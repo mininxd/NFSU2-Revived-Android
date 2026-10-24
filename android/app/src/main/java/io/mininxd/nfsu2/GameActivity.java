@@ -346,17 +346,42 @@ public final class GameActivity extends NativeActivity {
         // NativeActivity may stay resumed when a runtime permission dialog closes.
         if (code == 1 && results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) recreate();
     }
+    private float simulatedPointerX = 0.5f;
+    private boolean rightStickDragging = false;
+
+    @Override public boolean dispatchGenericMotionEvent(android.view.MotionEvent event) {
+        if ((event.getSource() & android.view.InputDevice.SOURCE_JOYSTICK) == android.view.InputDevice.SOURCE_JOYSTICK) {
+            // Right analog stick rotates preview car when inside a menu/garage/lobby
+            if (!nativeDrivingControls()) {
+                float rx = event.getAxisValue(android.view.MotionEvent.AXIS_Z);
+                if (Math.abs(rx) < 0.05f) {
+                    rx = event.getAxisValue(android.view.MotionEvent.AXIS_RX);
+                }
+                if (Math.abs(rx) > 0.15f) {
+                    if (!rightStickDragging) {
+                        simulatedPointerX = 0.5f;
+                        nativePointer(simulatedPointerX, 0.5f, 0); // Pointer DOWN
+                        rightStickDragging = true;
+                    }
+                    simulatedPointerX += rx * 0.035f;
+                    if (simulatedPointerX < 0.05f) simulatedPointerX = 0.95f;
+                    else if (simulatedPointerX > 0.95f) simulatedPointerX = 0.05f;
+                    nativePointer(simulatedPointerX, 0.5f, 1); // Pointer MOVE
+                } else if (rightStickDragging) {
+                    nativePointer(simulatedPointerX, 0.5f, 2); // Pointer UP
+                    rightStickDragging = false;
+                    simulatedPointerX = 0.5f;
+                }
+            }
+        }
+        return super.dispatchGenericMotionEvent(event);
+    }
+
     @Override public void onBackPressed() {
         // Prevent accidental back gesture from closing the game while steering
     }
     @Override protected void onStop() {
         super.onStop();
-        // When backgrounded (Home button, app switcher, screen lock), Android destroys the native
-        // window surface. DXVK cannot recover the lost Vulkan surface without a clean launch.
-        // Finish so the process terminates cleanly instead of leaving a black screen with audio.
-        if (!isFinishing()) {
-            finish();
-        }
     }
     @Override protected void onDestroy() {
         super.onDestroy();
