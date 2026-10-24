@@ -60,6 +60,17 @@ void setWindowPos(){
     heaps->free(GuestHeaps::process,structure);ret(1,7);
 }
 void updateWindow(){if(!windows.count(arg(0))){lastError=1400;ret(0,1);return;}windowMessage(arg(0),0xf,0,0);ret(1,1);}
+void destroyWindow(){
+    uint32_t handle=arg(0);auto it=windows.find(handle);
+    if(it!=windows.end()){windowMessage(handle,2,0,0);windowMessage(handle,0x82,0,0);windows.erase(it);}
+    ret(1,1);
+}
+void isIconic(){ret(0,1);}
+void unregisterClass(){ret(1,2);}
+void postThreadMessage(){ret(1,4);}
+void setRect(){
+    uint32_t r=arg(0);if(r){write32(r,arg(1));write32(r+4,arg(2));write32(r+8,arg(3));write32(r+12,arg(4));}ret(1,5);
+}
 std::map<uint32_t,uint32_t> paintContexts;uint32_t nextPaintContext=0xf0070000;
 void beginPaint(){
     auto window=windows.find(arg(0));if(window==windows.end()||!arg(1)){lastError=1400;ret(0,2);return;}
