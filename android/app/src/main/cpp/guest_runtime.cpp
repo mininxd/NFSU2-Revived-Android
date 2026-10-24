@@ -949,8 +949,19 @@ void setGuestFrameLimit(unsigned framesPerSecond){
 void setGuestKey(unsigned scan,bool down){if(scan>=256)return;std::lock_guard<std::mutex> lock(inputMutex);if(bool(inputKeys[scan])==down)return;inputKeys[scan]=down?0x80:0;recordInputKey(scan,down);enqueueGuestKey(scan,down);}
 void clearGuestInput(){std::lock_guard<std::mutex> lock(inputMutex);for(unsigned scan=0;scan<256;++scan)if(inputKeys[scan]){recordInputKey(scan,false);enqueueGuestKey(scan,false);}inputKeys.fill(0);inputMouseButtons.fill(0);inputMouseX=inputMouseY=inputMouseZ=0;}
 void setGuestPointer(float x,float y,int phase){
+    float oldX = guestPointerX.load();
+    float oldY = guestPointerY.load();
     guestPointerX=std::clamp(x,0.f,1.f);guestPointerY=std::clamp(y,0.f,1.f);
-    if(phase!=1){std::lock_guard<std::mutex> lock(inputMutex);inputMouseButtons[0]=phase==0?0x80:0;}
+    {
+        std::lock_guard<std::mutex> lock(inputMutex);
+        if(phase!=1) inputMouseButtons[0]=phase==0?0x80:0;
+        if(phase==1){
+            int dx = int((guestPointerX.load() - oldX) * 1280.0f);
+            int dy = int((guestPointerY.load() - oldY) * 720.0f);
+            inputMouseX += dx;
+            inputMouseY += dy;
+        }
+    }
     enqueueGuestPointer(phase);
 }
 void typeGuestText(const std::vector<uint32_t>& characters){enqueueGuestText(characters);}
