@@ -1,4 +1,4 @@
-package com.nfsu2.androidevolved;
+package io.mininxd.nfsu2;
 
 /** Compare stable release tags numerically (0.10.0 > 0.5.4), never by text or publication date. */
 final class ReleaseVersion {

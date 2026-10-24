@@ -1,9 +1,9 @@
 plugins { id 'com.android.application' }
 android {
-    namespace 'com.nfsu2.androidevolved'
+    namespace 'io.mininxd.nfsu2'
     compileSdk 35
     defaultConfig {
-        applicationId 'com.nfsu2.androidevolved'
+        applicationId 'io.mininxd.nfsu2'
         minSdk 29
         targetSdk 35
         versionCode 25
@@ -16,6 +16,8 @@ android {
             storePassword 'nfsu2release'
             keyAlias 'nfsu2'
             keyPassword 'nfsu2release'
+            v1SigningEnabled true
+            v2SigningEnabled true
         }
     }
     buildTypes {
