@@ -1,4 +1,4 @@
-package io.mininxd.nfsu2;
+package com.nfsu2.androidevolved;
 
 import android.app.NativeActivity;
 import android.os.Build;

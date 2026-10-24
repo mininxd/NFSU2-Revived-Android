@@ -6,22 +6,16 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
-    inputs:
-      speed2_url:
-        description: 'Optional direct URL to download SPEED2.EXE for full game lifting'
-        required: false
-        default: ''
 
 jobs:
   build-apk:
-    name: Build Android APK (Universal ARM64 & ARMv7)
+    name: Build Android NFSU2 Release APK
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          submodules: recursive
           fetch-depth: 0
 
       - name: Set up JDK 17
@@ -30,67 +24,15 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install host dependencies
+      - name: Extract Prebuilt Game Native Libraries
         run: |
-          sudo apt-get update
-          sudo apt-get install -y glslang-tools spirv-tools ninja-build
-          python3 -m pip install --upgrade pip
-          pip install capstone pefile
+          mkdir -p android/app/src/main/jniLibs/arm64-v8a
+          cat prebuilt/lib_arm64.tar.gz.part_* > /tmp/lib_arm64.tar.gz
+          tar -xzf /tmp/lib_arm64.tar.gz -C android/app/src/main/jniLibs/arm64-v8a
+          rm -f /tmp/lib_arm64.tar.gz
+          ls -la android/app/src/main/jniLibs/arm64-v8a
 
-      - name: Set up Android NDK & CMake
-        run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;28.2.13676358" "cmake;3.30.5"
-
-      - name: Clone and patch pcrecomp
-        run: |
-          git clone https://github.com/sp00nznet/pcrecomp.git "${GITHUB_WORKSPACE}/../pcrecomp"
-          cd "${GITHUB_WORKSPACE}/../pcrecomp"
-          git checkout 35548b8
-          for p in "${GITHUB_WORKSPACE}"/patches/pcrecomp/*.patch; do
-            echo "Applying $p..."
-            git apply "$p" || patch -p1 < "$p"
-          done
-
-      - name: Prepare DXVK Native
-        run: |
-          mkdir -p "${GITHUB_WORKSPACE}/../reference"
-          git clone --branch native-1.9.2b https://github.com/Joshua-Ashton/dxvk-native.git "${GITHUB_WORKSPACE}/../reference/dxvk-native"
-          python3 ports/dxvk_android/prepare.py "${GITHUB_WORKSPACE}/../reference/dxvk-native" build/dxvk-source
-          python3 ports/dxvk_android/shaders.py build/dxvk-source
-
-      - name: Setup Game C Code (Lift or Fallback Stub)
-        env:
-          INPUT_SPEED2_URL: ${{ github.event.inputs.speed2_url }}
-          SECRET_SPEED2_URL: ${{ secrets.SPEED2_URL }}
-        run: |
-          mkdir -p src/recomp/gen
-          SPEED2_URL="${INPUT_SPEED2_URL:-$SECRET_SPEED2_URL}"
-          if [ -n "$SPEED2_URL" ]; then
-            echo "Downloading SPEED2.EXE from provided URL..."
-            curl -fL -o SPEED2.EXE "$SPEED2_URL"
-          fi
-
-          if [ -f "SPEED2.EXE" ]; then
-            echo "SPEED2.EXE found. Normalizing and lifting to C..."
-            mkdir -p work
-            python3 scripts/normalize_exe.py SPEED2.EXE work/SPEED2.analysis.exe
-            python3 "${GITHUB_WORKSPACE}/../pcrecomp/tools/cpp/vtable_scan.py" work/SPEED2.analysis.exe --seeds work/vtable_seeds.json
-            python3 "${GITHUB_WORKSPACE}/../pcrecomp/tools/cpp/rtti.py" work/SPEED2.analysis.exe --seeds work/rtti_seeds.json
-            python3 -c "import json; v=json.load(open('work/vtable_seeds.json')); r=json.load(open('work/rtti_seeds.json')); json.dump(list(set(v+r)), open('work/seeds_all.json', 'w'))"
-            python3 scripts/run_lift.py catalog work/SPEED2.analysis.exe work/seeds_all.json work/catalog.json
-            python3 scripts/run_lift.py lift work/SPEED2.analysis.exe work/catalog.json src/recomp/gen
-          elif [ ! -f "src/recomp/gen/recomp_dispatch.c" ]; then
-            echo "No SPEED2.EXE provided; generating minimal guest bridge stubs..."
-            python3 scripts/generate_stubs.py src/recomp/gen
-          fi
-
-      - name: Build NFSU2 Release APK (Universal ARM64 & ARMv7)
+      - name: Build NFSU2 Release APK
         run: |
           cd android
           chmod +x gradlew

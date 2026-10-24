@@ -1,4 +1,4 @@
-package io.mininxd.nfsu2;
+package com.nfsu2.androidevolved;
 
 import java.io.*;
 import java.nio.file.Files;
