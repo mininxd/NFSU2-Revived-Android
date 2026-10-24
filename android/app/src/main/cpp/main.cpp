@@ -366,7 +366,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nat
     customVulkanDriver=true;
     void* handle=nfsOpenVulkan(h.c_str(),t.c_str(),d.c_str(),l.c_str());
     auto entry=nfsVulkanEntry(handle);
-    if(!entry){customVulkanError="No se pudo cargar el driver Vulkan "+l+". Elige el driver del sistema en el launcher.";return;}
+    if(!entry){customVulkanError="Could not load Vulkan driver "+l+". Choose system driver in the launcher.";return;}
     dxvkAndroidSetInstanceProcAddr(entry);
 }
 static void configurePipelineCache(android_app* app){
@@ -425,7 +425,7 @@ void android_main(android_app* app) {
             auto status=host.guestWorker.status();
             if(status!=host.guestStatus){
                 host.guestStatus=status;
-                showStatus(app,("Datos accesibles: memoria interna/nfsu2\nVulkan 1.1: presentación activa\n"+status).c_str());
+                showStatus(app,("Accessible data: internal storage/nfsu2\nVulkan 1.1: presentation active\n"+status).c_str());
             }
             if (host.renderer.device&&!host.renderer.draw()) host.renderer.stop();
         } catch (const std::exception& e) {

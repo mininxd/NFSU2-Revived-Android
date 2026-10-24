@@ -34,8 +34,8 @@ runtime and D3D9 bridge, rather than the Xbox 360 renderer.
 
 `RacingControlsView` replaces the large flat button rows with a transparent
 Canvas overlay. Menu mode provides navigation, accept, back and profile text.
-The **CONDUCIR** button switches to steering, accelerator, brake, nitro and
-handbrake; **MENÚ** restores navigation. **PAUSA** sends Escape.
+The **DRIVE** button switches to steering, accelerator, brake, nitro and
+handbrake; **MENU** restores navigation. **PAUSE** sends Escape.
 The overlay also follows the installed guest keyboard action map automatically
 when entering/leaving driving mode. Manual mode switching remains available.
 Driving includes up/down shifts and camera selection.
@@ -52,13 +52,13 @@ handbrake (5) and nitro (6), instead of leaving the 32-action frontend format.
 The startup test covers remapping while unacquired, rejecting an acquired
 remap, and delivering the new driving press/release with its application ID.
 
-**AJUSTAR** opens an overlay editor without injecting game keys. Drag a button
-to move it; select it and use **− / +** to change its size (55–250%). **GUARDAR**
+**SETTINGS** opens an overlay editor without injecting game keys. Drag a button
+to move it; select it and use **− / +** to change its size (55–250%). **SAVE**
 stores normalized positions and size factors in app SharedPreferences, with
-separate menu and driving layouts. **CANCELAR** reloads saved settings;
-**RESTABLECER** previews defaults until saved. Pause the race before editing.
+separate menu and driving layouts. **CANCEL** reloads saved settings;
+**RESET** previews defaults until saved. Pause the race before editing.
 
-**AJUSTAR → OPCIONES** adds classic, Xbox and PlayStation 3 visual layouts.
+**SETTINGS → OPTIONS** adds classic, Xbox and PlayStation 3 visual layouts.
 The owner's Most Wanted and Carbon touch views provided the layout reference:
 left steering stick, RT/LT pedals and circular A/B/X/Y buttons in a diamond.
 This port implements those controls against its keyboard action bridge; the
@@ -70,7 +70,7 @@ movement to left/right keys with a center dead zone, rather than analog input.
 Named custom layouts save the current mode/style and all button positions/sizes
 as JSON in app preferences. Loading restores that layout; menu and driving
 presets are listed separately. Style choice and named-preset operations apply
-immediately, while **CANCELAR** discards unsaved placement edits.
+immediately, while **CANCEL** discards unsaved placement edits.
 
 The inclination option uses the accelerometer with display-rotation correction,
 low-pass smoothing, a calibrated neutral position, hysteresis, invert and 1–4×

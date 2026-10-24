@@ -22,11 +22,11 @@ std::string json(const std::string& value) {
 std::string probe(const char* hooks, const char* temp, const char* directory, const char* library) {
     struct Loader { void* handle; ~Loader() { if (handle) dlclose(handle); } }
         loader{nfsOpenVulkan(hooks, temp, directory, library)};
-    if (!loader.handle) return "{\"driverLoadFailed\":true,\"probeError\":\"No se pudo abrir el driver seleccionado\"}";
+    if (!loader.handle) return "{\"driverLoadFailed\":true,\"probeError\":\"Could not open selected driver\"}";
     auto getProc = nfsVulkanEntry(loader.handle);
-    if (!getProc) return "{\"driverLoadFailed\":true,\"probeError\":\"El paquete no ofrece vkGetInstanceProcAddr\"}";
+    if (!getProc) return "{\"driverLoadFailed\":true,\"probeError\":\"Package does not provide vkGetInstanceProcAddr\"}";
     auto createInstance = reinterpret_cast<PFN_vkCreateInstance>(getProc(nullptr, "vkCreateInstance"));
-    if (!createInstance) return "{\"driverLoadFailed\":true,\"probeError\":\"El paquete no ofrece vkCreateInstance\"}";
+    if (!createInstance) return "{\"driverLoadFailed\":true,\"probeError\":\"Package does not provide vkCreateInstance\"}";
     uint32_t loaderVersion = VK_API_VERSION_1_0;
     if (auto version = reinterpret_cast<PFN_vkEnumerateInstanceVersion>(getProc(nullptr, "vkEnumerateInstanceVersion")))
         version(&loaderVersion);
@@ -40,7 +40,7 @@ std::string probe(const char* hooks, const char* temp, const char* directory, co
     if (result != VK_SUCCESS)
         return "{\"driverLoadFailed\":true,\"probeError\":\"vkCreateInstance: " + std::to_string(result) + "\"}";
 #define LOAD(name) auto name = reinterpret_cast<PFN_##name>(getProc(instance, #name)); \
-    if (!name) return "{\"driverLoadFailed\":true,\"probeError\":\"Driver con funciones Vulkan incompletas\"}"
+    if (!name) return "{\"driverLoadFailed\":true,\"probeError\":\"Driver with incomplete Vulkan features\"}"
     LOAD(vkDestroyInstance);
     LOAD(vkEnumeratePhysicalDevices);
     LOAD(vkGetPhysicalDeviceProperties);
@@ -53,7 +53,7 @@ std::string probe(const char* hooks, const char* temp, const char* directory, co
     uint32_t count = 0;
     if (vkEnumeratePhysicalDevices(instance, &count, nullptr) != VK_SUCCESS || !count) {
         vkDestroyInstance(instance, nullptr);
-        return "{\"driverLoadFailed\":true,\"probeError\":\"No se encontró una GPU Vulkan\"}";
+        return "{\"driverLoadFailed\":true,\"probeError\":\"No Vulkan GPU found\"}";
     }
     std::vector<VkPhysicalDevice> devices(count);
     vkEnumeratePhysicalDevices(instance, &count, devices.data());

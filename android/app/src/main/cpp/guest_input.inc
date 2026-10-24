@@ -256,19 +256,19 @@ bool joystickMethod(InputObject& object,uint32_t self,uint32_t method){
 }
 // Key names for GetObjectInfo (the controls screen shows them next to each action).
 std::string keyboardKeyName(uint32_t dik){
-    static const char* const row[]={nullptr,"Esc","1","2","3","4","5","6","7","8","9","0","-","=","Retroceso","Tab",
-        "Q","W","E","R","T","Y","U","I","O","P","[","]","Intro","Ctrl izq.","A","S","D","F","G","H","J","K","L",";","'","`",
-        "Mayus izq.","\\","Z","X","C","V","B","N","M",",",".","/","Mayus der.","* (num)","Alt izq.","Espacio","Bloq Mayus",
-        "F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","Bloq Num","Bloq Despl","7 (num)","8 (num)","9 (num)","- (num)",
+    static const char* const row[]={nullptr,"Esc","1","2","3","4","5","6","7","8","9","0","-","=","Backspace","Tab",
+        "Q","W","E","R","T","Y","U","I","O","P","[","]","Enter","Left Ctrl","A","S","D","F","G","H","J","K","L",";","'","`",
+        "Left Shift","\\","Z","X","C","V","B","N","M",",",".","/","Right Shift","* (num)","Left Alt","Space","Caps Lock",
+        "F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","Num Lock","Scroll Lock","7 (num)","8 (num)","9 (num)","- (num)",
         "4 (num)","5 (num)","6 (num)","+ (num)","1 (num)","2 (num)","3 (num)","0 (num)",". (num)"};
     if(dik<sizeof row/sizeof row[0]&&row[dik])return row[dik];
     switch(dik){
-    case 0x57:return "F11";case 0x58:return "F12";case 0x9c:return "Intro (num)";case 0x9d:return "Ctrl der.";
-    case 0xb5:return "/ (num)";case 0xb8:return "Alt der.";case 0xc5:return "Pausa";case 0xc7:return "Inicio";
-    case 0xc8:return "Arriba";case 0xc9:return "Re Pag";case 0xcb:return "Izquierda";case 0xcd:return "Derecha";
-    case 0xcf:return "Fin";case 0xd0:return "Abajo";case 0xd1:return "Av Pag";case 0xd2:return "Insert";case 0xd3:return "Supr";
+    case 0x57:return "F11";case 0x58:return "F12";case 0x9c:return "Numpad Enter";case 0x9d:return "Right Ctrl";
+    case 0xb5:return "/ (num)";case 0xb8:return "Right Alt";case 0xc5:return "Pause";case 0xc7:return "Home";
+    case 0xc8:return "Up";case 0xc9:return "Page Up";case 0xcb:return "Left";case 0xcd:return "Right";
+    case 0xcf:return "End";case 0xd0:return "Down";case 0xd1:return "Page Down";case 0xd2:return "Insert";case 0xd3:return "Delete";
     }
-    char text[16];std::snprintf(text,sizeof text,"Tecla %02X",dik);return text;
+    char text[16];std::snprintf(text,sizeof text,"Key %02X",dik);return text;
 }
 // IDirectInputDevice8::GetObjectInfo(DIDEVICEOBJECTINSTANCEA*, dwObj, dwHow) for the
 // keyboard (objects are DIK codes, c_dfDIKeyboard offsets) and the mouse (DIMOUSESTATE2).

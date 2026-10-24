@@ -206,7 +206,7 @@ void socketCreate(){
     if(type!=SOCK_STREAM&&type!=SOCK_DGRAM){lastError=10044;ret(net::invalidSocket,3);return;}  // WSAESOCKTNOSUPPORT
     int fd=::socket(AF_INET,int(type)|SOCK_NONBLOCK|SOCK_CLOEXEC,int(protocol));
     if(fd<0){
-        NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","Winsock: socket(af=%u,type=%u,protocol=%u) fallo: %s",family,type,protocol,std::strerror(errno));
+        NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","Winsock: socket(af=%u,type=%u,protocol=%u) failed: %s",family,type,protocol,std::strerror(errno));
         lastError=net::wsaError(errno);ret(net::invalidSocket,3);return;
     }
     uint32_t handle=net::newHandle(fd,false);
@@ -225,7 +225,7 @@ void socketBind(){
     // A raw ICMP socket ignores the port; on a ping socket it is the echo id and low ones need privileges.
     if(socket->icmp&&address.ss_family==AF_INET)reinterpret_cast<sockaddr_in*>(&address)->sin_port=0;
     int status=::bind(socket->fd,reinterpret_cast<sockaddr*>(&address),length);int error=errno;
-    NFS_RUNTIME_LOG(status?ANDROID_LOG_WARN:ANDROID_LOG_INFO,"NFSU2","Winsock: bind %08x %s%s%s",arg(0),net::describe(address).c_str(),status?" fallo: ":"",status?std::strerror(error):"");
+    NFS_RUNTIME_LOG(status?ANDROID_LOG_WARN:ANDROID_LOG_INFO,"NFSU2","Winsock: bind %08x %s%s%s",arg(0),net::describe(address).c_str(),status?" failed: ":"",status?std::strerror(error):"");
     errno=error;ret(status?net::failErrno():0,3);
 }
 void socketListen(){
@@ -281,7 +281,7 @@ void socketSendTo(){
     socket=net::find(arg(0));  // the call may have waited with the machine released
     if(socket){
         int error=errno;
-        if(net::hardError(sent))NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","Winsock: sendto %08x -> %s fallo: %s",arg(0),addressLength?net::describe(address).c_str():"(conectado)",std::strerror(error));
+        if(net::hardError(sent))NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","Winsock: sendto %08x -> %s failed: %s",arg(0),addressLength?net::describe(address).c_str():"(connected)",std::strerror(error));
         else if(sent>=0&&addressLength){net::notePeer(*socket,"envia a",net::describe(address),sent);net::count(arg(0),*socket,net::describe(address),true,sent);}
         errno=error;
     }
@@ -321,7 +321,7 @@ void socketRecvFrom(){
     // MSG_TRUNC reports the full datagram size: Windows fails a short buffer with WSAEMSGSIZE.
     ssize_t received=net::blocking(*socket,POLLIN,socket->recvTimeout,[&](int fd){
         peerLength=sizeof peer;return ::recvfrom(fd,data,length,int(flags&3)|MSG_TRUNC,reinterpret_cast<sockaddr*>(&peer),&peerLength);});
-    if(net::hardError(received)){int error=errno;NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","Winsock: recvfrom %08x fallo: %s",arg(0),std::strerror(error));errno=error;}
+    if(net::hardError(received)){int error=errno;NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","Winsock: recvfrom %08x failed: %s",arg(0),std::strerror(error));errno=error;}
     if(received<0){ret(net::failErrno(),6);return;}
     socket=net::find(arg(0));
     if(socket&&peerLength){net::notePeer(*socket,"recibe de",net::describe(peer),received);net::count(arg(0),*socket,net::describe(peer),false,received);}

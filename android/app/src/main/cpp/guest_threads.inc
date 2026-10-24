@@ -52,7 +52,7 @@ void resetEvent(){auto event=eventHandles.find(arg(0));if(event==eventHandles.en
 struct GuestThreadExit{uint32_t code;};
 thread_local bool insideGuestThread=false;
 void exitThread(){
-    if(!insideGuestThread)throw GuestStop("ExitThread en el hilo principal desde "+hex(g_cur_func));
+    if(!insideGuestThread)throw GuestStop("ExitThread on main thread from "+hex(g_cur_func));
     throw GuestThreadExit{arg(0)};
 }
 void* guestThreadEntry(void* context){

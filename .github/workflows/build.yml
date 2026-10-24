@@ -1,0 +1,144 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      speed2_url:
+        description: 'Optional direct URL to download SPEED2.EXE for full game lifting'
+        required: false
+        default: ''
+
+jobs:
+  build-apk:
+    name: Build Android APK (ARM64 & ARMv7)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y glslang-tools spirv-tools ninja-build
+          python3 -m pip install --upgrade pip
+          pip install capstone pefile
+
+      - name: Set up Android NDK & CMake
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;28.2.13676358" "cmake;3.30.5"
+
+      - name: Clone and patch pcrecomp
+        run: |
+          git clone https://github.com/sp00nznet/pcrecomp.git "${GITHUB_WORKSPACE}/../pcrecomp"
+          cd "${GITHUB_WORKSPACE}/../pcrecomp"
+          git checkout 35548b8
+          for p in "${GITHUB_WORKSPACE}"/patches/pcrecomp/*.patch; do
+            echo "Applying $p..."
+            git apply "$p" || patch -p1 < "$p"
+          done
+
+      - name: Prepare DXVK Native
+        run: |
+          mkdir -p "${GITHUB_WORKSPACE}/../reference"
+          git clone --branch native-1.9.2b https://github.com/Joshua-Ashton/dxvk-native.git "${GITHUB_WORKSPACE}/../reference/dxvk-native"
+          python3 ports/dxvk_android/prepare.py "${GITHUB_WORKSPACE}/../reference/dxvk-native" build/dxvk-source
+          python3 ports/dxvk_android/shaders.py build/dxvk-source
+
+      - name: Setup Game C Code (Lift or Fallback Stub)
+        env:
+          SPEED2_URL: ${{ inputs.speed2_url || secrets.SPEED2_URL }}
+        run: |
+          mkdir -p src/recomp/gen
+          if [ -n "$SPEED2_URL" ]; then
+            echo "Downloading SPEED2.EXE from provided URL..."
+            curl -fL -o SPEED2.EXE "$SPEED2_URL"
+          fi
+
+          if [ -f "SPEED2.EXE" ]; then
+            echo "SPEED2.EXE found. Normalizing and lifting to C..."
+            mkdir -p work
+            python3 scripts/normalize_exe.py SPEED2.EXE work/SPEED2.analysis.exe
+            python3 "${GITHUB_WORKSPACE}/../pcrecomp/tools/cpp/vtable_scan.py" work/SPEED2.analysis.exe --seeds work/vtable_seeds.json
+            python3 "${GITHUB_WORKSPACE}/../pcrecomp/tools/cpp/rtti.py" work/SPEED2.analysis.exe --seeds work/rtti_seeds.json
+            python3 -c "import json; v=json.load(open('work/vtable_seeds.json')); r=json.load(open('work/rtti_seeds.json')); json.dump(list(set(v+r)), open('work/seeds_all.json', 'w'))"
+            python3 scripts/run_lift.py catalog work/SPEED2.analysis.exe work/seeds_all.json work/catalog.json
+            python3 scripts/run_lift.py lift work/SPEED2.analysis.exe work/catalog.json src/recomp/gen
+          elif [ ! -f "src/recomp/gen/recomp_dispatch.c" ]; then
+            echo "No SPEED2.EXE provided; generating minimal guest bridge stubs..."
+            cat << 'EOF' > src/recomp/gen/recomp_funcs.h
+#pragma once
+#include "recomp_types.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
+void sub_00401000(void);
+void sub_0075BCC7(void);
+#ifdef __cplusplus
+}
+#endif
+EOF
+            cat << 'EOF' > src/recomp/gen/recomp_0000.c
+#include "recomp_funcs.h"
+#include "recomp_types.h"
+void sub_00401000(void) {}
+void sub_0075BCC7(void) {}
+EOF
+            cat << 'EOF' > src/recomp/gen/recomp_dispatch.c
+#include "recomp_funcs.h"
+#include "recomp_types.h"
+const recomp_dispatch_entry_t recomp_dispatch_table[] = {
+    { 0x00401000, sub_00401000 },
+    { 0x0075BCC7, sub_0075BCC7 },
+};
+const uint32_t recomp_dispatch_count = 2;
+EOF
+            cat << 'EOF' > src/recomp/gen/recomp_imports.c
+#include "recomp_types.h"
+const recomp_import_entry_t recomp_import_table[] = {
+    { 0, "" }
+};
+const uint32_t recomp_import_count = 0;
+EOF
+          fi
+
+      - name: Build ARM64 APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Build ARMv7 (32-bit) APK
+        run: |
+          cd android
+          ./gradlew assembleRelease -PnfsAbi=armeabi-v7a --no-daemon
+
+      - name: Rename and Organize APKs
+        run: |
+          mkdir -p artifacts
+          find android/app/build/outputs/apk -name "*.apk" -exec cp {} artifacts/ \;
+
+      - name: Upload APK Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: NFSU2-Android-APKs
+          path: artifacts/*.apk

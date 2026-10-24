@@ -1,7 +1,7 @@
 # Need for Speed Underground 2 — Recompiled
 
 
-### Android downloads / Descargas Android
+### Android Downloads
 
 [Underground 2 v0.14.9](https://github.com/codepdbh/nfsu2-recompiled/releases/tag/v0.14.9)
 
@@ -67,7 +67,7 @@ Issue-driven changes and remaining limits: [16 October review](docs/ISSUE_REVIEW
 - **🌋 Vulkan Graphics Acceleration**: Full Direct3D 9 to Vulkan translation powered by an embedded port of DXVK Native.
 - **🎮 Fully Customizable Touch Controls**:
   - Drag-and-drop on-screen controls editor with button scaling and persistent named layouts.
-  - Preset control themes: *Clásico*, *Xbox*, and *PlayStation*.
+  - Preset control themes: *Classic*, *Xbox*, and *PlayStation*.
   - Gyroscope / Tilt-based accelerometer steering for an intuitive driving experience.
   - Dedicated driving buttons: Steering, Handbrake, Nitrous (N₂O), Brake/Reverse, and Throttle.
 - **🖥️ In-Game Resolution & FPS Scaler**:

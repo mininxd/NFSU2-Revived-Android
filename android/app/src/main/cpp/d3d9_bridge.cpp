@@ -105,9 +105,9 @@ CompressedView compressionView(uint32_t address){auto found=objects.find(address
 // with its GPU work (Present waited 7-10 ms with the GPU 67% busy). Two
 // back buffers allow DXVK's default latency of 3; the game only ever reads
 // back buffer 0, so the extra buffers are invisible to it.
-// Launcher "Sincronía CPU/GPU": 2 (default) or 1 for the lowest input latency.
+// Launcher "CPU/GPU Sync": 2 (default) or 1 for the lowest input latency.
 std::atomic<uint32_t> configuredBackBuffers{2};
-// Launcher "Texturas comprimidas: convertir en CPU": DXT decoded to RGBA8 even when the
+// Launcher "Compressed textures: convert on CPU": DXT decoded to RGBA8 even when the
 // driver reports BC support, for drivers whose BC sampling is broken.
 std::atomic<bool> forceCpuTextures{false};
 uint32_t hostBackBufferCount(uint32_t requested){
@@ -272,8 +272,8 @@ uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumen
             // here with the reason instead.
             static unsigned failures=0;failures=FAILED(status)?failures+1:0;
             if(FAILED(status)&&failures<2)return status;
-            if(FAILED(status))throw std::runtime_error("La GPU no pudo crear el dispositivo grafico (Vulkan, CreateDevice "+
-                std::to_string(uint32_t(status))+"). Usa \"Probar driver\" en el launcher para ver que le falta.");
+            if(FAILED(status))throw std::runtime_error("The GPU could not create the graphics device (Vulkan, CreateDevice "+
+                std::to_string(uint32_t(status))+"). Use \"Test driver\" in the launcher to see what is missing.");
             write(args[6],wrap(device,Kind::Device));return status;
         }
         }
