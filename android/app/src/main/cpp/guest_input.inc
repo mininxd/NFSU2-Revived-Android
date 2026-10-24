@@ -362,6 +362,28 @@ void inputDispatch(){
     case 3:{uint32_t output=arg(1);if(!output||read32(output)!=44){ret(diInvalid,2);return;}
         std::memset(ptr(output+4,40),0,40);write32(output+4,1);write32(output+8,kind==2?0x413:0x212);
         write32(output+12,kind==2?0:3);write32(output+16,kind==2?256:8);ret(0,2);return;}
+    case 4:{uint32_t callback=arg(1),context=arg(2),flags=arg(3);if(!callback){ret(diInvalid,4);return;}
+        uint32_t instance=allocate(316);
+        try{
+            if(kind==2){
+                uint32_t category=flags&0x1f;
+                if(!category||(category&0x0c)){
+                    for(uint32_t dik=0;dik<256;++dik){
+                        std::string name=keyboardKeyName(dik);
+                        uint32_t type=0x0cu|(dik<<8);
+                        uint32_t guidData1=0x55728220u;uint16_t guidData2=0xd33c,guidData3=0x11cf;
+                        write32(instance,316);std::memset(ptr(instance+4,312),0,312);
+                        const uint8_t tail[8]={0xbf,0xc7,0x44,0x45,0x53,0x54,0,0};
+                        std::memcpy(ptr(instance+4,4),&guidData1,4);std::memcpy(ptr(instance+8,2),&guidData2,2);
+                        std::memcpy(ptr(instance+10,2),&guidData3,2);std::memcpy(ptr(instance+12,8),tail,8);
+                        write32(instance+20,dik);write32(instance+24,type);write32(instance+28,0);
+                        std::memcpy(ptr(instance+32,name.size()+1),name.c_str(),name.size()+1);
+                        if(!callGuest(callback,{instance,context}))break;
+                    }
+                }
+            }
+        }catch(...){heaps->free(GuestHeaps::process,instance);throw;}
+        heaps->free(GuestHeaps::process,instance);ret(0,4);return;}
     case 5:case 6:{uint32_t property=arg(1),header=arg(2);
         if(!header||read32(header)!=20||read32(header+4)!=16||read32(header+12)!=0){ret(diInvalid,3);return;}
         if(property!=1){ret(0x80004001,3);return;}
