@@ -87,19 +87,7 @@ jobs:
             python3 scripts/run_lift.py lift work/SPEED2.analysis.exe work/catalog.json src/recomp/gen
           elif [ ! -f "src/recomp/gen/recomp_dispatch.c" ]; then
             echo "No SPEED2.EXE provided; generating minimal guest bridge stubs..."
-            python3 -c "
-            funcs = '#pragma once\n#include \"recomp_types.h\"\n#ifdef __cplusplus\nextern \"C\" {\n#endif\nvoid sub_00401000(void);\nvoid sub_0075BCC7(void);\n#ifdef __cplusplus\n}\n#endif\n'
-            open('src/recomp/gen/recomp_funcs.h', 'w').write(funcs)
-
-            c_0000 = '#include \"recomp_funcs.h\"\n#include \"recomp_types.h\"\nvoid sub_00401000(void) {}\nvoid sub_0075BCC7(void) {}\n'
-            open('src/recomp/gen/recomp_0000.c', 'w').write(c_0000)
-
-            dispatch = '#include \"recomp_funcs.h\"\n#include \"recomp_types.h\"\nconst recomp_dispatch_entry_t recomp_dispatch_table[] = {\n    { 0x00401000, sub_00401000 },\n    { 0x0075BCC7, sub_0075BCC7 },\n};\nconst uint32_t recomp_dispatch_count = 2;\n'
-            open('src/recomp/gen/recomp_dispatch.c', 'w').write(dispatch)
-
-            imports = '#include \"recomp_types.h\"\nconst recomp_import_entry_t recomp_import_table[] = {\n    { 0, \"\" }\n};\nconst uint32_t recomp_import_count = 0;\n'
-            open('src/recomp/gen/recomp_imports.c', 'w').write(imports)
-            "
+            python3 scripts/generate_stubs.py src/recomp/gen
           fi
 
       - name: Build ARM64 APK
@@ -107,16 +95,24 @@ jobs:
           cd android
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon
+          mkdir -p ../artifacts
+          if [ -f "app/build/outputs/apk/release/app-release.apk" ]; then
+            cp app/build/outputs/apk/release/app-release.apk ../artifacts/NFSU2-arm64-v8a.apk
+          fi
 
       - name: Build ARMv7 (32-bit) APK
         run: |
           cd android
           ./gradlew assembleRelease -PnfsAbi=armeabi-v7a --no-daemon
+          mkdir -p ../artifacts
+          if [ -f "app/build/outputs/apk/release/app-release.apk" ]; then
+            cp app/build/outputs/apk/release/app-release.apk ../artifacts/NFSU2-armeabi-v7a.apk
+          fi
 
-      - name: Rename and Organize APKs
+      - name: Organize APKs
         run: |
-          mkdir -p artifacts
-          find android/app/build/outputs/apk -name "*.apk" -exec cp {} artifacts/ \;
+          find android/app/build/outputs/apk -name "*.apk" -exec cp {} artifacts/ \; || true
+          ls -la artifacts/
 
       - name: Upload APK Artifacts
         uses: actions/upload-artifact@v4
