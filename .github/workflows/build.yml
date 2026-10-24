@@ -66,9 +66,11 @@ jobs:
 
       - name: Setup Game C Code (Lift or Fallback Stub)
         env:
-          SPEED2_URL: ${{ inputs.speed2_url || secrets.SPEED2_URL }}
+          INPUT_SPEED2_URL: ${{ github.event.inputs.speed2_url }}
+          SECRET_SPEED2_URL: ${{ secrets.SPEED2_URL }}
         run: |
           mkdir -p src/recomp/gen
+          SPEED2_URL="${INPUT_SPEED2_URL:-$SECRET_SPEED2_URL}"
           if [ -n "$SPEED2_URL" ]; then
             echo "Downloading SPEED2.EXE from provided URL..."
             curl -fL -o SPEED2.EXE "$SPEED2_URL"
@@ -85,40 +87,19 @@ jobs:
             python3 scripts/run_lift.py lift work/SPEED2.analysis.exe work/catalog.json src/recomp/gen
           elif [ ! -f "src/recomp/gen/recomp_dispatch.c" ]; then
             echo "No SPEED2.EXE provided; generating minimal guest bridge stubs..."
-            cat << 'EOF' > src/recomp/gen/recomp_funcs.h
-#pragma once
-#include "recomp_types.h"
-#ifdef __cplusplus
-extern "C" {
-#endif
-void sub_00401000(void);
-void sub_0075BCC7(void);
-#ifdef __cplusplus
-}
-#endif
-EOF
-            cat << 'EOF' > src/recomp/gen/recomp_0000.c
-#include "recomp_funcs.h"
-#include "recomp_types.h"
-void sub_00401000(void) {}
-void sub_0075BCC7(void) {}
-EOF
-            cat << 'EOF' > src/recomp/gen/recomp_dispatch.c
-#include "recomp_funcs.h"
-#include "recomp_types.h"
-const recomp_dispatch_entry_t recomp_dispatch_table[] = {
-    { 0x00401000, sub_00401000 },
-    { 0x0075BCC7, sub_0075BCC7 },
-};
-const uint32_t recomp_dispatch_count = 2;
-EOF
-            cat << 'EOF' > src/recomp/gen/recomp_imports.c
-#include "recomp_types.h"
-const recomp_import_entry_t recomp_import_table[] = {
-    { 0, "" }
-};
-const uint32_t recomp_import_count = 0;
-EOF
+            python3 -c "
+            funcs = '#pragma once\n#include \"recomp_types.h\"\n#ifdef __cplusplus\nextern \"C\" {\n#endif\nvoid sub_00401000(void);\nvoid sub_0075BCC7(void);\n#ifdef __cplusplus\n}\n#endif\n'
+            open('src/recomp/gen/recomp_funcs.h', 'w').write(funcs)
+
+            c_0000 = '#include \"recomp_funcs.h\"\n#include \"recomp_types.h\"\nvoid sub_00401000(void) {}\nvoid sub_0075BCC7(void) {}\n'
+            open('src/recomp/gen/recomp_0000.c', 'w').write(c_0000)
+
+            dispatch = '#include \"recomp_funcs.h\"\n#include \"recomp_types.h\"\nconst recomp_dispatch_entry_t recomp_dispatch_table[] = {\n    { 0x00401000, sub_00401000 },\n    { 0x0075BCC7, sub_0075BCC7 },\n};\nconst uint32_t recomp_dispatch_count = 2;\n'
+            open('src/recomp/gen/recomp_dispatch.c', 'w').write(dispatch)
+
+            imports = '#include \"recomp_types.h\"\nconst recomp_import_entry_t recomp_import_table[] = {\n    { 0, \"\" }\n};\nconst uint32_t recomp_import_count = 0;\n'
+            open('src/recomp/gen/recomp_imports.c', 'w').write(imports)
+            "
           fi
 
       - name: Build ARM64 APK
@@ -142,3 +123,4 @@ EOF
         with:
           name: NFSU2-Android-APKs
           path: artifacts/*.apk
+          if-no-files-found: warn
