@@ -25,9 +25,8 @@ final class GameOptions {
 
     static final Option[] ALL = {
             new Option(RESOLUTION, "Internal Resolution", "75",
-                    new String[] {"100", "75", "50", "720"},
-                    new String[] {"Native · maximum quality", "75% · balanced", "50% · maximum performance",
-                            "1280×720 · 16:9"}),
+                    new String[] {"25", "30", "35", "40", "45", "50", "55", "60", "65", "70", "75", "80", "85", "90", "95", "100"},
+                    new String[] {"25%", "30%", "35%", "40%", "45%", "50%", "55%", "60%", "65%", "70%", "75%", "80%", "85%", "90%", "95%", "100%"}),
             new Option(FPS, "FPS Limit", "120",
                     new String[] {"30", "60", "90", "120", "0"},
                     new String[] {"30 FPS · battery saver", "60 FPS", "90 FPS", "120 FPS", "Uncapped"}),

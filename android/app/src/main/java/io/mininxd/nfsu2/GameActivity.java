@@ -346,6 +346,18 @@ public final class GameActivity extends NativeActivity {
         // NativeActivity may stay resumed when a runtime permission dialog closes.
         if (code == 1 && results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) recreate();
     }
+    @Override public void onBackPressed() {
+        // Prevent accidental back gesture from closing the game while steering
+    }
+    @Override protected void onStop() {
+        super.onStop();
+        // When backgrounded (Home button, app switcher, screen lock), Android destroys the native
+        // window surface. DXVK cannot recover the lost Vulkan surface without a clean launch.
+        // Finish so the process terminates cleanly instead of leaving a black screen with audio.
+        if (!isFinishing()) {
+            finish();
+        }
+    }
     @Override protected void onDestroy() {
         super.onDestroy();
         // Each launch uses a fresh guest machine in the dedicated :game process.
