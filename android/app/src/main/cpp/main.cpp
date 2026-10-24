@@ -341,6 +341,7 @@ extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeGamep
     gamepadDevices=std::move(devices);
 }
 extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeWidescreen(JNIEnv*,jclass,jboolean enabled){setGuestWidescreen(enabled==JNI_TRUE);}
+extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeHudSafeArea(JNIEnv*,jclass,jboolean enabled){setGuestHudSafeArea(enabled==JNI_TRUE);}
 // Minimap at the top-left: the bottom-left corner sits under the steering thumb.
 extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeOnlineServer(JNIEnv* env,jclass,jstring host){
     const char* text=env->GetStringUTFChars(host,nullptr);setGuestOnlineServer(text?text:"");env->ReleaseStringUTFChars(host,text);

@@ -208,9 +208,19 @@ public final class GameActivity extends NativeActivity {
             if(mode.getPhysicalWidth()==current.getPhysicalWidth()&&mode.getPhysicalHeight()==current.getPhysicalHeight())
                 refresh=Math.max(refresh,mode.getRefreshRate());
         android.view.WindowManager.LayoutParams windowParams=getWindow().getAttributes();
-        windowParams.preferredRefreshRate=Math.min(120,refresh);getWindow().setAttributes(windowParams);
-        // Launcher options travel as extras; a direct start (adb, recents) falls back to the saved ones.
+        windowParams.preferredRefreshRate=Math.min(120,refresh);
         Intent launch = getIntent();
+        String cutout = launch.getStringExtra("cutout");
+        if (cutout == null) cutout = GameOptions.get(this, GameOptions.CUTOUT);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            if ("safe".equals(cutout)) {
+                windowParams.layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_NEVER;
+            } else {
+                windowParams.layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+            }
+        }
+        getWindow().setAttributes(windowParams);
+        // Launcher options travel as extras; a direct start (adb, recents) falls back to the saved ones.
         DisplayMetrics metrics = new DisplayMetrics(); getWindowManager().getDefaultDisplay().getRealMetrics(metrics);
         int[] size = GameOptions.renderSize(this, Math.max(metrics.widthPixels, metrics.heightPixels),
                 Math.min(metrics.widthPixels, metrics.heightPixels));
@@ -275,6 +285,8 @@ public final class GameActivity extends NativeActivity {
             }
         });
     }
+    private boolean wasBackgrounded = false;
+
     @Override public void onWindowFocusChanged(boolean focused) {
         super.onWindowFocusChanged(focused);
         if(!focused) {
@@ -288,7 +300,12 @@ public final class GameActivity extends NativeActivity {
                 if(insets!=null){insets.hide(android.view.WindowInsets.Type.systemBars());
                     insets.setSystemBarsBehavior(android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);}
             }else getWindow().getDecorView().setSystemUiVisibility(android.view.View.SYSTEM_UI_FLAG_FULLSCREEN |
-                    android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+                    android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY |
+                    android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION |
+                    android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+            if (wasBackgrounded) {
+                showRecoveryDialog();
+            }
         }
         if (focused && foreground && statusWindow != null && !statusHidden && !statusWindow.isShowing()) {
             statusWindow.showAtLocation(getWindow().getDecorView(), Gravity.TOP | Gravity.START, 0, 0);
@@ -382,7 +399,32 @@ public final class GameActivity extends NativeActivity {
     }
     @Override protected void onStop() {
         super.onStop();
+        wasBackgrounded = true;
     }
+
+    private void showRecoveryDialog() {
+        if (isFinishing() || (Build.VERSION.SDK_INT >= 17 && isDestroyed())) return;
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Session Interrupted")
+                .setMessage("Android OS paused the graphics pipeline while the game was in the background.\n\nTap Quick Restart to reload cleanly in ~1 second.")
+                .setPositiveButton("Quick Restart", (dialog, which) -> quickRestart())
+                .setNeutralButton("Try Resume", (dialog, which) -> {
+                    wasBackgrounded = false;
+                    dialog.dismiss();
+                })
+                .setNegativeButton("Exit to Launcher", (dialog, which) -> finish())
+                .setCancelable(false)
+                .show();
+    }
+
+    private void quickRestart() {
+        wasBackgrounded = false;
+        Intent intent = getIntent();
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(intent);
+        android.os.Process.killProcess(android.os.Process.myPid());
+    }
+
     @Override protected void onDestroy() {
         super.onDestroy();
         // Each launch uses a fresh guest machine in the dedicated :game process.

@@ -21,12 +21,19 @@ final class GameOptions {
     }
 
     static final String RESOLUTION = "resolution", FPS = "fps", WIDESCREEN = "widescreen", LATENCY = "latency",
-            TEXTURES = "textures", MINIMAP = "minimap", LANGUAGE = "language";
+            TEXTURES = "textures", MINIMAP = "minimap", LANGUAGE = "language",
+            CUTOUT = "cutout", HUD_SAFE = "hud_safe";
 
     static final Option[] ALL = {
             new Option(RESOLUTION, "Internal Resolution", "75",
                     new String[] {"25", "30", "35", "40", "45", "50", "55", "60", "65", "70", "75", "80", "85", "90", "95", "100"},
                     new String[] {"25%", "30%", "35%", "40%", "45%", "50%", "55%", "60%", "65%", "70%", "75%", "80%", "85%", "90%", "95%", "100%"}),
+            new Option(CUTOUT, "Display Cutout (Notch)", "fullscreen",
+                    new String[] {"fullscreen", "safe"},
+                    new String[] {"Full Screen · bypass notch", "Letterbox · avoid cutout"}),
+            new Option(HUD_SAFE, "HUD Safe Area (20:9 / Notch)", "on",
+                    new String[] {"on", "off"},
+                    new String[] {"16:9 Centered · safe from notch", "Screen edges · ultra-wide"}),
             new Option(FPS, "FPS Limit", "120",
                     new String[] {"30", "60", "90", "120", "0"},
                     new String[] {"30 FPS · battery saver", "60 FPS", "90 FPS", "120 FPS", "Uncapped"}),

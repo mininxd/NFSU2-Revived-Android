@@ -31,6 +31,7 @@ static float s_hud_pos_x = 320.0f;      /* the mod's fHudPosX */
 static float s_hud_offset = 0.0f;       /* fWidescreenHudOffset */
 static float s_width = 640.0f, s_height = 480.0f;
 static const int s_disable_cutscene_borders = 1;
+static int s_hud_safe_area = 1;
 /* Extra vertical move of the minimap (mobile layout: top-left instead of
  * bottom-left, clear of the thumbs). 0 keeps the mod's position. */
 static float s_minimap_dy = 0.0f;
@@ -117,8 +118,14 @@ void nfs_widescreen_set_resolution(unsigned width, unsigned height) {
     s_aspect = s_width / s_height;
     hud_scale_x = (1.0f / s_width * (s_height / 480.0f)) * 2.0f;
     s_hud_pos_x = 640.0f / (640.0f * hud_scale_x);
-    /* HudAspectRatioConstraint = Auto: -CalculateWidescreenOffset(W, H, 640, 480). */
-    s_hud_offset = -((640.0f / 2.0f) - (480.0f / 2.0f) * s_aspect);
+    /* HudAspectRatioConstraint = Auto: -CalculateWidescreenOffset(W, H, 640, 480).
+     * On tall/wide displays (20:9, 21:9), clamp HUD offset to 16:9 safe zone so
+     * minimap and gauges don't clip into camera hole-punches, notches, or corners. */
+    float hud_aspect = s_aspect;
+    if (s_hud_safe_area && hud_aspect > (16.0f / 9.0f)) {
+        hud_aspect = 16.0f / 9.0f;
+    }
+    s_hud_offset = -((640.0f / 2.0f) - (480.0f / 2.0f) * hud_aspect);
     wrf(HUD_SCALE_X, hud_scale_x);              /* fld [fHudScaleX] */
     wrf(0x00797D50u, s_hud_pos_x);              /* fsub [fHudPosX] */
     wrf(0x00797D58u, s_hud_pos_x * 2.0f);       /* fmul [fHudPosX_x2] */
@@ -130,6 +137,13 @@ void nfs_widescreen_set_resolution(unsigned width, unsigned height) {
 int nfs_widescreen_hud_entries(void) { return (int)s_hud_count; }
 
 void nfs_widescreen_set_minimap_offset(float dy) { s_minimap_dy = dy; }
+
+void nfs_widescreen_set_hud_safe_area(int enabled) {
+    s_hud_safe_area = enabled;
+    if (s_width > 0.0f && s_height > 0.0f) {
+        nfs_widescreen_set_resolution((unsigned)s_width, (unsigned)s_height);
+    }
+}
 
 /* FPSLimit (the mod's Misc.ixx): the game paces its main loop with a fixed
  * frame time of 1/60 s. SetFrameRate (0x576CB0) stores 1/fps in 0x865558 and
