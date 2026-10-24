@@ -3,9 +3,13 @@ name: Build Android APK
 on:
   push:
     branches: [ main ]
+    tags: [ 'v*' ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build-apk:
@@ -52,3 +56,11 @@ jobs:
           name: NFSU2-Android-APK
           path: artifacts/*.apk
           if-no-files-found: warn
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload ${{ github.ref_name }} artifacts/NFSU2.apk#NFSU2-AndroidEvolved-${{ github.ref_name }}-arm64.apk --clobber || \
+          gh release create ${{ github.ref_name }} artifacts/NFSU2.apk#NFSU2-AndroidEvolved-${{ github.ref_name }}-arm64.apk --title "${{ github.ref_name }}" --generate-notes
