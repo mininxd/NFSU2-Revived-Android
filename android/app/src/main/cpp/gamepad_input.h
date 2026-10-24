@@ -43,13 +43,8 @@ public:
         auto axis=[&](int32_t which){return AMotionEvent_getAxisValue(event,which,0);};
         stickX_=axis(AMOTION_EVENT_AXIS_X);stickY_=axis(AMOTION_EVENT_AXIS_Y);
         hatX_=axis(AMOTION_EVENT_AXIS_HAT_X);hatY_=axis(AMOTION_EVENT_AXIS_HAT_Y);
-        // Android's right stick: check both AXIS_RX ("X Rotation") and AXIS_Z, and AXIS_RY / AXIS_RZ.
-        float rx = axis(AMOTION_EVENT_AXIS_RX);
-        float z = axis(AMOTION_EVENT_AXIS_Z);
-        rightX_ = std::fabs(rx) > std::fabs(z) ? rx : z;
-        float ry = axis(AMOTION_EVENT_AXIS_RY);
-        float rz = axis(AMOTION_EVENT_AXIS_RZ);
-        rightY_ = std::fabs(ry) > std::fabs(rz) ? ry : rz;
+        // Android's standard right stick is Z/RZ.
+        rightX_=axis(AMOTION_EVENT_AXIS_Z);rightY_=axis(AMOTION_EVENT_AXIS_RZ);
         // Pads report triggers as LTRIGGER/RTRIGGER, BRAKE/GAS or both.
         leftTrigger_=std::fmax(axis(AMOTION_EVENT_AXIS_LTRIGGER),axis(AMOTION_EVENT_AXIS_BRAKE));
         rightTrigger_=std::fmax(axis(AMOTION_EVENT_AXIS_RTRIGGER),axis(AMOTION_EVENT_AXIS_GAS));

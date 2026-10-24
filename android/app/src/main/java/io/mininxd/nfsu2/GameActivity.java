@@ -333,12 +333,6 @@ public final class GameActivity extends NativeActivity {
         holdLanBroadcasts(false);
         updateTiltSensor();
         if(inputManager!=null)inputManager.unregisterInputDeviceListener(gamepadListener);
-        if (stickHandler != null) stickHandler.removeCallbacks(stickRotateRunnable);
-        if (rightStickDragging) {
-            nativePointer(simulatedPointerX, 0.5f, 2);
-            rightStickDragging = false;
-            simulatedPointerX = 0.5f;
-        }
         if (statusWindow != null) statusWindow.dismiss();
         if (touchControls != null) {touchControls.removeCallbacks(updateControlMode);touchControls.releaseAll();}
         if (controlsWindow != null) controlsWindow.dismiss();
@@ -371,69 +365,6 @@ public final class GameActivity extends NativeActivity {
         // NativeActivity may stay resumed when a runtime permission dialog closes.
         if (code == 1 && results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) recreate();
     }
-    private float simulatedPointerX = 0.5f;
-    private boolean rightStickDragging = false;
-    private float lastRightStickX = 0f;
-    private final Handler stickHandler = new Handler(Looper.getMainLooper());
-    private final Runnable stickRotateRunnable = new Runnable() {
-        @Override public void run() {
-            if (!foreground || nativeDrivingControls() || Math.abs(lastRightStickX) <= 0.15f) {
-                if (rightStickDragging) {
-                    nativePointer(simulatedPointerX, 0.5f, 2); // Pointer UP
-                    rightStickDragging = false;
-                    simulatedPointerX = 0.5f;
-                }
-                return;
-            }
-            if (!rightStickDragging) {
-                simulatedPointerX = 0.5f;
-                nativePointer(simulatedPointerX, 0.5f, 0); // Pointer DOWN
-                rightStickDragging = true;
-            }
-            simulatedPointerX += lastRightStickX * 0.035f;
-            if (simulatedPointerX < 0.1f || simulatedPointerX > 0.9f) {
-                nativePointer(simulatedPointerX, 0.5f, 2); // Pointer UP
-                simulatedPointerX = 0.5f;
-                nativePointer(simulatedPointerX, 0.5f, 0); // Pointer DOWN
-            } else {
-                nativePointer(simulatedPointerX, 0.5f, 1); // Pointer MOVE
-            }
-            stickHandler.postDelayed(this, 16); // ~60 FPS smooth continuous rotation
-        }
-    };
-
-    @Override public boolean dispatchGenericMotionEvent(android.view.MotionEvent event) {
-        if ((event.getSource() & android.view.InputDevice.SOURCE_JOYSTICK) == android.view.InputDevice.SOURCE_JOYSTICK
-                || (event.getSource() & android.view.InputDevice.SOURCE_GAMEPAD) == android.view.InputDevice.SOURCE_GAMEPAD) {
-            // Right analog stick ("X Rotation" / AXIS_RX / AXIS_Z) rotates preview car when inside a menu/garage/lobby
-            if (!nativeDrivingControls()) {
-                float rxVal = event.getAxisValue(android.view.MotionEvent.AXIS_RX);
-                float zVal = event.getAxisValue(android.view.MotionEvent.AXIS_Z);
-                float rx = Math.abs(rxVal) > Math.abs(zVal) ? rxVal : zVal;
-                if (Math.abs(rx) <= 0.15f) {
-                    float rzVal = event.getAxisValue(android.view.MotionEvent.AXIS_RZ);
-                    if (Math.abs(rzVal) > 0.15f) rx = rzVal;
-                }
-                boolean wasActive = Math.abs(lastRightStickX) > 0.15f;
-                lastRightStickX = (Math.abs(rx) > 0.15f) ? rx : 0f;
-                if (Math.abs(lastRightStickX) > 0.15f) {
-                    if (!wasActive) {
-                        stickHandler.removeCallbacks(stickRotateRunnable);
-                        stickHandler.post(stickRotateRunnable);
-                    }
-                } else if (wasActive) {
-                    stickHandler.removeCallbacks(stickRotateRunnable);
-                    if (rightStickDragging) {
-                        nativePointer(simulatedPointerX, 0.5f, 2);
-                        rightStickDragging = false;
-                        simulatedPointerX = 0.5f;
-                    }
-                }
-            }
-        }
-        return super.dispatchGenericMotionEvent(event);
-    }
-
     @Override public void onBackPressed() {
         // Prevent accidental back gesture from closing the game while steering
     }
