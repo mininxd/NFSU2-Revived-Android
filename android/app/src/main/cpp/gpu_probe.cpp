@@ -149,8 +149,8 @@ std::string probe(const char* hooks, const char* temp, const char* directory, co
 }  // namespace
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_nfsu2_androidevolved_GpuProbeActivity_nativeGpuReport(JNIEnv* env, jclass, jstring hooks, jstring temp,
-                                                               jstring directory, jstring library) {
+Java_io_mininxd_nfsu2_GpuProbeActivity_nativeGpuReport(JNIEnv* env, jclass, jstring hooks, jstring temp,
+                                                       jstring directory, jstring library) {
     auto text = [&](jstring value) {
         const char* chars = value ? env->GetStringUTFChars(value, nullptr) : nullptr;
         std::string result = chars ? chars : "";

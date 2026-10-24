@@ -44,7 +44,7 @@ or configure the SDK through Android Studio. From `android/`:
 ```powershell
 ./gradlew.bat --no-daemon assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
-adb shell am start -n com.nfsu2.androidevolved/.LauncherActivity
+adb shell am start -n io.mininxd.nfsu2/.LauncherActivity
 adb logcat -s NFSU2
 ```
 

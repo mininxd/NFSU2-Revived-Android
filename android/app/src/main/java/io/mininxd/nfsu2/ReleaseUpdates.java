@@ -1,4 +1,4 @@
-package com.nfsu2.androidevolved;
+package io.mininxd.nfsu2;
 
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -75,7 +75,7 @@ final class ReleaseUpdates {
                         "https://api.github.com/repos/codepdbh/nfsu2-recompiled/releases/tags/v" + Uri.encode(version)).openConnection();
                 connection.setConnectTimeout(6000); connection.setReadTimeout(6000);
                 connection.setRequestProperty("Accept", "application/vnd.github+json");
-                connection.setRequestProperty("User-Agent", "NFSU2-Android-Evolved/" + version);
+                connection.setRequestProperty("User-Agent", "NFSU2-Android/" + version);
                 try {
                     if (connection.getResponseCode() == 200) {
                         ByteArrayOutputStream body = new ByteArrayOutputStream();
@@ -116,7 +116,7 @@ final class ReleaseUpdates {
         HttpsURLConnection connection = (HttpsURLConnection) new URL(API).openConnection();
         connection.setConnectTimeout(6000); connection.setReadTimeout(6000);
         connection.setRequestProperty("Accept", "application/vnd.github+json");
-        connection.setRequestProperty("User-Agent", "NFSU2-Android-Evolved/" + installed(context));
+        connection.setRequestProperty("User-Agent", "NFSU2-Android/" + installed(context));
         connection.setRequestProperty("X-GitHub-Api-Version", "2026-03-10");
         try {
             int code = connection.getResponseCode();

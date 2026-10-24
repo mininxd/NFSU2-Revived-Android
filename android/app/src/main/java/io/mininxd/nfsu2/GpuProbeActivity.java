@@ -1,4 +1,4 @@
-package com.nfsu2.androidevolved;
+package io.mininxd.nfsu2;
 
 import android.app.Activity;
 import android.content.Intent;

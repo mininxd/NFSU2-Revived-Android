@@ -1,4 +1,4 @@
-package com.nfsu2.androidevolved;
+package io.mininxd.nfsu2;
 
 import android.app.NativeActivity;
 import android.os.Build;
@@ -232,7 +232,7 @@ public final class GameActivity extends NativeActivity {
         status.setBackgroundColor(0xb0000000);
         status.setTextSize(18);
         status.setPadding(24, 16, 24, 16);
-        status.setText("NFSU2 Android Evolved\nChecking internal storage/nfsu2…");
+        status.setText("NFSU2\nChecking internal storage/nfsu2…");
         // NativeActivity gives its main window surface to Vulkan; use a separate
         // non-interactive popup surface for the diagnostic text.
         statusWindow = new PopupWindow(status, ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -248,12 +248,12 @@ public final class GameActivity extends NativeActivity {
         runOnUiThread(() -> {
             if (statusHideTask != null) status.removeCallbacks(statusHideTask);
             if (message.contains("Executing game CRT entry") || message.contains("Ejecutando entrada CRT")) {
-                status.setText("NFSU2 Android Evolved\n" + message);
+                status.setText("NFSU2\n" + message);
                 statusHideTask = () -> {statusHidden=true;if(statusWindow.isShowing())statusWindow.dismiss();};
                 status.postDelayed(statusHideTask, 8000);
             } else {
                 statusHidden=false;
-                status.setText("NFSU2 Android Evolved\n" + message);
+                status.setText("NFSU2\n" + message);
                 if (!statusWindow.isShowing() && hasWindowFocus())
                     statusWindow.showAtLocation(getWindow().getDecorView(), Gravity.TOP | Gravity.START, 0, 0);
             }

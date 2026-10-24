@@ -1,4 +1,4 @@
-package com.nfsu2.androidevolved;
+package io.mininxd.nfsu2;
 
 import android.app.ActivityManager;
 import android.app.ApplicationExitInfo;
@@ -62,7 +62,7 @@ final class Diagnostics {
 
     static String summary(Context context) {
         GpuDrivers.Driver driver = GpuDrivers.selected(context);
-        return "NFSU2 Android Evolved " + ReleaseUpdates.installed(context)
+        return "NFSU2 " + ReleaseUpdates.installed(context)
                 + "\nAPK ABI: " + (Process.is64Bit() ? "arm64-v8a" : "armeabi-v7a")
                 + "\nDevice: " + Build.MANUFACTURER + " " + Build.MODEL
                 + "\nAndroid: " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")"

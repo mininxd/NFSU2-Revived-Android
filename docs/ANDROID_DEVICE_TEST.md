@@ -2,7 +2,7 @@
 
 ## Artifact and device
 
-- App: `com.nfsu2.androidevolved`, version `0.1.0-bootstrap`, ARM64 debug APK.
+- App: `io.mininxd.nfsu2`, version `0.1.0-bootstrap`, ARM64 debug APK.
 - Icon: exact `ICONO/ICONO.png` packaged as `drawable/icono.png`.
 - Device: Samsung SM-S938B, Android API 36, Adreno 830.
 - Vulkan physical-device API reported: 1.3. The instance requests Vulkan 1.1,

@@ -17,7 +17,7 @@ Issue-driven changes and remaining limits: [16 October review](docs/ISSUE_REVIEW
 
 <div align="center">
 
-<img src="docs/images/logo.png" alt="NFSU2 Android Evolved Logo" width="220" />
+<img src="docs/images/logo.png" alt="NFSU2 Logo" width="220" />
 
 ### **Static Recompilation of SPEED2.EXE into Native C (x86 & ARM64)**
 
@@ -208,7 +208,7 @@ The `android/` directory contains the complete Gradle project for the Android AP
 2. **Device Deployment**:
    - Install the generated APK on your Android device.
    - Copy your PC game files (`Need for Speed Underground 2`) to the device's internal storage inside a folder named `/sdcard/nfsu2/`.
-   - Open **NFSU2 Android Evolved**, grant file access, choose your preferred language, resolution, and FPS cap, and launch the game!
+   - Open **NFSU2**, grant file access, choose your preferred language, resolution, and FPS cap, and launch the game!
 
 See additional documentation:
 - [Android Port Status & Build Notes](docs/ANDROID_PORT.md)
