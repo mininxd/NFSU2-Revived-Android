@@ -216,7 +216,13 @@ public final class GameActivity extends NativeActivity {
                 Math.min(metrics.widthPixels, metrics.heightPixels));
         nativeResolution(launch.getIntExtra("renderWidth", size[0]), launch.getIntExtra("renderHeight", size[1]));
         String language = launch.getStringExtra("language");
-        nativeLanguage(language != null ? language : GameOptions.language(this));
+        if (language == null || "English".equalsIgnoreCase(language)) {
+            language = GameOptions.language(this);
+        }
+        if ("English".equalsIgnoreCase(language)) {
+            language = "English UK";
+        }
+        nativeLanguage(language);
         nativeFrameLimit(launch.getIntExtra("frameCap", Integer.parseInt(GameOptions.get(this, GameOptions.FPS))));
         nativeWidescreen(launch.getBooleanExtra("widescreen", GameOptions.get(this, GameOptions.WIDESCREEN).equals("on")));
         String server = launch.getStringExtra("onlineServer");
@@ -245,15 +251,25 @@ public final class GameActivity extends NativeActivity {
         controlsWindow.setClippingEnabled(false);
     }
     public void setStatus(String message) {
+        if (message != null) {
+            message = message
+                    .replace("Datos accesibles: memoria interna/nfsu2", "Accessible data: internal storage/nfsu2")
+                    .replace("Vulkan 1.1: presentación activa", "Vulkan 1.1: presentation active")
+                    .replace("Ejecutando entrada CRT del juego…", "Executing game CRT entry…")
+                    .replace("Ejecutando entrada CRT del juego", "Executing game CRT entry…")
+                    .replace("Arranque guest detenido:", "Guest boot halted:")
+                    .replace("Entrada guest terminada:", "Guest entry finished:");
+        }
+        final String text = message;
         runOnUiThread(() -> {
             if (statusHideTask != null) status.removeCallbacks(statusHideTask);
-            if (message.contains("Executing game CRT entry") || message.contains("Ejecutando entrada CRT")) {
-                status.setText("NFSU2\n" + message);
+            if (text != null && (text.contains("Executing game CRT entry") || text.contains("Ejecutando entrada CRT"))) {
+                status.setText("NFSU2\n" + text);
                 statusHideTask = () -> {statusHidden=true;if(statusWindow.isShowing())statusWindow.dismiss();};
-                status.postDelayed(statusHideTask, 8000);
+                status.postDelayed(statusHideTask, 3000);
             } else {
                 statusHidden=false;
-                status.setText("NFSU2\n" + message);
+                status.setText("NFSU2\n" + text);
                 if (!statusWindow.isShowing() && hasWindowFocus())
                     statusWindow.showAtLocation(getWindow().getDecorView(), Gravity.TOP | Gravity.START, 0, 0);
             }

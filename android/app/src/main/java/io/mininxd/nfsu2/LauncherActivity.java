@@ -232,8 +232,8 @@ public final class LauncherActivity extends Activity {
 
     private String languageLabel() {
         String current = GameOptions.language(this);
-        for (String[] language : LANGUAGES) if (language[1].equals(current)) return language[0];
-        return current;
+        for (String[] language : LANGUAGES) if (language[1].equalsIgnoreCase(current)) return language[0];
+        return "English";
     }
 
     private void chooseLanguage() {
@@ -241,13 +241,16 @@ public final class LauncherActivity extends Activity {
         if (found.isEmpty()) { message("Language", "No languages found in internal storage/nfsu2/LANGUAGES."); return; }
         String[] names = new String[found.size()];
         int checked = 0;
+        String current = GameOptions.language(this);
         for (int i = 0; i < names.length; i++) {
             names[i] = found.get(i)[0];
-            if (found.get(i)[1].equals(GameOptions.language(this))) checked = i;
+            if (found.get(i)[1].equalsIgnoreCase(current)) checked = i;
         }
         new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle("Language")
                 .setSingleChoiceItems(names, checked, (dialog, which) -> {
-                    GameOptions.prefs(this).edit().putString(GameOptions.LANGUAGE, found.get(which)[1]).apply();
+                    String selected = found.get(which)[1];
+                    if ("English".equalsIgnoreCase(selected)) selected = "English UK";
+                    GameOptions.prefs(this).edit().putString(GameOptions.LANGUAGE, selected).apply();
                     dialog.dismiss(); refreshOptions();
                 }).setNegativeButton("Cancel", null).show();
     }

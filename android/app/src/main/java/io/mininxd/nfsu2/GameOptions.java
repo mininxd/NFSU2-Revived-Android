@@ -83,7 +83,11 @@ final class GameOptions {
 
     /** The game's language folder name (LANGUAGES/<file>.bin) chosen in the launcher. */
     static String language(Context context) {
-        return prefs(context).getString(LANGUAGE, "English");
+        String lang = prefs(context).getString(LANGUAGE, "English UK");
+        if ("English".equalsIgnoreCase(lang) || "English (UK)".equalsIgnoreCase(lang) || "English (US)".equalsIgnoreCase(lang)) {
+            return "English UK";
+        }
+        return lang;
     }
 
     /** Render size for the selected resolution on a display of width × height (landscape). */
