@@ -316,17 +316,15 @@ void inputDispatch(){
         switch(method){
         case 3:{uint32_t output=arg(2);if(!output){ret(0x80004003,4);return;}write32(output,0);
             uint32_t device=inputGuidEquals(arg(1),keyboardGuid)?2:inputGuidEquals(arg(1),mouseGuid)?3:inputGuidEquals(arg(1),padGuid)?4:0;
-            if(device==4){std::lock_guard<std::mutex> lock(inputMutex);if(!inputPadConnected)device=0;}
             if(inputGuidEquals(arg(1),padGuid))NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","DirectInput CreateDevice gamepad: %s",device?"created":"not connected");
             if(arg(3)){ret(0x80040110,4);return;}if(!device){ret(0x80070002,4);return;}
             write32(output,createInputObject(device));ret(0,4);return;}
         case 4:{uint32_t type=arg(1),callback=arg(2),context=arg(3),flags=arg(4);
             if(!callback||flags&~0x70111u){ret(diInvalid,5);return;}
-            bool pad;{std::lock_guard<std::mutex> lock(inputMutex);pad=inputPadConnected;}
-            NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","DirectInput EnumDevices type=%u flags=%x gamepad=%d",type,flags,int(pad));
+            NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","DirectInput EnumDevices type=%u flags=%x gamepad=1",type,flags);
             uint32_t instance=allocate(580);
-            try{for(uint32_t device:{2u,3u,4u}){
-                if(device==4&&(!pad||(flags&0x100u)))continue;  // no force feedback
+            try{for(uint32_t device:{3u,4u}){
+                if(device==4&&(flags&0x100u))continue;  // no force feedback
                 uint32_t deviceType=device==2?0x13:device==3?0x12:0x15;
                 uint32_t deviceClass=device==2?3:device==3?2:4;
                 if(type!=0&&(type!=1||device==4)&&type!=deviceClass&&(type&0xff)!=deviceType)continue;
@@ -336,7 +334,7 @@ void inputDispatch(){
                 if(!proceed)break;
             }}catch(...){heaps->free(GuestHeaps::process,instance);throw;}
             heaps->free(GuestHeaps::process,instance);ret(0,5);return;}
-        case 5:{if(inputGuidEquals(arg(1),padGuid)){std::lock_guard<std::mutex> lock(inputMutex);ret(inputPadConnected?0:1,2);return;}
+        case 5:{if(inputGuidEquals(arg(1),padGuid)){ret(0,2);return;}
             ret(inputGuidEquals(arg(1),keyboardGuid)||inputGuidEquals(arg(1),mouseGuid)?0:0x80070002,2);return;}
         case 7:ret(arg(2)==0x800?0:diInvalid,3);return;
         case 9:{uint32_t format=arg(2),callback=arg(3),context=arg(4),flags=arg(5);
