@@ -3,12 +3,12 @@
 
 ### Android Downloads
 
-[Underground 2 v0.14.9](https://github.com/codepdbh/nfsu2-recompiled/releases/tag/v0.14.9)
+[Underground 2 v0.14.12](https://github.com/mininxd/nfsu2-recompiled/releases/tag/v0.14.12)
 
 | APK | Architecture |
 |---|---|
-| [ARM64 / 64 bits](https://github.com/codepdbh/nfsu2-recompiled/releases/download/v0.14.9/NFSU2-AndroidEvolved-v0.14.9-arm64.apk) | arm64-v8a, recommended |
-| [ARMv7 / 32 bits](https://github.com/codepdbh/nfsu2-recompiled/releases/download/v0.14.9/NFSU2-AndroidEvolved-v0.14.9-armeabi-v7a.apk) | armeabi-v7a; requires Android with 32-bit app support |
+| [ARM64 / 64 bits](https://github.com/mininxd/nfsu2-recompiled/releases/download/v0.14.12/NFSU2-AndroidEvolved-v0.14.12-arm64.apk) | arm64-v8a, recommended |
+| [ARMv7 / 32 bits](https://github.com/mininxd/nfsu2-recompiled/releases/download/v0.14.12/NFSU2-AndroidEvolved-v0.14.12-armeabi-v7a.apk) | armeabi-v7a; requires Android with 32-bit app support |
 
 Android 10+ and Vulkan 1.1+. Both APKs use the same package and signing key;
 install the architecture supported by your device. Original game data is required.

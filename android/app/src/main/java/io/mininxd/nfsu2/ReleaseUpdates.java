@@ -16,8 +16,8 @@ import javax.net.ssl.HttpsURLConnection;
 
 /** Optional official GitHub updates. No APK is installed or downloaded in the background. */
 final class ReleaseUpdates {
-    private static final String REPO = "https://github.com/codepdbh/nfsu2-recompiled/";
-    private static final String API = "https://api.github.com/repos/codepdbh/nfsu2-recompiled/releases/latest";
+    private static final String REPO = "https://github.com/mininxd/nfsu2-recompiled/";
+    private static final String API = "https://api.github.com/repos/mininxd/nfsu2-recompiled/releases/latest";
     static final class Result {
         final String tag, url, error;
         Result(String tag, String url, String error) { this.tag = tag; this.url = url; this.error = error; }
@@ -72,7 +72,7 @@ final class ReleaseUpdates {
             String notes = null;
             try {
                 HttpsURLConnection connection = (HttpsURLConnection) new URL(
-                        "https://api.github.com/repos/codepdbh/nfsu2-recompiled/releases/tags/v" + Uri.encode(version)).openConnection();
+                        "https://api.github.com/repos/mininxd/nfsu2-recompiled/releases/tags/v" + Uri.encode(version)).openConnection();
                 connection.setConnectTimeout(6000); connection.setReadTimeout(6000);
                 connection.setRequestProperty("Accept", "application/vnd.github+json");
                 connection.setRequestProperty("User-Agent", "NFSU2-Android/" + version);

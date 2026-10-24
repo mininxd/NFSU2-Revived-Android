@@ -75,7 +75,7 @@ public final class LauncherActivity extends Activity {
                 .setPositiveButton("OK", (d, which) -> ReleaseUpdates.whatsNewSeen(this))
                 .setNeutralButton("View on GitHub", (d, which) -> {
                     ReleaseUpdates.whatsNewSeen(this);
-                    openUrl(Uri.parse("https://github.com/codepdbh/nfsu2-recompiled/releases/tag/v" + Uri.encode(version)));
+                    openUrl(Uri.parse("https://github.com/mininxd/nfsu2-recompiled/releases/tag/v" + Uri.encode(version)));
                 })
                 .setOnCancelListener(d -> ReleaseUpdates.whatsNewSeen(this))
                 .show();
@@ -97,8 +97,10 @@ public final class LauncherActivity extends Activity {
         if (crash != null) {
             Diagnostics.acknowledgeCrashes(this);
             new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                    .setTitle("The game crashed").setMessage(crash + ".\n\nDo you want to send the complete log to GitHub so it can be fixed?")
+                    .setTitle("The game crashed")
+                    .setMessage(crash + ".\n\nYou can report this issue on GitHub or save the diagnostic ZIP file to your device.")
                     .setPositiveButton("Report on GitHub", (dialog, which) -> prepareReport(crash))
+                    .setNeutralButton("Save Diagnostic ZIP", (dialog, which) -> saveDiagnosticZip(crash))
                     .setNegativeButton("Not now", null).show();
         }
     }
@@ -217,7 +219,7 @@ public final class LauncherActivity extends Activity {
         optionsList.addView(optionRow("Online server", GameOptions.onlineServer(this), this::chooseOnlineServer));
         optionsList.addView(optionRow("Check for updates",
                 checkingUpdates ? "Checking GitHub…" : "Version " + ReleaseUpdates.installed(this), () -> checkUpdates(true)));
-        optionsList.addView(optionRow("Report an issue", "Full log to GitHub", () -> prepareReport(null)));
+        optionsList.addView(optionRow("Report an issue", "Report on GitHub / Save ZIP", () -> showReportDialog(null)));
     }
 
     // ---- Options ---------------------------------------------------------------------------------------
@@ -401,9 +403,7 @@ public final class LauncherActivity extends Activity {
     }
 
     /**
-     * Builds the report ZIP, saves it to Download/NFSU2 and opens a pre-filled GitHub issue. GitHub
-     * cannot take an attachment through the link, so the issue already carries a technical summary
-     * and the player is told where the ZIP is to attach it.
+     * Builds the report ZIP, saves it to Download/NFSU2 and /sdcard/NFSU2, and opens a pre-filled GitHub issue.
      */
     private void prepareReport(String crash) {
         status.setText("Preparing log…");
@@ -411,21 +411,60 @@ public final class LauncherActivity extends Activity {
             try {
                 File report = Diagnostics.createReport(this);
                 String location = Diagnostics.saveToDownloads(this, report);
+                Diagnostics.saveToSdcard(report);
                 Uri issue = Diagnostics.issueUri(this, crash, location);
                 main.post(() -> {
                     refresh();
                     new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
                             .setTitle("Report on GitHub")
-                            .setMessage("The full log has been saved to:\n" + location
-                                    + "\n\nA GitHub issue will open with a pre-filled technical summary. Describe what happened and, "
+                            .setMessage("The diagnostic log has been saved to:\n" + location
+                                    + "\nand /sdcard/NFSU2/" + report.getName()
+                                    + "\n\nA GitHub issue will open on mininxd/nfsu2-recompiled with a pre-filled technical summary. Describe what happened and, "
                                     + "if possible, attach that ZIP (GitHub does not allow attaching files automatically).")
                             .setPositiveButton("Open GitHub", (dialog, which) -> openUrl(issue))
+                            .setNeutralButton("Save ZIP Only", null)
                             .setNegativeButton("Cancel", null).show();
                 });
             } catch (Exception error) {
                 main.post(() -> { refresh(); message("Report an issue", "Could not prepare log: " + error.getMessage()); });
             }
         });
+    }
+
+    private void saveDiagnosticZip(String crash) {
+        status.setText("Saving diagnostic ZIP…");
+        worker.execute(() -> {
+            try {
+                File report = Diagnostics.createReport(this);
+                String location = Diagnostics.saveToDownloads(this, report);
+                String sdcardLoc = Diagnostics.saveToSdcard(report);
+                main.post(() -> {
+                    refresh();
+                    String msg = "Diagnostic ZIP successfully saved to:\n• " + location;
+                    if (sdcardLoc != null) msg += "\n• " + sdcardLoc;
+                    msg += "\n\nYou can attach or send this file for troubleshooting.";
+                    new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                            .setTitle("Diagnostic Saved")
+                            .setMessage(msg)
+                            .setPositiveButton("OK", null)
+                            .show();
+                });
+            } catch (Exception error) {
+                main.post(() -> { refresh(); message("Save Diagnostic", "Could not save diagnostic: " + error.getMessage()); });
+            }
+        });
+    }
+
+    private void showReportDialog(String crash) {
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle(crash != null ? "The game crashed" : "Diagnostics & Bug Report")
+                .setMessage(crash != null
+                        ? crash + "\n\nChoose an option below to report on GitHub or save the diagnostic ZIP file."
+                        : "Generate diagnostic logs, crash traces, and system specs to report an issue or save locally.")
+                .setPositiveButton("Report on GitHub", (dialog, which) -> prepareReport(crash))
+                .setNeutralButton("Save Diagnostic ZIP", (dialog, which) -> saveDiagnosticZip(crash))
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     private void openUrl(Uri uri) {

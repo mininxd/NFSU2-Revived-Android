@@ -38,6 +38,13 @@ public:
     GuestMemory() {
         base_ = mmap(nullptr, size_t(size), PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
         if (base_ == MAP_FAILED) throw std::runtime_error("Guest address-space reservation failed");
+        // Map page 0 as read-only zeros to safely tolerate legacy PC null-structure field reads
+        // (e.g. sub_005996b0 reading [remote_player + 0x40] during online lobby state sync).
+        // Writes to page 0 still trap with SEGV_ACCERR because it is PROT_READ only.
+        if (mprotect(base_, page_, PROT_READ) != 0) {
+            munmap(base_, size_t(size));
+            throw std::runtime_error("Failed to protect guest null page as read-only");
+        }
     }
     GuestMemory(const GuestMemory&) = delete;
     GuestMemory& operator=(const GuestMemory&) = delete;
@@ -105,4 +112,6 @@ inline void testGuestMemory() {
     try { mem.address(uint32_t(GuestMemory::size-1), 2); } catch (const std::out_of_range&) { rejected = true; }
     if (!rejected) throw std::runtime_error("Guest wraparound was accepted");
     if(mem.readable(0,1)||mem.readable(0x30000000,1)||!mem.readable(0x400000,4)||mem.readable(uint32_t(GuestMemory::size-1),2))throw std::runtime_error("Guest committed range validation failed");
+    volatile uint32_t nullOffsetVal = *reinterpret_cast<const volatile uint32_t*>(static_cast<const unsigned char*>(mem.base()) + 0x40);
+    if (nullOffsetVal != 0) throw std::runtime_error("Guest null page is not zero");
 }

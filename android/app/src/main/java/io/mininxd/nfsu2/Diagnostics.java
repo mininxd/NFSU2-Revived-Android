@@ -31,7 +31,7 @@ import java.util.zip.ZipOutputStream;
  * attach.
  */
 final class Diagnostics {
-    static final String ISSUES = "https://github.com/codepdbh/nfsu2-recompiled/issues/new";
+    static final String ISSUES = "https://github.com/mininxd/nfsu2-recompiled/issues/new";
     private static final int LIMIT = 4 * 1024 * 1024;
     private static final String PREFS = "nfsu2_diagnostics";
 
@@ -150,23 +150,54 @@ final class Diagnostics {
 
     /** Copies the report to Download/NFSU2 (MediaStore: an app needs no permission for its own files). */
     static String saveToDownloads(Context context, File report) throws IOException {
-        android.content.ContentValues values = new android.content.ContentValues();
-        values.put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, report.getName());
-        values.put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "application/zip");
-        values.put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS + "/NFSU2");
-        android.content.ContentResolver resolver = context.getContentResolver();
-        Uri target = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
-        if (target == null) throw new IOException("Could not create file in Downloads.");
-        try (InputStream input = new java.io.FileInputStream(report);
-             java.io.OutputStream output = resolver.openOutputStream(target, "w")) {
-            if (output == null) throw new IOException("Could not write to Downloads.");
-            byte[] buffer = new byte[65536];
-            for (int n; (n = input.read(buffer)) != -1;) output.write(buffer, 0, n);
-        } catch (IOException error) {
-            resolver.delete(target, null, null);
-            throw error;
+        try {
+            android.content.ContentValues values = new android.content.ContentValues();
+            values.put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, report.getName());
+            values.put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "application/zip");
+            values.put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS + "/NFSU2");
+            android.content.ContentResolver resolver = context.getContentResolver();
+            Uri target = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+            if (target != null) {
+                try (InputStream input = new java.io.FileInputStream(report);
+                     java.io.OutputStream output = resolver.openOutputStream(target, "w")) {
+                    if (output != null) {
+                        byte[] buffer = new byte[65536];
+                        for (int n; (n = input.read(buffer)) != -1;) output.write(buffer, 0, n);
+                        return "Downloads/NFSU2/" + report.getName();
+                    }
+                }
+            }
+        } catch (Exception ignored) { }
+        try {
+            File publicDl = new File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "NFSU2");
+            if (!publicDl.isDirectory()) publicDl.mkdirs();
+            File dest = new File(publicDl, report.getName());
+            try (InputStream in = new java.io.FileInputStream(report);
+                 java.io.FileOutputStream out = new java.io.FileOutputStream(dest)) {
+                byte[] buf = new byte[65536];
+                for (int n; (n = in.read(buf)) != -1;) out.write(buf, 0, n);
+                return "Downloads/NFSU2/" + report.getName();
+            }
+        } catch (Exception ignored) { }
+        return report.getAbsolutePath();
+    }
+
+    /** Copies the report directly to /sdcard/NFSU2/ */
+    static String saveToSdcard(File report) {
+        try {
+            File destDir = new File(android.os.Environment.getExternalStorageDirectory(), "NFSU2");
+            if (!destDir.isDirectory()) destDir.mkdirs();
+            File dest = new File(destDir, report.getName());
+            try (InputStream input = new java.io.FileInputStream(report);
+                 java.io.FileOutputStream output = new java.io.FileOutputStream(dest)) {
+                byte[] buffer = new byte[65536];
+                int n;
+                while ((n = input.read(buffer)) != -1) output.write(buffer, 0, n);
+            }
+            return dest.getAbsolutePath();
+        } catch (Exception ignored) {
+            return null;
         }
-        return "Downloads/NFSU2/" + report.getName();
     }
 
     private static void add(ZipOutputStream zip, String name, byte[] data) throws IOException {
