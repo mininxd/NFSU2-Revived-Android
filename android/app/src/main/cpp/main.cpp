@@ -260,7 +260,7 @@ static void onCommand(android_app* app, int32_t command) {
     auto& h = *static_cast<Host*>(app->userData);
     if (command == APP_CMD_RESUME) { h.resumed = true; h.failed = false; }
     if (command == APP_CMD_PAUSE) { setGuestPaused(true);gamepad.releaseAll(setPadKey);clearGuestInput();h.resumed = false; h.renderer.stop();acknowledgeD3D9Surface(false);setD3D9HostWindow(nullptr); }
-    if (command == APP_CMD_TERM_WINDOW || command == APP_CMD_WINDOW_RESIZED || command == APP_CMD_INIT_WINDOW) {
+    if (command == APP_CMD_TERM_WINDOW) {
         setGuestPaused(true);h.renderer.stop(); h.failed = false;
         acknowledgeD3D9Surface(false);setD3D9HostWindow(nullptr);
     }

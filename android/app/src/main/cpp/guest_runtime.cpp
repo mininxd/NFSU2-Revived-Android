@@ -909,13 +909,25 @@ std::string connectGuestRuntime(const char* executable) {
 }
 void requestGuestRuntimeStop() {stopRequested=true;}
 void setGuestPaused(bool paused) {
-    // The AAudio stream keeps pulling from looping voices while the guest is
-    // paused: in the background the last mixed sound repeated until the app
-    // closed. Pause the output with the guest and restart it on resume.
+    // When paused, soundCallback sends silence so looping voices do not repeat.
+    // We avoid pausing AAudioStream directly on pause because Android AudioServer
+    // disconnects paused streams during screen recording route changes.
+    // On resume, if the stream became disconnected, we close and restart it.
     bool previous=guestPaused.exchange(paused);
-    if(previous!=paused&&soundStream){
-        aaudio_result_t status=paused?AAudioStream_requestPause(soundStream):AAudioStream_requestStart(soundStream);
-        if(status!=AAUDIO_OK)NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFS","Audio %s failed: %d",paused?"pause":"resume",int(status));
+    if(previous!=paused&&soundStream&&!paused){
+        aaudio_stream_state_t state=AAudioStream_getState(soundStream);
+        if(state==AAUDIO_STREAM_STATE_DISCONNECTED||state==AAUDIO_STREAM_STATE_CLOSING||state==AAUDIO_STREAM_STATE_CLOSED){
+            NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","AAudio stream disconnected while paused, recreating...");
+            shutdownGuestSound();
+            startSoundStream();
+        }else{
+            aaudio_result_t status=AAudioStream_requestStart(soundStream);
+            if(status!=AAUDIO_OK&&status!=AAUDIO_ERROR_INVALID_STATE){
+                NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","AAudio resume failed: %d, recreating stream",int(status));
+                shutdownGuestSound();
+                startSoundStream();
+            }
+        }
     }
 }
 bool guestDrivingControls() {return inputDrivingMode.load();}

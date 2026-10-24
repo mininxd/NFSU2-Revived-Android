@@ -18,6 +18,10 @@ AAudioStream* soundStream=nullptr;
 int32_t soundLastXruns=0;
 std::atomic<uint32_t> soundCallbackPeakUs{0};
 aaudio_data_callback_result_t soundCallback(AAudioStream*,void*,void* data,int32_t frames){
+    if(guestPaused.load(std::memory_order_relaxed)){
+        std::memset(data,0,sizeof(float)*2*frames);
+        return AAUDIO_CALLBACK_RESULT_CONTINUE;
+    }
     auto start=std::chrono::steady_clock::now();
     soundMixer.render(static_cast<float*>(data),unsigned(frames));
     uint32_t us=uint32_t(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now()-start).count());
@@ -69,7 +73,17 @@ bool startSoundStream(){
 // Called on the guest thread after Present, never from the real-time callback.
 // Grow only after an actual underrun, one burst at a time, bounded by capacity.
 void serviceGuestSound(){
-    if(!soundStream)return;
+    if(!soundStream){
+        if(!guestPaused.load(std::memory_order_relaxed))startSoundStream();
+        return;
+    }
+    aaudio_stream_state_t state=AAudioStream_getState(soundStream);
+    if(state==AAUDIO_STREAM_STATE_DISCONNECTED||state==AAUDIO_STREAM_STATE_CLOSING||state==AAUDIO_STREAM_STATE_CLOSED){
+        NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","AAudio stream disconnected (state=%d), restarting...",int(state));
+        shutdownGuestSound();
+        if(!guestPaused.load(std::memory_order_relaxed))startSoundStream();
+        return;
+    }
     int32_t xruns=AAudioStream_getXRunCount(soundStream),burst=AAudioStream_getFramesPerBurst(soundStream);
     int32_t size=AAudioStream_getBufferSizeInFrames(soundStream),capacity=AAudioStream_getBufferCapacityInFrames(soundStream);
     if(xruns>soundLastXruns&&burst>0&&size<soundFrames(soundMaximumMs))
