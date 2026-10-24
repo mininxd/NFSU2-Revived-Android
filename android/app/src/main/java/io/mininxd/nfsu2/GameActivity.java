@@ -261,6 +261,30 @@ public final class GameActivity extends NativeActivity {
         controlsWindow = new PopupWindow(touchControls, ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT, false);
         controlsWindow.setClippingEnabled(false);
+        java.util.ArrayList<String> cheats = launch.getStringArrayListExtra("cheats");
+        if (cheats == null) cheats = GameOptions.getActiveCheatCodes(this);
+        if (!cheats.isEmpty()) applyCheatCodes(cheats);
+    }
+
+    private void applyCheatCodes(java.util.List<String> codes) {
+        if (codes == null || codes.isEmpty()) return;
+        android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
+        long[] waves = new long[] { 5000, 7500, 10000, 13000 };
+        for (long waveDelay : waves) {
+            handler.postDelayed(() -> {
+                if (!foreground) return;
+                long offset = 0;
+                for (String code : codes) {
+                    handler.postDelayed(() -> {
+                        if (foreground) {
+                            nativeTypeText(code, false);
+                            android.util.Log.i("NFSU2", "Delivered cheat code: " + code);
+                        }
+                    }, offset);
+                    offset += 250;
+                }
+            }, waveDelay);
+        }
     }
     public void setStatus(String message) {
         if (message != null) {

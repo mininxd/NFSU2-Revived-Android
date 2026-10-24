@@ -221,6 +221,7 @@ public final class LauncherActivity extends Activity {
         optionsList.addView(optionRow("Reset graphics cache", "Regenerate shaders", () -> GraphicsCache.prompt(this)));
         for (GameOptions.Option option : GameOptions.ALL)
             optionsList.addView(optionRow(option.title, option.label(GameOptions.get(this, option.key)), () -> chooseOption(option)));
+        optionsList.addView(optionRow("Cheat Codes", cheatCodesSummary(), this::chooseCheatCodes));
         optionsList.addView(optionRow("Online server", GameOptions.onlineServer(this), this::chooseOnlineServer));
         optionsList.addView(optionRow("Check for updates",
                 checkingUpdates ? "Checking GitHub…" : "Version " + ReleaseUpdates.installed(this), () -> checkUpdates(true)));
@@ -271,6 +272,48 @@ public final class LauncherActivity extends Activity {
                     GameOptions.set(this, option.key, option.values[which]);
                     dialog.dismiss(); refreshOptions();
                 }).setNegativeButton("Cancel", null).show();
+    }
+
+    private String cheatCodesSummary() {
+        int count = 0;
+        for (GameOptions.Cheat c : GameOptions.CHEATS) {
+            if (GameOptions.isCheatEnabled(this, c.id)) count++;
+        }
+        if (count == 0) return "None active";
+        if (count == GameOptions.CHEATS.length) return "All active (" + count + ")";
+        return count + " active";
+    }
+
+    private void chooseCheatCodes() {
+        int n = GameOptions.CHEATS.length;
+        CharSequence[] items = new CharSequence[n];
+        boolean[] checked = new boolean[n];
+        for (int i = 0; i < n; i++) {
+            GameOptions.Cheat c = GameOptions.CHEATS[i];
+            items[i] = c.title + "\n" + c.description;
+            checked[i] = GameOptions.isCheatEnabled(this, c.id);
+        }
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Cheat Codes")
+                .setMultiChoiceItems(items, checked, (dialog, which, isChecked) -> {
+                    checked[which] = isChecked;
+                    GameOptions.setCheatEnabled(this, GameOptions.CHEATS[which].id, isChecked);
+                })
+                .setPositiveButton("Done", (dialog, which) -> refreshOptions())
+                .setNeutralButton("Select All", (dialog, which) -> {
+                    for (int i = 0; i < n; i++) {
+                        GameOptions.setCheatEnabled(this, GameOptions.CHEATS[i].id, true);
+                    }
+                    refreshOptions();
+                })
+                .setNegativeButton("Clear All", (dialog, which) -> {
+                    for (int i = 0; i < n; i++) {
+                        GameOptions.setCheatEnabled(this, GameOptions.CHEATS[i].id, false);
+                    }
+                    refreshOptions();
+                })
+                .setOnDismissListener(dialog -> refreshOptions())
+                .show();
     }
 
     private void chooseOnlineServer() {
@@ -507,7 +550,8 @@ public final class LauncherActivity extends Activity {
                 .putExtra("onlineServer", GameOptions.onlineServer(this))
                 .putExtra("cutout", GameOptions.get(this, GameOptions.CUTOUT))
                 .putExtra("hudSafeArea", GameOptions.get(this, GameOptions.HUD_SAFE).equals("on"))
-                .putExtra("driverLoader", loader));
+                .putExtra("driverLoader", loader)
+                .putStringArrayListExtra("cheats", GameOptions.getActiveCheatCodes(this)));
     }
 
     // ---- Storage ---------------------------------------------------------------------------------------

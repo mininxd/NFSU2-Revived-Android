@@ -103,4 +103,42 @@ final class GameOptions {
         float scale = Integer.parseInt(value) / 100f;
         return new int[] {Math.round(width * scale / 2f) * 2, Math.round(height * scale / 2f) * 2};
     }
+
+    static final class Cheat {
+        final String id, title, description;
+        final String[] codes;
+        Cheat(String id, String title, String description, String... codes) {
+            this.id = id; this.title = title; this.description = description; this.codes = codes;
+        }
+    }
+
+    static final Cheat[] CHEATS = {
+        new Cheat("districts", "Unlock All Districts", "Explore Coal Harbor, Jackson Heights & all map areas (opendoors)", "opendoors"),
+        new Cheat("cars_parts", "Unlock All Cars & Circuit Parts", "All vehicles & performance parts in Career (ordermebaby)", "ordermebaby"),
+        new Cheat("perf_lv1", "Unlock Performance Parts Lv 1", "Engine, transmission, ECU, nitrous Lv 1 (needperformance1)", "needperformance1"),
+        new Cheat("perf_lv2", "Unlock Performance Parts Lv 2", "Top-tier Level 2 performance upgrades (needperformance2)", "needperformance2"),
+        new Cheat("vis_lv1", "Unlock Visual Upgrades Lv 1", "Body kits, spoilers, hoods, rims Lv 1 (gimmevisual1)", "gimmevisual1"),
+        new Cheat("vis_lv2", "Unlock Visual Upgrades Lv 2", "Level 2 widebody and visual customization (gimmevisual2)", "gimmevisual2"),
+        new Cheat("cash", "Extra Career Cash (+$20,000)", "Starting bank boost in Career mode (regmebaby)", "regmebaby"),
+        new Cheat("sponsors", "Unlock Sponsor Cars", "Snoop Dogg, Chingy, Capone, D3, ShineStreet & David Choe cars", "yodogg", "gimmechingy", "wannacapone", "davidchoeart", "tunejapantuning", "shinestreetbright", "wantmyd3"),
+        new Cheat("vinyls", "Unlock Sponsor Vinyls", "Best Buy, Cingular, Burger King, Edge & Old Spice", "needmybestbuy", "gotmycingular", "gottahavebk", "gottaedge", "goforoldspice")
+    };
+
+    static boolean isCheatEnabled(Context context, String id) {
+        return prefs(context).getBoolean("cheat_" + id, false);
+    }
+
+    static void setCheatEnabled(Context context, String id, boolean enabled) {
+        prefs(context).edit().putBoolean("cheat_" + id, enabled).apply();
+    }
+
+    static java.util.ArrayList<String> getActiveCheatCodes(Context context) {
+        java.util.ArrayList<String> list = new java.util.ArrayList<>();
+        for (Cheat c : CHEATS) {
+            if (isCheatEnabled(context, c.id)) {
+                for (String code : c.codes) if (!list.contains(code)) list.add(code);
+            }
+        }
+        return list;
+    }
 }
