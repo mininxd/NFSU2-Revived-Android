@@ -107,6 +107,11 @@ public final class LauncherActivity extends Activity {
         super.onResume();
         resumed = true;
         refresh();
+        if (GameOptions.isRoamEnabled(this)) {
+            AdhocRoamClient.getInstance().queryServerPlayers(this, () -> {
+                if (resumed) runOnUiThread(this::refreshOptions);
+            });
+        }
         String crash = Diagnostics.unreportedCrash(this);
         if (crash != null) {
             Diagnostics.acknowledgeCrashes(this);
@@ -422,11 +427,23 @@ public final class LauncherActivity extends Activity {
         optionsList.addView(optionRow("Cheat Codes", cheatCodesSummary(), this::chooseCheatCodes));
         optionsList.addView(optionRow("Freeroam Online (beta)", GameOptions.isRoamEnabled(this) ? "On" : "Off", this::toggleFreeRoam));
         optionsList.addView(optionRow("Ghost Mode", GameOptions.isGhostModeEnabled(this) ? "On" : "Off", this::toggleGhostMode));
-        optionsList.addView(optionRow("Online Server", GameOptions.onlineServer(this), this::chooseOnlineServer));
+        optionsList.addView(optionRow("Online Server", serverStatusSummary(), this::chooseOnlineServer));
         optionsList.addView(optionRow("Room Name", GameOptions.roamRoom(this).isEmpty() ? "Default (Public)" : GameOptions.roamRoom(this), this::chooseRoamRoom));
         optionsList.addView(optionRow("Check for updates",
                 checkingUpdates ? "Checking GitHub…" : "Version " + ReleaseUpdates.installed(this), () -> checkUpdates(true)));
         optionsList.addView(optionRow("Report an issue", "Report on GitHub / Save ZIP", () -> showReportDialog(null)));
+    }
+
+    private String serverStatusSummary() {
+        String server = GameOptions.onlineServer(this);
+        int roam = AdhocRoamClient.getInstance().getTotalRoamPlayers();
+        int total = AdhocRoamClient.getInstance().getTotalServerPlayers();
+        if (roam > 0) {
+            return server + " (" + roam + " roaming)";
+        } else if (total > 0) {
+            return server + " (" + total + " online)";
+        }
+        return server;
     }
 
     // ---- Options ---------------------------------------------------------------------------------------

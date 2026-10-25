@@ -313,14 +313,43 @@ public final class DiagnosticOverlay {
             onRaceCount = racers.size();
         }
 
+        AdhocRoamClient roamClient = AdhocRoamClient.getInstance();
+        int totalRoam = roamClient.getTotalRoamPlayers();
+        int totalServer = roamClient.getTotalServerPlayers();
+        int roomRoam = roamClient.getRoomRoamPlayers();
+        String room = roamClient.getRoomName();
+        boolean hasRoom = room != null && !room.trim().isEmpty();
+
+        int displayOnline;
+        if (hasRoom && roomRoam >= 0) {
+            displayOnline = roomRoam;
+        } else if (totalRoam > 0) {
+            displayOnline = totalRoam;
+        } else if (totalServer > 0) {
+            displayOnline = totalServer;
+        } else {
+            displayOnline = onlineCount;
+        }
+
         if (isFull()) {
             StringBuilder sb = new StringBuilder();
             sb.append("fps: ").append(fpsStr).append(" (").append(String.format(Locale.US, "%.1f ms", frameTimeMs)).append(")\n");
 
             if (GameOptions.isRoamEnabled(activity)) {
                 if (adhocConnected) {
-                    sb.append("network: connected to ").append(AdhocRoamClient.getInstance().getServerHost()).append('\n');
-                    sb.append("player_online: ").append(onlineCount).append('\n');
+                    sb.append("network: connected to ").append(roamClient.getServerHost()).append('\n');
+                    if (hasRoom && roomRoam >= 0) {
+                        sb.append("player_online: ").append(roomRoam)
+                          .append(" (room: \"").append(room).append("\", roam: ").append(totalRoam)
+                          .append(", server: ").append(totalServer).append(")\n");
+                    } else if (totalRoam > 0) {
+                        sb.append("player_online: ").append(totalRoam)
+                          .append(" (server: ").append(totalServer).append(")\n");
+                    } else if (totalServer > 0) {
+                        sb.append("player_online: ").append(totalServer).append('\n');
+                    } else {
+                        sb.append("player_online: ").append(onlineCount).append('\n');
+                    }
                     // ONLY show player_on_race and player_racing when an ongoing race is active!
                     // When roaming, hide them completely.
                     if (isRacing) {
@@ -333,7 +362,7 @@ public final class DiagnosticOverlay {
                         sb.append("]\n");
                     }
                 } else {
-                    sb.append("network: ").append(AdhocRoamClient.getInstance().getConnectionStatus()).append('\n');
+                    sb.append("network: ").append(roamClient.getConnectionStatus()).append('\n');
                 }
             }
 
@@ -351,21 +380,21 @@ public final class DiagnosticOverlay {
             if (adhocConnected) {
                 if (isRacing) {
                     String text = String.format(Locale.US,
-                            "FPS: %s (%.1f ms)  |  Racing: %d %s\nCPU: %.0f%%  |  RAM: %.1f/%.1f GB",
-                            fpsStr, frameTimeMs, onRaceCount, racers.toString(),
+                            "FPS: %s (%.1f ms)  |  Racing: %d %s (Online: %d)\nCPU: %.0f%%  |  RAM: %.1f/%.1f GB",
+                            fpsStr, frameTimeMs, onRaceCount, racers.toString(), displayOnline,
                             cpu, usedMb / 1024.0f, totalMb / 1024.0f);
                     textView.setText(text);
                 } else {
                     String text = String.format(Locale.US,
                             "FPS: %s (%.1f ms)  |  Online: %d  |  connected to %s\nCPU: %.0f%%  |  RAM: %.1f/%.1f GB",
-                            fpsStr, frameTimeMs, onlineCount, AdhocRoamClient.getInstance().getServerHost(),
+                            fpsStr, frameTimeMs, displayOnline, roamClient.getServerHost(),
                             cpu, usedMb / 1024.0f, totalMb / 1024.0f);
                     textView.setText(text);
                 }
             } else if (GameOptions.isRoamEnabled(activity)) {
                 String text = String.format(Locale.US,
                         "FPS: %s (%.1f ms)  |  network: %s\nCPU: %.0f%%  |  RAM: %.1f/%.1f GB",
-                        fpsStr, frameTimeMs, AdhocRoamClient.getInstance().getConnectionStatus(),
+                        fpsStr, frameTimeMs, roamClient.getConnectionStatus(),
                         cpu, usedMb / 1024.0f, totalMb / 1024.0f);
                 textView.setText(text);
             } else {

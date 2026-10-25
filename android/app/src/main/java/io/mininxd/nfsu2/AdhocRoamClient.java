@@ -20,9 +20,11 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.net.HttpURLConnection;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
@@ -147,6 +149,7 @@ public final class AdhocRoamClient {
     private Thread adhocctlThread;
     private Thread postofficeThread;
     private Thread wsThread;
+    private Thread playersPollerThread;
     private Thread udpBridgeThread;
     private Thread roamTickThread;
 
@@ -165,6 +168,11 @@ public final class AdhocRoamClient {
     private String playerName = "Racer";
     private volatile String connectionStatus = "disconnected";
 
+    private volatile int totalServerPlayers = 0;
+    private volatile int totalRoamPlayers = 0;
+    private volatile int totalOnlinePlayers = 0;
+    private volatile int roomRoamPlayers = 0;
+
     private AdhocRoamClient() {}
 
     public static AdhocRoamClient getInstance() {
@@ -181,6 +189,22 @@ public final class AdhocRoamClient {
 
     public String getConnectionStatus() {
         return connectionStatus;
+    }
+
+    public int getTotalServerPlayers() {
+        return totalServerPlayers;
+    }
+
+    public int getTotalRoamPlayers() {
+        return totalRoamPlayers;
+    }
+
+    public int getTotalOnlinePlayers() {
+        return totalOnlinePlayers;
+    }
+
+    public int getRoomRoamPlayers() {
+        return roomRoamPlayers;
     }
 
     private boolean ghostMode = true;
@@ -237,6 +261,7 @@ public final class AdhocRoamClient {
             Log.i(TAG, "Backend selected for " + serverHost + ": " + (isWs ? "WebSocket Virtual Switch (WSS)" : "Prometheus Adhoc"));
             if (isWs) {
                 startWebSocketThread();
+                startPlayersPollerThread();
             } else {
                 startAdhocctlThread();
                 startPostofficeThread();
@@ -279,6 +304,7 @@ public final class AdhocRoamClient {
         interruptQuietly(adhocctlThread);
         interruptQuietly(postofficeThread);
         interruptQuietly(wsThread);
+        interruptQuietly(playersPollerThread);
         interruptQuietly(udpBridgeThread);
         interruptQuietly(roamTickThread);
 
@@ -328,6 +354,166 @@ public final class AdhocRoamClient {
                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     }
 
+    /**
+     * FNV-1a room hash matching nfsu2-web / roam_core.c rc_room_hash.
+     * Empty string returns 0 (the public open world).
+     */
+    public static int roomHash(String name) {
+        if (name == null || name.trim().isEmpty()) return 0;
+        int h = 0x811c9dc5;
+        int kept = 0;
+        byte[] bytes = name.getBytes(StandardCharsets.UTF_8);
+        for (byte b : bytes) {
+            int ub = b & 0xFF;
+            if (ub == 0x20 || (ub >= 0x09 && ub <= 0x0D)) continue;
+            if (ub >= 0x41 && ub <= 0x5A) ub += 0x20;
+            h = (h ^ ub) * 0x01000193;
+            kept++;
+        }
+        if (kept == 0) return 0;
+        return (h == 0) ? 1 : h;
+    }
+
+    private String getHttpBaseUrl(String hostInput) {
+        if (hostInput == null || hostInput.trim().isEmpty()) {
+            hostInput = serverHost;
+        }
+        String host = hostInput.trim();
+        boolean useSsl = true;
+        int port = 443;
+        if (host.startsWith("wss://")) {
+            host = host.substring(6);
+            useSsl = true;
+        } else if (host.startsWith("ws://")) {
+            host = host.substring(5);
+            useSsl = false;
+            port = 80;
+        } else if (host.startsWith("https://")) {
+            host = host.substring(8);
+            useSsl = true;
+        } else if (host.startsWith("http://")) {
+            host = host.substring(7);
+            useSsl = false;
+            port = 80;
+        }
+        if (host.contains("/")) {
+            host = host.substring(0, host.indexOf("/"));
+        }
+        if (host.contains(":")) {
+            String[] parts = host.split(":");
+            host = parts[0];
+            try { port = Integer.parseInt(parts[1]); } catch (Exception ignored) {}
+        }
+        boolean isDefaultPort = (useSsl && port == 443) || (!useSsl && port == 80);
+        return (useSsl ? "https://" : "http://") + host + (isDefaultPort ? "" : ":" + port);
+    }
+
+    public void pollServerPlayers() {
+        HttpURLConnection conn = null;
+        try {
+            String base = getHttpBaseUrl(serverHost);
+            int hash = roomHash(roomName);
+            String endpoint = base + "/players" + (hash != 0 ? "?room=" + (hash & 0xFFFFFFFFL) : "");
+            URL url = new URL(endpoint);
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setConnectTimeout(4000);
+            conn.setReadTimeout(4000);
+            conn.setRequestProperty("User-Agent", "NFSU2-Revived-Android");
+            conn.setRequestProperty("Accept", "application/json");
+
+            int code = conn.getResponseCode();
+            if (code == 200) {
+                InputStream in = conn.getInputStream();
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                byte[] buf = new byte[1024];
+                int n;
+                while ((n = in.read(buf)) != -1) {
+                    baos.write(buf, 0, n);
+                }
+                in.close();
+
+                JSONObject obj = new JSONObject(baos.toString(StandardCharsets.UTF_8.name()));
+                int p = obj.optInt("players", -1);
+                int r = obj.optInt("roam", -1);
+                int on = obj.optInt("online", -1);
+                int rm = obj.has("room") ? obj.optInt("room", -1) : r;
+
+                if (p >= 0) totalServerPlayers = p;
+                if (r >= 0) totalRoamPlayers = r;
+                if (on >= 0) totalOnlinePlayers = on;
+                if (rm >= 0) roomRoamPlayers = rm;
+
+                int activeRoomOrRoam = (rm >= 0 && hash != 0) ? rm : (r >= 0 ? r : p);
+                Log.i(TAG, "player_count: " + activeRoomOrRoam
+                        + " (roam=" + totalRoamPlayers + ", online=" + totalOnlinePlayers + ", total=" + totalServerPlayers + ", room=" + roomRoamPlayers + ")");
+            }
+        } catch (Exception e) {
+            Log.d(TAG, "pollServerPlayers failed: " + e.getMessage());
+        } finally {
+            if (conn != null) {
+                try { conn.disconnect(); } catch (Exception ignored) {}
+            }
+        }
+    }
+
+    public void queryServerPlayers(Context context, Runnable onDone) {
+        String server = GameOptions.onlineServer(context);
+        if (!isWsHost(server)) {
+            if (onDone != null) onDone.run();
+            return;
+        }
+        new Thread(() -> {
+            HttpURLConnection conn = null;
+            try {
+                String base = getHttpBaseUrl(server);
+                int hash = roomHash(GameOptions.roamRoom(context));
+                String endpoint = base + "/players" + (hash != 0 ? "?room=" + (hash & 0xFFFFFFFFL) : "");
+                URL url = new URL(endpoint);
+                conn = (HttpURLConnection) url.openConnection();
+                conn.setConnectTimeout(3000);
+                conn.setReadTimeout(3000);
+                conn.setRequestProperty("User-Agent", "NFSU2-Revived-Android");
+                conn.setRequestProperty("Accept", "application/json");
+                if (conn.getResponseCode() == 200) {
+                    InputStream in = conn.getInputStream();
+                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                    byte[] buf = new byte[1024];
+                    int n;
+                    while ((n = in.read(buf)) != -1) baos.write(buf, 0, n);
+                    in.close();
+                    JSONObject obj = new JSONObject(baos.toString(StandardCharsets.UTF_8.name()));
+                    int p = obj.optInt("players", -1);
+                    int r = obj.optInt("roam", -1);
+                    int on = obj.optInt("online", -1);
+                    int rm = obj.has("room") ? obj.optInt("room", -1) : r;
+                    if (p >= 0) totalServerPlayers = p;
+                    if (r >= 0) totalRoamPlayers = r;
+                    if (on >= 0) totalOnlinePlayers = on;
+                    if (rm >= 0) roomRoamPlayers = rm;
+                }
+            } catch (Exception ignored) {
+            } finally {
+                if (conn != null) {
+                    try { conn.disconnect(); } catch (Exception ignored) {}
+                }
+            }
+            if (onDone != null) onDone.run();
+        }, "AsyncServerQuery").start();
+    }
+
+    private void startPlayersPollerThread() {
+        playersPollerThread = new Thread(() -> {
+            while (running.get()) {
+                pollServerPlayers();
+                for (int i = 0; i < 120 && running.get(); i++) {
+                    sleepQuietly(100);
+                }
+            }
+        }, "PlayersPoller");
+        playersPollerThread.setDaemon(true);
+        playersPollerThread.start();
+    }
+
     // ---- WebSocket Virtual Switch Client (WSS /lan) ---------------------------------------------------
 
     private void startWebSocketThread() {
@@ -342,6 +528,13 @@ public final class AdhocRoamClient {
                         useSsl = true;
                     } else if (host.startsWith("ws://")) {
                         host = host.substring(5);
+                        useSsl = false;
+                        port = 80;
+                    } else if (host.startsWith("https://")) {
+                        host = host.substring(8);
+                        useSsl = true;
+                    } else if (host.startsWith("http://")) {
+                        host = host.substring(7);
                         useSsl = false;
                         port = 80;
                     }
@@ -493,7 +686,12 @@ public final class AdhocRoamClient {
                 JSONObject hello = new JSONObject();
                 hello.put("t", "hello");
                 hello.put("name", playerName);
+                hello.put("bundle", 1);
+                hello.put("deltas", 1);
                 sendWsFrame(1, hello.toString().getBytes(StandardCharsets.UTF_8));
+
+                // Trigger immediate HTTP /players poll to sync total server counts
+                new Thread(this::pollServerPlayers, "ImmediatePoller").start();
 
                 if (libraryLoaded) {
                     try {
@@ -511,8 +709,24 @@ public final class AdhocRoamClient {
             } else if ("peers".equals(type)) {
                 JSONArray arr = obj.optJSONArray("peers");
                 if (arr != null) {
-                    Log.i(TAG, "WebSocket active server peers: " + arr.length());
+                    int count = arr.length();
+                    Log.i(TAG, "WebSocket active server peers: " + count);
+                    if (totalServerPlayers <= 0) {
+                        totalServerPlayers = count;
+                    }
+                    Log.i(TAG, "player_count: " + (totalRoamPlayers > 0 ? totalRoamPlayers : totalServerPlayers)
+                            + " (ws peers=" + count + ", roam=" + totalRoamPlayers + ", total=" + totalServerPlayers + ")");
                 }
+            } else if ("delta".equals(type)) {
+                JSONArray added = obj.optJSONArray("peers");
+                JSONArray gone = obj.optJSONArray("gone");
+                int addedCount = added != null ? added.length() : 0;
+                int goneCount = gone != null ? gone.length() : 0;
+                if (totalServerPlayers > 0) {
+                    totalServerPlayers = Math.max(1, totalServerPlayers + addedCount - goneCount);
+                }
+                Log.i(TAG, "player_count: " + (totalRoamPlayers > 0 ? totalRoamPlayers : totalServerPlayers)
+                        + " (delta +" + addedCount + " -" + goneCount + ", total=" + totalServerPlayers + ")");
             }
         } catch (Exception e) {
             Log.d(TAG, "handleWsTextMessage: " + e.getMessage());
