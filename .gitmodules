@@ -1,3 +1,6 @@
 [submodule "third_party/libadrenotools"]
 	path = third_party/libadrenotools
 	url = https://github.com/bylaws/libadrenotools.git
+[submodule "nfsu2-web"]
+	path = nfsu2-web
+	url = https://github.com/th0mk/nfsu2-web
