@@ -157,7 +157,7 @@ public final class AdhocRoamClient {
             stop();
         }
 
-        this.serverHost = (host != null && !host.trim().isEmpty()) ? host.trim() : GameOptions.DEFAULT_ROAM_SERVER;
+        this.serverHost = (host != null && !host.trim().isEmpty()) ? host.trim() : GameOptions.roamServer(context);
         this.roomName = (room != null && !room.trim().isEmpty()) ? room.trim() : GameOptions.DEFAULT_ROAM_ROOM;
         if (name == null || name.trim().isEmpty() || "Racer".equalsIgnoreCase(name)) {
             name = GameOptions.detectSavegamePlayerName();

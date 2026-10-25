@@ -107,7 +107,11 @@ final class GameOptions {
     }
 
     static String roamServer(Context context) {
-        return DEFAULT_ROAM_SERVER;
+        String server = onlineServer(context);
+        if (DEFAULT_ONLINE_SERVER.equalsIgnoreCase(server) || "eahub.eu".equalsIgnoreCase(server)) {
+            return DEFAULT_ROAM_SERVER;
+        }
+        return server;
     }
 
     static String roamRoom(Context context) {

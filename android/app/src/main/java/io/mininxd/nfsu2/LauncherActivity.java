@@ -539,7 +539,7 @@ public final class LauncherActivity extends Activity {
         box.setPadding(pad, pad / 2, pad, 0);
         box.addView(input);
         new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle("Online server")
-                .setMessage("Game online mode (EA Nation) connects to this community server instead of the closed EA servers.")
+                .setMessage("Server for EA Nation and Free Roam multiplayer. Default: eahub.eu (Free Roam uses adhoc.eahub.eu). Custom servers use the exact host entered.")
                 .setView(box)
                 .setPositiveButton("Save", (dialog, which) -> {
                     String value = input.getText().toString().trim();
