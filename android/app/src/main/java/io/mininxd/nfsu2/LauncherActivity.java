@@ -89,7 +89,7 @@ public final class LauncherActivity extends Activity {
                 .setPositiveButton("OK", (d, which) -> ReleaseUpdates.whatsNewSeen(this))
                 .setNeutralButton("View on GitHub", (d, which) -> {
                     ReleaseUpdates.whatsNewSeen(this);
-                    openUrl(Uri.parse("https://github.com/mininxd/nfsu2-recompiled/releases/tag/v" + Uri.encode(version)));
+                    openUrl(Uri.parse("https://github.com/mininxd/NFSU2-Revived-Android/releases/tag/v" + Uri.encode(version)));
                 })
                 .setOnCancelListener(d -> ReleaseUpdates.whatsNewSeen(this))
                 .show();
@@ -509,7 +509,7 @@ public final class LauncherActivity extends Activity {
                             .setTitle("Report on GitHub")
                             .setMessage("The diagnostic log has been saved to:\n" + location
                                     + "\nand /sdcard/NFSU2/" + report.getName()
-                                    + "\n\nA GitHub issue will open on mininxd/nfsu2-recompiled with a pre-filled technical summary. Describe what happened and, "
+                                    + "\n\nA GitHub issue will open on mininxd/NFSU2-Revived-Android with a pre-filled technical summary. Describe what happened and, "
                                     + "if possible, attach that ZIP (GitHub does not allow attaching files automatically).")
                             .setPositiveButton("Open GitHub", (dialog, which) -> openUrl(issue))
                             .setNeutralButton("Save ZIP Only", null)

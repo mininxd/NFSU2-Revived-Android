@@ -31,7 +31,7 @@ import java.util.zip.ZipOutputStream;
  * attach.
  */
 final class Diagnostics {
-    static final String ISSUES = "https://github.com/mininxd/nfsu2-recompiled/issues/new";
+    static final String ISSUES = "https://github.com/mininxd/NFSU2-Revived-Android/issues/new";
     private static final int LIMIT = 4 * 1024 * 1024;
     private static final String PREFS = "nfsu2_diagnostics";
 
