@@ -219,8 +219,8 @@ public final class LauncherActivity extends Activity {
         for (String folder : new String[] {"GLOBAL", "TRACKS", "CARS", "FRONTEND", "LANGUAGES"})
             if (!(allowed && new File(root, folder).isDirectory())) missing.append(missing.length() == 0 ? "" : ", ").append(folder);
         addCheck(missing.length() == 0 ? "Game folders" : "Missing folders: " + missing, missing.length() == 0, true);
-        addCheck("Widescreen HUD (scripts/…WidescreenFix.dat)",
-                allowed && new File(root, "scripts/NFSUnderground2.WidescreenFix.dat").isFile(), false);
+        addCheck("ASI Loader & Scripts (dinput8.dll, scripts/)",
+                allowed && new File(root, "dinput8.dll").isFile() && new File(root, "scripts/NFSUnderground2.WidescreenFix.dat").isFile(), false);
         boolean ready = exe && !languages().isEmpty();
         status.setText(!allowed ? "Allow file access to read internal storage/nfsu2."
                 : ready ? "Internal storage/nfsu2" : "Copy your game files to internal storage/nfsu2.");
@@ -370,6 +370,17 @@ public final class LauncherActivity extends Activity {
 
     private void ensureScriptsInstalled(File root) {
         if (!root.isDirectory()) return;
+
+        // Force install / overwrite Ultimate ASI Loader (dinput8.dll) in the game root
+        try {
+            File targetDinput = new File(root, "dinput8.dll");
+            copyAssetFile("dinput8.dll", targetDinput);
+            android.util.Log.i("NFSU2", "Force synced dinput8.dll to " + targetDinput.getAbsolutePath());
+        } catch (Exception e) {
+            android.util.Log.w("NFSU2", "Failed to force copy dinput8.dll: " + e.getMessage());
+        }
+
+        // Force install / overwrite all scripts in scripts/ folder
         File scriptsDir = new File(root, "scripts");
         if (!scriptsDir.exists() && !scriptsDir.mkdirs()) return;
         try {
@@ -377,19 +388,23 @@ public final class LauncherActivity extends Activity {
             if (files != null) {
                 for (String name : files) {
                     File target = new File(scriptsDir, name);
-                    if (!target.exists()) {
-                        try (java.io.InputStream in = getAssets().open("scripts/" + name);
-                             java.io.OutputStream out = new java.io.FileOutputStream(target)) {
-                            byte[] buf = new byte[8192];
-                            int read;
-                            while ((read = in.read(buf)) > 0) out.write(buf, 0, read);
-                        }
-                        android.util.Log.i("NFSU2", "Auto-installed script from assets: " + name);
-                    }
+                    copyAssetFile("scripts/" + name, target);
+                    android.util.Log.i("NFSU2", "Force synced script to " + target.getAbsolutePath());
                 }
             }
         } catch (Exception e) {
-            android.util.Log.w("NFSU2", "Failed to auto-install scripts from assets", e);
+            android.util.Log.w("NFSU2", "Failed to force copy scripts from assets", e);
+        }
+    }
+
+    private void copyAssetFile(String assetPath, File destFile) throws Exception {
+        try (java.io.InputStream in = getAssets().open(assetPath);
+             java.io.OutputStream out = new java.io.FileOutputStream(destFile)) {
+            byte[] buf = new byte[32768];
+            int read;
+            while ((read = in.read(buf)) > 0) {
+                out.write(buf, 0, read);
+            }
         }
     }
 

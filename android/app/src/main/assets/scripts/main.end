@@ -1,0 +1,356 @@
+[VERSN2]
+
+// stops errors, better than checks
+stop_errors true
+
+// unlocks memory files
+unlock_memory all
+
+// String
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D71E7 Text "Ay, yo man, street drag is the influence behind everything we got!"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D71E7 Label BD_PU_TUTORIALS_207
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D71E7 Key 0xCC3D71E7
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D71E8 Text "Check it like this--the RPM is the key to gettin' ahead of the competition."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D71E8 Label BD_PU_TUTORIALS_208
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D71E8 Key 0xCC3D71E8
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD1619868 Text "Launch at the right time and rocket into the lead with speed."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD1619868 Label BD_PU_TUTORIALS_208_A
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD1619868 Key 0xD1619868
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD1619869 Text "But if you're slow about it, you'll end up at the back of the pack."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD1619869 Label BD_PU_TUTORIALS_208_B
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD1619869 Key 0xD1619869
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D71E9 Text "Launch is followed by shift, so it's next; it's the daddy of success, so hit it up at the perfect shift point for max power!"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D71E9 Label BD_PU_TUTORIALS_209
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D71E9 Key 0xCC3D71E9
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD1619CA9 Text "Now, remember, if you slam it too soon--or too late--you'll be comin' in last."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD1619CA9 Label BD_PU_TUTORIALS_209_A
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD1619CA9 Key 0xD1619CA9
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D71E7 Text "TOMMY: Ay, yo man, street drag is the influence behind everything we got!"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D71E7 Label BD_PU_TUTORIALS_207
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D71E7 Key 0xCC3D71E7
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D71E8 Text "TOMMY: Check it like this--the RPM is the key to gettin' ahead of the competition."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D71E8 Label BD_PU_TUTORIALS_208
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D71E8 Key 0xCC3D71E8
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD1619868 Text "TOMMY: Launch at the right time and rocket into the lead with speed."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD1619868 Label BD_PU_TUTORIALS_208_A
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD1619868 Key 0xD1619868
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD1619869 Text "TOMMY: But if you're slow about it, you'll end up at the back of the pack."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD1619869 Label BD_PU_TUTORIALS_208_B
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD1619869 Key 0xD1619869
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D71E9 Text "TOMMY: Launch is followed by shift, so it's next; it's the daddy of success, so hit it up at the perfect shift point for max power!"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D71E9 Label BD_PU_TUTORIALS_209
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D71E9 Key 0xCC3D71E9
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD1619CA9 Text "TOMMY: Now, remember, if you slam it too soon--or too late--you'll be comin' in last."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD1619CA9 Label BD_PU_TUTORIALS_209_A
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD1619CA9 Key 0xD1619CA9
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7202 Text "TOMMY: If the other guy gets past you, just chill and slide into his slipstream, and sit in his draft. Gain precious speed and then make your move to bounce right on by."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7202 Label BD_PU_TUTORIALS_211
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7202 Key 0xCC3D7202
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7203 Text "TOMMY: This is gonna be BIG, dawg! You ready?! Good, go out there and prove yourself."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7203 Label BD_PU_TUTORIALS_212
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7203 Key 0xCC3D7203
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D720A Text "TOMMY: Yo, check this--the drift is all about style and control."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D720A Label BD_PU_TUTORIALS_219
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D720A Key 0xCC3D720A
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7222 Text "TOMMY: Remember these three words: speed, steering, and handbrake, because they all play a factor in settin' up those sweet moves that are gonna get you rackin' in some heavy points!"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7222 Label BD_PU_TUTORIALS_220
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7222 Key 0xCC3D7222
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7223 Text "TOMMY: Make sure you don't go crazy with the brakes, because the faster you go, combined with the more slide you hit, the higher your score's gonna be."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7223 Label BD_PU_TUTORIALS_221
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7223 Key 0xCC3D7223
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7224 Text "TOMMY: Now, this score will dictate the multiplier you're gonna get; this multiplier will affect the score of your next drift, so make sure it's high!"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7224 Label BD_PU_TUTORIALS_222
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7224 Key 0xCC3D7224
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7225 Text "TOMMY: After you get all them details workin' together, you gotta start blending drifts into one another."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7225 Label BD_PU_TUTORIALS_223
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7225 Key 0xCC3D7225
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD1629BE5 Text "TOMMY: Mesh your drifts into one long, seamless slide, and the scoreboard will light up something hard!"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD1629BE5 Label BD_PU_TUTORIALS_223_A
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD1629BE5 Key 0xD1629BE5
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7226 Text "TOMMY: Now, if you think you're wired tight, it's time to go B-I-G BIG! Try hanging your rubber into the shoulder for bonus points!"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7226 Label BD_PU_TUTORIALS_224
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7226 Key 0xCC3D7226
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD162A026 Text "TOMMY: The more tires you slide through the lanes, the faster you rack up that score. Just remember to stay off the walls, or you lose all your points for that set."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD162A026 Label BD_PU_TUTORIALS_224_A
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD162A026 Key 0xD162A026
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7227 Text "TOMMY: So, bro, let's get down to some business and heat up them streets!"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7227 Label BD_PU_TUTORIALS_225
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7227 Key 0xCC3D7227
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x53EBBF48 Text "TOMMY: Yeah, baby! This here is the downhill drift, and it don't play!"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x53EBBF48 Label BD_PU_TUTORIALS_241C
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x53EBBF48 Key 0x53EBBF48
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7266 Text "TOMMY: In this drift, you're gonna be slippin' and slidin' down the mountain; that's right, you start at the top and work your way down to the bottom."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7266 Label BD_PU_TUTORIALS_242
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7266 Key 0xCC3D7266
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7267 Text "TOMMY: It's gonna be comin' at ya hard, so like you heard before, speed, steering, and handbrake are all gonna play huge here."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7267 Label BD_PU_TUTORIALS_243
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7267 Key 0xCC3D7267
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7268 Text "TOMMY: Now, just make sure you don't nail traffic, because the locals ain't gonna be in on the news, so they're bound to get in your way."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7268 Label BD_PU_TUTORIALS_244
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7268 Key 0xCC3D7268
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7269 Text "TOMMY: At the same time, though, when these fools come up on ya, get up as tight as possible on their cars like you're their second skin, 'cause when you slide up on 'em, and hug 'em through the curves, you're gonna score some large points for stuntin' like that!"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7269 Label BD_PU_TUTORIALS_245
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7269 Key 0xCC3D7269
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D726A Text "TOMMY: And, of course, speed keeps your multiplier up. So you want that baby as high as it'll go to keep them points poppin' off right."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D726A Label BD_PU_TUTORIALS_246
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D726A Key 0xCC3D726A
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D726B Text "TOMMY: Now that you know what you're doing, just jam the throttle to the floor and go BIG! See ya at the base!"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D726B Label BD_PU_TUTORIALS_247
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D726B Key 0xCC3D726B
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7289 Text "TOMMY: Yo, listen here! You're about to be fully felt by the Street X. This is the hottest new kick slammin' the race world!"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7289 Label BD_PU_TUTORIALS_254
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D7289 Key 0xCC3D7289
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D728A Text "These-here-tracks are TIGHT. There's very little room to bend the curves, so make sure your ride's dialed in right."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D728A Label BD_PU_TUTORIALS_255
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D728A Key 0xCC3D728A
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D728A Text "TOMMY: These here tracks are TIGHT. There's very little room to bend the curves, so make sure your ride's dialed in right."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D728A Label BD_PU_TUTORIALS_255
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D728A Key 0xCC3D728A
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D728B Text "TOMMY: Do whatever it takes to get that other guy outta your grill, 'cause the inside line is where you wanna be."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D728B Label BD_PU_TUTORIALS_256
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D728B Key 0xCC3D728B
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD1644DCB Text "TOMMY: The best line in and out of the turns is gonna shave serious time off your run."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD1644DCB Label BD_PU_TUTORIALS_256_A
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD1644DCB Key 0xD1644DCB
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D728C Text "TOMMY: So, tune it for quick sprints and tight, slam-down control."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D728C Label BD_PU_TUTORIALS_257
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D728C Key 0xCC3D728C
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D728D Text "TOMMY: You know what I'm sayin'? A'ight then, get out there and go savage, bro!"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D728D Label BD_PU_TUTORIALS_258
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xCC3D728D Key 0xCC3D728D
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x03812413 Text "BROOKE: Hi, I'm Brooke Burke, and I play Rachel Teller in Need for Speed: Underground 2."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x03812413 Label PSA_1
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x03812413 Key 0x03812413
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x03812414 Text "BROOKE: Playing a racer in the game was a lot of fun, but on the streets, I make sure to drive safely and responsibly."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x03812414 Label PSA_2
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x03812414 Key 0x03812414
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x03812415 Text "BROOKE: When it comes to racing, make sure you only do it on the streets of Underground 2."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x03812415 Label PSA_3
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x03812415 Key 0x03812415
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x03812416 Text "BROOKE: So remember to always use your seatbelt and obey the laws of the road."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x03812416 Label PSA_4
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x03812416 Key 0x03812416
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x3E0DE37B Text "6 MONTHS AGO..."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x3E0DE37B Label SC01_01_6MONTHSAGO
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x3E0DE37B Key 0x3E0DE37B
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xB70F221F Text "SAMANTHA: Hey, hot shot. You're cleaning up out there."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xB70F221F Label SC01_02_HOTSHOT
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xB70F221F Key 0xB70F221F
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x2765D827 Text "SAMANTHA: You took out Eddie, scored the babe--have you thought about what's next?"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x2765D827 Label SC01_03_TOOKOUTEDDIE
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x2765D827 Key 0x2765D827
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x37D15F43 Text "SAMANTHA: I don't think there's anyone out there that can beat you."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x37D15F43 Label SC01_04_STRAIGHTUP
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x37D15F43 Key 0x37D15F43
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x24AAE6FF Text "CALEB: We like what we see. There's room in my posse for you, and I ain't takin' no for an answer. What's it gonna be?"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x24AAE6FF Label SC01_05_CALEB_MYPOSSE
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x24AAE6FF Key 0x24AAE6FF
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x301BC2E3 Text "SAMANTHA: Hey, the party's kickin', and they want their star! You better get here quick! ... Hello? Hello?!"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x301BC2E3 Label SC01_06_SAM_PARTYKICKIN
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x301BC2E3 Key 0x301BC2E3
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x807F53BE Text "CALEB: Yeah, everything's cool. I just had to take care of, uh, a little problem."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x807F53BE Label SC01_07_CALEB_COOL
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x807F53BE Key 0x807F53BE
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x67F70C7B Text "PRESENT DAY"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x67F70C7B Label SC01_08_PRESENTDAY
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x67F70C7B Key 0x67F70C7B
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x7D0707B6 Text "SAMANTHA: I figured you might wanna change things up to help clear your head. Can't say I blame you."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x7D0707B6 Label SC01_09_SAM_MYGALRACHEL_1
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x7D0707B6 Key 0x7D0707B6
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x7D0707B7 Text "SAMANTHA: Hey, listen! When you get to Bayview, my gal Rachel will hook you up. She's loaned you her ride; it's at the airport waiting."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x7D0707B7 Label SC01_09_SAM_MYGALRACHEL_2
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x7D0707B7 Key 0x7D0707B7
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x7D0707B8 Text "SAMANTHA: Now it's her baby, so be gentle. Good luck, bro! Be seein' ya."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x7D0707B8 Label SC01_09_SAM_MYGALRACHEL_3
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x7D0707B8 Key 0x7D0707B8
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x234F34D1 Text "RACHEL: Finally! Where have you been with my ride, huh?"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x234F34D1 Label SC05_LINE_1
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x234F34D1 Key 0x234F34D1
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x234F34D2 Text "RACHEL: There better not be a single mark on it!"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x234F34D2 Label SC05_LINE_2
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x234F34D2 Key 0x234F34D2
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x234F34D3 Text "RACHEL: Sam claims you can drive; maybe so, but you ain't usin' my ride."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x234F34D3 Label SC05_LINE_3
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x234F34D3 Key 0x234F34D3
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x234F34D4 Text "RACHEL: Use your cash to pick out a set of wheels--I'll call you later."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x234F34D4 Label SC05_LINE_4
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x234F34D4 Key 0x234F34D4
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x0F9109B2 Text "RACHEL: Let me give you the 411. Everything in the Bayview race scene goes through me."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x0F9109B2 Label SC06_LINE_1
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x0F9109B2 Key 0x0F9109B2
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x0F9109B3 Text "RACHEL: And if you haven't noticed yet, it's the place to be; the race scene here is BIG."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x0F9109B3 Label SC06_LINE_2
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x0F9109B3 Key 0x0F9109B3
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x0F9109B4 Text "RACHEL: Whatever you like, you can find it--if you know where to look."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x0F9109B4 Label SC06_LINE_3
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x0F9109B4 Key 0x0F9109B4
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x0F9109B5 Text "RACHEL: Drag, drift, circuits, and way more. The scene runs so deep, we're racin' in places you wouldn't believe!"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x0F9109B5 Label SC06_LINE_4
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x0F9109B5 Key 0x0F9109B5
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x0F9109B6 Text "RACHEL: Of course, with that comes an opportunity for some serious money. Best of all, there's an invitation-only series called the Underground Racing League for the elite driver where the coin and the props are off the hook!"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x0F9109B6 Label SC06_LINE_5
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x0F9109B6 Key 0x0F9109B6
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x0F9109B7 Text "RACHEL: All it takes is the right cred and the proper connections."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x0F9109B7 Label SC06_LINE_6
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x0F9109B7 Key 0x0F9109B7
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x0F9109B8 Text "RACHEL: Remember, this is my town; you're a guest, so max respect. Round back is Tommy; he's a wizard under the hood. He'll hook you up."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x0F9109B8 Label SC06_LINE_7
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x0F9109B8 Key 0x0F9109B8
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x0F9109B9 Text "TOMMY: Hey dude, Rachel set it up so you can handle all your business out of the garage--she set aside some room for you. C'mon, I'll show you where you can store your rides."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x0F9109B9 Label SC06_LINE_8
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x0F9109B9 Key 0x0F9109B9
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xFBD2DE93 Text "RACHEL: Hey man, you're raisin' some serious hype out there! Looks like a couple of companies wanna represent you; that means you qualify for the Underground Racing League I told you about."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xFBD2DE93 Label SC07_LINE_1
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xFBD2DE93 Key 0xFBD2DE93
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xFBD2DE94 Text "RACHEL: No traffic, no streets, just pure driving. All of it takes place on a controlled private course."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xFBD2DE94 Label SC07_LINE_2
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xFBD2DE94 Key 0xFBD2DE94
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xFBD2DE94 Text "RACHEL: No traffic, no streets; just pure driving. All of it takes place on a controlled private course."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xFBD2DE94 Label SC07_LINE_2
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xFBD2DE94 Key 0xFBD2DE94
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xFBD2DE95 Text "RACHEL: And since you've set up shop with me, I'm gonna act as your agent. I'll take a cut off the top in return for letting you know what's worth looking at."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xFBD2DE95 Label SC07_LINE_3
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xFBD2DE95 Key 0xFBD2DE95
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xE814B374 Text "RACHEL: Yeah, yeah. You lit it up out there, but remember, that was just a taste--you gotta keep winning to stay."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xE814B374 Label SC08_LINE_1
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xE814B374 Key 0xE814B374
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xE814B375 Text "RACHEL: People are takin' notice of you, and it ain't all good."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xE814B375 Label SC08_LINE_2
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xE814B375 Key 0xE814B375
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xE814B376 Text "RACHEL: Don't ask me how, but you landed yourself a new set of wheels. I guess the sponsors saw something they liked. Head down to the car lot and pick something out; it's highlighted on your map. Later!"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xE814B376 Label SC08_LINE_3
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xE814B376 Key 0xE814B376
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD4568855 Text "WRAITHS MEMBER 1: Check it out! It's the big-daddy champ from up north!"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD4568855 Label SC09_LINE_1
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD4568855 Key 0xD4568855
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD4568856 Text "WRAITHS MEMBER 2: Nah, man, can't be! Looks more like a chump than a champ!"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD4568856 Label SC09_LINE_2
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD4568856 Key 0xD4568856
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD4568857 Text "NIKKI: So YOU'RE what all the fuss is about? Heh, don't look like much to me."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD4568857 Label SC09_LINE_3
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD4568857 Key 0xD4568857
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD4568858 Text "CALEB: Heh, you got that right."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD4568858 Label SC09_LINE_4
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD4568858 Key 0xD4568858
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD4568859 Text "NIKKI: You haven't got a chance, hero, on or off the track."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD4568859 Label SC09_LINE_5
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD4568859 Key 0xD4568859
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD4568859 Text "NIKKI: You haven't got a chance, hero--on or off the track."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD4568859 Label SC09_LINE_5
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD4568859 Key 0xD4568859
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xFA827D6D Text "RACHEL: The Wraiths have been puttin' it down out there, doing ANYTHING it takes to win. Check it out..."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xFA827D6D Label SC10_LINE_1
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xFA827D6D Key 0xFA827D6D
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xFA827D6E Text "RACHEL: Their boss, Caleb, has been workin' backroom deals, tryin' to take control."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xFA827D6E Label SC10_LINE_2
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xFA827D6E Key 0xFA827D6E
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xFA827D6F Text "RACHEL: Sponsors do everything through me, and I stand to lose big time, but you? You stand to lose even more; if he wins, he'll change everything."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xFA827D6F Label SC10_LINE_3
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xFA827D6F Key 0xFA827D6F
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xFA827D70 Text "RACHEL: With the history the two of you have, you can forget about racing anywhere in Bayview ever again."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xFA827D70 Label SC10_LINE_4
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xFA827D70 Key 0xFA827D70
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xFA827D71 Text "RACHEL: But if you keep winning and scoring all them sponsors, he won't have anyone to turn to--they'll kick him to the curb!"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xFA827D71 Label SC10_LINE_5
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xFA827D71 Key 0xFA827D71
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xFA827D72 Text "RACHEL: Just remember: You have to keep winning!"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xFA827D72 Label SC10_LINE_6
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xFA827D72 Key 0xFA827D72
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xE6C4524E Text "CALEB: You know what you have to do, girl. I don't wanna see any piece of that car across the finish line."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xE6C4524E Label SC11_LINE_1
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xE6C4524E Key 0xE6C4524E
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xE6C4524F Text "NIKKI: I won't have to do anything more than drive; he's nothin' but a showboatin' loser."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xE6C4524F Label SC11_LINE_2
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xE6C4524F Key 0xE6C4524F
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xE6C45250 Text "CALEB: Don't underestimate him. Do whatever--and I mean WHATEVER it takes--to tear him apart."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xE6C45250 Label SC11_LINE_3
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xE6C45250 Key 0xE6C45250
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xE6C45251 Text "CALEB: Don't let me down; I'm countin' on ya, Nikki."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xE6C45251 Label SC11_LINE_4
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xE6C45251 Key 0xE6C45251
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD306272F Text "CALEB: I TOLD you, 'Do whatever it takes.' What part of that didn't sink in?!"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD306272F Label SC12_LINE_1
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD306272F Key 0xD306272F
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD3062730 Text "NIKKI: Get outta my face! I race straight up!"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD3062730 Label SC12_LINE_2
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD3062730 Key 0xD3062730
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD3062731 Text "CALEB: You better remember who you're talkin to--"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD3062731 Label SC12_LINE_3
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD3062731 Key 0xD3062731
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD3062732 Text "NIKKI: Or what? I don't need you."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD3062732 Label SC12_LINE_4
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD3062732 Key 0xD3062732
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD3062733 Text "CALEB: Oh, really? What are you gonna do without me? You're nothing."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD3062733 Label SC12_LINE_5
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD3062733 Key 0xD3062733
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD3062734 Text "CALEB: It's only a matter of time before I run the whole show."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD3062734 Label SC12_LINE_6
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD3062734 Key 0xD3062734
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD3062735 Text "NIKKI: Then maybe I'll make sure you don't."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD3062735 Label SC12_LINE_7
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xD3062735 Key 0xD3062735
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xBF47FC10 Text "NIKKI: No hard feelings, right?"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xBF47FC10 Label SC13_LINE_1
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xBF47FC10 Key 0xBF47FC10
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xBF47FC11 Text "RACHEL: Nikki's in OUR corner now."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xBF47FC11 Label SC13_LINE_2
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xBF47FC11 Key 0xBF47FC11
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xBF47FC12 Text "NIKKI: Caleb's tellin' everyone you'll never race again once he's in control. He's crazy..."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xBF47FC12 Label SC13_LINE_3
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xBF47FC12 Key 0xBF47FC12
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xBF47FC13 Text "NIKKI: You better watch your back. I'll do what I can, but it's up to you now."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xBF47FC13 Label SC13_LINE_4
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xBF47FC13 Key 0xBF47FC13
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xBF47FC14 Text "CALEB: ... It's unbelievable! What good are any of you?! Not one of you could take that guy out...? Not ONE?!"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xBF47FC14 Label SC13_LINE_5
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xBF47FC14 Key 0xBF47FC14
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xBF47FC15 Text "CALEB: What do you think is gonna happen if he keeps winning? You can say goodbye to all this, your precious sponsors..."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xBF47FC15 Label SC13_LINE_6
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xBF47FC15 Key 0xBF47FC15
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xBF47FC16 Text "CALEB: ...all the C-notes fallin' into your hands, ALL of it!"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xBF47FC16 Label SC13_LINE_7
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xBF47FC16 Key 0xBF47FC16
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xBF47FC17 Text "WRAITHS MEMBER 1: Alright, we'll take care of it."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xBF47FC17 Label SC13_LINE_8
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xBF47FC17 Key 0xBF47FC17
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xBF47FC18 Text "WRAITHS MEMBER 2: He ain't gonna walk away from it this time."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xBF47FC18 Label SC13_LINE_9
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xBF47FC18 Key 0xBF47FC18
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xA8477E40 Text "CALEB: You just make sure he goes down, or ain't NONE of you gonna walk away from this."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xA8477E40 Label SC13_LINE_10
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xA8477E40 Key 0xA8477E40
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xAB89D0F1 Text "CALEB: Yeah, big deal, it was one race! It ain't gonna happen again."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xAB89D0F1 Label SC14_LINE_1
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xAB89D0F1 Key 0xAB89D0F1
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xAB89D0F2 Text "CALEB: You can't do that! We have a deal."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xAB89D0F2 Label SC14_LINE_2
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xAB89D0F2 Key 0xAB89D0F2
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xAB89D0F3 Text "CALEB: Look, just give me one more chance, I can take him..."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xAB89D0F3 Label SC14_LINE_3
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xAB89D0F3 Key 0xAB89D0F3
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xAB89D0F4 Text "CALEB: YOU..."
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xAB89D0F4 Label SC14_LINE_4
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xAB89D0F4 Key 0xAB89D0F4
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xAB89D0F5 Text "CALEB: ...are nothing but BAD LUCK. I took you out once, and I'm gonna do it again. I'm calling you out! Right here, right now,"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xAB89D0F5 Label SC14_LINE_5
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xAB89D0F5 Key 0xAB89D0F5
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xAB89D0F6 Text "CALEB: EVERYTHING on the line! You down, or what?!"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xAB89D0F6 Label SC14_LINE_6
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0xAB89D0F6 Key 0xAB89D0F6
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x97CBA5D2 Text "NIKKI & RACHEL: Aw, that was AMAZING! Awesome racing! I can't believe it!"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x97CBA5D2 Label SC15_LINE_1
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x97CBA5D2 Key 0x97CBA5D2
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x97CBA5D3 Text "NIKKI & RACHEL: (cheering) That's it; it's over for him! OVER! I can't believe we got it! We really got it, baby!"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x97CBA5D3 Label SC15_LINE_2
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x97CBA5D3 Key 0x97CBA5D3
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x840D7AB3 Text "CALEB: Ah, that's what I'm talking about! I told ya--you're nothing. You're NOTHING! (laughing)"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x840D7AB3 Label SC16_LINE_1
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x840D7AB3 Key 0x840D7AB3
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x704F4F94 Text "RACER: Let's heat it up!"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x704F4F94 Label SC17_LINE_1
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x704F4F94 Key 0x704F4F94
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x5C912475 Text "SECURITY GUARD: Yeah? It's done; everything is set up. You just make sure you hold up your end of the deal, ya hear?"
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x5C912475 Label SC18_LINE_1
+update_string LANGUAGES\ENGLISH.BIN STRBlocks GLOBAL 0x5C912475 Key 0x5C912475
+// unload files to save ram usage
+delete LANGUAGES\ENGLISH.BIN

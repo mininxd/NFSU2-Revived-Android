@@ -10,6 +10,7 @@ logs/*
 *.EXE
 *.exe
 *.dll
+!android/app/src/main/assets/dinput8.dll
 *.DLL
 *.BIN
 *.BUN
