@@ -27,7 +27,7 @@ final class RacingControlsView extends View {
     /** Touches outside every control drive the game's mouse: x/y as fractions of the view, phase 0 down, 1 move, 2 up. */
     interface Pointer { void touch(float x, float y, int phase); }
     // Special controls that do not map to a DirectInput scan code.
-    private static final int MODE = -1, TEXT = -2, STICK = -3, EDIT = -5;
+    private static final int MODE = -1, TEXT = -2, STICK = -3, EDIT = -5, CHAT = -6;
     private static final int ROUND = 0, PEDAL = 1, WHEEL = 2;
     private final Keys keys;
     private Pointer pointer;

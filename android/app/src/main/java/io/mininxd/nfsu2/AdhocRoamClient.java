@@ -1,8 +1,12 @@
 package io.mininxd.nfsu2;
 
+import android.app.AlertDialog;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
+import android.widget.Toast;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -39,8 +43,20 @@ public final class AdhocRoamClient {
         }
     }
 
-    public static native void nativeRoamConfigure(String room, String name, String peers);
+    public static native void nativeRoamConfigure(String room, String name, String peers, boolean ghostMode);
     public static native void nativeRoamTick();
+    public static native void nativeRoamSay(int phrase);
+    public static native void nativeRoamStick(float x, float y);
+
+    public static final String[][] QUICK_CHAT_GROUPS = {
+        { "Hey!", "Nice car!", "Thanks!", "Bye!" },           // Group 0: Up / Hi
+        { "Yes", "No", "Sorry!", "lol" },                     // Group 1: Right / Reply
+        { "Follow me!", "Wait up!", "Let's go!", "Nice!" },   // Group 2: Down / Drive
+        { "Race?", "Join my race!", "gg", "One more?" }       // Group 3: Left / Race
+    };
+    public static final String[] GROUP_NAMES = { "Hi (↑)", "Reply (→)", "Drive (↓)", "Race (←)" };
+
+    private static volatile Context currentContext = null;
 
     // Protocol constants (from aemu_postoffice / packets_v1.h)
     private static final byte OPCODE_PING = 0;
@@ -60,13 +76,26 @@ public final class AdhocRoamClient {
         public final String name;
         public final byte[] mac;
         public final int ip;
-        public final long lastSeen;
+        public final int virtualPort;
+        public DatagramSocket socket;
+        public Thread worker;
+        public volatile long lastSeen;
 
-        public Peer(String name, byte[] mac, int ip) {
+        public Peer(String name, byte[] mac, int ip, int virtualPort) {
             this.name = name;
             this.mac = mac != null ? mac.clone() : new byte[6];
             this.ip = ip;
+            this.virtualPort = virtualPort;
             this.lastSeen = System.currentTimeMillis();
+        }
+
+        public void close() {
+            if (socket != null && !socket.isClosed()) {
+                try { socket.close(); } catch (Exception ignored) {}
+            }
+            if (worker != null) {
+                try { worker.interrupt(); } catch (Exception ignored) {}
+            }
         }
     }
 
@@ -108,7 +137,15 @@ public final class AdhocRoamClient {
         return INSTANCE;
     }
 
+    private boolean ghostMode = true;
+
     public synchronized void start(Context context, String host, String room, String name) {
+        start(context, host, room, name, GameOptions.isGhostModeEnabled(context));
+    }
+
+    public synchronized void start(Context context, String host, String room, String name, boolean ghostMode) {
+        currentContext = context;
+        this.ghostMode = ghostMode;
         if (running.get()) {
             if (host.equals(serverHost) && room.equals(roomName) && name.equals(playerName)) {
                 return;
@@ -128,14 +165,14 @@ public final class AdhocRoamClient {
         peers.clear();
 
         Log.i(TAG, "Starting Adhoc Roam: Server=" + serverHost + " Room=" + roomName
-                + " Name=" + playerName + " MAC=" + formatMac(localMac));
+                + " Name=" + playerName + " Ghost=" + ghostMode + " MAC=" + formatMac(localMac));
 
         startAdhocctlThread();
         startPostofficeThread();
         startUdpBridgeThread();
 
         try {
-            nativeRoamConfigure(roomName, playerName, "127.0.0.1:" + LOCAL_RELAY_PORT);
+            nativeRoamConfigure(roomName, playerName, "127.0.0.1:" + LOCAL_RELAY_PORT, ghostMode);
         } catch (Throwable t) {
             Log.d(TAG, "nativeRoamConfigure: " + t.getMessage());
         }
@@ -158,6 +195,9 @@ public final class AdhocRoamClient {
         interruptQuietly(udpBridgeThread);
         interruptQuietly(roamTickThread);
 
+        for (Peer p : peers.values()) {
+            p.close();
+        }
         peers.clear();
         racingActive.set(false);
         adhocConnected.set(false);
@@ -295,11 +335,9 @@ public final class AdhocRoamClient {
                 String peerName = new String(nameBuf, 0, nullIdx, StandardCharsets.UTF_8);
                 int peerIp = ByteBuffer.wrap(ipBuf).order(ByteOrder.LITTLE_ENDIAN).getInt();
 
-                Peer peer = new Peer(peerName, peerMac, peerIp);
-                String macKey = formatMac(peerMac);
-                peers.put(macKey, peer);
-
-                Log.i(TAG, "Adhoc Peer Joined: " + peerName + " [" + macKey + "] total=" + peers.size());
+                if (!Arrays.equals(peerMac, localMac)) {
+                    getOrCreatePeer(peerName, peerMac, peerIp);
+                }
                 break;
             }
             case OPCODE_DISCONNECT: {
@@ -309,8 +347,11 @@ public final class AdhocRoamClient {
 
                 for (Map.Entry<String, Peer> entry : peers.entrySet()) {
                     if (entry.getValue().ip == peerIp) {
-                        peers.remove(entry.getKey());
-                        Log.i(TAG, "Adhoc Peer Left: " + entry.getValue().name + " [" + entry.getKey() + "]");
+                        Peer removed = peers.remove(entry.getKey());
+                        if (removed != null) {
+                            removed.close();
+                            Log.i(TAG, "Adhoc Peer Left: " + removed.name + " [" + entry.getKey() + "]");
+                        }
                         break;
                     }
                 }
@@ -391,8 +432,13 @@ public final class AdhocRoamClient {
 
                         byte[] payload = readFully(in, size);
 
-                        // Forward payload locally to the game via UDP (127.0.0.1:47210)
-                        forwardToLocalGame(payload);
+                        // Drop echoed packets from ourselves
+                        if (Arrays.equals(srcMac, localMac)) {
+                            continue;
+                        }
+
+                        // Forward payload locally to the game via peer's virtual socket
+                        forwardToLocalGame(srcMac, payload);
                     }
                 } catch (Exception e) {
                     if (running.get()) {
@@ -411,12 +457,79 @@ public final class AdhocRoamClient {
         postofficeThread.start();
     }
 
-    private void forwardToLocalGame(byte[] payload) {
+    private final java.util.concurrent.atomic.AtomicInteger nextVirtualPort = new java.util.concurrent.atomic.AtomicInteger(47212);
+
+    private synchronized Peer getOrCreatePeer(String name, byte[] mac, int ip) {
+        String key = formatMac(mac);
+        Peer existing = peers.get(key);
+        if (existing != null) {
+            existing.lastSeen = System.currentTimeMillis();
+            return existing;
+        }
+
+        int vPort = nextVirtualPort.getAndIncrement();
+        if (vPort > 47290) {
+            nextVirtualPort.set(47212);
+            vPort = 47212;
+        }
+
+        final Peer peer = new Peer(name, mac, ip, vPort);
         try {
-            if (localUdpSocket != null && !localUdpSocket.isClosed()) {
+            peer.socket = new DatagramSocket(vPort, InetAddress.getByName("127.0.0.1"));
+            peer.socket.setBroadcast(false);
+
+            peer.worker = new Thread(() -> {
+                byte[] buf = new byte[2048];
+                while (running.get() && peer.socket != null && !peer.socket.isClosed()) {
+                    try {
+                        DatagramPacket pkt = new DatagramPacket(buf, buf.length);
+                        peer.socket.receive(pkt);
+                        if (pkt.getLength() > 0) {
+                            byte[] data = Arrays.copyOf(pkt.getData(), pkt.getLength());
+                            sendPdpPacket(peer.mac, data);
+                        }
+                    } catch (Exception e) {
+                        break;
+                    }
+                }
+            }, "PeerWorker-" + vPort);
+            peer.worker.setDaemon(true);
+            peer.worker.start();
+        } catch (Exception e) {
+            Log.e(TAG, "Failed creating peer socket on port " + vPort + ": " + e.getMessage());
+        }
+
+        peers.put(key, peer);
+        Log.i(TAG, "Registered peer " + name + " [" + key + "] on virtual port " + vPort + ", total peers=" + peers.size());
+        return peer;
+    }
+
+    public synchronized void sendPdpPacket(byte[] dstMac, byte[] data) {
+        if (!running.get() || postofficeOut == null || data == null || data.length == 0 || dstMac == null) return;
+        try {
+            ByteBuffer pdpHeader = ByteBuffer.allocate(14).order(ByteOrder.LITTLE_ENDIAN);
+            pdpHeader.put(dstMac);
+            if (dstMac.length == 6) {
+                pdpHeader.putShort((short) 0); // padding
+            }
+            pdpHeader.putShort((short) DEFAULT_GAME_PORT);
+            pdpHeader.putInt(data.length);
+
+            postofficeOut.write(pdpHeader.array());
+            postofficeOut.write(data);
+            postofficeOut.flush();
+        } catch (Exception e) {
+            Log.d(TAG, "Failed sending PDP packet: " + e.getMessage());
+        }
+    }
+
+    private void forwardToLocalGame(byte[] srcMac, byte[] payload) {
+        try {
+            Peer peer = getOrCreatePeer("Player", srcMac, 0);
+            if (peer != null && peer.socket != null && !peer.socket.isClosed()) {
                 InetAddress loopback = InetAddress.getByName("127.0.0.1");
                 DatagramPacket packet = new DatagramPacket(payload, payload.length, loopback, DEFAULT_GAME_PORT);
-                localUdpSocket.send(packet);
+                peer.socket.send(packet);
             }
         } catch (Exception e) {
             Log.d(TAG, "Failed forwarding PDP payload to local game: " + e.getMessage());
@@ -476,21 +589,18 @@ public final class AdhocRoamClient {
         if (!running.get() || postofficeOut == null || data == null || data.length == 0) return;
 
         try {
-            // Send to postoffice PDP as broadcast destination (FF:FF:FF:FF:FF:FF)
-            // or iterate active peers
+            // 1. Send to postoffice PDP as broadcast destination (FF:FF:FF:FF:FF:FF)
             byte[] broadcastMac = new byte[] { (byte)0xFF, (byte)0xFF, (byte)0xFF, (byte)0xFF, (byte)0xFF, (byte)0xFF };
+            sendPdpPacket(broadcastMac, data);
 
-            ByteBuffer pdpHeader = ByteBuffer.allocate(14).order(ByteOrder.LITTLE_ENDIAN);
-            pdpHeader.put(broadcastMac);
-            pdpHeader.putShort((short) 0); // padding
-            pdpHeader.putShort((short) DEFAULT_GAME_PORT);
-            pdpHeader.putInt(data.length);
-
-            postofficeOut.write(pdpHeader.array());
-            postofficeOut.write(data);
-            postofficeOut.flush();
+            // 2. ALSO send directly to each known active peer in the room
+            for (Peer p : peers.values()) {
+                if (p.mac != null && p.mac.length == 6 && !Arrays.equals(p.mac, localMac)) {
+                    sendPdpPacket(p.mac, data);
+                }
+            }
         } catch (Exception e) {
-            Log.d(TAG, "Failed to send packet to postoffice: " + e.getMessage());
+            Log.d(TAG, "Failed to broadcast to adhoc peers: " + e.getMessage());
         }
     }
 
@@ -524,6 +634,105 @@ public final class AdhocRoamClient {
     private static void interruptQuietly(Thread t) {
         if (t != null) {
             try { t.interrupt(); } catch (Exception ignored) {}
+        }
+    }
+
+    // ---- Quick Chat UI & Input --------------------------------------------------------------------------
+
+    public static void handleRightStick(float x, float y) {
+        try {
+            nativeRoamStick(x, y);
+        } catch (Throwable ignored) {}
+    }
+
+    public static void showQuickChatDialog(Context context) {
+        if (context == null) context = currentContext;
+        if (context == null) return;
+        final Context ctx = context;
+        new Handler(Looper.getMainLooper()).post(() -> {
+            try {
+                String[] categories = {
+                    "1. Hi (↑)",
+                    "2. Reply (→)",
+                    "3. Drive (↓)",
+                    "4. Race (←)"
+                };
+                new AlertDialog.Builder(ctx)
+                    .setTitle("Quick Chat")
+                    .setItems(categories, (dialog, which) -> showGroupPhrasesDialog(ctx, which))
+                    .setNegativeButton("Cancel", null)
+                    .show();
+            } catch (Exception e) {
+                Log.d(TAG, "QuickChat dialog: " + e.getMessage());
+            }
+        });
+    }
+
+    private static void showGroupPhrasesDialog(Context context, int groupIndex) {
+        if (groupIndex < 0 || groupIndex >= QUICK_CHAT_GROUPS.length) return;
+        String[] phrases = QUICK_CHAT_GROUPS[groupIndex];
+        new AlertDialog.Builder(context)
+            .setTitle(GROUP_NAMES[groupIndex])
+            .setItems(phrases, (dialog, which) -> {
+                int phraseIndex = groupIndex * 4 + which;
+                sendQuickChat(phraseIndex);
+            })
+            .setNegativeButton("Back", (dialog, which) -> showQuickChatDialog(context))
+            .show();
+    }
+
+    public static void sendQuickChat(int phraseIndex) {
+        try {
+            nativeRoamSay(phraseIndex);
+            Log.i(TAG, "Sent Quick Chat phrase: " + phraseIndex);
+        } catch (Throwable t) {
+            Log.w(TAG, "Failed sending quick chat: " + t.getMessage());
+        }
+    }
+
+    // Called from native C layer (roam_android.c)
+    public static void onQuickChatReceived(String json) {
+        if (json == null || json.isEmpty()) return;
+        try {
+            org.json.JSONObject obj = new org.json.JSONObject(json);
+            if (obj.has("group")) {
+                int group = obj.getInt("group");
+                if (group >= 0 && group < GROUP_NAMES.length) {
+                    StringBuilder sb = new StringBuilder();
+                    sb.append("💬 Chat ").append(GROUP_NAMES[group]).append(":\n");
+                    String[] phrases = QUICK_CHAT_GROUPS[group];
+                    String[] arrows = { "↑", "→", "↓", "←" };
+                    for (int i = 0; i < 4; i++) {
+                        sb.append(arrows[i]).append(" ").append(phrases[i]).append(i < 3 ? "  |  " : "");
+                    }
+                    showToast(sb.toString());
+                }
+            } else if (obj.has("p")) {
+                int p = obj.getInt("p");
+                String name = obj.optString("name", "Racer");
+                boolean isMe = obj.optInt("me", 0) == 1;
+                int group = p / 4;
+                int idx = p % 4;
+                if (group >= 0 && group < QUICK_CHAT_GROUPS.length && idx >= 0 && idx < 4) {
+                    String phraseText = QUICK_CHAT_GROUPS[group][idx];
+                    String display = (isMe ? "You" : name) + ": \"" + phraseText + "\"";
+                    showToast("💬 " + display);
+                }
+            }
+        } catch (Exception e) {
+            Log.d(TAG, "QuickChat json parse: " + e.getMessage());
+        }
+    }
+
+    private static void showToast(String text) {
+        Log.i(TAG, text);
+        Context ctx = currentContext;
+        if (ctx != null) {
+            new Handler(Looper.getMainLooper()).post(() -> {
+                try {
+                    Toast.makeText(ctx, text, Toast.LENGTH_SHORT).show();
+                } catch (Exception ignored) {}
+            });
         }
     }
 }

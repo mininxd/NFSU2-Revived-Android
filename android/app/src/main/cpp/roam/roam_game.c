@@ -246,8 +246,10 @@ static int du_racing(uint32_t race);
  * one, or an outrun with a friend (du_racing): that is still free roam */
 static int roaming(void){
     uint32_t race = rd32(G_RACE);
+    uint32_t gm = rd32(G_GAMEMODE);
+    int career_racing = (gm & 1u) && rd32(G_CAREER_RACE);
     return rd32(G_FLOW) == 6u && ok(race, 0xc44) && MR32(race) == 4u && (MR32(race + 0x24u) == 1u || du_racing(race)) &&
-           !rd32(G_CAREER_RACE) && !(rd32(G_GAMEMODE) & 0x200u) && world() && player_car();
+           !career_racing && !(gm & 0x200u) && world() && player_car();
 }
 static uint32_t encounter_mgr(void){ uint32_t r = rd32(G_RACE); return ok(r, 0xc44) ? r + RC_ENCOUNTERS : 0; }
 /* one of the game's own opponent cars: an AI racer (kind 2) whose racer
@@ -777,9 +779,11 @@ static uint32_t skin_of(uint32_t rec){ return rec >= G_RECORDS && rec < G_RECORD
 /* slot k's paint slot: an opponent car's own (its record's place: 2-4), ours
  * 5 and up */
 static uint32_t slot_skin(int k){
-    if (k >= NOPP) return 5u + (uint32_t)(k - NOPP);
-    uint32_t n = skin_of(g_sl[k].car ? rd32(g_sl[k].car + 0x14u) : 0);
-    return n ? n : 2u + (uint32_t)k;
+    if (k < NOPP && g_sl[k].car && !g_sl[k].created){
+        uint32_t n = skin_of(rd32(g_sl[k].car + 0x14u));
+        return n ? n : 2u + (uint32_t)k;
+    }
+    return 5u + (uint32_t)k;
 }
 /* g_gmem: scratch for guest-call arguments (+0x40 a performance block, +0x80
  * a grid entry, +0xA0 a file name, +0x100 the name labels' vectors and
@@ -1274,7 +1278,7 @@ static void release(CPU *c, int k, const char *why){
         s->st = SL_PARKED;
     } else s->st = SL_FREE;                          /* nothing of the friend's on it */
     s->peer = -1; s->peer_id = 0; s->unseen_since = 0; s->name[0] = 0;
-    if (s->st == SL_FREE && k < NOPP){ s->car = 0; s->world = 0; }
+    if (s->st == SL_FREE && k < NOPP && !s->created){ s->car = 0; s->world = 0; }
 }
 /* the car gets its own ride back (still resident: the world, or for a car
  * of our own its first load, holds it), is deactivated, and the friend's
@@ -1314,7 +1318,7 @@ static void restore(CPU *c, int k){
  * into the freed entry or pack record, or whatever took its place, and goes
  * on with it.  So it runs only with the loader idle, as the game's own purge
  * does (0x63AE70 services the loader until +0x14 is 0); busy: the next frame. */
-#define POOL_NEED (3600u * 1024u)
+#define POOL_NEED (1500u * 1024u)
 static struct { uint32_t id; long next; } g_memnote[RC_TABLE];
 static int pool_room(CPU *c, const Slot *s, const char *car /* 0: a car of our own */){
     if (pool_free() >= POOL_NEED) return 1;
@@ -1341,7 +1345,7 @@ static int pool_room(CPU *c, const Slot *s, const char *car /* 0: a car of our o
 static int racer_number_used(uint32_t w, int n){
     uint32_t it = rd32(w);
     for (int m = 0; it && it != w && m < 128 && ok(it, 0x9e0); m++, it = rd32(it)) if ((int16_t)MR16(it + 0xau) == n) return 1;
-    for (int k = NOPP; k < NSLOT; k++) if ((g_sl[k].st == SL_CREATING || g_sl[k].created) && (int8_t)MR8(g_sl[k].rec + 1u) == n) return 1;
+    for (int k = 0; k < NSLOT; k++) if ((g_sl[k].st == SL_CREATING || g_sl[k].created) && (int8_t)MR8(g_sl[k].rec + 1u) == n) return 1;
     return 0;
 }
 static int racer_number(uint32_t w){
@@ -1358,6 +1362,7 @@ static int begin_create(CPU *c, int k){
     Slot *s = &g_sl[k];
     uint32_t w = world(), opp = 0;
     for (int i = 0; w && i < 22 && !opp; i++){ uint32_t car = ai_car(w, i); if (car && game_opponent(car)) opp = car; }
+    if (!opp) opp = player_car(); /* Fallback: clone racer record template from player car if no AI opponents exist (e.g. in Explore Mode) */
     uint32_t orec = opp ? rd32(opp + 0x14u) : 0;
     if (!ok(orec, REC_SZ) || !g_gmem) return 0;
     part_packs(c);                                               /* (their loading starts; begin_load waits for them) */
@@ -2029,7 +2034,7 @@ static int hud_on_top(uint32_t pkg){
  * (web/src/app/quickchat.ts), a number on the wire, so each player reads it in their own language and nobody types
  * anything.  The page shows a line over the car of each player who said something lately, where the name over it
  * is: tags_update tells it where, with every frame (roam_plat_say_marks).  Not in the Windows plugin (no page). */
-#ifdef ROAM_HOST_WIN
+#if defined(ROAM_HOST_WIN) && !defined(ROAM_HOST_ANDROID)
 #define SAYS            0
 #else
 #define SAYS            1
@@ -4506,12 +4511,11 @@ static void say_stamp(int64_t *t, int64_t host){
     t[o] = host;
 }
 static void say_page(uint32_t id, const char *name, int phrase, int me, int lobby){
-    char buf[128], ids[16]; MpJs j = { buf, 0, sizeof buf };
-    snprintf(ids, sizeof ids, "%u", id);
-    js_raw(&j, "{"); js_key(&j, "id"); js_raw(&j, ids); js_str(&j, "name", name); js_int(&j, "p", phrase);
-    if (me) js_int(&j, "me", 1);
-    if (lobby) js_int(&j, "lobby", 1);
-    js_raw(&j, "}");
+    char buf[256];
+    snprintf(buf, sizeof buf, "{\"id\":%u,\"name\":\"%s\",\"p\":%d%s%s}",
+             id, name ? name : "Racer", phrase,
+             me ? ",\"me\":1" : "",
+             lobby ? ",\"lobby\":1" : "");
     if (roam_plat_said(buf) < 0) rlog("[roam] f=%ld quick chat: the page's ring is full, a line lost\n", rh_frame());
 }
 static int say_in_lobby(uint32_t id){
@@ -4819,8 +4823,12 @@ static void assign(CPU *c, int64_t host){
             if (j < NOPP){
                 if (O.test_owncars) continue;
                 uint32_t w = world(), car = w && g_em == EM_HELD ? free_opponent_car(w) : 0;
-                if (!car) continue;
-                g_sl[j].car = car; g_sl[j].world = w; g_sl[j].created = 0;
+                if (!car){
+                    if (!w) continue;
+                    g_sl[j].car = 0; g_sl[j].world = w; g_sl[j].created = 1;
+                } else {
+                    g_sl[j].car = car; g_sl[j].world = w; g_sl[j].created = 0;
+                }
             }
             k = j;
         }
@@ -4881,7 +4889,7 @@ static void assign(CPU *c, int64_t host){
             return;
         }
         g_heavy++;
-        if (k >= NOPP && !s->car){
+        if (!s->car){
             if (!begin_create(c, k)){ s->peer = -1; s->peer_id = 0; s->name[0] = 0; tried[best] = 1; continue; }
             s->st = SL_CREATING; g_acquires++;
             rlog("[roam] f=%ld slot %d (car of our own, being created) for %s, %.0f m away\n", rh_frame(), k, s->name,

@@ -282,7 +282,8 @@ public final class GameActivity extends NativeActivity {
             if (roamRoom == null || roamRoom.isEmpty()) roamRoom = GameOptions.roamRoom(this);
             String roamName = launch.getStringExtra("roamName");
             if (roamName == null || roamName.isEmpty()) roamName = GameOptions.roamName(this);
-            AdhocRoamClient.getInstance().start(this, roamServer, roamRoom, roamName);
+            boolean ghostMode = launch.getBooleanExtra("roamGhost", GameOptions.isGhostModeEnabled(this));
+            AdhocRoamClient.getInstance().start(this, roamServer, roamRoom, roamName, ghostMode);
         }
 
         diagnosticOverlay = new DiagnosticOverlay(this, displayLogs);
@@ -447,6 +448,19 @@ public final class GameActivity extends NativeActivity {
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         startActivity(intent);
         android.os.Process.killProcess(android.os.Process.myPid());
+    }
+
+    @Override
+    public boolean onGenericMotionEvent(android.view.MotionEvent event) {
+        if ((event.getSource() & android.view.InputDevice.SOURCE_JOYSTICK) == android.view.InputDevice.SOURCE_JOYSTICK
+                && event.getAction() == android.view.MotionEvent.ACTION_MOVE) {
+            float z = event.getAxisValue(android.view.MotionEvent.AXIS_Z);
+            float rz = event.getAxisValue(android.view.MotionEvent.AXIS_RZ);
+            if (Math.abs(z) > 0.35f || Math.abs(rz) > 0.35f) {
+                AdhocRoamClient.handleRightStick(z, rz);
+            }
+        }
+        return super.onGenericMotionEvent(event);
     }
 
     @Override protected void onDestroy() {

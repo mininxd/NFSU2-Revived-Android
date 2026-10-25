@@ -421,6 +421,7 @@ public final class LauncherActivity extends Activity {
             optionsList.addView(optionRow(option.title, option.label(GameOptions.get(this, option.key)), () -> chooseOption(option)));
         optionsList.addView(optionRow("Cheat Codes", cheatCodesSummary(), this::chooseCheatCodes));
         optionsList.addView(optionRow("Freeroam Online (beta)", GameOptions.isRoamEnabled(this) ? "On" : "Off", this::toggleFreeRoam));
+        optionsList.addView(optionRow("Ghost Mode", GameOptions.isGhostModeEnabled(this) ? "On" : "Off", this::toggleGhostMode));
         optionsList.addView(optionRow("Online Server", GameOptions.onlineServer(this), this::chooseOnlineServer));
         optionsList.addView(optionRow("Check for updates",
                 checkingUpdates ? "Checking GitHub…" : "Version " + ReleaseUpdates.installed(this), () -> checkUpdates(true)));
@@ -518,6 +519,12 @@ public final class LauncherActivity extends Activity {
     private void toggleFreeRoam() {
         boolean next = !GameOptions.isRoamEnabled(this);
         GameOptions.setRoamEnabled(this, next);
+        refreshOptions();
+    }
+
+    private void toggleGhostMode() {
+        boolean next = !GameOptions.isGhostModeEnabled(this);
+        GameOptions.setGhostModeEnabled(this, next);
         refreshOptions();
     }
 

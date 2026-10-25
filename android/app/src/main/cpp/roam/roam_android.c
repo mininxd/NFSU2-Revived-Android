@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <math.h>
 #include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -28,8 +29,16 @@ uint32_t  *g_p_ecx = NULL;
 uint32_t  *g_p_edx = NULL;
 recomp_func_t (*g_p_recomp_lookup)(uint32_t va) = NULL;
 
+#define G_CARPOOL_KB 0x007fa9d4u
+#define CARPOOL_KB   48000
+
 int roam_android_init_symbols(void) {
-    if (g_p_mem_base && g_p_recomp_lookup && g_p_esp && *g_p_mem_base != 0) return 1;
+    if (g_p_mem_base && g_p_recomp_lookup && g_p_esp && *g_p_mem_base != 0) {
+        if (MR32(G_CARPOOL_KB) < CARPOOL_KB) {
+            MR32(G_CARPOOL_KB) = CARPOOL_KB;
+        }
+        return 1;
+    }
 
     void *h = dlopen("libnfsu2_android.so", RTLD_NOLOAD | RTLD_GLOBAL);
     if (!h) h = dlopen("libnfsu2_android.so", RTLD_LAZY | RTLD_GLOBAL);
@@ -42,7 +51,13 @@ int roam_android_init_symbols(void) {
     if (!g_p_ecx) g_p_ecx = (uint32_t *)dlsym(h, "g_ecx");
     if (!g_p_edx) g_p_edx = (uint32_t *)dlsym(h, "g_edx");
 
-    return (g_p_mem_base && *g_p_mem_base != 0 && g_p_recomp_lookup && g_p_esp);
+    if (g_p_mem_base && *g_p_mem_base != 0 && g_p_recomp_lookup && g_p_esp) {
+        if (MR32(G_CARPOOL_KB) < CARPOOL_KB) {
+            MR32(G_CARPOOL_KB) = CARPOOL_KB;
+        }
+        return 1;
+    }
+    return 0;
 }
 
 static int             g_fd = -1;
@@ -57,6 +72,17 @@ static long            g_frame_count = 0;
 static char            g_room_name[64] = "FREEROAM";
 static char            g_player_name[64] = "Racer";
 static char            g_peers_str[256] = "127.0.0.1:47211";
+static int             g_ghost_mode = 1;
+
+/* Quick Chat state */
+static atomic_int      g_say_pick = -1;
+static int             g_qc_open = -1;
+static int64_t         g_qc_open_until = 0;
+static int             g_qc_armed = 1;
+
+static JavaVM         *g_jvm = NULL;
+static jclass          g_client_class = NULL;
+static jmethodID       g_mid_on_said = NULL;
 
 void roam_plat_lock(void)   { pthread_mutex_lock(&g_mu); }
 void roam_plat_unlock(void) { pthread_mutex_unlock(&g_mu); }
@@ -82,10 +108,32 @@ void roam_plat_notice(const char *name, const char *what) {
 }
 
 int roam_plat_lobby(const char *json) { (void)json; return 0; }
-int roam_plat_solid(void) { return -1; }
-int roam_plat_quickchat(void) { return 0; }
-int roam_plat_say_pick(void) { return -1; }
-int roam_plat_said(const char *json) { (void)json; return 1; }
+int roam_plat_solid(void) { return g_ghost_mode ? 0 : 1; }
+int roam_plat_quickchat(void) { return 1; }
+int roam_plat_say_pick(void) { return atomic_exchange(&g_say_pick, -1); }
+
+int roam_plat_said(const char *json) {
+    if (!json || !g_jvm || !g_client_class || !g_mid_on_said) return 1;
+    JNIEnv *env = NULL;
+    int attached = 0;
+    if ((*g_jvm)->GetEnv(g_jvm, (void **)&env, JNI_VERSION_1_6) != JNI_OK) {
+        if ((*g_jvm)->AttachCurrentThread(g_jvm, &env, NULL) == 0) {
+            attached = 1;
+        } else {
+            return 1;
+        }
+    }
+    jstring jJson = (*env)->NewStringUTF(env, json);
+    if (jJson) {
+        (*env)->CallStaticVoidMethod(env, g_client_class, g_mid_on_said, jJson);
+        (*env)->DeleteLocalRef(env, jJson);
+    }
+    if (attached) {
+        (*g_jvm)->DetachCurrentThread(g_jvm);
+    }
+    return 1;
+}
+
 void roam_plat_say_marks(const uint32_t *ids, const float *xys, int n) { (void)ids; (void)xys; (void)n; }
 uint32_t roam_plat_crews(uint32_t crews[RC_CREW_MAX], uint32_t rgb[RC_CREW_MAX]) { (void)crews; (void)rgb; return 0; }
 int roam_plat_test_mode(void) { return 0; }
@@ -108,7 +156,7 @@ const char *roam_opt(const char *name) {
     if (!strcmp(name, "Port") || !strcmp(name, "NFSU2_ROAM_PORT")) return "47210";
     if (!strcmp(name, "Peers") || !strcmp(name, "NFSU2_ROAM_PEERS")) return g_peers_str;
     if (!strcmp(name, "Enable") || !strcmp(name, "NFSU2_ROAM")) return "1";
-    if (!strcmp(name, "Collide") || !strcmp(name, "NFSU2_ROAM_COLLIDE")) return "0";
+    if (!strcmp(name, "Collide") || !strcmp(name, "NFSU2_ROAM_COLLIDE")) return g_ghost_mode ? "0" : "1";
     return getenv(name);
 }
 
@@ -309,14 +357,56 @@ void nfs_roam_frame_tick(void) {
     roam_game_frame(NULL);
 }
 
+/* Gamepad Right Stick Quick Chat Input */
+void roam_stick_input(float x, float y) {
+    float r = sqrtf(x * x + y * y);
+    if (r < 0.35f) {
+        g_qc_armed = 1;
+        return;
+    }
+    if (r < 0.8f || !g_qc_armed) return;
+    g_qc_armed = 0;
+
+    int dir = (fabsf(x) > fabsf(y)) ? (x > 0.f ? 1 : 3) : (y < 0.f ? 0 : 2);
+    int64_t now = roam_plat_now_us();
+
+    if (g_qc_open < 0 || now > g_qc_open_until) {
+        g_qc_open = dir;
+        g_qc_open_until = now + 4000000; // 4 seconds open
+        char b[64];
+        snprintf(b, sizeof b, "{\"group\":%d}", dir);
+        roam_plat_said(b);
+    } else {
+        int phrase = g_qc_open * 4 + dir;
+        g_qc_open = -1;
+        g_qc_open_until = 0;
+        atomic_store(&g_say_pick, phrase);
+    }
+}
+
 /* JNI Interface */
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+jint JNI_OnLoad(JavaVM *vm, void *reserved) {
+    (void)reserved;
+    g_jvm = vm;
+    JNIEnv *env = NULL;
+    if ((*vm)->GetEnv(vm, (void **)&env, JNI_VERSION_1_6) == JNI_OK) {
+        jclass clz = (*env)->FindClass(env, "io/mininxd/nfsu2/AdhocRoamClient");
+        if (clz) {
+            g_client_class = (jclass)(*env)->NewGlobalRef(env, clz);
+            g_mid_on_said = (*env)->GetStaticMethodID(env, g_client_class, "onQuickChatReceived", "(Ljava/lang/String;)V");
+        }
+    }
+    return JNI_VERSION_1_6;
+}
+
 JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_AdhocRoamClient_nativeRoamConfigure(
-        JNIEnv *env, jclass clazz, jstring jRoom, jstring jName, jstring jPeers) {
+        JNIEnv *env, jclass clazz, jstring jRoom, jstring jName, jstring jPeers, jboolean jGhostMode) {
     (void)clazz;
+    g_ghost_mode = (jGhostMode == JNI_TRUE) ? 1 : 0;
     if (!env) return;
     if (jRoom) {
         const char *r = (*(JNIEnv **)env != NULL) ? (*env)->GetStringUTFChars(env, jRoom, NULL) : NULL;
@@ -330,8 +420,8 @@ JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_AdhocRoamClient_nativeRoamConfigure
         const char *p = (*(JNIEnv **)env != NULL) ? (*env)->GetStringUTFChars(env, jPeers, NULL) : NULL;
         if (p) { strncpy(g_peers_str, p, sizeof g_peers_str - 1); (*env)->ReleaseStringUTFChars(env, jPeers, p); }
     }
-    __android_log_print(ANDROID_LOG_INFO, "NFSU2-Roam", "Configured Native Roam: Room=%s, Name=%s, Peers=%s",
-                        g_room_name, g_player_name, g_peers_str);
+    __android_log_print(ANDROID_LOG_INFO, "NFSU2-Roam", "Configured Native Roam: Room=%s, Name=%s, Peers=%s, GhostMode=%d",
+                        g_room_name, g_player_name, g_peers_str, g_ghost_mode);
 }
 
 JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_AdhocRoamClient_nativeRoamTick(
@@ -339,6 +429,22 @@ JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_AdhocRoamClient_nativeRoamTick(
     (void)env;
     (void)clazz;
     nfs_roam_frame_tick();
+}
+
+JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_AdhocRoamClient_nativeRoamSay(
+        JNIEnv *env, jclass clazz, jint phrase) {
+    (void)env;
+    (void)clazz;
+    if (phrase >= 0 && phrase < 16) {
+        atomic_store(&g_say_pick, (int)phrase);
+    }
+}
+
+JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_AdhocRoamClient_nativeRoamStick(
+        JNIEnv *env, jclass clazz, jfloat x, jfloat y) {
+    (void)env;
+    (void)clazz;
+    roam_stick_input(x, y);
 }
 
 #ifdef __cplusplus

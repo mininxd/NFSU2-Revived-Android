@@ -96,6 +96,16 @@ final class GameOptions {
         prefs(context).edit().putBoolean(ROAM_ENABLED, enabled).apply();
     }
 
+    static final String ROAM_GHOST = "roam_ghost";
+
+    static boolean isGhostModeEnabled(Context context) {
+        return prefs(context).getBoolean(ROAM_GHOST, true);
+    }
+
+    static void setGhostModeEnabled(Context context, boolean enabled) {
+        prefs(context).edit().putBoolean(ROAM_GHOST, enabled).apply();
+    }
+
     static String roamServer(Context context) {
         return DEFAULT_ROAM_SERVER;
     }
