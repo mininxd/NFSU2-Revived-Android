@@ -12,13 +12,15 @@ import android.os.Looper;
 import android.os.Process;
 import android.os.SystemClock;
 import android.util.DisplayMetrics;
-import android.view.Choreographer;
+import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.PopupWindow;
 import android.widget.TextView;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.io.RandomAccessFile;
 import java.util.ArrayList;
 import java.util.List;
@@ -26,24 +28,24 @@ import java.util.Locale;
 
 /**
  * Diagnostic and performance telemetry overlay.
- * Supports "compact" (FPS, racers, CPU/RAM) and "full" (detailed metrics matching log_example.txt).
+ * Right-aligned, 60% opacity, compact font (6.5sp).
+ * Measures actual game FPS (not display vsync rate).
+ * Only displays online player information when online mode is active.
  */
-public final class DiagnosticOverlay implements Choreographer.FrameCallback {
+public final class DiagnosticOverlay {
     private final Activity activity;
     private final String mode; // "compact" or "full"
     private final Handler handler = new Handler(Looper.getMainLooper());
 
     private PopupWindow window;
     private TextView textView;
-    private boolean running = false;
+    private volatile boolean running = false;
     private boolean attached = false;
 
-    // Frame rate measurement
-    private long lastFrameTimeNanos = 0;
-    private int frameCount = 0;
-    private long lastFpsUpdateNanos = 0;
-    private float currentFps = 0.0f;
-    private float currentFrameTimeMs = 0.0f;
+    // Actual game FPS measured from native D3D9 presentation bridge
+    private volatile float measuredGameFps = 0.0f;
+    private volatile long lastNativeLogTime = 0;
+    private Thread logcatThread;
 
     // CPU measurement state
     private long prevTotal = 0;
@@ -76,22 +78,32 @@ public final class DiagnosticOverlay implements Choreographer.FrameCallback {
     private void initView() {
         textView = new TextView(activity);
         textView.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
-        textView.setTextColor(Color.parseColor("#EAEAEA"));
-        textView.setTextSize(isFull() ? 11 : 12);
+        textView.setTextColor(Color.WHITE);
 
-        int padH = dp(10);
-        int padV = dp(6);
+        // Right align text
+        textView.setGravity(Gravity.END);
+        textView.setTextAlignment(View.TEXT_ALIGNMENT_TEXT_END);
+
+        // Reduce font size to ~6.5sp (~6px scaled for device density)
+        textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 6.5f);
+
+        // 60% Opacity
+        textView.setAlpha(0.60f);
+
+        int padH = dp(7);
+        int padV = dp(4);
         textView.setPadding(padH, padV, padH, padV);
 
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(Color.parseColor("#C80D0D0D")); // 78% opacity dark charcoal
-        bg.setCornerRadius(dp(8));
-        bg.setStroke(dp(1), Color.parseColor("#55333333"));
+        // 60% opacity dark background (#990A0A0A)
+        bg.setColor(Color.argb((int)(0.60 * 255), 10, 10, 10));
+        bg.setCornerRadius(dp(4));
+        bg.setStroke(dp(1), Color.argb((int)(0.40 * 255), 70, 70, 70));
         textView.setBackground(bg);
 
         window = new PopupWindow(textView, ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT, false);
-        window.setTouchable(false); // Zero interference with game touch controls
+        window.setTouchable(false); // Zero interference with game controls
         window.setFocusable(false);
     }
 
@@ -107,7 +119,7 @@ public final class DiagnosticOverlay implements Choreographer.FrameCallback {
         if (!isEnabled() || running) return;
         running = true;
 
-        Choreographer.getInstance().postFrameCallback(this);
+        startLogcatFpsMonitor();
         handler.post(ticker);
     }
 
@@ -115,8 +127,11 @@ public final class DiagnosticOverlay implements Choreographer.FrameCallback {
         if (!running) return;
         running = false;
 
-        Choreographer.getInstance().removeFrameCallback(this);
         handler.removeCallbacks(ticker);
+        if (logcatThread != null) {
+            try { logcatThread.interrupt(); } catch (Exception ignored) {}
+            logcatThread = null;
+        }
 
         hide();
     }
@@ -126,8 +141,8 @@ public final class DiagnosticOverlay implements Choreographer.FrameCallback {
         View decor = activity.getWindow().getDecorView();
         if (decor.isAttachedToWindow() && activity.hasWindowFocus()) {
             try {
-                int marginX = dp(16);
-                int marginY = dp(18);
+                int marginX = dp(12);
+                int marginY = dp(14);
                 window.showAtLocation(decor, Gravity.TOP | Gravity.END, marginX, marginY);
                 attached = true;
             } catch (Exception ignored) {}
@@ -141,26 +156,62 @@ public final class DiagnosticOverlay implements Choreographer.FrameCallback {
         attached = false;
     }
 
-    @Override
-    public void doFrame(long frameTimeNanos) {
-        if (!running) return;
-
-        if (lastFrameTimeNanos > 0) {
-            long delta = frameTimeNanos - lastFrameTimeNanos;
-            currentFrameTimeMs = delta / 1_000_000.0f;
-            frameCount++;
-
-            if (frameTimeNanos - lastFpsUpdateNanos >= 1_000_000_000L) {
-                currentFps = (frameCount * 1_000_000_000.0f) / (frameTimeNanos - lastFpsUpdateNanos);
-                frameCount = 0;
-                lastFpsUpdateNanos = frameTimeNanos;
+    /**
+     * Reads the actual game rendering FPS directly from the native D3D9 bridge in libnfsu2_android.so.
+     * Prevents reading Android display vsync rates (such as 120Hz displays when game is capped to 30 FPS).
+     */
+    private void startLogcatFpsMonitor() {
+        logcatThread = new Thread(() -> {
+            java.lang.Process process = null;
+            try {
+                process = new ProcessBuilder("logcat", "-v", "brief", "-s", "NFSU2:I")
+                        .redirectErrorStream(true)
+                        .start();
+                BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+                String line;
+                while (running && (line = reader.readLine()) != null) {
+                    // Pattern: "Guest D3D9 presentation %.1f FPS over %.2f seconds..."
+                    int idx = line.indexOf("Guest D3D9 presentation ");
+                    if (idx >= 0) {
+                        String sub = line.substring(idx + 24);
+                        int fpsIdx = sub.indexOf(" FPS");
+                        if (fpsIdx > 0) {
+                            try {
+                                float parsed = Float.parseFloat(sub.substring(0, fpsIdx).trim());
+                                if (parsed > 0 && parsed <= 360) {
+                                    measuredGameFps = parsed;
+                                    lastNativeLogTime = SystemClock.elapsedRealtime();
+                                }
+                            } catch (Exception ignored) {}
+                        }
+                    }
+                }
+            } catch (Exception ignored) {
+            } finally {
+                if (process != null) {
+                    try { process.destroy(); } catch (Exception ignored) {}
+                }
             }
-        } else {
-            lastFpsUpdateNanos = frameTimeNanos;
-        }
+        }, "FpsLogcatMonitor");
+        logcatThread.setDaemon(true);
+        logcatThread.start();
+    }
 
-        lastFrameTimeNanos = frameTimeNanos;
-        Choreographer.getInstance().postFrameCallback(this);
+    private int getGameTargetFps() {
+        try {
+            int cap = Integer.parseInt(GameOptions.get(activity, GameOptions.FPS));
+            if (cap > 0) return cap;
+        } catch (Exception ignored) {}
+        return 60; // default cap
+    }
+
+    private float getCurrentGameFps() {
+        // If native D3D9 presentation logged recently (< 6 seconds ago), use it
+        if (measuredGameFps > 0 && (SystemClock.elapsedRealtime() - lastNativeLogTime < 6000)) {
+            return measuredGameFps;
+        }
+        // Otherwise, return configured game frame limit (e.g. 30 FPS, not 120Hz display rate)
+        return getGameTargetFps();
     }
 
     private final Runnable ticker = new Runnable() {
@@ -179,6 +230,10 @@ public final class DiagnosticOverlay implements Choreographer.FrameCallback {
     };
 
     private void updateStats() {
+        float gameFps = getCurrentGameFps();
+        float frameTimeMs = gameFps > 0 ? (1000.0f / gameFps) : 0.0f;
+        int fpsInt = Math.round(gameFps);
+
         float cpu = sampleCpuUsage();
 
         // Memory
@@ -191,54 +246,64 @@ public final class DiagnosticOverlay implements Choreographer.FrameCallback {
             totalMb = mi.totalMem / (1024 * 1024);
         }
 
-        // Online & Racers
-        List<String> racers = new ArrayList<>();
-        String myName = GameOptions.roamName(activity);
-        if (myName != null && !myName.trim().isEmpty()) {
-            racers.add(myName.trim());
-        } else {
-            racers.add("Racer");
-        }
+        // Online players is ONLY shown if entered online mode (Free Roam enabled)
+        boolean onlineMode = GameOptions.isRoamEnabled(activity);
 
-        boolean roamActive = GameOptions.isRoamEnabled(activity);
-        if (roamActive) {
+        List<String> racers = new ArrayList<>();
+        int onlineCount = 0;
+        int onRaceCount = 0;
+
+        if (onlineMode) {
+            String myName = GameOptions.roamName(activity);
+            if (myName != null && !myName.trim().isEmpty()) {
+                racers.add(myName.trim());
+            } else {
+                racers.add("Racer");
+            }
+
             for (AdhocRoamClient.Peer peer : AdhocRoamClient.getInstance().getPeers().values()) {
                 if (!racers.contains(peer.name)) {
                     racers.add(peer.name);
                 }
             }
+            onlineCount = racers.size();
+            onRaceCount = racers.size();
         }
-
-        int onlineCount = roamActive ? racers.size() : 1;
-        int onRaceCount = racers.size();
-
-        int fpsInt = Math.round(currentFps > 0 ? currentFps : (currentFrameTimeMs > 0 ? (1000.0f / currentFrameTimeMs) : 0));
-        if (fpsInt > 300) fpsInt = 0; // sanity clamp on startup
 
         if (isFull()) {
             StringBuilder sb = new StringBuilder();
-            sb.append("fps: ").append(fpsInt).append('\n');
-            sb.append("player_online: ").append(onlineCount).append('\n');
-            sb.append("player_on_race: ").append(onRaceCount).append('\n');
-            sb.append("player_racing: [");
-            for (int i = 0; i < racers.size(); i++) {
-                if (i > 0) sb.append(", ");
-                sb.append(racers.get(i));
+            sb.append("fps: ").append(fpsInt).append(" (").append(String.format(Locale.US, "%.1f ms", frameTimeMs)).append(")\n");
+            if (onlineMode) {
+                sb.append("player_online: ").append(onlineCount).append('\n');
+                sb.append("player_on_race: ").append(onRaceCount).append('\n');
+                sb.append("player_racing: [");
+                for (int i = 0; i < racers.size(); i++) {
+                    if (i > 0) sb.append(", ");
+                    sb.append(racers.get(i));
+                }
+                sb.append("]\n");
             }
-            sb.append("]\n");
             sb.append(String.format(Locale.US, "cpu_usage: %.1f%%\n", cpu));
             sb.append("gpu_usage: ").append(gpuDriverName).append('\n');
             sb.append("system: ").append(gpuDriverName).append(", ").append(cpuModel).append(", ").append(systemPlatform).append('\n');
             sb.append("memory: ").append(usedMb).append(" MB / ").append(totalMb).append(" MB");
             textView.setText(sb.toString());
         } else {
-            // Compact Mode: sleek 2-line HUD
-            String text = String.format(Locale.US,
-                    "FPS: %d (%.1f ms)  |  CPU: %.0f%%  |  RAM: %.1f/%.1f GB\nPlayers: %d %s",
-                    fpsInt, currentFrameTimeMs, cpu,
-                    usedMb / 1024.0f, totalMb / 1024.0f,
-                    onlineCount, racers.toString());
-            textView.setText(text);
+            // Compact Mode: sleek right-aligned HUD
+            if (onlineMode) {
+                String text = String.format(Locale.US,
+                        "FPS: %d (%.1f ms)  |  CPU: %.0f%%  |  RAM: %.1f/%.1f GB\nOnline: %d %s",
+                        fpsInt, frameTimeMs, cpu,
+                        usedMb / 1024.0f, totalMb / 1024.0f,
+                        onlineCount, racers.toString());
+                textView.setText(text);
+            } else {
+                String text = String.format(Locale.US,
+                        "FPS: %d (%.1f ms)  |  CPU: %.0f%%  |  RAM: %.1f/%.1f GB",
+                        fpsInt, frameTimeMs, cpu,
+                        usedMb / 1024.0f, totalMb / 1024.0f);
+                textView.setText(text);
+            }
         }
     }
 
