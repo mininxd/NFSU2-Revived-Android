@@ -77,6 +77,44 @@ final class GameOptions {
 
     static final String ONLINE_SERVER = "online_server", DEFAULT_ONLINE_SERVER = "eahub.eu";
 
+    /** Free Roam Multiplayer options (matching nfsu2-web / server-rs architecture). */
+    static final String ROAM_ENABLED = "roam_enabled", ROAM_SERVER = "roam_server",
+            ROAM_NAME = "roam_name", ROAM_SOLID = "roam_solid";
+    static final String DEFAULT_ROAM_SERVER = "wss://nfsu2.xyz/lan";
+
+    static boolean isRoamEnabled(Context context) {
+        return prefs(context).getBoolean(ROAM_ENABLED, true);
+    }
+
+    static void setRoamEnabled(Context context, boolean enabled) {
+        prefs(context).edit().putBoolean(ROAM_ENABLED, enabled).apply();
+    }
+
+    static String roamServer(Context context) {
+        String val = prefs(context).getString(ROAM_SERVER, DEFAULT_ROAM_SERVER);
+        return (val == null || val.trim().isEmpty()) ? DEFAULT_ROAM_SERVER : val.trim();
+    }
+
+    static void setRoamServer(Context context, String server) {
+        prefs(context).edit().putString(ROAM_SERVER, server).apply();
+    }
+
+    static String roamName(Context context) {
+        return prefs(context).getString(ROAM_NAME, "");
+    }
+
+    static void setRoamName(Context context, String name) {
+        prefs(context).edit().putString(ROAM_NAME, name).apply();
+    }
+
+    static boolean isRoamSolid(Context context) {
+        return prefs(context).getBoolean(ROAM_SOLID, false);
+    }
+
+    static void setRoamSolid(Context context, boolean solid) {
+        prefs(context).edit().putBoolean(ROAM_SOLID, solid).apply();
+    }
+
     /** EA Nation replacement server: the game's *.ea.com hosts resolve to this name or IPv4 address. */
     static String onlineServer(Context context) {
         String value = prefs(context).getString(ONLINE_SERVER, DEFAULT_ONLINE_SERVER);

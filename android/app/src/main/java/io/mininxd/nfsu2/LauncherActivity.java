@@ -37,8 +37,17 @@ import java.util.concurrent.Executors;
  */
 public final class LauncherActivity extends Activity {
     private static final int REQUEST_DRIVER_ZIP = 45, REQUEST_DRIVER_PROBE = 46;
-    // NFSU2 green.
-    private static final int ACCENT = 0xFF8EE03A;
+    // NFSU2 Revived Theme (inspired by nfsu2-web: dark asphalt, carbon grey, electric lime).
+    private static final int ACCENT = 0xFFC8F088; // NFSU2 menu electric lime
+    private static final int BG_PANEL = 0xFF1C1C1C;
+    private static final int STROKE_PANEL = 0xFF333333;
+    private static final int BG_FIELD = 0xFF141414;
+    private static final int STROKE_FIELD = 0xFF2A2A2A;
+    private static final int TEXT_MUTED = 0xFFC4C4C4;
+    private static final int TEXT_HINT = 0xFF8A8A8A;
+    private static final int COLOR_OK = 0xFF7CD992;
+    private static final int COLOR_ERR = 0xFFFF8A80;
+    private static final int COLOR_WARN = 0xFFFFD36E;
     /** {label, guest language name, LANGUAGES/<file>.bin}. */
     private static final String[][] LANGUAGES = {
         {"English", "English UK", "English"}, {"Español", "Spanish", "Spanish"},
@@ -119,8 +128,8 @@ public final class LauncherActivity extends Activity {
 
     private View buildScreen() {
         FrameLayout screen = new FrameLayout(this);
-        screen.setBackground(new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                new int[] {0xFF060D08, 0xFF0B2210, 0xFF060D08}));
+        screen.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[] {0xFF222222, 0xFF0D0D0D, 0xFF080808}));
         LinearLayout columns = new LinearLayout(this);
         columns.setPadding(dp(24), dp(10), dp(24), dp(10));
         screen.addView(columns, new FrameLayout.LayoutParams(-1, -1));
@@ -132,7 +141,7 @@ public final class LauncherActivity extends Activity {
         ScrollView leftScroll = new ScrollView(this);
         leftScroll.setFillViewport(true);
         leftScroll.addView(left);
-        columns.addView(leftScroll, new LinearLayout.LayoutParams(0, -1, 1.1f));
+        columns.addView(leftScroll, new LinearLayout.LayoutParams(0, -1, 1.05f));
 
         LinearLayout header = new LinearLayout(this);
         header.setGravity(Gravity.CENTER_VERTICAL);
@@ -143,8 +152,8 @@ public final class LauncherActivity extends Activity {
         LinearLayout titles = new LinearLayout(this);
         titles.setOrientation(LinearLayout.VERTICAL);
         titles.setPadding(dp(14), 0, 0, 0);
-        titles.addView(label("Need for Speed Underground 2", 18, Color.WHITE, true));
-        titles.addView(label("PC · natively recompiled for Android", 12, 0x99FFFFFF, false));
+        titles.addView(label("NFSU2 Revived", 20, Color.WHITE, true));
+        titles.addView(label("Need for Speed: Underground 2 · Recompiled", 12, TEXT_MUTED, false));
         header.addView(titles);
         left.addView(header, new LinearLayout.LayoutParams(-1, -2));
 
@@ -177,8 +186,8 @@ public final class LauncherActivity extends Activity {
         LinearLayout.LayoutParams rightParams = new LinearLayout.LayoutParams(0, -1, 1f);
         rightParams.leftMargin = dp(24);
         columns.addView(right, rightParams);
-        right.addView(label("OPTIONS", 12, ACCENT, true));
-        TextView note = label("Applied when pressing PLAY.", 12, 0x88FFFFFF, false);
+        right.addView(label("SETTINGS & MULTIPLAYER", 12, ACCENT, true));
+        TextView note = label("Applied when pressing PLAY.", 12, TEXT_HINT, false);
         note.setPadding(0, dp(2), 0, dp(4));
         right.addView(note);
         ScrollView scroll = new ScrollView(this);
@@ -222,7 +231,8 @@ public final class LauncherActivity extends Activity {
         for (GameOptions.Option option : GameOptions.ALL)
             optionsList.addView(optionRow(option.title, option.label(GameOptions.get(this, option.key)), () -> chooseOption(option)));
         optionsList.addView(optionRow("Cheat Codes", cheatCodesSummary(), this::chooseCheatCodes));
-        optionsList.addView(optionRow("Online server", GameOptions.onlineServer(this), this::chooseOnlineServer));
+        optionsList.addView(optionRow("Free Roam (Multiplayer)", freeRoamSummary(), this::chooseFreeRoam));
+        optionsList.addView(optionRow("Online Server (EA)", GameOptions.onlineServer(this), this::chooseOnlineServer));
         optionsList.addView(optionRow("Check for updates",
                 checkingUpdates ? "Checking GitHub…" : "Version " + ReleaseUpdates.installed(this), () -> checkUpdates(true)));
         optionsList.addView(optionRow("Report an issue", "Report on GitHub / Save ZIP", () -> showReportDialog(null)));
@@ -313,6 +323,71 @@ public final class LauncherActivity extends Activity {
                     refreshOptions();
                 })
                 .setOnDismissListener(dialog -> refreshOptions())
+                .show();
+    }
+
+    private String freeRoamSummary() {
+        if (!GameOptions.isRoamEnabled(this)) return "Disabled";
+        String s = GameOptions.roamServer(this);
+        if (s.contains("nfsu2.xyz")) return "WebSocket (nfsu2.xyz)";
+        return "Enabled (" + (GameOptions.isRoamSolid(this) ? "Solid" : "Ghost") + ")";
+    }
+
+    private void chooseFreeRoam() {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        int pad = dp(16);
+        form.setPadding(pad, pad / 2, pad, pad / 2);
+
+        android.widget.CheckBox enabled = new android.widget.CheckBox(this);
+        enabled.setText("Enable Free Roam Multiplayer (Live players in Career)");
+        enabled.setTextColor(Color.WHITE);
+        enabled.setChecked(GameOptions.isRoamEnabled(this));
+        form.addView(enabled);
+
+        TextView nameLabel = label("Player Name (displayed above car in city):", 13, TEXT_MUTED, false);
+        nameLabel.setPadding(0, dp(8), 0, dp(2));
+        form.addView(nameLabel);
+        android.widget.EditText nameInput = new android.widget.EditText(this);
+        nameInput.setSingleLine(true);
+        nameInput.setHint("Profile name (default)");
+        nameInput.setText(GameOptions.roamName(this));
+        form.addView(nameInput);
+
+        TextView srvLabel = label("Free Roam Server (WebSocket tunnel / Hub):", 13, TEXT_MUTED, false);
+        srvLabel.setPadding(0, dp(8), 0, dp(2));
+        form.addView(srvLabel);
+        android.widget.EditText srvInput = new android.widget.EditText(this);
+        srvInput.setSingleLine(true);
+        srvInput.setText(GameOptions.roamServer(this));
+        form.addView(srvInput);
+
+        android.widget.CheckBox solid = new android.widget.CheckBox(this);
+        solid.setText("Solid car physics (drive through cars if disabled)");
+        solid.setTextColor(Color.WHITE);
+        solid.setChecked(GameOptions.isRoamSolid(this));
+        solid.setPadding(0, dp(6), 0, 0);
+        form.addView(solid);
+
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Free Roam Multiplayer")
+                .setMessage("Dual networking: Classic Online uses eahub.eu, while Free Roam connects via WebSocket tunnel to live servers (e.g. nfsu2.xyz).")
+                .setView(form)
+                .setPositiveButton("Save", (dialog, which) -> {
+                    GameOptions.setRoamEnabled(this, enabled.isChecked());
+                    GameOptions.setRoamName(this, nameInput.getText().toString().trim());
+                    String s = srvInput.getText().toString().trim();
+                    if (!s.isEmpty()) GameOptions.setRoamServer(this, s);
+                    GameOptions.setRoamSolid(this, solid.isChecked());
+                    refreshOptions();
+                })
+                .setNeutralButton("Reset Default", (dialog, which) -> {
+                    GameOptions.setRoamEnabled(this, true);
+                    GameOptions.setRoamServer(this, GameOptions.DEFAULT_ROAM_SERVER);
+                    GameOptions.setRoamSolid(this, false);
+                    refreshOptions();
+                })
+                .setNegativeButton("Cancel", null)
                 .show();
     }
 
@@ -551,6 +626,10 @@ public final class LauncherActivity extends Activity {
                 .putExtra("cutout", GameOptions.get(this, GameOptions.CUTOUT))
                 .putExtra("hudSafeArea", GameOptions.get(this, GameOptions.HUD_SAFE).equals("on"))
                 .putExtra("driverLoader", loader)
+                .putExtra("roamEnabled", GameOptions.isRoamEnabled(this))
+                .putExtra("roamServer", GameOptions.roamServer(this))
+                .putExtra("roamName", GameOptions.roamName(this))
+                .putExtra("roamSolid", GameOptions.isRoamSolid(this))
                 .putStringArrayListExtra("cheats", GameOptions.getActiveCheatCodes(this)));
     }
 
@@ -584,7 +663,7 @@ public final class LauncherActivity extends Activity {
 
     private void addCheck(String name, boolean ok, boolean required) {
         TextView row = label((ok ? "✓  " : required ? "✗  " : "!  ") + name + (ok || required ? "" : " · optional"), 13,
-                ok ? 0xFF7CD992 : required ? 0xFFFF6B6B : 0xFFFFC857, false);
+                ok ? COLOR_OK : required ? COLOR_ERR : COLOR_WARN, false);
         row.setPadding(0, dp(2), 0, dp(2));
         checksList.addView(row);
     }
@@ -592,9 +671,10 @@ public final class LauncherActivity extends Activity {
     private View optionRow(String title, String value, Runnable onClick) {
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(dp(12), dp(8), dp(12), dp(8));
+        row.setPadding(dp(12), dp(9), dp(12), dp(9));
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(0x168EE03A);
+        bg.setColor(BG_FIELD);
+        bg.setStroke(dp(1), STROKE_FIELD);
         bg.setCornerRadius(dp(10));
         row.setBackground(bg);
         row.setClickable(true);
@@ -614,9 +694,9 @@ public final class LauncherActivity extends Activity {
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(dp(16), dp(12), dp(16), dp(12));
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(0xCC0E1A12);
-        bg.setCornerRadius(dp(16));
-        bg.setStroke(dp(1), 0x448EE03A);
+        bg.setColor(BG_PANEL);
+        bg.setCornerRadius(dp(14));
+        bg.setStroke(dp(1), STROKE_PANEL);
         card.setBackground(bg);
         return card;
     }
@@ -625,15 +705,18 @@ public final class LauncherActivity extends Activity {
         Button b = new Button(this);
         b.setText(text);
         b.setAllCaps(false);
-        b.setTextColor(primary ? 0xFF0A1C05 : Color.WHITE);
-        b.setTextSize(TypedValue.COMPLEX_UNIT_SP, primary ? 22 : 15);
-        b.setTypeface(Typeface.DEFAULT_BOLD);
-        b.setLetterSpacing(primary ? .12f : 0f);
-        GradientDrawable bg = primary
-                ? new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, new int[] {0xFFB8F25A, 0xFF3FB82A})
-                : new GradientDrawable();
-        if (!primary) { bg.setColor(0x22FFFFFF); bg.setStroke(dp(1), 0x55FFFFFF); }
-        bg.setCornerRadius(dp(14));
+        b.setTextColor(primary ? 0xFF0D1A04 : Color.WHITE);
+        b.setTextSize(TypedValue.COMPLEX_UNIT_SP, primary ? 20 : 14);
+        b.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD_ITALIC));
+        b.setLetterSpacing(primary ? .10f : 0f);
+        GradientDrawable bg = new GradientDrawable();
+        if (primary) {
+            bg.setColor(ACCENT);
+        } else {
+            bg.setColor(BG_FIELD);
+            bg.setStroke(dp(1), 0xFF444444);
+        }
+        bg.setCornerRadius(dp(12));
         b.setBackground(bg);
         b.setStateListAnimator(null);
         return b;
@@ -644,7 +727,10 @@ public final class LauncherActivity extends Activity {
         t.setText(text);
         t.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
         t.setTextColor(color);
-        if (bold) { t.setTypeface(Typeface.DEFAULT_BOLD); t.setLetterSpacing(.06f); }
+        if (bold) {
+            t.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD_ITALIC));
+            t.setLetterSpacing(.05f);
+        }
         return t;
     }
 
