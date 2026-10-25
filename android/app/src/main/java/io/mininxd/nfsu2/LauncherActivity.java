@@ -567,6 +567,7 @@ public final class LauncherActivity extends Activity {
                 .putExtra("cutout", GameOptions.get(this, GameOptions.CUTOUT))
                 .putExtra("hudSafeArea", GameOptions.get(this, GameOptions.HUD_SAFE).equals("on"))
                 .putExtra("driverLoader", loader)
+                .putExtra("displayLogs", GameOptions.get(this, GameOptions.DISPLAY_LOGS))
                 .putExtra("roamEnabled", GameOptions.isRoamEnabled(this))
                 .putExtra("roamServer", GameOptions.roamServer(this))
                 .putExtra("roamRoom", GameOptions.roamRoom(this))

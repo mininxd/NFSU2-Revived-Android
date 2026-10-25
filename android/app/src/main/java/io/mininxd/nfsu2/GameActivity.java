@@ -34,6 +34,7 @@ public final class GameActivity extends NativeActivity {
     private TextView status;
     private PopupWindow statusWindow;
     private PopupWindow controlsWindow;
+    private DiagnosticOverlay diagnosticOverlay;
     private RacingControlsView touchControls;
     private boolean statusHidden;
     private Runnable statusHideTask;
@@ -275,6 +276,13 @@ public final class GameActivity extends NativeActivity {
             if (roamName == null || roamName.isEmpty()) roamName = GameOptions.roamName(this);
             AdhocRoamClient.getInstance().start(this, roamServer, roamRoom, roamName);
         }
+
+        String displayLogs = launch.getStringExtra("displayLogs");
+        if (displayLogs == null) displayLogs = GameOptions.get(this, GameOptions.DISPLAY_LOGS);
+        diagnosticOverlay = new DiagnosticOverlay(this, displayLogs);
+        if (diagnosticOverlay.isEnabled()) {
+            diagnosticOverlay.start();
+        }
     }
 
     private void applyCheatCodes(java.util.List<String> codes) {
@@ -330,6 +338,7 @@ public final class GameActivity extends NativeActivity {
             if(touchControls!=null)touchControls.releaseAll();
             setTiltKeys(false,false);
             if(controlsWindow!=null)controlsWindow.dismiss();
+            if(diagnosticOverlay!=null)diagnosticOverlay.hide();
         }
         if(focused){
             if(Build.VERSION.SDK_INT>=30){
@@ -349,6 +358,9 @@ public final class GameActivity extends NativeActivity {
         }
         if (focused && foreground && controlsWindow != null && !controlsWindow.isShowing()) {
             controlsWindow.showAtLocation(getWindow().getDecorView(), Gravity.TOP | Gravity.START, 0, 0);
+        }
+        if (focused && foreground && diagnosticOverlay != null) {
+            diagnosticOverlay.show();
         }
     }
     // LAN games announce and discover themselves with UDP broadcasts on port 9999;
@@ -433,6 +445,7 @@ public final class GameActivity extends NativeActivity {
 
     @Override protected void onDestroy() {
         super.onDestroy();
+        if (diagnosticOverlay != null) diagnosticOverlay.stop();
         AdhocRoamClient.getInstance().stop();
         // Each launch uses a fresh guest machine in the dedicated :game process.
         android.os.Process.killProcess(android.os.Process.myPid());

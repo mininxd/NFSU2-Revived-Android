@@ -22,7 +22,7 @@ final class GameOptions {
 
     static final String RESOLUTION = "resolution", FPS = "fps", WIDESCREEN = "widescreen", LATENCY = "latency",
             TEXTURES = "textures", MINIMAP = "minimap", LANGUAGE = "language",
-            CUTOUT = "cutout", HUD_SAFE = "hud_safe";
+            CUTOUT = "cutout", HUD_SAFE = "hud_safe", DISPLAY_LOGS = "display_logs";
 
     static final Option[] ALL = {
             new Option(RESOLUTION, "Internal Resolution", "75",
@@ -37,6 +37,9 @@ final class GameOptions {
             new Option(FPS, "FPS Limit", "120",
                     new String[] {"30", "60", "90", "120", "0"},
                     new String[] {"30 FPS · battery saver", "60 FPS", "90 FPS", "120 FPS", "Uncapped"}),
+            new Option(DISPLAY_LOGS, "Display Logs", "off",
+                    new String[] {"off", "compact", "full"},
+                    new String[] {"Off", "Compact", "Full"}),
             new Option(WIDESCREEN, "Widescreen", "on",
                     new String[] {"on", "off"},
                     new String[] {"Corrected HUD and camera", "Original 4:3 stretched"}),
