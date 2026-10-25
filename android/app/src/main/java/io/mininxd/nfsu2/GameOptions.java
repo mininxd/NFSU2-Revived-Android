@@ -77,10 +77,13 @@ final class GameOptions {
 
     static final String ONLINE_SERVER = "online_server", DEFAULT_ONLINE_SERVER = "eahub.eu";
 
-    /** Free Roam Multiplayer options (matching nfsu2-web / server-rs architecture). */
+    /** Free Roam Multiplayer options (Prometheus Adhoc over adhoc.eahub.eu). */
     static final String ROAM_ENABLED = "roam_enabled", ROAM_SERVER = "roam_server",
-            ROAM_NAME = "roam_name", ROAM_SOLID = "roam_solid";
-    static final String DEFAULT_ROAM_SERVER = "wss://nfsu2.xyz/lan";
+            ROAM_ROOM = "roam_room", ROAM_NAME = "roam_name", ROAM_SOLID = "roam_solid";
+    static final String DEFAULT_ROAM_SERVER = "adhoc.eahub.eu";
+    static final String DEFAULT_ROAM_ROOM = "FREEROAM";
+    static final int ADHOCCTL_PORT = 27312;
+    static final int POSTOFFICE_PORT = 27313;
 
     static boolean isRoamEnabled(Context context) {
         return prefs(context).getBoolean(ROAM_ENABLED, true);
@@ -92,11 +95,23 @@ final class GameOptions {
 
     static String roamServer(Context context) {
         String val = prefs(context).getString(ROAM_SERVER, DEFAULT_ROAM_SERVER);
-        return (val == null || val.trim().isEmpty()) ? DEFAULT_ROAM_SERVER : val.trim();
+        if (val == null || val.trim().isEmpty() || val.contains("nfsu") || val.contains("xyz")) {
+            return DEFAULT_ROAM_SERVER;
+        }
+        return val.trim();
     }
 
     static void setRoamServer(Context context, String server) {
         prefs(context).edit().putString(ROAM_SERVER, server).apply();
+    }
+
+    static String roamRoom(Context context) {
+        String val = prefs(context).getString(ROAM_ROOM, DEFAULT_ROAM_ROOM);
+        return (val == null || val.trim().isEmpty()) ? DEFAULT_ROAM_ROOM : val.trim().toUpperCase();
+    }
+
+    static void setRoamRoom(Context context, String room) {
+        prefs(context).edit().putString(ROAM_ROOM, room != null ? room.trim().toUpperCase() : DEFAULT_ROAM_ROOM).apply();
     }
 
     static String roamName(Context context) {

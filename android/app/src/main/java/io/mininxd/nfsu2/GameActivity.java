@@ -264,6 +264,17 @@ public final class GameActivity extends NativeActivity {
         java.util.ArrayList<String> cheats = launch.getStringArrayListExtra("cheats");
         if (cheats == null) cheats = GameOptions.getActiveCheatCodes(this);
         if (!cheats.isEmpty()) applyCheatCodes(cheats);
+
+        boolean roamEnabled = launch.getBooleanExtra("roamEnabled", GameOptions.isRoamEnabled(this));
+        if (roamEnabled) {
+            String roamServer = launch.getStringExtra("roamServer");
+            if (roamServer == null || roamServer.isEmpty()) roamServer = GameOptions.roamServer(this);
+            String roamRoom = launch.getStringExtra("roamRoom");
+            if (roamRoom == null || roamRoom.isEmpty()) roamRoom = GameOptions.roamRoom(this);
+            String roamName = launch.getStringExtra("roamName");
+            if (roamName == null || roamName.isEmpty()) roamName = GameOptions.roamName(this);
+            AdhocRoamClient.getInstance().start(this, roamServer, roamRoom, roamName);
+        }
     }
 
     private void applyCheatCodes(java.util.List<String> codes) {
@@ -422,6 +433,7 @@ public final class GameActivity extends NativeActivity {
 
     @Override protected void onDestroy() {
         super.onDestroy();
+        AdhocRoamClient.getInstance().stop();
         // Each launch uses a fresh guest machine in the dedicated :game process.
         android.os.Process.killProcess(android.os.Process.myPid());
     }

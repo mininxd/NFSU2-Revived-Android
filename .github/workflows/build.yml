@@ -62,5 +62,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload ${{ github.ref_name }} artifacts/NFSU2.apk#NFSU2-AndroidEvolved-${{ github.ref_name }}-arm64.apk --clobber || \
-          gh release create ${{ github.ref_name }} artifacts/NFSU2.apk#NFSU2-AndroidEvolved-${{ github.ref_name }}-arm64.apk --title "${{ github.ref_name }}" --generate-notes
+          cp artifacts/NFSU2.apk artifacts/NFSU2-Revived-${{ github.ref_name }}-arm64.apk
+          cp artifacts/NFSU2.apk artifacts/NFSU2-AndroidEvolved-${{ github.ref_name }}-arm64.apk
+          gh release upload ${{ github.ref_name }} artifacts/NFSU2-Revived-${{ github.ref_name }}-arm64.apk artifacts/NFSU2-AndroidEvolved-${{ github.ref_name }}-arm64.apk --clobber || \
+          gh release create ${{ github.ref_name }} artifacts/NFSU2-Revived-${{ github.ref_name }}-arm64.apk artifacts/NFSU2-AndroidEvolved-${{ github.ref_name }}-arm64.apk --title "NFSU2 Revived ${{ github.ref_name }}" --generate-notes

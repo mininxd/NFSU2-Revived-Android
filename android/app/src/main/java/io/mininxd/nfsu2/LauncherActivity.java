@@ -328,9 +328,8 @@ public final class LauncherActivity extends Activity {
 
     private String freeRoamSummary() {
         if (!GameOptions.isRoamEnabled(this)) return "Disabled";
-        String s = GameOptions.roamServer(this);
-        if (s.contains("nfsu2.xyz")) return "WebSocket (nfsu2.xyz)";
-        return "Enabled (" + (GameOptions.isRoamSolid(this) ? "Solid" : "Ghost") + ")";
+        String room = GameOptions.roamRoom(this);
+        return "Adhoc [" + room + "] (" + (GameOptions.isRoamSolid(this) ? "Solid" : "Ghost") + ")";
     }
 
     private void chooseFreeRoam() {
@@ -354,7 +353,15 @@ public final class LauncherActivity extends Activity {
         nameInput.setText(GameOptions.roamName(this));
         form.addView(nameInput);
 
-        TextView srvLabel = label("Free Roam Server (WebSocket tunnel / Hub):", 13, TEXT_MUTED, false);
+        TextView roomLabel = label("Adhoc Room / Group (default: FREEROAM):", 13, TEXT_MUTED, false);
+        roomLabel.setPadding(0, dp(8), 0, dp(2));
+        form.addView(roomLabel);
+        android.widget.EditText roomInput = new android.widget.EditText(this);
+        roomInput.setSingleLine(true);
+        roomInput.setText(GameOptions.roamRoom(this));
+        form.addView(roomInput);
+
+        TextView srvLabel = label("Adhoc Server (Prometheus / EA Hub):", 13, TEXT_MUTED, false);
         srvLabel.setPadding(0, dp(8), 0, dp(2));
         form.addView(srvLabel);
         android.widget.EditText srvInput = new android.widget.EditText(this);
@@ -370,12 +377,14 @@ public final class LauncherActivity extends Activity {
         form.addView(solid);
 
         new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle("Free Roam Multiplayer")
-                .setMessage("Dual networking: Classic Online uses eahub.eu, while Free Roam connects via WebSocket tunnel to live servers (e.g. nfsu2.xyz).")
+                .setTitle("Free Roam (Adhoc Multiplayer)")
+                .setMessage("Connects to the open Prometheus Adhoc server (adhoc.eahub.eu) to synchronize other racers directly in Career Free Roam.")
                 .setView(form)
                 .setPositiveButton("Save", (dialog, which) -> {
                     GameOptions.setRoamEnabled(this, enabled.isChecked());
                     GameOptions.setRoamName(this, nameInput.getText().toString().trim());
+                    String r = roomInput.getText().toString().trim();
+                    if (!r.isEmpty()) GameOptions.setRoamRoom(this, r);
                     String s = srvInput.getText().toString().trim();
                     if (!s.isEmpty()) GameOptions.setRoamServer(this, s);
                     GameOptions.setRoamSolid(this, solid.isChecked());
@@ -384,6 +393,7 @@ public final class LauncherActivity extends Activity {
                 .setNeutralButton("Reset Default", (dialog, which) -> {
                     GameOptions.setRoamEnabled(this, true);
                     GameOptions.setRoamServer(this, GameOptions.DEFAULT_ROAM_SERVER);
+                    GameOptions.setRoamRoom(this, GameOptions.DEFAULT_ROAM_ROOM);
                     GameOptions.setRoamSolid(this, false);
                     refreshOptions();
                 })
@@ -628,6 +638,7 @@ public final class LauncherActivity extends Activity {
                 .putExtra("driverLoader", loader)
                 .putExtra("roamEnabled", GameOptions.isRoamEnabled(this))
                 .putExtra("roamServer", GameOptions.roamServer(this))
+                .putExtra("roamRoom", GameOptions.roamRoom(this))
                 .putExtra("roamName", GameOptions.roamName(this))
                 .putExtra("roamSolid", GameOptions.isRoamSolid(this))
                 .putStringArrayListExtra("cheats", GameOptions.getActiveCheatCodes(this)));
