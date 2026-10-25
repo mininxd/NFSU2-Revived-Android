@@ -420,7 +420,7 @@ public final class LauncherActivity extends Activity {
         for (GameOptions.Option option : GameOptions.ALL)
             optionsList.addView(optionRow(option.title, option.label(GameOptions.get(this, option.key)), () -> chooseOption(option)));
         optionsList.addView(optionRow("Cheat Codes", cheatCodesSummary(), this::chooseCheatCodes));
-        optionsList.addView(optionRow("Free Roam (Multiplayer)", GameOptions.isRoamEnabled(this) ? "On" : "Off", this::toggleFreeRoam));
+        optionsList.addView(optionRow("Freeroam Online (beta)", GameOptions.isRoamEnabled(this) ? "On" : "Off", this::toggleFreeRoam));
         optionsList.addView(optionRow("Online Server", GameOptions.onlineServer(this), this::chooseOnlineServer));
         optionsList.addView(optionRow("Check for updates",
                 checkingUpdates ? "Checking GitHub…" : "Version " + ReleaseUpdates.installed(this), () -> checkUpdates(true)));
