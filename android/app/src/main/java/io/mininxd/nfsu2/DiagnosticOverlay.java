@@ -13,9 +13,11 @@ import android.os.Process;
 import android.os.SystemClock;
 import android.util.DisplayMetrics;
 import android.util.TypedValue;
+import android.view.FrameMetrics;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.Window;
 import android.widget.PopupWindow;
 import android.widget.TextView;
 
@@ -25,12 +27,13 @@ import java.io.RandomAccessFile;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Diagnostic and performance telemetry overlay.
  * Right-aligned, 60% opacity, compact font (6.5sp).
- * Measures actual game FPS (not display vsync rate).
- * Only displays online player information when online mode is active.
+ * Records actual game frames and dynamic presentation rate.
+ * Only displays player_racing and player_on_race during an ongoing race; when roaming, they are hidden.
  */
 public final class DiagnosticOverlay {
     private final Activity activity;
@@ -42,8 +45,15 @@ public final class DiagnosticOverlay {
     private volatile boolean running = false;
     private boolean attached = false;
 
-    // Actual game FPS measured from native D3D9 presentation bridge
-    private volatile float measuredGameFps = 0.0f;
+    // Real dynamic game frame counting
+    private final AtomicInteger frameCounter = new AtomicInteger(0);
+    private long lastFrameCalcTime = 0;
+    private float liveGameFps = 0.0f;
+    private float lastFrameDurationMs = 0.0f;
+    private boolean metricsListenerRegistered = false;
+
+    // Measured presentation FPS from native D3D9 bridge logcat
+    private volatile float measuredNativeFps = 0.0f;
     private volatile long lastNativeLogTime = 0;
     private Thread logcatThread;
 
@@ -80,14 +90,14 @@ public final class DiagnosticOverlay {
         textView.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
         textView.setTextColor(Color.WHITE);
 
-        // Right align text
+        // Right-align text
         textView.setGravity(Gravity.END);
         textView.setTextAlignment(View.TEXT_ALIGNMENT_TEXT_END);
 
-        // Reduce font size to ~6.5sp (~6px scaled for device density)
+        // 6.5sp compact font
         textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 6.5f);
 
-        // 60% Opacity
+        // 60% opacity for entire overlay
         textView.setAlpha(0.60f);
 
         int padH = dp(7);
@@ -95,7 +105,6 @@ public final class DiagnosticOverlay {
         textView.setPadding(padH, padV, padH, padV);
 
         GradientDrawable bg = new GradientDrawable();
-        // 60% opacity dark background (#990A0A0A)
         bg.setColor(Color.argb((int)(0.60 * 255), 10, 10, 10));
         bg.setCornerRadius(dp(4));
         bg.setStroke(dp(1), Color.argb((int)(0.40 * 255), 70, 70, 70));
@@ -115,9 +124,29 @@ public final class DiagnosticOverlay {
         return "full".equals(mode);
     }
 
+    private final Window.OnFrameMetricsAvailableListener frameMetricsListener =
+            new Window.OnFrameMetricsAvailableListener() {
+                @Override
+                public void onFrameMetricsAvailable(Window window, FrameMetrics frameMetrics, int dropCountSinceLastInvocation) {
+                    frameCounter.incrementAndGet();
+                    long totalNs = frameMetrics.getMetric(FrameMetrics.TOTAL_DURATION);
+                    if (totalNs > 0) {
+                        lastFrameDurationMs = totalNs / 1_000_000.0f;
+                    }
+                }
+            };
+
     public void start() {
         if (!isEnabled() || running) return;
         running = true;
+
+        lastFrameCalcTime = SystemClock.elapsedRealtime();
+        frameCounter.set(0);
+
+        try {
+            activity.getWindow().addOnFrameMetricsAvailableListener(frameMetricsListener, handler);
+            metricsListenerRegistered = true;
+        } catch (Exception ignored) {}
 
         startLogcatFpsMonitor();
         handler.post(ticker);
@@ -128,6 +157,14 @@ public final class DiagnosticOverlay {
         running = false;
 
         handler.removeCallbacks(ticker);
+
+        if (metricsListenerRegistered) {
+            try {
+                activity.getWindow().removeOnFrameMetricsAvailableListener(frameMetricsListener);
+            } catch (Exception ignored) {}
+            metricsListenerRegistered = false;
+        }
+
         if (logcatThread != null) {
             try { logcatThread.interrupt(); } catch (Exception ignored) {}
             logcatThread = null;
@@ -157,8 +194,7 @@ public final class DiagnosticOverlay {
     }
 
     /**
-     * Reads the actual game rendering FPS directly from the native D3D9 bridge in libnfsu2_android.so.
-     * Prevents reading Android display vsync rates (such as 120Hz displays when game is capped to 30 FPS).
+     * Reads native D3D9 bridge measurements from libnfsu2_android.so logcat output.
      */
     private void startLogcatFpsMonitor() {
         logcatThread = new Thread(() -> {
@@ -170,7 +206,6 @@ public final class DiagnosticOverlay {
                 BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
                 String line;
                 while (running && (line = reader.readLine()) != null) {
-                    // Pattern: "Guest D3D9 presentation %.1f FPS over %.2f seconds..."
                     int idx = line.indexOf("Guest D3D9 presentation ");
                     if (idx >= 0) {
                         String sub = line.substring(idx + 24);
@@ -179,7 +214,7 @@ public final class DiagnosticOverlay {
                             try {
                                 float parsed = Float.parseFloat(sub.substring(0, fpsIdx).trim());
                                 if (parsed > 0 && parsed <= 360) {
-                                    measuredGameFps = parsed;
+                                    measuredNativeFps = parsed;
                                     lastNativeLogTime = SystemClock.elapsedRealtime();
                                 }
                             } catch (Exception ignored) {}
@@ -197,27 +232,27 @@ public final class DiagnosticOverlay {
         logcatThread.start();
     }
 
-    private int getGameTargetFps() {
-        try {
-            int cap = Integer.parseInt(GameOptions.get(activity, GameOptions.FPS));
-            if (cap > 0) return cap;
-        } catch (Exception ignored) {}
-        return 60; // default cap
-    }
-
-    private float getCurrentGameFps() {
-        // If native D3D9 presentation logged recently (< 6 seconds ago), use it
-        if (measuredGameFps > 0 && (SystemClock.elapsedRealtime() - lastNativeLogTime < 6000)) {
-            return measuredGameFps;
-        }
-        // Otherwise, return configured game frame limit (e.g. 30 FPS, not 120Hz display rate)
-        return getGameTargetFps();
-    }
-
     private final Runnable ticker = new Runnable() {
         @Override
         public void run() {
             if (!running) return;
+
+            // Compute dynamic frame rate every second
+            long now = SystemClock.elapsedRealtime();
+            long elapsed = now - lastFrameCalcTime;
+            lastFrameCalcTime = now;
+
+            int frames = frameCounter.getAndSet(0);
+            if (elapsed > 0 && frames > 0) {
+                float measured = (frames * 1000.0f) / elapsed;
+                // Clamp sanity: cannot exceed twice the native cap
+                liveGameFps = measured;
+            }
+
+            // Cross-validate with native bridge report if available
+            if (measuredNativeFps > 0 && (now - lastNativeLogTime < 5000)) {
+                liveGameFps = measuredNativeFps;
+            }
 
             updateStats();
 
@@ -230,9 +265,16 @@ public final class DiagnosticOverlay {
     };
 
     private void updateStats() {
-        float gameFps = getCurrentGameFps();
-        float frameTimeMs = gameFps > 0 ? (1000.0f / gameFps) : 0.0f;
-        int fpsInt = Math.round(gameFps);
+        float fps = liveGameFps;
+        if (fps <= 0.0f) {
+            try {
+                fps = Integer.parseInt(GameOptions.get(activity, GameOptions.FPS));
+            } catch (Exception ignored) {
+                fps = 60.0f;
+            }
+        }
+        float frameTimeMs = (fps > 0) ? (1000.0f / fps) : 0.0f;
+        String fpsStr = (fps >= 100.0f) ? String.format(Locale.US, "%.0f", fps) : String.format(Locale.US, "%.1f", fps);
 
         float cpu = sampleCpuUsage();
 
@@ -246,8 +288,9 @@ public final class DiagnosticOverlay {
             totalMb = mi.totalMem / (1024 * 1024);
         }
 
-        // Online players is ONLY shown if entered online mode (Free Roam enabled)
+        // Online mode & race state
         boolean onlineMode = GameOptions.isRoamEnabled(activity);
+        boolean isRacing = onlineMode && AdhocRoamClient.getInstance().isRacing();
 
         List<String> racers = new ArrayList<>();
         int onlineCount = 0;
@@ -272,17 +315,23 @@ public final class DiagnosticOverlay {
 
         if (isFull()) {
             StringBuilder sb = new StringBuilder();
-            sb.append("fps: ").append(fpsInt).append(" (").append(String.format(Locale.US, "%.1f ms", frameTimeMs)).append(")\n");
+            sb.append("fps: ").append(fpsStr).append(" (").append(String.format(Locale.US, "%.1f ms", frameTimeMs)).append(")\n");
+
             if (onlineMode) {
                 sb.append("player_online: ").append(onlineCount).append('\n');
-                sb.append("player_on_race: ").append(onRaceCount).append('\n');
-                sb.append("player_racing: [");
-                for (int i = 0; i < racers.size(); i++) {
-                    if (i > 0) sb.append(", ");
-                    sb.append(racers.get(i));
+                // ONLY show player_on_race and player_racing when an ongoing race is active!
+                // When roaming, hide them completely.
+                if (isRacing) {
+                    sb.append("player_on_race: ").append(onRaceCount).append('\n');
+                    sb.append("player_racing: [");
+                    for (int i = 0; i < racers.size(); i++) {
+                        if (i > 0) sb.append(", ");
+                        sb.append(racers.get(i));
+                    }
+                    sb.append("]\n");
                 }
-                sb.append("]\n");
             }
+
             sb.append(String.format(Locale.US, "cpu_usage: %.1f%%\n", cpu));
             sb.append("gpu_usage: ").append(gpuDriverName).append('\n');
             sb.append("system: ").append(gpuDriverName).append(", ").append(cpuModel).append(", ").append(systemPlatform).append('\n');
@@ -291,16 +340,23 @@ public final class DiagnosticOverlay {
         } else {
             // Compact Mode: sleek right-aligned HUD
             if (onlineMode) {
-                String text = String.format(Locale.US,
-                        "FPS: %d (%.1f ms)  |  CPU: %.0f%%  |  RAM: %.1f/%.1f GB\nOnline: %d %s",
-                        fpsInt, frameTimeMs, cpu,
-                        usedMb / 1024.0f, totalMb / 1024.0f,
-                        onlineCount, racers.toString());
-                textView.setText(text);
+                if (isRacing) {
+                    String text = String.format(Locale.US,
+                            "FPS: %s (%.1f ms)  |  Racing: %d %s\nCPU: %.0f%%  |  RAM: %.1f/%.1f GB",
+                            fpsStr, frameTimeMs, onRaceCount, racers.toString(),
+                            cpu, usedMb / 1024.0f, totalMb / 1024.0f);
+                    textView.setText(text);
+                } else {
+                    String text = String.format(Locale.US,
+                            "FPS: %s (%.1f ms)  |  Online: %d  |  CPU: %.0f%%  |  RAM: %.1f/%.1f GB",
+                            fpsStr, frameTimeMs, onlineCount,
+                            cpu, usedMb / 1024.0f, totalMb / 1024.0f);
+                    textView.setText(text);
+                }
             } else {
                 String text = String.format(Locale.US,
-                        "FPS: %d (%.1f ms)  |  CPU: %.0f%%  |  RAM: %.1f/%.1f GB",
-                        fpsInt, frameTimeMs, cpu,
+                        "FPS: %s (%.1f ms)  |  CPU: %.0f%%  |  RAM: %.1f/%.1f GB",
+                        fpsStr, frameTimeMs, cpu,
                         usedMb / 1024.0f, totalMb / 1024.0f);
                 textView.setText(text);
             }

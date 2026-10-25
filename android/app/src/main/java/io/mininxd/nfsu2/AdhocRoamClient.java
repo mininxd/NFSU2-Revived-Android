@@ -59,7 +59,16 @@ public final class AdhocRoamClient {
     }
 
     private final AtomicBoolean running = new AtomicBoolean(false);
+    private final AtomicBoolean racingActive = new AtomicBoolean(false);
     private final Map<String, Peer> peers = new ConcurrentHashMap<>();
+
+    public boolean isRacing() {
+        return racingActive.get();
+    }
+
+    public void setRacing(boolean active) {
+        racingActive.set(active);
+    }
 
     private Thread adhocctlThread;
     private Thread postofficeThread;
@@ -124,6 +133,7 @@ public final class AdhocRoamClient {
         interruptQuietly(udpBridgeThread);
 
         peers.clear();
+        racingActive.set(false);
     }
 
     public int getPeerCount() {
