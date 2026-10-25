@@ -122,7 +122,9 @@ final class RacingControlsView extends View {
             // Free-roam actions of the PC keyboard defaults (Options > Controls).
             add(72,16,46,"map",0x32);     // World map: M
             add(128,16,46,"sms",0x0f);    // Read SMS: Tab
-            add(184,16,46,"reset",0x13);  // Reset car: R
+            add(184,16,46,"enter",0x1c);  // Enter event: Enter
+            add(240,16,46,"info",0x14);   // Career stats / Player info: T
+            add(296,16,46,"reset",0x13);  // Reset car: R
             if(style.equals("classic")) {
                 add(20,bottom-92,92,"left",0xcb);
                 add(124,bottom-92,92,"right",0xcd);
@@ -251,6 +253,22 @@ final class RacingControlsView extends View {
             case "accept":
                 path.reset();path.moveTo(cx-s*.7f,cy);path.lineTo(cx-s*.15f,cy+s*.55f);path.lineTo(cx+s*.75f,cy-s*.5f);
                 canvas.drawPath(path,line);break;
+            case "enter":
+                path.reset();
+                path.moveTo(cx+s*.45f,cy-s*.5f);
+                path.lineTo(cx+s*.45f,cy+s*.2f);
+                path.lineTo(cx-s*.35f,cy+s*.2f);
+                canvas.drawPath(path,line);
+                path.reset();
+                path.moveTo(cx-s*.12f,cy-s*.08f);
+                path.lineTo(cx-s*.45f,cy+s*.2f);
+                path.lineTo(cx-s*.12f,cy+s*.48f);
+                canvas.drawPath(path,line);
+                break;
+            case "info":
+                glyph(canvas,"i",cx,cy,s*1.2f,on);
+                canvas.drawCircle(cx,cy,s*.85f,line);
+                break;
             case "map":
                 path.reset();path.moveTo(cx-s*.9f,cy-s*.55f);path.lineTo(cx-s*.3f,cy-s*.8f);path.lineTo(cx+s*.3f,cy-s*.55f);
                 path.lineTo(cx+s*.9f,cy-s*.8f);path.lineTo(cx+s*.9f,cy+s*.55f);path.lineTo(cx+s*.3f,cy+s*.8f);

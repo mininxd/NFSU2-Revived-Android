@@ -103,19 +103,26 @@ private:
         std::array<bool,256> want{};
         // Hysteresis keeps a stick resting near the threshold from chattering.
         auto past=[&](float value,unsigned scan){return value>(sent_[scan]?.25f:.4f);};
-        bool left=buttons_[Left]||hatX_<-.5f||past(-stickX_,0xcb),right=buttons_[Right]||hatX_>.5f||past(stickX_,0xcd);
-        bool up=buttons_[Up]||hatY_<-.5f,down=buttons_[Down]||hatY_>.5f;
-        want[0xcb]=left;want[0xcd]=right;
+        bool hatLeft=buttons_[Left]||hatX_<-.5f,hatRight=buttons_[Right]||hatX_>.5f;
+        bool hatUp=buttons_[Up]||hatY_<-.5f,hatDown=buttons_[Down]||hatY_>.5f;
         if(driving){
             // Xbox-style racing: RT gas, LT brake/reverse, A handbrake, B nitrous,
             // X camera, Y look back, RB/LB shift up/down, Start pause.
-            want[0xc8]=up||buttons_[R2]||past(rightTrigger_,0xc8);
-            want[0xd0]=down||buttons_[L2]||past(leftTrigger_,0xd0);
+            want[0xcb]=past(-stickX_,0xcb)||hatLeft;
+            want[0xcd]=past(stickX_,0xcd)||hatRight;
+            want[0xc8]=buttons_[R2]||past(rightTrigger_,0xc8);
+            want[0xd0]=buttons_[L2]||past(leftTrigger_,0xd0);
             want[0x39]=buttons_[A];want[0x38]=buttons_[B];want[0x2e]=buttons_[X];want[0x30]=buttons_[Y];
             want[0x2a]=buttons_[R1];want[0x1d]=buttons_[L1];
             want[0x01]=buttons_[Start]||buttons_[Select];
+            // HAT navigation in free roam: Up = Enter event, Down = Player info, Left = Map, Right = SMS
+            if(hatUp)want[0x1c]=true;
+            if(hatDown)want[0x14]=true;
+            if(hatLeft)want[0x32]=true;
+            if(hatRight)want[0x0f]=true;
         }else{
-            want[0xc8]=up||past(-stickY_,0xc8);want[0xd0]=down||past(stickY_,0xd0);
+            want[0xcb]=hatLeft||past(-stickX_,0xcb);want[0xcd]=hatRight||past(stickX_,0xcd);
+            want[0xc8]=hatUp||past(-stickY_,0xc8);want[0xd0]=hatDown||past(stickY_,0xd0);
             want[0x1c]=buttons_[A]||buttons_[Start];want[0x01]=buttons_[B]||buttons_[Select];
             want[0x39]=buttons_[X];want[0x2a]=buttons_[Y];
         }

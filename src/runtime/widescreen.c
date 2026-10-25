@@ -86,7 +86,7 @@ static void widescreen_hud(float* x, float* y) {
         const hud_entry* e = &s_hud[i];
         if ((int)e->pos_x != ix || (int)e->pos_y != iy) continue;
         if (s_bank_left && is_bank(e)) {
-            *x = -s_hud_offset - 260.0f + (e->pos_x - 193.0f);
+            *x = -s_hud_offset - 190.0f + (e->pos_x - 193.0f);
         } else {
             if (e->offset_x >= 0.0f) *x += s_hud_offset + (e->offset_x - base_offset);
             else *x -= s_hud_offset - (e->offset_x + base_offset);

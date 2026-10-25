@@ -224,17 +224,17 @@ final class GameOptions {
                     String trimmed = line.trim();
                     if (trimmed.startsWith("Bank_Bar_Pos")) {
                         String target = logsEnabled
-                                ? "Bank_Bar_Pos                         227.0  -184.0               -559.67  0.0"
+                                ? "Bank_Bar_Pos                         227.0  -184.0               -485.0  0.0"
                                 : "Bank_Bar_Pos                         227.0  -184.0                119.0  0.0";
                         if (!line.equals(target)) { line = target; changed = true; }
                     } else if (trimmed.startsWith("Bank_Text_Pos")) {
                         String target = logsEnabled
-                                ? "Bank_Text_Pos                        193.0  -194.0               -559.67  0.0"
+                                ? "Bank_Text_Pos                        193.0  -194.0               -485.0  0.0"
                                 : "Bank_Text_Pos                        193.0  -194.0                119.0  0.0";
                         if (!line.equals(target)) { line = target; changed = true; }
                     } else if (trimmed.startsWith("Bank_Reward_Text_Pos")) {
                         String target = logsEnabled
-                                ? "Bank_Reward_Text_Pos                 283.0  -163.0               -559.67  0.0"
+                                ? "Bank_Reward_Text_Pos                 283.0  -163.0               -485.0  0.0"
                                 : "Bank_Reward_Text_Pos                 283.0  -163.0                119.0  0.0";
                         if (!line.equals(target)) { line = target; changed = true; }
                     } else if (trimmed.startsWith("SMS_Bar_Pos")) {
