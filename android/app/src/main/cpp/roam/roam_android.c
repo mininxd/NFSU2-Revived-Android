@@ -83,6 +83,8 @@ static int             g_qc_armed = 1;
 static JavaVM         *g_jvm = NULL;
 static jclass          g_client_class = NULL;
 static jmethodID       g_mid_on_said = NULL;
+static jmethodID       g_mid_on_send = NULL;
+static uint32_t        g_hub_ip = 0;
 
 void roam_plat_lock(void)   { pthread_mutex_lock(&g_mu); }
 void roam_plat_unlock(void) { pthread_mutex_unlock(&g_mu); }
@@ -157,6 +159,7 @@ const char *roam_opt(const char *name) {
     if (!strcmp(name, "Peers") || !strcmp(name, "NFSU2_ROAM_PEERS")) return g_peers_str;
     if (!strcmp(name, "Enable") || !strcmp(name, "NFSU2_ROAM")) return "1";
     if (!strcmp(name, "Collide") || !strcmp(name, "NFSU2_ROAM_COLLIDE")) return g_ghost_mode ? "0" : "1";
+    if (!strcmp(name, "NFSU2_ROAM_HUB")) return g_hub_ip ? "1" : "0";
     return getenv(name);
 }
 
@@ -198,14 +201,39 @@ static void do_send(uint32_t ip, uint16_t port, const uint8_t *buf, int len) {
 
 static void io_send(void *u, uint32_t ip, uint16_t port, const uint8_t *buf, int len) {
     (void)u;
+    if (!buf || len <= 0) return;
+
+    if (g_jvm && g_client_class && g_mid_on_send) {
+        JNIEnv *env = NULL;
+        int attached = 0;
+        jint res = (*g_jvm)->GetEnv(g_jvm, (void **)&env, JNI_VERSION_1_6);
+        if (res == JNI_EDETACHED) {
+            if ((*g_jvm)->AttachCurrentThread(g_jvm, &env, NULL) == 0) {
+                attached = 1;
+            }
+        }
+        if (env) {
+            jbyteArray jData = (*env)->NewByteArray(env, len);
+            if (jData) {
+                (*env)->SetByteArrayRegion(env, jData, 0, len, (const jbyte *)buf);
+                (*env)->CallStaticVoidMethod(env, g_client_class, g_mid_on_send, (jint)ip, (jint)port, jData);
+                (*env)->DeleteLocalRef(env, jData);
+            }
+            if (attached) {
+                (*g_jvm)->DetachCurrentThread(g_jvm);
+            }
+            g_st.sent++;
+            g_st.sent_bytes += (uint64_t)len;
+            return;
+        }
+    }
+
     do_send(ip, port, buf, len);
 }
 
 static void io_broadcast(void *u, uint16_t port, const uint8_t *buf, int len) {
     (void)u;
-    /* Broadcast on local relay (127.0.0.1:47211) and subnet broadcast */
-    do_send(0x7F000001u, 47211, buf, len);
-    do_send(0xFFFFFFFFu, port, buf, len);
+    io_send(NULL, 0xFFFFFFFFu, port, buf, len);
 }
 
 extern void roam_game_event(int ev, int peer, const char *text);
@@ -219,6 +247,10 @@ static void *net_thread(void *arg) {
     (void)arg;
     uint8_t buf[1500];
     int64_t next_tick = 0;
+    JNIEnv *env = NULL;
+    if (g_jvm) {
+        (*g_jvm)->AttachCurrentThread(g_jvm, &env, NULL);
+    }
 
     while (!atomic_load(&g_stop)) {
         struct pollfd pf = { g_fd, POLLIN, 0 };
@@ -255,6 +287,9 @@ static void *net_thread(void *arg) {
             next_tick = now + 10000; // 10ms
         }
     }
+    if (g_jvm && env) {
+        (*g_jvm)->DetachCurrentThread(g_jvm);
+    }
     return NULL;
 }
 
@@ -266,6 +301,12 @@ int roam_plat_start(const roam_plat_cfg *cfg, rc_session *s) {
     }
     g_s = s;
     if (cfg) g_cfg = *cfg;
+    if (g_hub_ip) {
+        s->conf.hub_ip = g_hub_ip;
+        s->conf.hub_port = cfg && cfg->port ? cfg->port : 47210;
+        s->conf.snap_states = 1;
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Roam", "Enabled Free Roam Hub: %08x:%u", g_hub_ip, s->conf.hub_port);
+    }
 
     g_fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (g_fd < 0) {
@@ -398,15 +439,24 @@ jint JNI_OnLoad(JavaVM *vm, void *reserved) {
         if (clz) {
             g_client_class = (jclass)(*env)->NewGlobalRef(env, clz);
             g_mid_on_said = (*env)->GetStaticMethodID(env, g_client_class, "onQuickChatReceived", "(Ljava/lang/String;)V");
+            g_mid_on_send = (*env)->GetStaticMethodID(env, g_client_class, "onNativeSend", "(II[B)V");
         }
     }
     return JNI_VERSION_1_6;
 }
 
 JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_AdhocRoamClient_nativeRoamConfigure(
-        JNIEnv *env, jclass clazz, jstring jRoom, jstring jName, jstring jPeers, jboolean jGhostMode) {
+        JNIEnv *env, jclass clazz, jstring jRoom, jstring jName, jstring jPeers, jboolean jGhostMode, jint jHubIp) {
     (void)clazz;
     g_ghost_mode = (jGhostMode == JNI_TRUE) ? 1 : 0;
+    g_hub_ip = (uint32_t)jHubIp;
+    if (g_s && g_hub_ip) {
+        roam_plat_lock();
+        g_s->conf.hub_ip = g_hub_ip;
+        g_s->conf.hub_port = 47210;
+        g_s->conf.snap_states = 1;
+        roam_plat_unlock();
+    }
     if (!env) return;
     if (jRoom) {
         const char *r = (*(JNIEnv **)env != NULL) ? (*env)->GetStringUTFChars(env, jRoom, NULL) : NULL;
@@ -420,8 +470,26 @@ JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_AdhocRoamClient_nativeRoamConfigure
         const char *p = (*(JNIEnv **)env != NULL) ? (*env)->GetStringUTFChars(env, jPeers, NULL) : NULL;
         if (p) { strncpy(g_peers_str, p, sizeof g_peers_str - 1); (*env)->ReleaseStringUTFChars(env, jPeers, p); }
     }
-    __android_log_print(ANDROID_LOG_INFO, "NFSU2-Roam", "Configured Native Roam: Room=%s, Name=%s, Peers=%s, GhostMode=%d",
-                        g_room_name, g_player_name, g_peers_str, g_ghost_mode);
+    __android_log_print(ANDROID_LOG_INFO, "NFSU2-Roam", "Configured Native Roam: Room=%s, Name=%s, Peers=%s, GhostMode=%d, Hub=%08x",
+                        g_room_name, g_player_name, g_peers_str, g_ghost_mode, g_hub_ip);
+}
+
+JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_AdhocRoamClient_nativeRoamReceive(
+        JNIEnv *env, jclass clazz, jint srcIp, jint srcPort, jbyteArray jData) {
+    (void)clazz;
+    if (!g_s || !jData) return;
+    jsize len = (*env)->GetArrayLength(env, jData);
+    if (len <= 0 || len > 1500) return;
+
+    uint8_t buf[1500];
+    (*env)->GetByteArrayRegion(env, jData, 0, len, (jbyte *)buf);
+
+    int64_t now = roam_plat_now_us();
+    roam_plat_lock();
+    g_st.recv++;
+    g_st.recv_bytes += (uint64_t)len;
+    rc_receive(g_s, (uint32_t)srcIp, (uint16_t)srcPort, buf, (int)len, now);
+    roam_plat_unlock();
 }
 
 JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_AdhocRoamClient_nativeRoamTick(

@@ -57,10 +57,16 @@ public final class AdhocRoamClient {
         }
     }
 
-    public static native void nativeRoamConfigure(String room, String name, String peers, boolean ghostMode);
+    public static native void nativeRoamConfigure(String room, String name, String peers, boolean ghostMode, int hubIp);
+    public static native void nativeRoamReceive(int srcIp, int srcPort, byte[] data);
     public static native void nativeRoamTick();
     public static native void nativeRoamSay(int phrase);
     public static native void nativeRoamStick(float x, float y);
+
+    public static void onNativeSend(int dstIp, int dstPort, byte[] data) {
+        if (!INSTANCE.running.get() || data == null || data.length == 0) return;
+        INSTANCE.handleNativeSend(dstIp, dstPort, data);
+    }
 
     public static final String[][] QUICK_CHAT_GROUPS = {
         { "Hey!", "Nice car!", "Thanks!", "Bye!" },           // Group 0: Up / Hi
@@ -231,11 +237,18 @@ public final class AdhocRoamClient {
                 startAdhocctlThread();
                 startPostofficeThread();
             }
+            if (libraryLoaded) {
+                try {
+                    nativeRoamConfigure(roomName, playerName, "127.0.0.1:" + LOCAL_RELAY_PORT, ghostMode, isWs ? 0x0A4D00FD : 0);
+                } catch (Throwable t) {
+                    Log.d(TAG, "nativeRoamConfigure: " + t.getMessage());
+                }
+            }
         }, "BackendSelector").start();
 
         if (libraryLoaded) {
             try {
-                nativeRoamConfigure(roomName, playerName, "127.0.0.1:" + LOCAL_RELAY_PORT, ghostMode);
+                nativeRoamConfigure(roomName, playerName, "127.0.0.1:" + LOCAL_RELAY_PORT, ghostMode, 0);
             } catch (Throwable t) {
                 Log.d(TAG, "nativeRoamConfigure: " + t.getMessage());
             }
@@ -470,6 +483,14 @@ public final class AdhocRoamClient {
                 hello.put("t", "hello");
                 hello.put("name", playerName);
                 sendWsFrame(1, hello.toString().getBytes(StandardCharsets.UTF_8));
+
+                if (libraryLoaded) {
+                    try {
+                        nativeRoamConfigure(roomName, playerName, "127.0.0.1:" + LOCAL_RELAY_PORT, ghostMode, 0x0A4D00FD);
+                    } catch (Throwable t) {
+                        Log.d(TAG, "nativeRoamConfigure: " + t.getMessage());
+                    }
+                }
             } else if ("ping".equals(type)) {
                 int id = obj.optInt("id", 0);
                 JSONObject pong = new JSONObject();
@@ -494,10 +515,16 @@ public final class AdhocRoamClient {
         if (kind == 1) { // NET_KIND_UDP
             if (data.length >= 16) {
                 int srcVip = ((data[4] & 0xFF) << 24) | ((data[5] & 0xFF) << 16) | ((data[6] & 0xFF) << 8) | (data[7] & 0xFF);
+                int sport = ((data[12] & 0xFF) << 8) | (data[13] & 0xFF);
+                if (sport == 0) sport = DEFAULT_GAME_PORT;
                 if (srcVip != myVirtualIp) {
                     byte[] payload = Arrays.copyOfRange(data, 16, data.length);
-                    byte[] mac = new byte[] { 0x02, 0x77, (byte) (srcVip >> 24), (byte) (srcVip >> 16), (byte) (srcVip >> 8), (byte) srcVip };
-                    forwardToLocalGame(mac, payload);
+                    if (srcVip != 0x0A4D00FD) {
+                        trackWsPeer(srcVip);
+                    }
+                    if (libraryLoaded) {
+                        nativeRoamReceive(srcVip, sport, payload);
+                    }
                 }
             }
         } else if (kind == 32) { // NET_KIND_BUNDLE
@@ -509,10 +536,16 @@ public final class AdhocRoamClient {
                 int end = f + flen;
                 if (flen >= 16 && end <= data.length && (data[f] & 0xFF) == 1) {
                     int srcVip = ((data[f + 4] & 0xFF) << 24) | ((data[f + 5] & 0xFF) << 16) | ((data[f + 6] & 0xFF) << 8) | (data[f + 7] & 0xFF);
+                    int sport = ((data[f + 12] & 0xFF) << 8) | (data[f + 13] & 0xFF);
+                    if (sport == 0) sport = DEFAULT_GAME_PORT;
                     if (srcVip != myVirtualIp) {
                         byte[] payload = Arrays.copyOfRange(data, f + 16, end);
-                        byte[] mac = new byte[] { 0x02, 0x77, (byte) (srcVip >> 24), (byte) (srcVip >> 16), (byte) (srcVip >> 8), (byte) srcVip };
-                        forwardToLocalGame(mac, payload);
+                        if (srcVip != 0x0A4D00FD) {
+                            trackWsPeer(srcVip);
+                        }
+                        if (libraryLoaded) {
+                            nativeRoamReceive(srcVip, sport, payload);
+                        }
                     }
                 }
                 at = end;
@@ -520,8 +553,39 @@ public final class AdhocRoamClient {
         }
     }
 
+    private void trackWsPeer(int srcVip) {
+        String key = String.format("%02X:%02X:%02X:%02X:%02X:%02X",
+                0x02, 0x77, (srcVip >> 24) & 0xFF, (srcVip >> 16) & 0xFF, (srcVip >> 8) & 0xFF, srcVip & 0xFF);
+        Peer existing = peers.get(key);
+        if (existing != null) {
+            existing.lastSeen = System.currentTimeMillis();
+            return;
+        }
+        byte[] mac = new byte[] { 0x02, 0x77, (byte) (srcVip >> 24), (byte) (srcVip >> 16), (byte) (srcVip >> 8), (byte) srcVip };
+        Peer p = new Peer("Player", mac, srcVip, 0);
+        peers.put(key, p);
+    }
+
+    private void handleNativeSend(int dstIp, int dstPort, byte[] data) {
+        if (activeMode == MODE_WSS) {
+            sendWebSocketDgram(dstIp, dstPort, data);
+        } else {
+            if (dstIp == -1 || dstIp == 0xFFFFFFFF) {
+                broadcastToAdhocPeers(data);
+            } else {
+                for (Peer p : peers.values()) {
+                    if (p.ip == dstIp) {
+                        sendPdpPacket(p.mac, data);
+                        return;
+                    }
+                }
+                broadcastToAdhocPeers(data);
+            }
+        }
+    }
+
     public synchronized void sendWebSocketDgram(int dstVip, int dport, byte[] payload) {
-        if (!running.get() || wsOut == null || payload == null || payload.length == 0) return;
+        if (!running.get() || wsOut == null || payload == null || payload.length == 0 || myVirtualIp == 0) return;
         try {
             ByteBuffer buf = ByteBuffer.allocate(16 + payload.length);
             buf.put((byte) 1); // NET_KIND_UDP
@@ -531,7 +595,7 @@ public final class AdhocRoamClient {
             buf.putInt(myVirtualIp);
             buf.putInt(dstVip);
             buf.putShort((short) DEFAULT_GAME_PORT);
-            buf.putShort((short) dport);
+            buf.putShort((short) (dport != 0 ? dport : DEFAULT_GAME_PORT));
             buf.put(payload);
 
             sendWsFrame(2, buf.array());
@@ -773,8 +837,14 @@ public final class AdhocRoamClient {
                             continue;
                         }
 
-                        // Forward payload locally to the game via peer's virtual socket
-                        forwardToLocalGame(srcMac, payload);
+                        // Forward payload locally to the game via native bridge
+                        Peer p = getOrCreatePeer("Player", srcMac, 0);
+                        if (libraryLoaded) {
+                            int srcIp = p.ip != 0 ? p.ip : (((srcMac[2] & 0xFF) << 24) | ((srcMac[3] & 0xFF) << 16) | ((srcMac[4] & 0xFF) << 8) | (srcMac[5] & 0xFF));
+                            nativeRoamReceive(srcIp, DEFAULT_GAME_PORT, payload);
+                        } else {
+                            forwardToLocalGame(srcMac, payload);
+                        }
                     }
                 } catch (Exception e) {
                     if (running.get()) {
