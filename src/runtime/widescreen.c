@@ -35,6 +35,8 @@ static int s_hud_safe_area = 1;
 /* Extra vertical move of the minimap (mobile layout: top-left instead of
  * bottom-left, clear of the thumbs). 0 keeps the mod's position. */
 static float s_minimap_dy = 0.0f;
+static int s_bank_left = 0;
+static float s_sms_nav_dy = 0.0f;
 /* Game frame time for FPSLimit (0 = the game's own 1/60 s). */
 static float s_frame_time = 0.0f;
 /* FOV multipliers chosen per view at 0x5C7F64 and applied at its three
@@ -64,6 +66,18 @@ static int is_minimap(const hud_entry* e) {
     return (x == -223 && (y == 70 || y == 71 || y == 142 || y == 143)) || (x == -143 && y == 196);
 }
 
+/* Bank_Bar_Pos, Bank_Text_Pos, Bank_Reward_Text_Pos in the mod's .dat */
+static int is_bank(const hud_entry* e) {
+    int x = (int)e->pos_x, y = (int)e->pos_y;
+    return (x == 227 && y == -184) || (x == 193 && y == -194) || (x == 283 && y == -163);
+}
+
+/* SMS_Bar_Pos, SMS_Icon_Pos, Satellite_Signal_Pos in the mod's .dat */
+static int is_sms_or_nav(const hud_entry* e) {
+    int x = (int)e->pos_x, y = (int)e->pos_y;
+    return (x == -248 && y == -122) || (x == -195 && y == -112) || (x == -263 && y == 36);
+}
+
 /* The mod's WidescreenHud(): move a known HUD element by its .dat offset. */
 static void widescreen_hud(float* x, float* y) {
     const float base_offset = (480.0f * (16.0f / 9.0f) - 640.0f) / 2.0f;
@@ -71,10 +85,15 @@ static void widescreen_hud(float* x, float* y) {
     for (unsigned i = 0; i < s_hud_count; i++) {
         const hud_entry* e = &s_hud[i];
         if ((int)e->pos_x != ix || (int)e->pos_y != iy) continue;
-        if (e->offset_x >= 0.0f) *x += s_hud_offset + (e->offset_x - base_offset);
-        else *x -= s_hud_offset - (e->offset_x + base_offset);
+        if (s_bank_left && is_bank(e)) {
+            *x = -s_hud_offset - 260.0f + (e->pos_x - 193.0f);
+        } else {
+            if (e->offset_x >= 0.0f) *x += s_hud_offset + (e->offset_x - base_offset);
+            else *x -= s_hud_offset - (e->offset_x + base_offset);
+        }
         *y += e->offset_y;
         if (is_minimap(e)) *y += s_minimap_dy;
+        if (s_sms_nav_dy != 0.0f && is_sms_or_nav(e)) *y += s_sms_nav_dy;
         return;
     }
 }
@@ -137,6 +156,8 @@ void nfs_widescreen_set_resolution(unsigned width, unsigned height) {
 int nfs_widescreen_hud_entries(void) { return (int)s_hud_count; }
 
 void nfs_widescreen_set_minimap_offset(float dy) { s_minimap_dy = dy; }
+void nfs_widescreen_set_bank_left(int enabled) { s_bank_left = enabled; }
+void nfs_widescreen_set_sms_nav_offset(float dy) { s_sms_nav_dy = dy; }
 
 void nfs_widescreen_set_hud_safe_area(int enabled) {
     s_hud_safe_area = enabled;

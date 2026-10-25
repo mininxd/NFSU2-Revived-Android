@@ -94,8 +94,8 @@ public final class DiagnosticOverlay {
         textView.setGravity(Gravity.END);
         textView.setTextAlignment(View.TEXT_ALIGNMENT_TEXT_END);
 
-        // 6.5sp compact font
-        textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 6.5f);
+        // 7sp compact font
+        textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 7.0f);
 
         // 60% opacity for entire overlay
         textView.setAlpha(0.60f);

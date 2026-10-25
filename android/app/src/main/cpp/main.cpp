@@ -347,6 +347,10 @@ extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeOnlin
     const char* text=env->GetStringUTFChars(host,nullptr);setGuestOnlineServer(text?text:"");env->ReleaseStringUTFChars(host,text);
 }
 extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeMinimapTop(JNIEnv*,jclass,jboolean top){nfs_widescreen_set_minimap_offset(top==JNI_TRUE?-230.0f:0.0f);}
+extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeHudLogLayout(JNIEnv*,jclass,jboolean enabled){
+    nfs_widescreen_set_bank_left(enabled==JNI_TRUE?1:0);
+    nfs_widescreen_set_sms_nav_offset(enabled==JNI_TRUE?50.0f:0.0f);
+}
 static bool compatCpuTextures=false;static unsigned compatBackBuffers=2;
 extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeBackBuffers(JNIEnv*,jclass,jint count){
     compatBackBuffers=unsigned(count);setD3D9Compatibility(compatCpuTextures,compatBackBuffers);

@@ -204,4 +204,69 @@ final class GameOptions {
         }
         return list;
     }
+
+    /**
+     * Synchronizes scripts/NFSUnderground2.WidescreenFix.dat layout.
+     * When displayLogs is enabled, repositions the Bank money GUI to the left and
+     * offsets the SMS and Navigation GUI downward to keep the right telemetry HUD clear.
+     */
+    static void syncWidescreenHudDat(Context context, boolean logsEnabled) {
+        try {
+            java.io.File datFile = new java.io.File(android.os.Environment.getExternalStorageDirectory(),
+                    "nfsu2/scripts/NFSUnderground2.WidescreenFix.dat");
+            if (!datFile.isFile()) return;
+
+            java.util.List<String> lines = new java.util.ArrayList<>();
+            boolean changed = false;
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(datFile))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    String trimmed = line.trim();
+                    if (trimmed.startsWith("Bank_Bar_Pos")) {
+                        String target = logsEnabled
+                                ? "Bank_Bar_Pos                         227.0  -184.0               -559.67  0.0"
+                                : "Bank_Bar_Pos                         227.0  -184.0                119.0  0.0";
+                        if (!line.equals(target)) { line = target; changed = true; }
+                    } else if (trimmed.startsWith("Bank_Text_Pos")) {
+                        String target = logsEnabled
+                                ? "Bank_Text_Pos                        193.0  -194.0               -559.67  0.0"
+                                : "Bank_Text_Pos                        193.0  -194.0                119.0  0.0";
+                        if (!line.equals(target)) { line = target; changed = true; }
+                    } else if (trimmed.startsWith("Bank_Reward_Text_Pos")) {
+                        String target = logsEnabled
+                                ? "Bank_Reward_Text_Pos                 283.0  -163.0               -559.67  0.0"
+                                : "Bank_Reward_Text_Pos                 283.0  -163.0                119.0  0.0";
+                        if (!line.equals(target)) { line = target; changed = true; }
+                    } else if (trimmed.startsWith("SMS_Bar_Pos")) {
+                        String target = logsEnabled
+                                ? "SMS_Bar_Pos                         -248.0  -122.0               -109.0  50.0"
+                                : "SMS_Bar_Pos                         -248.0  -122.0               -109.0  0.0";
+                        if (!line.equals(target)) { line = target; changed = true; }
+                    } else if (trimmed.startsWith("SMS_Icon_Pos")) {
+                        String target = logsEnabled
+                                ? "SMS_Icon_Pos                        -195.0  -112.0               -109.0  50.0"
+                                : "SMS_Icon_Pos                        -195.0  -112.0               -109.0  0.0";
+                        if (!line.equals(target)) { line = target; changed = true; }
+                    } else if (trimmed.startsWith("Satellite_Signal_Pos")) {
+                        String target = logsEnabled
+                                ? "Satellite_Signal_Pos                -263.0   36.0                 -109.0  50.0"
+                                : "Satellite_Signal_Pos                -263.0   36.0                 -109.0  0.0";
+                        if (!line.equals(target)) { line = target; changed = true; }
+                    }
+                    lines.add(line);
+                }
+            }
+
+            if (changed) {
+                try (java.io.PrintWriter writer = new java.io.PrintWriter(new java.io.FileWriter(datFile))) {
+                    for (String l : lines) {
+                        writer.println(l);
+                    }
+                }
+                android.util.Log.i("NFSU2", "Synchronized WidescreenFix.dat layout (logsEnabled=" + logsEnabled + ")");
+            }
+        } catch (Exception e) {
+            android.util.Log.w("NFSU2", "Failed to synchronize WidescreenFix.dat layout", e);
+        }
+    }
 }

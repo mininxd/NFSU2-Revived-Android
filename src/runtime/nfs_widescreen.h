@@ -13,6 +13,9 @@ void nfs_widescreen_set_resolution(unsigned width, unsigned height);
 int nfs_widescreen_hud_entries(void);
 /* Vertical offset (480-line HUD units, negative = up) added to the minimap. */
 void nfs_widescreen_set_minimap_offset(float dy);
+/* Reposition bank money GUI to left and offset SMS / Navigation GUI downwards. */
+void nfs_widescreen_set_bank_left(int enabled);
+void nfs_widescreen_set_sms_nav_offset(float dy);
 /* Clamp HUD elements to 16:9 safe bounds on wider displays (20:9, 21:9) */
 void nfs_widescreen_set_hud_safe_area(int enabled);
 /* Game frame pacing (the game caps itself at 60): fps >= 30 replaces its 1/60 s

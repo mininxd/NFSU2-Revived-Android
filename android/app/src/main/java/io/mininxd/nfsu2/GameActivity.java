@@ -228,6 +228,9 @@ public final class GameActivity extends NativeActivity {
         int[] size = GameOptions.renderSize(this, Math.max(metrics.widthPixels, metrics.heightPixels),
                 Math.min(metrics.widthPixels, metrics.heightPixels));
         nativeResolution(launch.getIntExtra("renderWidth", size[0]), launch.getIntExtra("renderHeight", size[1]));
+        String displayLogs = launch.getStringExtra("displayLogs");
+        if (displayLogs == null) displayLogs = GameOptions.get(this, GameOptions.DISPLAY_LOGS);
+        GameOptions.syncWidescreenHudDat(this, !"off".equalsIgnoreCase(displayLogs));
         String language = launch.getStringExtra("language");
         if (language == null || "English".equalsIgnoreCase(language)) {
             language = GameOptions.language(this);
@@ -277,8 +280,6 @@ public final class GameActivity extends NativeActivity {
             AdhocRoamClient.getInstance().start(this, roamServer, roamRoom, roamName);
         }
 
-        String displayLogs = launch.getStringExtra("displayLogs");
-        if (displayLogs == null) displayLogs = GameOptions.get(this, GameOptions.DISPLAY_LOGS);
         diagnosticOverlay = new DiagnosticOverlay(this, displayLogs);
         if (diagnosticOverlay.isEnabled()) {
             diagnosticOverlay.start();
