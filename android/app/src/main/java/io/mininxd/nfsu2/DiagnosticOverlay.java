@@ -288,15 +288,15 @@ public final class DiagnosticOverlay {
             totalMb = mi.totalMem / (1024 * 1024);
         }
 
-        // Online mode & race state
-        boolean onlineMode = GameOptions.isRoamEnabled(activity);
-        boolean isRacing = onlineMode && AdhocRoamClient.getInstance().isRacing();
+        // Online mode: ONLY shown when connected to adhoc server!
+        boolean adhocConnected = GameOptions.isRoamEnabled(activity) && AdhocRoamClient.getInstance().isConnected();
+        boolean isRacing = adhocConnected && AdhocRoamClient.getInstance().isRacing();
 
         List<String> racers = new ArrayList<>();
         int onlineCount = 0;
         int onRaceCount = 0;
 
-        if (onlineMode) {
+        if (adhocConnected) {
             String myName = GameOptions.roamName(activity);
             if (myName != null && !myName.trim().isEmpty()) {
                 racers.add(myName.trim());
@@ -317,7 +317,7 @@ public final class DiagnosticOverlay {
             StringBuilder sb = new StringBuilder();
             sb.append("fps: ").append(fpsStr).append(" (").append(String.format(Locale.US, "%.1f ms", frameTimeMs)).append(")\n");
 
-            if (onlineMode) {
+            if (adhocConnected) {
                 sb.append("player_online: ").append(onlineCount).append('\n');
                 // ONLY show player_on_race and player_racing when an ongoing race is active!
                 // When roaming, hide them completely.
@@ -333,13 +333,17 @@ public final class DiagnosticOverlay {
             }
 
             sb.append(String.format(Locale.US, "cpu_usage: %.1f%%\n", cpu));
-            sb.append("gpu_usage: ").append(gpuDriverName).append('\n');
-            sb.append("system: ").append(gpuDriverName).append(", ").append(cpuModel).append(", ").append(systemPlatform).append('\n');
+            String gpuUsage = sampleGpuUsage();
+            if (gpuUsage != null) {
+                sb.append("gpu_usage: ").append(gpuUsage).append('\n');
+            }
+            // Display system info directly without "system:" label prefix
+            sb.append(gpuDriverName).append(", ").append(cpuModel).append(", ").append(systemPlatform).append('\n');
             sb.append("memory: ").append(usedMb).append(" MB / ").append(totalMb).append(" MB");
             textView.setText(sb.toString());
         } else {
             // Compact Mode: sleek right-aligned HUD
-            if (onlineMode) {
+            if (adhocConnected) {
                 if (isRacing) {
                     String text = String.format(Locale.US,
                             "FPS: %s (%.1f ms)  |  Racing: %d %s\nCPU: %.0f%%  |  RAM: %.1f/%.1f GB",
@@ -409,6 +413,45 @@ public final class DiagnosticOverlay {
         lastProcessCpuTime = nowCpu;
 
         return Math.max(0.0f, Math.min(100.0f, lastCpuPercent));
+    }
+
+    private String sampleGpuUsage() {
+        String[] percentagePaths = new String[]{
+                "/sys/class/kgsl/kgsl-3d0/gpu_busy_percentage",
+                "/sys/class/misc/mali0/device/utilization",
+                "/sys/devices/platform/mali.0/utilization",
+                "/sys/kernel/debug/ged/hal/gpu_utilization",
+                "/sys/module/ged/parameters/gpu_loading"
+        };
+        for (String p : percentagePaths) {
+            try (RandomAccessFile raf = new RandomAccessFile(p, "r")) {
+                String line = raf.readLine();
+                if (line != null) {
+                    line = line.trim().replace("%", "").trim();
+                    String[] parts = line.split("\\s+");
+                    int val = Integer.parseInt(parts[0]);
+                    if (val >= 0 && val <= 100) {
+                        return val + "%";
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        try (RandomAccessFile raf = new RandomAccessFile("/sys/class/kgsl/kgsl-3d0/gpubusy", "r")) {
+            String line = raf.readLine();
+            if (line != null) {
+                String[] parts = line.trim().split("\\s+");
+                if (parts.length >= 2) {
+                    long busy = Long.parseLong(parts[0]);
+                    long total = Long.parseLong(parts[1]);
+                    if (total > 0 && busy >= 0 && busy <= total) {
+                        return (busy * 100 / total) + "%";
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
     }
 
     private int dp(int value) {

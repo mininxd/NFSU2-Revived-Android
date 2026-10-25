@@ -60,7 +60,12 @@ public final class AdhocRoamClient {
 
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicBoolean racingActive = new AtomicBoolean(false);
+    private final AtomicBoolean adhocConnected = new AtomicBoolean(false);
     private final Map<String, Peer> peers = new ConcurrentHashMap<>();
+
+    public boolean isConnected() {
+        return running.get() && adhocConnected.get();
+    }
 
     public boolean isRacing() {
         return racingActive.get();
@@ -134,6 +139,7 @@ public final class AdhocRoamClient {
 
         peers.clear();
         racingActive.set(false);
+        adhocConnected.set(false);
     }
 
     public int getPeerCount() {
@@ -239,6 +245,7 @@ public final class AdhocRoamClient {
                         sleepQuietly(5000);
                     }
                 } finally {
+                    adhocConnected.set(false);
                     closeQuietly(adhocctlSocket);
                 }
             }
@@ -252,6 +259,7 @@ public final class AdhocRoamClient {
             case OPCODE_CONNECT_BSSID: {
                 // SceNetAdhocctlConnectBSSIDPacketS2C: base(1 already read) + mac(6) = 6 remaining bytes
                 byte[] bssid = readFully(in, 6);
+                adhocConnected.set(true);
                 Log.i(TAG, "Joined room group BSSID: " + formatMac(bssid));
                 break;
             }
