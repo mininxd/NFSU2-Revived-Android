@@ -461,7 +461,7 @@ public final class AdhocRoamClient {
                     if (running.get()) {
                         String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
                         connectionStatus = "error: " + errMsg;
-                        Log.w(TAG, "Connection error to " + host + ": " + errMsg + ", retrying in 4s...");
+                        Log.w(TAG, "Connection error to " + serverHost + ": " + errMsg + ", retrying in 4s...");
                         sleepQuietly(4000);
                     }
                 } finally {
