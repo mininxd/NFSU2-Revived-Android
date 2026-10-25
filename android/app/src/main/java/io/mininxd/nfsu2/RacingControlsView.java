@@ -461,9 +461,9 @@ final class RacingControlsView extends View {
     private void filledTriangle(Canvas canvas, float x, float y, float s, boolean left) {
         float d = left ? -1 : 1;
         path.reset();
-        path.moveTo(x - d * s * 0.5f, y);
-        path.lineTo(x + d * s * 0.5f, y - s * 0.6f);
-        path.lineTo(x + d * s * 0.5f, y + s * 0.6f);
+        path.moveTo(x + d * s * 0.5f, y);
+        path.lineTo(x - d * s * 0.5f, y - s * 0.6f);
+        path.lineTo(x - d * s * 0.5f, y + s * 0.6f);
         path.close();
         canvas.drawPath(path, fill);
     }
