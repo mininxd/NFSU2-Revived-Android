@@ -201,6 +201,7 @@ public final class LauncherActivity extends Activity {
     private void refresh() {
         boolean allowed = allowed();
         File root = gameRoot();
+        if (allowed) ensureScriptsInstalled(root);
         checksList.removeAllViews();
         boolean exe = allowed && new File(root, "SPEED2.EXE").isFile();
         addCheck("SPEED2.EXE", exe, true);
@@ -217,6 +218,31 @@ public final class LauncherActivity extends Activity {
         play.setAlpha(ready ? 1f : .45f);
         access.setVisibility(allowed ? View.GONE : View.VISIBLE);
         refreshOptions();
+    }
+
+    private void ensureScriptsInstalled(File root) {
+        if (!root.isDirectory()) return;
+        File scriptsDir = new File(root, "scripts");
+        if (!scriptsDir.exists() && !scriptsDir.mkdirs()) return;
+        try {
+            String[] files = getAssets().list("scripts");
+            if (files != null) {
+                for (String name : files) {
+                    File target = new File(scriptsDir, name);
+                    if (!target.exists()) {
+                        try (java.io.InputStream in = getAssets().open("scripts/" + name);
+                             java.io.OutputStream out = new java.io.FileOutputStream(target)) {
+                            byte[] buf = new byte[8192];
+                            int read;
+                            while ((read = in.read(buf)) > 0) out.write(buf, 0, read);
+                        }
+                        android.util.Log.i("NFSU2", "Auto-installed script from assets: " + name);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            android.util.Log.w("NFSU2", "Failed to auto-install scripts from assets", e);
+        }
     }
 
     private void refreshOptions() {
@@ -555,6 +581,7 @@ public final class LauncherActivity extends Activity {
         int[] size = GameOptions.renderSize(this, Math.max(metrics.widthPixels, metrics.heightPixels),
                 Math.min(metrics.widthPixels, metrics.heightPixels));
         String[] loader = GpuDrivers.loaderArguments(this);
+        ensureScriptsInstalled(gameRoot());
         boolean logsEnabled = !"off".equals(GameOptions.get(this, GameOptions.DISPLAY_LOGS));
         GameOptions.syncWidescreenHudDat(this, logsEnabled);
         startActivity(new Intent(this, GameActivity.class)
