@@ -36,6 +36,24 @@ jobs:
           rm -f /tmp/lib_arm64.tar.gz
           ls -la android/app/src/main/jniLibs/arm64-v8a
 
+      - name: Build Native Free Roam Companion (libnfsu2_roam.so)
+        run: |
+          CLANG_BIN=$(find "$ANDROID_HOME/ndk" "$ANDROID_NDK_ROOT" /usr/local/lib/android/sdk/ndk -name "aarch64-linux-android*-clang" 2>/dev/null | sort -V | tail -n 1)
+          if [ -z "$CLANG_BIN" ]; then
+            echo "Searching system for aarch64 clang..."
+            CLANG_BIN=$(which aarch64-linux-gnu-gcc || which clang || find / -name "*clang" 2>/dev/null | head -n 1)
+          fi
+          echo "Using compiler: $CLANG_BIN"
+          $CLANG_BIN -std=c11 -O2 -shared -fPIC -ffp-contract=off -fno-strict-aliasing \
+            -DROAM_HOST_ANDROID -DROAM_HOST_WIN=1 \
+            -Iandroid/app/src/main/cpp/roam \
+            android/app/src/main/cpp/roam/roam_core.c \
+            android/app/src/main/cpp/roam/roam_game.c \
+            android/app/src/main/cpp/roam/roam_android.c \
+            -llog -ldl \
+            -o android/app/src/main/jniLibs/arm64-v8a/libnfsu2_roam.so
+          ls -lh android/app/src/main/jniLibs/arm64-v8a/libnfsu2_roam.so
+
       - name: Configure Gamefiles Direct Link from Secret (if set)
         env:
           GAMEFILES_URL: ${{ secrets.GAMEFILES_URL || secrets.GAMEFILES_ZIP_URL }}

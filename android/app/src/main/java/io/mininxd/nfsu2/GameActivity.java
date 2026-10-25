@@ -28,7 +28,12 @@ import android.util.DisplayMetrics;
 
 /** Storage permission gateway for the fixed Internal storage/nfsu2 directory. */
 public final class GameActivity extends NativeActivity {
-    static { System.loadLibrary("nfsu2_android"); }
+    static {
+        System.loadLibrary("nfsu2_android");
+        try {
+            System.loadLibrary("nfsu2_roam");
+        } catch (Throwable ignored) {}
+    }
     private boolean requested;
     private boolean foreground;
     private TextView status;

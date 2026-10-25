@@ -30,6 +30,18 @@ public final class AdhocRoamClient {
     private static final String TAG = "AdhocRoam";
     private static final AdhocRoamClient INSTANCE = new AdhocRoamClient();
 
+    static {
+        try {
+            System.loadLibrary("nfsu2_roam");
+            Log.i(TAG, "Native free roam companion (libnfsu2_roam) loaded successfully");
+        } catch (Throwable t) {
+            Log.d(TAG, "libnfsu2_roam not loaded: " + t.getMessage());
+        }
+    }
+
+    public static native void nativeRoamConfigure(String room, String name, String peers);
+    public static native void nativeRoamTick();
+
     // Protocol constants (from aemu_postoffice / packets_v1.h)
     private static final byte OPCODE_PING = 0;
     private static final byte OPCODE_LOGIN = 1;
@@ -78,6 +90,7 @@ public final class AdhocRoamClient {
     private Thread adhocctlThread;
     private Thread postofficeThread;
     private Thread udpBridgeThread;
+    private Thread roamTickThread;
 
     private Socket adhocctlSocket;
     private Socket postofficeSocket;
@@ -120,6 +133,13 @@ public final class AdhocRoamClient {
         startAdhocctlThread();
         startPostofficeThread();
         startUdpBridgeThread();
+
+        try {
+            nativeRoamConfigure(roomName, playerName, "127.0.0.1:" + LOCAL_RELAY_PORT);
+        } catch (Throwable t) {
+            Log.d(TAG, "nativeRoamConfigure: " + t.getMessage());
+        }
+        startRoamTickThread();
     }
 
     public synchronized void stop() {
@@ -136,6 +156,7 @@ public final class AdhocRoamClient {
         interruptQuietly(adhocctlThread);
         interruptQuietly(postofficeThread);
         interruptQuietly(udpBridgeThread);
+        interruptQuietly(roamTickThread);
 
         peers.clear();
         racingActive.set(false);
@@ -432,6 +453,23 @@ public final class AdhocRoamClient {
         }, "AdhocUdpBridge");
         udpBridgeThread.setDaemon(true);
         udpBridgeThread.start();
+    }
+
+    private void startRoamTickThread() {
+        roamTickThread = new Thread(() -> {
+            while (running.get()) {
+                try {
+                    nativeRoamTick();
+                    Thread.sleep(16); // ~60 Hz simulation step
+                } catch (InterruptedException e) {
+                    break;
+                } catch (Throwable t) {
+                    try { Thread.sleep(100); } catch (Exception ignored) {}
+                }
+            }
+        }, "RoamTickWorker");
+        roamTickThread.setDaemon(true);
+        roamTickThread.start();
     }
 
     public synchronized void broadcastToAdhocPeers(byte[] data) {
