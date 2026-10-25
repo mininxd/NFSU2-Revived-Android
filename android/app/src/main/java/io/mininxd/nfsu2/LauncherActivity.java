@@ -60,7 +60,7 @@ public final class LauncherActivity extends Activity {
 
     private LinearLayout checksList, optionsList;
     private TextView status;
-    private Button play, access;
+    private Button play, access, downloadFiles;
     private boolean playAfterProbe, checkingUpdates, resumed;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
@@ -181,6 +181,12 @@ public final class LauncherActivity extends Activity {
         accessParams.topMargin = dp(10);
         left.addView(access, accessParams);
 
+        downloadFiles = actionButton("Download Game Data", false);
+        downloadFiles.setOnClickListener(view -> startDownloadOrExtractGameData());
+        LinearLayout.LayoutParams dlParams = new LinearLayout.LayoutParams(-1, dp(46));
+        dlParams.topMargin = dp(8);
+        left.addView(downloadFiles, dlParams);
+
         // Right: options.
         LinearLayout right = card();
         LinearLayout.LayoutParams rightParams = new LinearLayout.LayoutParams(0, -1, 1f);
@@ -204,6 +210,10 @@ public final class LauncherActivity extends Activity {
         if (allowed) ensureScriptsInstalled(root);
         checksList.removeAllViews();
         boolean exe = allowed && new File(root, "SPEED2.EXE").isFile();
+        if (allowed && !exe) {
+            ensureGamefilesInstalled(root);
+            exe = new File(root, "SPEED2.EXE").isFile();
+        }
         addCheck("SPEED2.EXE", exe, true);
         StringBuilder missing = new StringBuilder();
         for (String folder : new String[] {"GLOBAL", "TRACKS", "CARS", "FRONTEND", "LANGUAGES"})
@@ -217,7 +227,145 @@ public final class LauncherActivity extends Activity {
         play.setEnabled(ready);
         play.setAlpha(ready ? 1f : .45f);
         access.setVisibility(allowed ? View.GONE : View.VISIBLE);
+
+        String dlUrl = getGamefilesUrl();
+        File localCacheZip = new File(Environment.getExternalStorageDirectory(), "cache/NFSU2_GameFiles.zip");
+        boolean canInstall = allowed && !ready && (dlUrl != null || localCacheZip.isFile());
+        downloadFiles.setVisibility(canInstall ? View.VISIBLE : View.GONE);
+        if (canInstall) {
+            downloadFiles.setText(localCacheZip.isFile() ? "Install Game Data (Found in /sdcard/cache)" : "Download & Install Game Data");
+        }
+
         refreshOptions();
+    }
+
+    private String getGamefilesUrl() {
+        try (java.io.InputStream in = getAssets().open("gamefiles_url.txt")) {
+            byte[] b = new byte[in.available()];
+            in.read(b);
+            String url = new String(b, java.nio.charset.StandardCharsets.UTF_8).trim();
+            if (!url.isEmpty()) return url;
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    private void ensureGamefilesInstalled(File root) {
+        if (!allowed() || new File(root, "SPEED2.EXE").isFile()) return;
+        try {
+            String[] list = getAssets().list("gamefiles");
+            if (list != null && list.length > 0) {
+                runOnUiThread(() -> status.setText("Extracting bundled game files..."));
+                if (!root.exists()) root.mkdirs();
+                copyAssetFolder(getAssets(), "gamefiles", root);
+            }
+        } catch (Exception e) {
+            android.util.Log.w("NFSU2", "Failed to unpack bundled gamefiles", e);
+        }
+    }
+
+    private static void copyAssetFolder(android.content.res.AssetManager assets, String src, File dest) {
+        try {
+            String[] files = assets.list(src);
+            if (files == null || files.length == 0) {
+                try (java.io.InputStream in = assets.open(src);
+                     java.io.OutputStream out = new java.io.FileOutputStream(dest)) {
+                    byte[] buf = new byte[16384];
+                    int r;
+                    while ((r = in.read(buf)) > 0) out.write(buf, 0, r);
+                }
+            } else {
+                if (!dest.exists()) dest.mkdirs();
+                for (String file : files) {
+                    copyAssetFolder(assets, src + "/" + file, new File(dest, file));
+                }
+            }
+        } catch (Exception ignored) {}
+    }
+
+    private void startDownloadOrExtractGameData() {
+        File localCacheZip = new File(Environment.getExternalStorageDirectory(), "cache/NFSU2_GameFiles.zip");
+        String url = getGamefilesUrl();
+        downloadFiles.setEnabled(false);
+        downloadFiles.setAlpha(0.5f);
+
+        worker.execute(() -> {
+            try {
+                File targetZip = localCacheZip;
+                if (!targetZip.isFile()) {
+                    if (url == null) throw new RuntimeException("No download URL or cache zip found");
+                    main.post(() -> status.setText("Connecting to download game files..."));
+                    File cacheDir = new File(Environment.getExternalStorageDirectory(), "cache");
+                    if (!cacheDir.exists()) cacheDir.mkdirs();
+                    targetZip = new File(cacheDir, "NFSU2_GameFiles.zip");
+
+                    java.net.HttpURLConnection conn = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+                    conn.setConnectTimeout(20000);
+                    conn.setReadTimeout(60000);
+                    conn.setInstanceFollowRedirects(true);
+                    int total = conn.getContentLength();
+                    try (java.io.InputStream in = conn.getInputStream();
+                         java.io.OutputStream out = new java.io.FileOutputStream(targetZip)) {
+                        byte[] buf = new byte[32768];
+                        int r, downloaded = 0;
+                        long lastReport = 0;
+                        while ((r = in.read(buf)) > 0) {
+                            out.write(buf, 0, r);
+                            downloaded += r;
+                            long now = System.currentTimeMillis();
+                            if (now - lastReport >= 400) {
+                                lastReport = now;
+                                final int d = downloaded, t = total;
+                                main.post(() -> {
+                                    if (t > 0) {
+                                        int pct = (int) (((long) d * 100) / t);
+                                        status.setText("Downloading: " + pct + "% (" + (d / (1024 * 1024)) + "/" + (t / (1024 * 1024)) + " MB)");
+                                    } else {
+                                        status.setText("Downloading: " + (d / (1024 * 1024)) + " MB");
+                                    }
+                                });
+                            }
+                        }
+                    }
+                }
+
+                main.post(() -> status.setText("Extracting game files to internal storage..."));
+                File destDir = Environment.getExternalStorageDirectory();
+                extractZip(targetZip, destDir);
+
+                main.post(() -> {
+                    status.setText("Game files installed successfully!");
+                    refresh();
+                });
+            } catch (Exception e) {
+                android.util.Log.e("NFSU2", "Failed to download or install game data", e);
+                main.post(() -> {
+                    status.setText("Installation error: " + e.getMessage());
+                    downloadFiles.setEnabled(true);
+                    downloadFiles.setAlpha(1.0f);
+                });
+            }
+        });
+    }
+
+    private static void extractZip(File zipFile, File destDir) throws Exception {
+        byte[] buffer = new byte[32768];
+        try (java.util.zip.ZipInputStream zis = new java.util.zip.ZipInputStream(new java.io.FileInputStream(zipFile))) {
+            java.util.zip.ZipEntry entry;
+            while ((entry = zis.getNextEntry()) != null) {
+                File target = new File(destDir, entry.getName());
+                if (entry.isDirectory()) {
+                    target.mkdirs();
+                } else {
+                    File parent = target.getParentFile();
+                    if (parent != null && !parent.exists()) parent.mkdirs();
+                    try (java.io.FileOutputStream fos = new java.io.FileOutputStream(target)) {
+                        int len;
+                        while ((len = zis.read(buffer)) > 0) fos.write(buffer, 0, len);
+                    }
+                }
+                zis.closeEntry();
+            }
+        }
     }
 
     private void ensureScriptsInstalled(File root) {

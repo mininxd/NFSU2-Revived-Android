@@ -36,6 +36,15 @@ jobs:
           rm -f /tmp/lib_arm64.tar.gz
           ls -la android/app/src/main/jniLibs/arm64-v8a
 
+      - name: Configure Gamefiles Direct Link from Secret (if set)
+        env:
+          GAMEFILES_URL: ${{ secrets.GAMEFILES_URL || secrets.GAMEFILES_ZIP_URL }}
+        if: ${{ env.GAMEFILES_URL != '' }}
+        run: |
+          echo "Found GAMEFILES_URL secret. Embedding direct link into APK assets..."
+          mkdir -p android/app/src/main/assets
+          echo "$GAMEFILES_URL" > android/app/src/main/assets/gamefiles_url.txt
+
       - name: Build NFSU2 Release APK
         run: |
           cd android
