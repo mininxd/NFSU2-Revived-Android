@@ -317,19 +317,23 @@ public final class DiagnosticOverlay {
             StringBuilder sb = new StringBuilder();
             sb.append("fps: ").append(fpsStr).append(" (").append(String.format(Locale.US, "%.1f ms", frameTimeMs)).append(")\n");
 
-            if (adhocConnected) {
-                sb.append("network: ").append(AdhocRoamClient.getInstance().getActiveModeName()).append('\n');
-                sb.append("player_online: ").append(onlineCount).append('\n');
-                // ONLY show player_on_race and player_racing when an ongoing race is active!
-                // When roaming, hide them completely.
-                if (isRacing) {
-                    sb.append("player_on_race: ").append(onRaceCount).append('\n');
-                    sb.append("player_racing: [");
-                    for (int i = 0; i < racers.size(); i++) {
-                        if (i > 0) sb.append(", ");
-                        sb.append(racers.get(i));
+            if (GameOptions.isRoamEnabled(activity)) {
+                if (adhocConnected) {
+                    sb.append("network: connected to ").append(AdhocRoamClient.getInstance().getServerHost()).append('\n');
+                    sb.append("player_online: ").append(onlineCount).append('\n');
+                    // ONLY show player_on_race and player_racing when an ongoing race is active!
+                    // When roaming, hide them completely.
+                    if (isRacing) {
+                        sb.append("player_on_race: ").append(onRaceCount).append('\n');
+                        sb.append("player_racing: [");
+                        for (int i = 0; i < racers.size(); i++) {
+                            if (i > 0) sb.append(", ");
+                            sb.append(racers.get(i));
+                        }
+                        sb.append("]\n");
                     }
-                    sb.append("]\n");
+                } else {
+                    sb.append("network: ").append(AdhocRoamClient.getInstance().getConnectionStatus()).append('\n');
                 }
             }
 
@@ -353,11 +357,17 @@ public final class DiagnosticOverlay {
                     textView.setText(text);
                 } else {
                     String text = String.format(Locale.US,
-                            "FPS: %s (%.1f ms)  |  Online: %d  |  CPU: %.0f%%  |  RAM: %.1f/%.1f GB",
-                            fpsStr, frameTimeMs, onlineCount,
+                            "FPS: %s (%.1f ms)  |  Online: %d  |  connected to %s\nCPU: %.0f%%  |  RAM: %.1f/%.1f GB",
+                            fpsStr, frameTimeMs, onlineCount, AdhocRoamClient.getInstance().getServerHost(),
                             cpu, usedMb / 1024.0f, totalMb / 1024.0f);
                     textView.setText(text);
                 }
+            } else if (GameOptions.isRoamEnabled(activity)) {
+                String text = String.format(Locale.US,
+                        "FPS: %s (%.1f ms)  |  network: %s\nCPU: %.0f%%  |  RAM: %.1f/%.1f GB",
+                        fpsStr, frameTimeMs, AdhocRoamClient.getInstance().getConnectionStatus(),
+                        cpu, usedMb / 1024.0f, totalMb / 1024.0f);
+                textView.setText(text);
             } else {
                 String text = String.format(Locale.US,
                         "FPS: %s (%.1f ms)  |  CPU: %.0f%%  |  RAM: %.1f/%.1f GB",

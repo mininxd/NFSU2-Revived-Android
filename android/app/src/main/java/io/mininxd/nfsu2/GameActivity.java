@@ -278,8 +278,8 @@ public final class GameActivity extends NativeActivity {
         if (roamEnabled) {
             String roamServer = launch.getStringExtra("roamServer");
             if (roamServer == null || roamServer.isEmpty()) roamServer = GameOptions.roamServer(this);
-            String roamRoom = launch.getStringExtra("roamRoom");
-            if (roamRoom == null || roamRoom.isEmpty()) roamRoom = GameOptions.roamRoom(this);
+            String roamRoom = launch.hasExtra("roamRoom") ? launch.getStringExtra("roamRoom") : GameOptions.roamRoom(this);
+            if (roamRoom == null) roamRoom = "";
             String roamName = launch.getStringExtra("roamName");
             if (roamName == null || roamName.isEmpty()) roamName = GameOptions.roamName(this);
             boolean ghostMode = launch.getBooleanExtra("roamGhost", GameOptions.isGhostModeEnabled(this));

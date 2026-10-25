@@ -163,6 +163,7 @@ public final class AdhocRoamClient {
     private String serverHost = GameOptions.DEFAULT_ROAM_SERVER;
     private String roomName = GameOptions.DEFAULT_ROAM_ROOM;
     private String playerName = "Racer";
+    private volatile String connectionStatus = "disconnected";
 
     private AdhocRoamClient() {}
 
@@ -170,30 +171,32 @@ public final class AdhocRoamClient {
         return INSTANCE;
     }
 
+    public String getServerHost() {
+        return serverHost;
+    }
+
+    public String getRoomName() {
+        return roomName;
+    }
+
+    public String getConnectionStatus() {
+        return connectionStatus;
+    }
+
     private boolean ghostMode = true;
 
     private boolean isWsHost(String host) {
         if (host == null) return false;
         String h = host.toLowerCase().trim();
-        if (h.startsWith("ws://") || h.startsWith("wss://") || h.endsWith(".xyz") || h.contains("/lan")) {
-            return true;
-        }
-        // Test port 27312 with 900ms timeout
-        try {
-            Socket test = new Socket();
-            test.connect(new InetSocketAddress(host, GameOptions.ADHOCCTL_PORT), 900);
-            test.close();
+        // Default Prometheus Adhoc server (eahub.eu / adhoc.eahub.eu)
+        if (h.equals("adhoc.eahub.eu") || h.equals("eahub.eu")) {
             return false;
-        } catch (Exception e) {
-            try {
-                Socket testWeb = new Socket();
-                testWeb.connect(new InetSocketAddress(host, 443), 900);
-                testWeb.close();
-                return true;
-            } catch (Exception e2) {
-                return false;
-            }
         }
+        if (h.startsWith("adhoc.") && !h.contains("nfsu2")) {
+            return false;
+        }
+        // Custom servers connect directly via WebSocket virtual switch (/lan)
+        return true;
     }
 
     public synchronized void start(Context context, String host, String room, String name) {
@@ -211,7 +214,7 @@ public final class AdhocRoamClient {
         }
 
         this.serverHost = (host != null && !host.trim().isEmpty()) ? host.trim() : GameOptions.roamServer(context);
-        this.roomName = (room != null && !room.trim().isEmpty()) ? room.trim() : GameOptions.DEFAULT_ROAM_ROOM;
+        this.roomName = (room != null) ? room.trim() : GameOptions.roamRoom(context);
         if (name == null || name.trim().isEmpty() || "Racer".equalsIgnoreCase(name)) {
             name = GameOptions.detectSavegamePlayerName();
         }
@@ -220,6 +223,7 @@ public final class AdhocRoamClient {
 
         running.set(true);
         peers.clear();
+        connectionStatus = "connecting to " + serverHost + "...";
 
         Log.i(TAG, "Starting Adhoc Roam: Server=" + serverHost + " Room=" + roomName
                 + " Name=" + playerName + " Ghost=" + ghostMode + " MAC=" + formatMac(localMac));
@@ -260,6 +264,7 @@ public final class AdhocRoamClient {
         if (!running.getAndSet(false)) return;
 
         Log.i(TAG, "Stopping Adhoc Roam client");
+        connectionStatus = "disconnected";
 
         closeQuietly(adhocctlSocket);
         closeQuietly(postofficeSocket);
@@ -396,6 +401,8 @@ public final class AdhocRoamClient {
                     }
 
                     Log.i(TAG, "WebSocket handshake 101 Switching Protocols OK");
+                    Log.i(TAG, "connected to " + host);
+                    connectionStatus = "connected to " + host;
 
                     long lastPingTime = System.currentTimeMillis();
 
@@ -452,7 +459,9 @@ public final class AdhocRoamClient {
                     }
                 } catch (Exception e) {
                     if (running.get()) {
-                        Log.w(TAG, "WebSocket error: " + e.getMessage() + ", reconnecting in 4s...");
+                        String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                        connectionStatus = "error: " + errMsg;
+                        Log.w(TAG, "Connection error to " + host + ": " + errMsg + ", retrying in 4s...");
                         sleepQuietly(4000);
                     }
                 } finally {
@@ -476,7 +485,9 @@ public final class AdhocRoamClient {
                 myVirtualIp = obj.optInt("vip", 0);
                 String vipStr = obj.optString("vipStr", "");
                 Log.i(TAG, "WebSocket welcome: VIP=" + vipStr + " (" + myVirtualIp + ")");
+                Log.i(TAG, "connected to " + serverHost);
                 adhocConnected.set(true);
+                connectionStatus = "connected to " + serverHost;
 
                 // Send hello
                 JSONObject hello = new JSONObject();
@@ -675,14 +686,15 @@ public final class AdhocRoamClient {
                     ByteBuffer connBuf = ByteBuffer.allocate(9).order(ByteOrder.LITTLE_ENDIAN);
                     connBuf.put(OPCODE_CONNECT);
                     byte[] groupField = new byte[8];
-                    byte[] groupBytes = roomName.getBytes(StandardCharsets.US_ASCII);
+                    String adhocGroup = (roomName != null && !roomName.isEmpty()) ? roomName : "FREEROAM";
+                    byte[] groupBytes = adhocGroup.getBytes(StandardCharsets.US_ASCII);
                     System.arraycopy(groupBytes, 0, groupField, 0, Math.min(groupBytes.length, 8));
                     connBuf.put(groupField);
 
                     out.write(connBuf.array());
                     out.flush();
 
-                    Log.i(TAG, "Adhocctl login and join room '" + roomName + "' sent successfully");
+                    Log.i(TAG, "Adhocctl login and join room '" + adhocGroup + "' sent successfully");
 
                     long lastPing = System.currentTimeMillis();
 
@@ -702,7 +714,9 @@ public final class AdhocRoamClient {
                     }
                 } catch (Exception e) {
                     if (running.get()) {
-                        Log.w(TAG, "Adhocctl connection error: " + e.getMessage() + ", reconnecting in 5s...");
+                        String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                        connectionStatus = "error: " + errMsg;
+                        Log.w(TAG, "Adhocctl connection error to " + serverHost + ": " + errMsg + ", retrying in 5s...");
                         sleepQuietly(5000);
                     }
                 } finally {
@@ -722,6 +736,8 @@ public final class AdhocRoamClient {
                 byte[] bssid = readFully(in, 6);
                 adhocConnected.set(true);
                 Log.i(TAG, "Joined room group BSSID: " + formatMac(bssid));
+                Log.i(TAG, "connected to " + serverHost);
+                connectionStatus = "connected to " + serverHost;
                 break;
             }
             case OPCODE_CONNECT: {

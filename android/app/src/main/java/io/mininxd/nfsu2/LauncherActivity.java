@@ -423,6 +423,7 @@ public final class LauncherActivity extends Activity {
         optionsList.addView(optionRow("Freeroam Online (beta)", GameOptions.isRoamEnabled(this) ? "On" : "Off", this::toggleFreeRoam));
         optionsList.addView(optionRow("Ghost Mode", GameOptions.isGhostModeEnabled(this) ? "On" : "Off", this::toggleGhostMode));
         optionsList.addView(optionRow("Online Server", GameOptions.onlineServer(this), this::chooseOnlineServer));
+        optionsList.addView(optionRow("Room Name", GameOptions.roamRoom(this).isEmpty() ? "Default (Public)" : GameOptions.roamRoom(this), this::chooseRoamRoom));
         optionsList.addView(optionRow("Check for updates",
                 checkingUpdates ? "Checking GitHub…" : "Version " + ReleaseUpdates.installed(this), () -> checkUpdates(true)));
         optionsList.addView(optionRow("Report an issue", "Report on GitHub / Save ZIP", () -> showReportDialog(null)));
@@ -549,6 +550,31 @@ public final class LauncherActivity extends Activity {
                 })
                 .setNeutralButton("Reset", (dialog, which) -> {
                     GameOptions.prefs(this).edit().remove(GameOptions.ONLINE_SERVER).apply();
+                    refreshOptions();
+                })
+                .setNegativeButton("Cancel", null).show();
+    }
+
+    private void chooseRoamRoom() {
+        android.widget.EditText input = new android.widget.EditText(this);
+        input.setSingleLine(true);
+        input.setHint("Leave empty for public room");
+        input.setText(GameOptions.roamRoom(this));
+        input.setSelection(input.getText().length());
+        android.widget.FrameLayout box = new android.widget.FrameLayout(this);
+        int pad = (int) (20 * getResources().getDisplayMetrics().density);
+        box.setPadding(pad, pad / 2, pad, 0);
+        box.addView(input);
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle("Room Name")
+                .setMessage("Multiplayer room name. Leave empty for the main public world (default). Set a name to join a private room with friends.")
+                .setView(box)
+                .setPositiveButton("Save", (dialog, which) -> {
+                    String value = input.getText().toString().trim();
+                    GameOptions.setRoamRoom(this, value);
+                    refreshOptions();
+                })
+                .setNeutralButton("Clear (Public)", (dialog, which) -> {
+                    GameOptions.setRoamRoom(this, "");
                     refreshOptions();
                 })
                 .setNegativeButton("Cancel", null).show();

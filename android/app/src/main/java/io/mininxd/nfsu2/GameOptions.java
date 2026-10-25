@@ -84,7 +84,7 @@ final class GameOptions {
     static final String ROAM_ENABLED = "roam_enabled", ROAM_SERVER = "roam_server",
             ROAM_ROOM = "roam_room", ROAM_NAME = "roam_name", ROAM_SOLID = "roam_solid";
     static final String DEFAULT_ROAM_SERVER = "adhoc.eahub.eu";
-    static final String DEFAULT_ROAM_ROOM = "FREEROAM";
+    static final String DEFAULT_ROAM_ROOM = "";
     static final int ADHOCCTL_PORT = 27312;
     static final int POSTOFFICE_PORT = 27313;
 
@@ -115,7 +115,11 @@ final class GameOptions {
     }
 
     static String roamRoom(Context context) {
-        return DEFAULT_ROAM_ROOM;
+        return prefs(context).getString(ROAM_ROOM, DEFAULT_ROAM_ROOM);
+    }
+
+    static void setRoamRoom(Context context, String room) {
+        prefs(context).edit().putString(ROAM_ROOM, room != null ? room.trim() : "").apply();
     }
 
     static String roamName(Context context) {
