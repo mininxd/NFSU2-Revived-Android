@@ -89,7 +89,7 @@ final class GameOptions {
     static final int POSTOFFICE_PORT = 27313;
 
     static boolean isRoamEnabled(Context context) {
-        return prefs(context).getBoolean(ROAM_ENABLED, false);
+        return prefs(context).getBoolean(ROAM_ENABLED, true);
     }
 
     static void setRoamEnabled(Context context, boolean enabled) {
