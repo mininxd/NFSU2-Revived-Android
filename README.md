@@ -240,7 +240,6 @@ This project is **NFSU2 Revived** (not Evolve). Full credit and attribution to t
 
 - **[codepdbh/nfsu2-recompiled](https://github.com/codepdbh/nfsu2-recompiled)** — Original static recompilation of `SPEED2.EXE`, Windows host, foundational Android port & launcher.
 - **[Manuel Peña (manuelpllull)](https://github.com/manuelpllull)** — R36S handheld port ([nfsu2-recompiled-r36s](https://github.com/manuelpllull/nfsu2-recompiled-r36s)) and widescreen hook work.
-- **[mininxd](https://github.com/mininxd)** — NFSU2 Revived Android maintenance, online server integration, ASI loader & FreeRoam enhancements.
 
 Contributions are welcome through pull requests.
 
