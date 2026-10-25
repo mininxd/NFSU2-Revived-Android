@@ -318,6 +318,7 @@ public final class DiagnosticOverlay {
             sb.append("fps: ").append(fpsStr).append(" (").append(String.format(Locale.US, "%.1f ms", frameTimeMs)).append(")\n");
 
             if (adhocConnected) {
+                sb.append("network: ").append(AdhocRoamClient.getInstance().getActiveModeName()).append('\n');
                 sb.append("player_online: ").append(onlineCount).append('\n');
                 // ONLY show player_on_race and player_racing when an ongoing race is active!
                 // When roaming, hide them completely.

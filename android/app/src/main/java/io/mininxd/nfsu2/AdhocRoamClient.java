@@ -5,16 +5,23 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Base64;
 import android.util.Log;
 import android.widget.Toast;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -22,8 +29,11 @@ import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import javax.net.ssl.SSLSocketFactory;
 
 /**
  * Adhoc Free Roam Client for NFSU2 Revived.
@@ -120,13 +130,26 @@ public final class AdhocRoamClient {
         racingActive.set(active);
     }
 
+    public static final int MODE_ADHOC = 1;
+    public static final int MODE_WSS = 2;
+    private volatile int activeMode = MODE_ADHOC;
+
+    public String getActiveModeName() {
+        return activeMode == MODE_WSS ? "WebSocket (WSS)" : "Prometheus Adhoc";
+    }
+
     private Thread adhocctlThread;
     private Thread postofficeThread;
+    private Thread wsThread;
     private Thread udpBridgeThread;
     private Thread roamTickThread;
 
     private Socket adhocctlSocket;
     private Socket postofficeSocket;
+    private Socket wsSocket;
+    private OutputStream wsOut;
+    private volatile int myVirtualIp = 0;
+
     private DatagramSocket localUdpSocket;
     private BufferedOutputStream postofficeOut;
 
@@ -142,6 +165,30 @@ public final class AdhocRoamClient {
     }
 
     private boolean ghostMode = true;
+
+    private boolean isWsHost(String host) {
+        if (host == null) return false;
+        String h = host.toLowerCase().trim();
+        if (h.startsWith("ws://") || h.startsWith("wss://") || h.endsWith(".xyz") || h.contains("/lan")) {
+            return true;
+        }
+        // Test port 27312 with 900ms timeout
+        try {
+            Socket test = new Socket();
+            test.connect(new InetSocketAddress(host, GameOptions.ADHOCCTL_PORT), 900);
+            test.close();
+            return false;
+        } catch (Exception e) {
+            try {
+                Socket testWeb = new Socket();
+                testWeb.connect(new InetSocketAddress(host, 443), 900);
+                testWeb.close();
+                return true;
+            } catch (Exception e2) {
+                return false;
+            }
+        }
+    }
 
     public synchronized void start(Context context, String host, String room, String name) {
         start(context, host, room, name, GameOptions.isGhostModeEnabled(context));
@@ -171,9 +218,20 @@ public final class AdhocRoamClient {
         Log.i(TAG, "Starting Adhoc Roam: Server=" + serverHost + " Room=" + roomName
                 + " Name=" + playerName + " Ghost=" + ghostMode + " MAC=" + formatMac(localMac));
 
-        startAdhocctlThread();
-        startPostofficeThread();
         startUdpBridgeThread();
+
+        new Thread(() -> {
+            if (!running.get()) return;
+            boolean isWs = isWsHost(serverHost);
+            activeMode = isWs ? MODE_WSS : MODE_ADHOC;
+            Log.i(TAG, "Backend selected for " + serverHost + ": " + (isWs ? "WebSocket Virtual Switch (WSS)" : "Prometheus Adhoc"));
+            if (isWs) {
+                startWebSocketThread();
+            } else {
+                startAdhocctlThread();
+                startPostofficeThread();
+            }
+        }, "BackendSelector").start();
 
         if (libraryLoaded) {
             try {
@@ -192,12 +250,17 @@ public final class AdhocRoamClient {
 
         closeQuietly(adhocctlSocket);
         closeQuietly(postofficeSocket);
+        closeQuietly(wsSocket);
+        synchronized (this) {
+            wsOut = null;
+        }
         if (localUdpSocket != null) {
             try { localUdpSocket.close(); } catch (Exception ignored) {}
         }
 
         interruptQuietly(adhocctlThread);
         interruptQuietly(postofficeThread);
+        interruptQuietly(wsThread);
         interruptQuietly(udpBridgeThread);
         interruptQuietly(roamTickThread);
 
@@ -245,6 +308,273 @@ public final class AdhocRoamClient {
         if (mac == null || mac.length < 6) return "00:00:00:00:00:00";
         return String.format("%02X:%02X:%02X:%02X:%02X:%02X",
                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    }
+
+    // ---- WebSocket Virtual Switch Client (WSS /lan) ---------------------------------------------------
+
+    private void startWebSocketThread() {
+        wsThread = new Thread(() -> {
+            while (running.get()) {
+                try {
+                    String host = serverHost;
+                    boolean useSsl = true;
+                    int port = 443;
+                    if (host.startsWith("wss://")) {
+                        host = host.substring(6);
+                        useSsl = true;
+                    } else if (host.startsWith("ws://")) {
+                        host = host.substring(5);
+                        useSsl = false;
+                        port = 80;
+                    }
+                    if (host.contains("/")) {
+                        host = host.substring(0, host.indexOf("/"));
+                    }
+                    if (host.contains(":")) {
+                        String[] parts = host.split(":");
+                        host = parts[0];
+                        try { port = Integer.parseInt(parts[1]); } catch (Exception ignored) {}
+                    }
+
+                    Log.i(TAG, "Connecting WebSocket switch " + (useSsl ? "wss://" : "ws://") + host + ":" + port + "/lan");
+                    if (useSsl) {
+                        SSLSocketFactory factory = (SSLSocketFactory) SSLSocketFactory.getDefault();
+                        wsSocket = factory.createSocket(host, port);
+                    } else {
+                        wsSocket = new Socket(host, port);
+                    }
+                    wsSocket.setTcpNoDelay(true);
+                    wsSocket.setSoTimeout(35000);
+
+                    OutputStream rawOut = new BufferedOutputStream(wsSocket.getOutputStream());
+                    InputStream rawIn = new BufferedInputStream(wsSocket.getInputStream());
+
+                    synchronized (this) {
+                        wsOut = rawOut;
+                    }
+
+                    // Handshake
+                    String secKey = Base64.encodeToString(UUID.randomUUID().toString().substring(0, 16).getBytes(StandardCharsets.US_ASCII), Base64.NO_WRAP);
+                    String handshake = "GET /lan HTTP/1.1\r\n" +
+                            "Host: " + host + "\r\n" +
+                            "Upgrade: websocket\r\n" +
+                            "Connection: Upgrade\r\n" +
+                            "Sec-WebSocket-Key: " + secKey + "\r\n" +
+                            "Sec-WebSocket-Version: 13\r\n" +
+                            "Origin: https://" + host + "\r\n\r\n";
+                    rawOut.write(handshake.getBytes(StandardCharsets.US_ASCII));
+                    rawOut.flush();
+
+                    // Read HTTP response status
+                    ByteArrayOutputStream headerBuf = new ByteArrayOutputStream();
+                    int b;
+                    while ((b = rawIn.read()) != -1) {
+                        headerBuf.write(b);
+                        byte[] arr = headerBuf.toByteArray();
+                        if (arr.length >= 4 &&
+                                arr[arr.length - 4] == '\r' && arr[arr.length - 3] == '\n' &&
+                                arr[arr.length - 2] == '\r' && arr[arr.length - 1] == '\n') {
+                            break;
+                        }
+                    }
+                    String statusLine = headerBuf.toString(StandardCharsets.ISO_8859_1.name());
+                    if (!statusLine.contains("101")) {
+                        throw new IOException("WebSocket upgrade rejected: " + statusLine.split("\r\n")[0]);
+                    }
+
+                    Log.i(TAG, "WebSocket handshake 101 Switching Protocols OK");
+
+                    long lastPingTime = System.currentTimeMillis();
+
+                    // Frame receive loop
+                    while (running.get()) {
+                        int b0 = rawIn.read();
+                        if (b0 == -1) break;
+                        int b1 = rawIn.read();
+                        if (b1 == -1) break;
+
+                        int opcode = b0 & 0x0F;
+                        boolean masked = (b1 & 0x80) != 0;
+                        int payloadLen = b1 & 0x7F;
+
+                        if (payloadLen == 126) {
+                            payloadLen = ((rawIn.read() & 0xFF) << 8) | (rawIn.read() & 0xFF);
+                        } else if (payloadLen == 127) {
+                            long bigLen = 0;
+                            for (int i = 0; i < 8; i++) {
+                                bigLen = (bigLen << 8) | (rawIn.read() & 0xFF);
+                            }
+                            payloadLen = (int) bigLen;
+                        }
+
+                        byte[] maskKey = null;
+                        if (masked) {
+                            maskKey = new byte[4];
+                            readBytes(rawIn, maskKey, 4);
+                        }
+
+                        byte[] payload = new byte[payloadLen];
+                        readBytes(rawIn, payload, payloadLen);
+
+                        if (masked && maskKey != null) {
+                            for (int i = 0; i < payloadLen; i++) {
+                                payload[i] ^= maskKey[i % 4];
+                            }
+                        }
+
+                        if (opcode == 1) { // Text frame
+                            handleWsTextMessage(new String(payload, StandardCharsets.UTF_8));
+                        } else if (opcode == 2) { // Binary frame
+                            handleWsBinaryMessage(payload);
+                        } else if (opcode == 9) { // Ping
+                            sendWsFrame(10, payload); // Pong
+                        } else if (opcode == 8) { // Close
+                            break;
+                        }
+
+                        if (System.currentTimeMillis() - lastPingTime > 15000) {
+                            sendWsPing();
+                            lastPingTime = System.currentTimeMillis();
+                        }
+                    }
+                } catch (Exception e) {
+                    if (running.get()) {
+                        Log.w(TAG, "WebSocket error: " + e.getMessage() + ", reconnecting in 4s...");
+                        sleepQuietly(4000);
+                    }
+                } finally {
+                    adhocConnected.set(false);
+                    synchronized (this) {
+                        wsOut = null;
+                    }
+                    closeQuietly(wsSocket);
+                }
+            }
+        }, "WebSocketWorker");
+        wsThread.setDaemon(true);
+        wsThread.start();
+    }
+
+    private void handleWsTextMessage(String jsonStr) {
+        try {
+            JSONObject obj = new JSONObject(jsonStr);
+            String type = obj.optString("t", "");
+            if ("welcome".equals(type)) {
+                myVirtualIp = obj.optInt("vip", 0);
+                String vipStr = obj.optString("vipStr", "");
+                Log.i(TAG, "WebSocket welcome: VIP=" + vipStr + " (" + myVirtualIp + ")");
+                adhocConnected.set(true);
+
+                // Send hello
+                JSONObject hello = new JSONObject();
+                hello.put("t", "hello");
+                hello.put("name", playerName);
+                sendWsFrame(1, hello.toString().getBytes(StandardCharsets.UTF_8));
+            } else if ("ping".equals(type)) {
+                int id = obj.optInt("id", 0);
+                JSONObject pong = new JSONObject();
+                pong.put("t", "pong");
+                pong.put("id", id);
+                sendWsFrame(1, pong.toString().getBytes(StandardCharsets.UTF_8));
+            } else if ("peers".equals(type)) {
+                JSONArray arr = obj.optJSONArray("peers");
+                if (arr != null) {
+                    Log.i(TAG, "WebSocket active server peers: " + arr.length());
+                }
+            }
+        } catch (Exception e) {
+            Log.d(TAG, "handleWsTextMessage: " + e.getMessage());
+        }
+    }
+
+    private void handleWsBinaryMessage(byte[] data) {
+        if (data == null || data.length < 4) return;
+        int kind = data[0] & 0xFF;
+
+        if (kind == 1) { // NET_KIND_UDP
+            if (data.length >= 16) {
+                int srcVip = ((data[4] & 0xFF) << 24) | ((data[5] & 0xFF) << 16) | ((data[6] & 0xFF) << 8) | (data[7] & 0xFF);
+                if (srcVip != myVirtualIp) {
+                    byte[] payload = Arrays.copyOfRange(data, 16, data.length);
+                    byte[] mac = new byte[] { 0x02, 0x77, (byte) (srcVip >> 24), (byte) (srcVip >> 16), (byte) (srcVip >> 8), (byte) srcVip };
+                    forwardToLocalGame(mac, payload);
+                }
+            }
+        } else if (kind == 32) { // NET_KIND_BUNDLE
+            int at = 4;
+            while (at + 4 <= data.length) {
+                int k = data[at] & 0xFF;
+                int flen = ((data[at + 2] & 0xFF) << 8) | (data[at + 3] & 0xFF);
+                int f = at + 4 + 4 * k;
+                int end = f + flen;
+                if (flen >= 16 && end <= data.length && (data[f] & 0xFF) == 1) {
+                    int srcVip = ((data[f + 4] & 0xFF) << 24) | ((data[f + 5] & 0xFF) << 16) | ((data[f + 6] & 0xFF) << 8) | (data[f + 7] & 0xFF);
+                    if (srcVip != myVirtualIp) {
+                        byte[] payload = Arrays.copyOfRange(data, f + 16, end);
+                        byte[] mac = new byte[] { 0x02, 0x77, (byte) (srcVip >> 24), (byte) (srcVip >> 16), (byte) (srcVip >> 8), (byte) srcVip };
+                        forwardToLocalGame(mac, payload);
+                    }
+                }
+                at = end;
+            }
+        }
+    }
+
+    public synchronized void sendWebSocketDgram(int dstVip, int dport, byte[] payload) {
+        if (!running.get() || wsOut == null || payload == null || payload.length == 0) return;
+        try {
+            ByteBuffer buf = ByteBuffer.allocate(16 + payload.length);
+            buf.put((byte) 1); // NET_KIND_UDP
+            buf.put((byte) 0);
+            buf.put((byte) 0);
+            buf.put((byte) 0);
+            buf.putInt(myVirtualIp);
+            buf.putInt(dstVip);
+            buf.putShort((short) DEFAULT_GAME_PORT);
+            buf.putShort((short) dport);
+            buf.put(payload);
+
+            sendWsFrame(2, buf.array());
+        } catch (Exception e) {
+            Log.d(TAG, "sendWebSocketDgram failed: " + e.getMessage());
+        }
+    }
+
+    private synchronized void sendWsFrame(int opcode, byte[] payload) throws IOException {
+        if (wsOut == null || payload == null) return;
+        byte[] mask = new byte[4];
+        new SecureRandom().nextBytes(mask);
+        int len = payload.length;
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream(len + 14);
+        baos.write(0x80 | (opcode & 0x0F));
+        if (len < 126) {
+            baos.write(0x80 | len);
+        } else if (len <= 65535) {
+            baos.write(0x80 | 126);
+            baos.write((len >> 8) & 0xFF);
+            baos.write(len & 0xFF);
+        } else {
+            baos.write(0x80 | 127);
+            for (int i = 7; i >= 0; i--) {
+                baos.write((int) ((len >> (i * 8)) & 0xFF));
+            }
+        }
+        baos.write(mask);
+        for (int i = 0; i < len; i++) {
+            baos.write(payload[i] ^ mask[i % 4]);
+        }
+        wsOut.write(baos.toByteArray());
+        wsOut.flush();
+    }
+
+    private void sendWsPing() {
+        try {
+            JSONObject ping = new JSONObject();
+            ping.put("t", "ping");
+            ping.put("id", (int) (System.currentTimeMillis() % 100000));
+            sendWsFrame(1, ping.toString().getBytes(StandardCharsets.UTF_8));
+        } catch (Exception ignored) {}
     }
 
     // ---- Adhocctl Thread (TCP 27312) -------------------------------------------------------------------
@@ -492,7 +822,11 @@ public final class AdhocRoamClient {
                         peer.socket.receive(pkt);
                         if (pkt.getLength() > 0) {
                             byte[] data = Arrays.copyOf(pkt.getData(), pkt.getLength());
-                            sendPdpPacket(peer.mac, data);
+                            if (activeMode == MODE_WSS) {
+                                sendWebSocketDgram(peer.ip, DEFAULT_GAME_PORT, data);
+                            } else {
+                                sendPdpPacket(peer.mac, data);
+                            }
                         }
                     } catch (Exception e) {
                         break;
@@ -596,7 +930,16 @@ public final class AdhocRoamClient {
     }
 
     public synchronized void broadcastToAdhocPeers(byte[] data) {
-        if (!running.get() || postofficeOut == null || data == null || data.length == 0) return;
+        if (!running.get() || data == null || data.length == 0) return;
+
+        if (activeMode == MODE_WSS) {
+            // Send to Roam Hub (10.77.0.253) and broadcast to players
+            sendWebSocketDgram(0x0A4D00FD, DEFAULT_GAME_PORT, data);
+            sendWebSocketDgram(0xFFFFFFFF, DEFAULT_GAME_PORT, data);
+            return;
+        }
+
+        if (postofficeOut == null) return;
 
         try {
             // 1. Send to postoffice PDP as broadcast destination (FF:FF:FF:FF:FF:FF)
