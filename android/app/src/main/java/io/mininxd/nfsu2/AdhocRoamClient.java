@@ -34,12 +34,16 @@ public final class AdhocRoamClient {
     private static final String TAG = "AdhocRoam";
     private static final AdhocRoamClient INSTANCE = new AdhocRoamClient();
 
+    private static volatile boolean libraryLoaded = false;
+
     static {
         try {
             System.loadLibrary("nfsu2_roam");
+            libraryLoaded = true;
             Log.i(TAG, "Native free roam companion (libnfsu2_roam) loaded successfully");
         } catch (Throwable t) {
-            Log.d(TAG, "libnfsu2_roam not loaded: " + t.getMessage());
+            libraryLoaded = false;
+            Log.w(TAG, "libnfsu2_roam not loaded: " + t.getMessage());
         }
     }
 
@@ -171,12 +175,14 @@ public final class AdhocRoamClient {
         startPostofficeThread();
         startUdpBridgeThread();
 
-        try {
-            nativeRoamConfigure(roomName, playerName, "127.0.0.1:" + LOCAL_RELAY_PORT, ghostMode);
-        } catch (Throwable t) {
-            Log.d(TAG, "nativeRoamConfigure: " + t.getMessage());
+        if (libraryLoaded) {
+            try {
+                nativeRoamConfigure(roomName, playerName, "127.0.0.1:" + LOCAL_RELAY_PORT, ghostMode);
+            } catch (Throwable t) {
+                Log.d(TAG, "nativeRoamConfigure: " + t.getMessage());
+            }
+            startRoamTickThread();
         }
-        startRoamTickThread();
     }
 
     public synchronized void stop() {
@@ -569,6 +575,7 @@ public final class AdhocRoamClient {
     }
 
     private void startRoamTickThread() {
+        if (!libraryLoaded) return;
         roamTickThread = new Thread(() -> {
             while (running.get()) {
                 try {
@@ -576,8 +583,11 @@ public final class AdhocRoamClient {
                     Thread.sleep(16); // ~60 Hz simulation step
                 } catch (InterruptedException e) {
                     break;
+                } catch (UnsatisfiedLinkError e) {
+                    Log.e(TAG, "nativeRoamTick unavailable, stopping tick worker");
+                    break;
                 } catch (Throwable t) {
-                    try { Thread.sleep(100); } catch (Exception ignored) {}
+                    try { Thread.sleep(50); } catch (Exception ignored) { break; }
                 }
             }
         }, "RoamTickWorker");
