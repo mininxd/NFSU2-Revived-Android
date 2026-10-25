@@ -1,4 +1,4 @@
-# Need for Speed Underground 2 — Recompiled
+# Need for Speed Underground 2 — Revived (Android)
 
 
 ### Android Downloads
@@ -7,16 +7,13 @@
 
 | APK | Architecture |
 |---|---|
-| [ARM64 / 64 bits](https://github.com/mininxd/NFSU2-Revived-Android/releases/latest) | arm64-v8a, recommended |
+| [NFSU2 Revived (ARM64)](https://github.com/mininxd/NFSU2-Revived-Android/releases/latest) | arm64-v8a, recommended |
 
-Android 10+ and Vulkan 1.1+. Both APKs use the same package and signing key;
-install the architecture supported by your device. Original game data is required.
+Android 10+ and Vulkan 1.1+. Original game data is required.
 Audio, pacing and validation details: [runtime follow-up](docs/AUDIO_FRAME_PACING.md).
 Issue-driven changes and remaining limits: [16 October review](docs/ISSUE_REVIEW_2026_10_16.md).
 
 <div align="center">
-
-<img src="docs/images/logo.png" alt="NFSU2 Logo" width="220" />
 
 ### **Static Recompilation of SPEED2.EXE into Native C (x86 & ARM64)**
 
@@ -26,7 +23,7 @@ Issue-driven changes and remaining limits: [16 October review](docs/ISSUE_REVIEW
 [![Status](https://img.shields.io/badge/Status-Playable%20Race%20Prototype-brightgreen.svg)](#status)
 [![License](https://img.shields.io/badge/License-MIT%20(Tooling)-lightgrey.svg)](#legal)
 
-*A full static binary recompilation of **Need for Speed: Underground 2** (`SPEED2.EXE`, x86-32) into clean, portable C code using an enhanced fork of [pcrecomp](https://github.com/sp00nznet/pcrecomp).*
+*NFSU2 Revived (not Evolve) is the continuation of the native Android port for **Need for Speed: Underground 2** (`SPEED2.EXE`, x86-32), building upon and crediting the original static binary recompilation by [codepdbh/nfsu2-recompiled](https://github.com/codepdbh/nfsu2-recompiled).*
 
 [🎮 Android Showcase](#gameplay-showcase) • [⚡ Features](#features) • [📊 Status](#status) • [🛠️ Build Pipeline](#pipeline) • [📱 Android Guide](#android-port) • [⚖️ Legal](#legal)
 
@@ -237,12 +234,13 @@ The project uses tailored patches over upstream pcrecomp located in `patches/pcr
 
 ---
 
-## Contributors
+## Credits & Contributors
 
-| Contributor | Contribution |
-|---|---|
-| [codepdbh](https://github.com/codepdbh) | Static recompilation, Windows host, Android port and launcher |
-| [Manuel Peña (manuelpllull)](https://github.com/manuelpllull) | R36S handheld port ([nfsu2-recompiled-r36s](https://github.com/manuelpllull/nfsu2-recompiled-r36s)) and widescreen hook work |
+This project is **NFSU2 Revived** (not Evolve). Full credit and attribution to the original project and creators:
+
+- **[codepdbh/nfsu2-recompiled](https://github.com/codepdbh/nfsu2-recompiled)** — Original static recompilation of `SPEED2.EXE`, Windows host, foundational Android port & launcher.
+- **[Manuel Peña (manuelpllull)](https://github.com/manuelpllull)** — R36S handheld port ([nfsu2-recompiled-r36s](https://github.com/manuelpllull/nfsu2-recompiled-r36s)) and widescreen hook work.
+- **[mininxd](https://github.com/mininxd)** — NFSU2 Revived Android maintenance, online server integration, ASI loader & FreeRoam enhancements.
 
 Contributions are welcome through pull requests.
 
