@@ -231,7 +231,7 @@ public final class LauncherActivity extends Activity {
         for (GameOptions.Option option : GameOptions.ALL)
             optionsList.addView(optionRow(option.title, option.label(GameOptions.get(this, option.key)), () -> chooseOption(option)));
         optionsList.addView(optionRow("Cheat Codes", cheatCodesSummary(), this::chooseCheatCodes));
-        optionsList.addView(optionRow("Free Roam (Multiplayer)", freeRoamSummary(), this::chooseFreeRoam));
+        optionsList.addView(optionRow("Free Roam (Multiplayer)", GameOptions.isRoamEnabled(this) ? "On" : "Off", this::toggleFreeRoam));
         optionsList.addView(optionRow("Online Server (EA)", GameOptions.onlineServer(this), this::chooseOnlineServer));
         optionsList.addView(optionRow("Check for updates",
                 checkingUpdates ? "Checking GitHub…" : "Version " + ReleaseUpdates.installed(this), () -> checkUpdates(true)));
@@ -326,79 +326,10 @@ public final class LauncherActivity extends Activity {
                 .show();
     }
 
-    private String freeRoamSummary() {
-        if (!GameOptions.isRoamEnabled(this)) return "Disabled";
-        String room = GameOptions.roamRoom(this);
-        return "Adhoc [" + room + "] (" + (GameOptions.isRoamSolid(this) ? "Solid" : "Ghost") + ")";
-    }
-
-    private void chooseFreeRoam() {
-        LinearLayout form = new LinearLayout(this);
-        form.setOrientation(LinearLayout.VERTICAL);
-        int pad = dp(16);
-        form.setPadding(pad, pad / 2, pad, pad / 2);
-
-        android.widget.CheckBox enabled = new android.widget.CheckBox(this);
-        enabled.setText("Enable Free Roam Multiplayer (Live players in Career)");
-        enabled.setTextColor(Color.WHITE);
-        enabled.setChecked(GameOptions.isRoamEnabled(this));
-        form.addView(enabled);
-
-        TextView nameLabel = label("Player Name (displayed above car in city):", 13, TEXT_MUTED, false);
-        nameLabel.setPadding(0, dp(8), 0, dp(2));
-        form.addView(nameLabel);
-        android.widget.EditText nameInput = new android.widget.EditText(this);
-        nameInput.setSingleLine(true);
-        nameInput.setHint("Profile name (default)");
-        nameInput.setText(GameOptions.roamName(this));
-        form.addView(nameInput);
-
-        TextView roomLabel = label("Adhoc Room / Group (default: FREEROAM):", 13, TEXT_MUTED, false);
-        roomLabel.setPadding(0, dp(8), 0, dp(2));
-        form.addView(roomLabel);
-        android.widget.EditText roomInput = new android.widget.EditText(this);
-        roomInput.setSingleLine(true);
-        roomInput.setText(GameOptions.roamRoom(this));
-        form.addView(roomInput);
-
-        TextView srvLabel = label("Adhoc Server (Prometheus / EA Hub):", 13, TEXT_MUTED, false);
-        srvLabel.setPadding(0, dp(8), 0, dp(2));
-        form.addView(srvLabel);
-        android.widget.EditText srvInput = new android.widget.EditText(this);
-        srvInput.setSingleLine(true);
-        srvInput.setText(GameOptions.roamServer(this));
-        form.addView(srvInput);
-
-        android.widget.CheckBox solid = new android.widget.CheckBox(this);
-        solid.setText("Solid car physics (drive through cars if disabled)");
-        solid.setTextColor(Color.WHITE);
-        solid.setChecked(GameOptions.isRoamSolid(this));
-        solid.setPadding(0, dp(6), 0, 0);
-        form.addView(solid);
-
-        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle("Free Roam (Adhoc Multiplayer)")
-                .setMessage("Connects to the open Prometheus Adhoc server (adhoc.eahub.eu) to synchronize other racers directly in Career Free Roam.")
-                .setView(form)
-                .setPositiveButton("Save", (dialog, which) -> {
-                    GameOptions.setRoamEnabled(this, enabled.isChecked());
-                    GameOptions.setRoamName(this, nameInput.getText().toString().trim());
-                    String r = roomInput.getText().toString().trim();
-                    if (!r.isEmpty()) GameOptions.setRoamRoom(this, r);
-                    String s = srvInput.getText().toString().trim();
-                    if (!s.isEmpty()) GameOptions.setRoamServer(this, s);
-                    GameOptions.setRoamSolid(this, solid.isChecked());
-                    refreshOptions();
-                })
-                .setNeutralButton("Reset Default", (dialog, which) -> {
-                    GameOptions.setRoamEnabled(this, true);
-                    GameOptions.setRoamServer(this, GameOptions.DEFAULT_ROAM_SERVER);
-                    GameOptions.setRoamRoom(this, GameOptions.DEFAULT_ROAM_ROOM);
-                    GameOptions.setRoamSolid(this, false);
-                    refreshOptions();
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
+    private void toggleFreeRoam() {
+        boolean next = !GameOptions.isRoamEnabled(this);
+        GameOptions.setRoamEnabled(this, next);
+        refreshOptions();
     }
 
     private void chooseOnlineServer() {

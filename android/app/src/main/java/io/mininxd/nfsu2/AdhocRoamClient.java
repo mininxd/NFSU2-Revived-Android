@@ -91,6 +91,9 @@ public final class AdhocRoamClient {
 
         this.serverHost = (host != null && !host.trim().isEmpty()) ? host.trim() : GameOptions.DEFAULT_ROAM_SERVER;
         this.roomName = (room != null && !room.trim().isEmpty()) ? room.trim() : GameOptions.DEFAULT_ROAM_ROOM;
+        if (name == null || name.trim().isEmpty() || "Racer".equalsIgnoreCase(name)) {
+            name = GameOptions.detectSavegamePlayerName();
+        }
         this.playerName = (name != null && !name.trim().isEmpty()) ? name.trim() : "Racer";
         this.localMac = getOrCreateVirtualMac(context);
 

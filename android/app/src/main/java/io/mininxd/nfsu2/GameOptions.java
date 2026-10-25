@@ -86,7 +86,7 @@ final class GameOptions {
     static final int POSTOFFICE_PORT = 27313;
 
     static boolean isRoamEnabled(Context context) {
-        return prefs(context).getBoolean(ROAM_ENABLED, true);
+        return prefs(context).getBoolean(ROAM_ENABLED, false);
     }
 
     static void setRoamEnabled(Context context, boolean enabled) {
@@ -94,40 +94,47 @@ final class GameOptions {
     }
 
     static String roamServer(Context context) {
-        String val = prefs(context).getString(ROAM_SERVER, DEFAULT_ROAM_SERVER);
-        if (val == null || val.trim().isEmpty() || val.contains("nfsu") || val.contains("xyz")) {
-            return DEFAULT_ROAM_SERVER;
-        }
-        return val.trim();
-    }
-
-    static void setRoamServer(Context context, String server) {
-        prefs(context).edit().putString(ROAM_SERVER, server).apply();
+        return DEFAULT_ROAM_SERVER;
     }
 
     static String roamRoom(Context context) {
-        String val = prefs(context).getString(ROAM_ROOM, DEFAULT_ROAM_ROOM);
-        return (val == null || val.trim().isEmpty()) ? DEFAULT_ROAM_ROOM : val.trim().toUpperCase();
-    }
-
-    static void setRoamRoom(Context context, String room) {
-        prefs(context).edit().putString(ROAM_ROOM, room != null ? room.trim().toUpperCase() : DEFAULT_ROAM_ROOM).apply();
+        return DEFAULT_ROAM_ROOM;
     }
 
     static String roamName(Context context) {
-        return prefs(context).getString(ROAM_NAME, "");
+        return detectSavegamePlayerName();
     }
 
-    static void setRoamName(Context context, String name) {
-        prefs(context).edit().putString(ROAM_NAME, name).apply();
+    static String detectSavegamePlayerName() {
+        try {
+            java.io.File appData = new java.io.File(android.os.Environment.getExternalStorageDirectory(),
+                    "nfsu2/AppData/Local/NFS Underground 2");
+            if (appData.isDirectory()) {
+                java.io.File[] profiles = appData.listFiles(java.io.File::isDirectory);
+                if (profiles != null && profiles.length > 0) {
+                    java.io.File latest = null;
+                    long latestTime = 0;
+                    for (java.io.File p : profiles) {
+                        String name = p.getName();
+                        if (name.contains("DVD") || name.contains("Magazine")) continue;
+                        java.io.File save = new java.io.File(p, name);
+                        if (save.isFile()) {
+                            long m = save.lastModified();
+                            if (m > latestTime) {
+                                latestTime = m;
+                                latest = save;
+                            }
+                        }
+                    }
+                    if (latest != null) return latest.getName();
+                }
+            }
+        } catch (Exception ignored) {}
+        return "Racer";
     }
 
     static boolean isRoamSolid(Context context) {
-        return prefs(context).getBoolean(ROAM_SOLID, false);
-    }
-
-    static void setRoamSolid(Context context, boolean solid) {
-        prefs(context).edit().putBoolean(ROAM_SOLID, solid).apply();
+        return false;
     }
 
     /** EA Nation replacement server: the game's *.ea.com hosts resolve to this name or IPv4 address. */
