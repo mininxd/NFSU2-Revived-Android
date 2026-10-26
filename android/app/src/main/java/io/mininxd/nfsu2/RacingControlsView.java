@@ -677,6 +677,10 @@ final class RacingControlsView extends View {
         if (c == null || ++c.held != 1) return;
         if (c.scan >= 0) {
             keys.set(c.scan, true);
+            // Horn (0x31 / N) triggers Free Roam horn packet & audio
+            if (c.scan == 0x31) {
+                AdhocRoamClient.setHorn(true);
+            }
             // Nitro (0x38 / Alt) holds Gas (0xc8 / Up) as well, matching web touch controls!
             if (c.scan == 0x38) {
                 keys.set(0xc8, true);
@@ -689,6 +693,9 @@ final class RacingControlsView extends View {
         if (c != null && --c.held == 0) {
             if (c.scan >= 0) {
                 keys.set(c.scan, false);
+                if (c.scan == 0x31) {
+                    AdhocRoamClient.setHorn(false);
+                }
                 if (c.scan == 0x38) {
                     // Release Gas unless another finger is holding it directly
                     boolean gasHeld = false;
@@ -748,6 +755,7 @@ final class RacingControlsView extends View {
 
     void releaseAll() {
         for (Control c : fingers.values()) release(c);
+        AdhocRoamClient.setHorn(false);
         fingers.clear();
         pointerRelease();
         invalidate();

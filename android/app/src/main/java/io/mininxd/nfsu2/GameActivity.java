@@ -247,7 +247,13 @@ public final class GameActivity extends NativeActivity {
         nativeFrameLimit(launch.getIntExtra("frameCap", Integer.parseInt(GameOptions.get(this, GameOptions.FPS))));
         nativeWidescreen(launch.getBooleanExtra("widescreen", GameOptions.get(this, GameOptions.WIDESCREEN).equals("on")));
         String server = launch.getStringExtra("onlineServer");
-        nativeOnlineServer(GameOptions.validServer(server) ? server : GameOptions.onlineServer(this));
+        String configuredServer = GameOptions.validServer(server) ? server : GameOptions.onlineServer(this);
+        // If connecting to a modern WebSocket switch server (nfsu2-web), route through LocalOnlineBridge
+        if (io.mininxd.nfsu2.net.ServerApiClient.isWsHost(configuredServer)) {
+            nativeOnlineServer("127.0.0.1");
+        } else {
+            nativeOnlineServer(configuredServer);
+        }
         nativeMinimapTop(launch.getBooleanExtra("minimapTop", GameOptions.get(this, GameOptions.MINIMAP).equals("top")));
         nativeBackBuffers(launch.getIntExtra("backBuffers", Integer.parseInt(GameOptions.get(this, GameOptions.LATENCY))));
         nativeCpuTextures(launch.getBooleanExtra("cpuTextures", GameOptions.get(this, GameOptions.TEXTURES).equals("cpu")));

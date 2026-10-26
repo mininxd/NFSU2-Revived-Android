@@ -96,10 +96,11 @@ static inline uint64_t rh_ns(void) {
     return (uint64_t)ts.tv_sec * 1000000000ull + ts.tv_nsec;
 }
 
-/* Audio stubs */
-#define rh_horn_held(stick) ((void)(stick), 0)
-#define rh_horn_mine()   (-1)
-#define rh_horn_name(k)  ((void)(k), "another")
+/* Audio stubs & Horn Integration */
+int roam_android_horn_held(void);
+#define rh_horn_held(stick) ((void)(stick), roam_android_horn_held())
+#define rh_horn_mine()   0
+#define rh_horn_name(k)  ((void)(k), "stock")
 #define rh_horn_begin(pos, fwd, vel)   ((void)(pos), (void)(fwd), (void)(vel))
 #define rh_horn_sound(who, name, kind, p, v) ((void)(who), (void)(name), (void)(kind), (void)(p), (void)(v))
 #define rh_horn_end()    ((void)0)

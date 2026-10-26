@@ -32,11 +32,23 @@ recomp_func_t (*g_p_recomp_lookup)(uint32_t va) = NULL;
 #define G_CARPOOL_KB 0x007fa9d4u
 #define CARPOOL_KB   48000
 
+/* Online Mode Lobby Patch: removes '*' from "*pcnfs05.ea.com" at 0x7FBDBCu
+ * so DirtySock connects via plain TCP on port 20920 instead of SSL 2.0 on 20921 */
+static void roam_android_patch_online(void) {
+    if (!g_p_mem_base || !*g_p_mem_base) return;
+    uint8_t *p = GPTR(0x7FBDBCu);
+    if (memcmp(p, "*pcnfs05.ea.com", 15) == 0) {
+        memcpy(p, "pcnfs05.ea.com\0", 15);
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Roam", "Patched 0x7FBDBC: removed '*' from *pcnfs05.ea.com for plain TCP lobby");
+    }
+}
+
 int roam_android_init_symbols(void) {
     if (g_p_mem_base && g_p_recomp_lookup && g_p_esp && *g_p_mem_base != 0) {
         if (MR32(G_CARPOOL_KB) < CARPOOL_KB) {
             MR32(G_CARPOOL_KB) = CARPOOL_KB;
         }
+        roam_android_patch_online();
         return 1;
     }
 
@@ -55,6 +67,7 @@ int roam_android_init_symbols(void) {
         if (MR32(G_CARPOOL_KB) < CARPOOL_KB) {
             MR32(G_CARPOOL_KB) = CARPOOL_KB;
         }
+        roam_android_patch_online();
         return 1;
     }
     return 0;
@@ -79,6 +92,13 @@ static atomic_int      g_say_pick = -1;
 static int             g_qc_open = -1;
 static int64_t         g_qc_open_until = 0;
 static int             g_qc_armed = 1;
+
+/* Horn state */
+static atomic_int      g_horn_held = 0;
+
+int roam_android_horn_held(void) {
+    return atomic_load(&g_horn_held);
+}
 
 static JavaVM         *g_jvm = NULL;
 static jclass          g_client_class = NULL;
@@ -435,7 +455,11 @@ jint JNI_OnLoad(JavaVM *vm, void *reserved) {
     g_jvm = vm;
     JNIEnv *env = NULL;
     if ((*vm)->GetEnv(vm, (void **)&env, JNI_VERSION_1_6) == JNI_OK) {
-        jclass clz = (*env)->FindClass(env, "io/mininxd/nfsu2/AdhocRoamClient");
+        jclass clz = (*env)->FindClass(env, "io/mininxd/nfsu2/net/RoamNativeBridge");
+        if (!clz) {
+            (*env)->ExceptionClear(env);
+            clz = (*env)->FindClass(env, "io/mininxd/nfsu2/AdhocRoamClient");
+        }
         if (clz) {
             g_client_class = (jclass)(*env)->NewGlobalRef(env, clz);
             g_mid_on_said = (*env)->GetStaticMethodID(env, g_client_class, "onQuickChatReceived", "(Ljava/lang/String;)V");
@@ -445,9 +469,7 @@ jint JNI_OnLoad(JavaVM *vm, void *reserved) {
     return JNI_VERSION_1_6;
 }
 
-JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_AdhocRoamClient_nativeRoamConfigure(
-        JNIEnv *env, jclass clazz, jstring jRoom, jstring jName, jstring jPeers, jboolean jGhostMode, jint jHubIp) {
-    (void)clazz;
+static void roam_do_configure(JNIEnv *env, jstring jRoom, jstring jName, jstring jPeers, jboolean jGhostMode, jint jHubIp) {
     g_ghost_mode = (jGhostMode == JNI_TRUE) ? 1 : 0;
     g_hub_ip = (uint32_t)jHubIp;
     if (g_s && g_hub_ip) {
@@ -474,9 +496,7 @@ JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_AdhocRoamClient_nativeRoamConfigure
                         g_room_name, g_player_name, g_peers_str, g_ghost_mode, g_hub_ip);
 }
 
-JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_AdhocRoamClient_nativeRoamReceive(
-        JNIEnv *env, jclass clazz, jint srcIp, jint srcPort, jbyteArray jData) {
-    (void)clazz;
+static void roam_do_receive(JNIEnv *env, jint srcIp, jint srcPort, jbyteArray jData) {
     if (!g_s || !jData) return;
     jsize len = (*env)->GetArrayLength(env, jData);
     if (len <= 0 || len > 1500) return;
@@ -492,27 +512,96 @@ JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_AdhocRoamClient_nativeRoamReceive(
     roam_plat_unlock();
 }
 
-JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_AdhocRoamClient_nativeRoamTick(
-        JNIEnv *env, jclass clazz) {
-    (void)env;
-    (void)clazz;
+static void roam_do_tick(void) {
     nfs_roam_frame_tick();
 }
 
-JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_AdhocRoamClient_nativeRoamSay(
-        JNIEnv *env, jclass clazz, jint phrase) {
-    (void)env;
-    (void)clazz;
+static void roam_do_say(jint phrase) {
     if (phrase >= 0 && phrase < 16) {
         atomic_store(&g_say_pick, (int)phrase);
     }
 }
 
+static void roam_do_stick(jfloat x, jfloat y) {
+    roam_stick_input(x, y);
+}
+
+static void roam_do_horn(jboolean held) {
+    atomic_store(&g_horn_held, (held == JNI_TRUE) ? 1 : 0);
+}
+
+/* JNI Bindings for io.mininxd.nfsu2.AdhocRoamClient */
+JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_AdhocRoamClient_nativeRoamConfigure(
+        JNIEnv *env, jclass clazz, jstring jRoom, jstring jName, jstring jPeers, jboolean jGhostMode, jint jHubIp) {
+    (void)clazz;
+    roam_do_configure(env, jRoom, jName, jPeers, jGhostMode, jHubIp);
+}
+
+JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_AdhocRoamClient_nativeRoamReceive(
+        JNIEnv *env, jclass clazz, jint srcIp, jint srcPort, jbyteArray jData) {
+    (void)clazz;
+    roam_do_receive(env, srcIp, srcPort, jData);
+}
+
+JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_AdhocRoamClient_nativeRoamTick(
+        JNIEnv *env, jclass clazz) {
+    (void)env; (void)clazz;
+    roam_do_tick();
+}
+
+JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_AdhocRoamClient_nativeRoamSay(
+        JNIEnv *env, jclass clazz, jint phrase) {
+    (void)env; (void)clazz;
+    roam_do_say(phrase);
+}
+
 JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_AdhocRoamClient_nativeRoamStick(
         JNIEnv *env, jclass clazz, jfloat x, jfloat y) {
-    (void)env;
+    (void)env; (void)clazz;
+    roam_do_stick(x, y);
+}
+
+JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_AdhocRoamClient_nativeRoamHorn(
+        JNIEnv *env, jclass clazz, jboolean held) {
+    (void)env; (void)clazz;
+    roam_do_horn(held);
+}
+
+/* JNI Bindings for io.mininxd.nfsu2.net.RoamNativeBridge */
+JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_net_RoamNativeBridge_nativeRoamConfigure(
+        JNIEnv *env, jclass clazz, jstring jRoom, jstring jName, jstring jPeers, jboolean jGhostMode, jint jHubIp) {
     (void)clazz;
-    roam_stick_input(x, y);
+    roam_do_configure(env, jRoom, jName, jPeers, jGhostMode, jHubIp);
+}
+
+JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_net_RoamNativeBridge_nativeRoamReceive(
+        JNIEnv *env, jclass clazz, jint srcIp, jint srcPort, jbyteArray jData) {
+    (void)clazz;
+    roam_do_receive(env, srcIp, srcPort, jData);
+}
+
+JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_net_RoamNativeBridge_nativeRoamTick(
+        JNIEnv *env, jclass clazz) {
+    (void)env; (void)clazz;
+    roam_do_tick();
+}
+
+JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_net_RoamNativeBridge_nativeRoamSay(
+        JNIEnv *env, jclass clazz, jint phrase) {
+    (void)env; (void)clazz;
+    roam_do_say(phrase);
+}
+
+JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_net_RoamNativeBridge_nativeRoamStick(
+        JNIEnv *env, jclass clazz, jfloat x, jfloat y) {
+    (void)env; (void)clazz;
+    roam_do_stick(x, y);
+}
+
+JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_net_RoamNativeBridge_nativeRoamHorn(
+        JNIEnv *env, jclass clazz, jboolean held) {
+    (void)env; (void)clazz;
+    roam_do_horn(held);
 }
 
 #ifdef __cplusplus
