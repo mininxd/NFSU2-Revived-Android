@@ -3,6 +3,8 @@ package io.mininxd.nfsu2;
 import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -21,15 +23,18 @@ import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
 import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import io.mininxd.nfsu2.net.NetLog;
 
 /**
  * Launcher in the style of the MW and Carbon ports: game files and PLAY on the left, options on the
@@ -429,6 +434,7 @@ public final class LauncherActivity extends Activity {
         optionsList.addView(optionRow("Ghost Mode", GameOptions.isGhostModeEnabled(this) ? "On" : "Off", this::toggleGhostMode));
         optionsList.addView(optionRow("Online Server", serverStatusSummary(), this::chooseOnlineServer));
         optionsList.addView(optionRow("Room Name", GameOptions.roamRoom(this).isEmpty() ? "Default (Public)" : GameOptions.roamRoom(this), this::chooseRoamRoom));
+        optionsList.addView(optionRow("Network Log", "View / Export / Clear", this::showNetworkLogDialog));
         optionsList.addView(optionRow("Check for updates",
                 checkingUpdates ? "Checking GitHub…" : "Version " + ReleaseUpdates.installed(this), () -> checkUpdates(true)));
         optionsList.addView(optionRow("Report an issue", "Report on GitHub / Save ZIP", () -> showReportDialog(null)));
@@ -767,6 +773,46 @@ public final class LauncherActivity extends Activity {
                 .setPositiveButton("Report on GitHub", (dialog, which) -> prepareReport(crash))
                 .setNeutralButton("Save Diagnostic ZIP", (dialog, which) -> saveDiagnosticZip(crash))
                 .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void showNetworkLogDialog() {
+        List<String> lines = NetLog.getRecentLogLines(this, 120);
+        String logText = lines.isEmpty() ? "No network logs recorded yet.\nLaunch Free Roam or Online mode to begin recording." : String.join("\n", lines);
+        File logFile = NetLog.getPrimaryLogFile(this);
+        String path = (logFile != null) ? logFile.getAbsolutePath() : "net_log.txt";
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.setPadding(dp(12), dp(12), dp(12), dp(12));
+        HorizontalScrollView hScroll = new HorizontalScrollView(this);
+        TextView tv = new TextView(this);
+        tv.setText(logText);
+        tv.setTypeface(Typeface.MONOSPACE);
+        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10.5f);
+        tv.setTextColor(0xFFE0E0E0);
+        tv.setTextIsSelectable(true);
+        hScroll.addView(tv);
+        scroll.addView(hScroll);
+
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Network Log")
+                .setMessage("Location: " + path)
+                .setView(scroll)
+                .setPositiveButton("Copy All", (d, w) -> {
+                    ClipboardManager cb = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                    if (cb != null) {
+                        cb.setPrimaryClip(ClipData.newPlainText("NFSU2 Network Log", NetLog.getFullLogText(this)));
+                        Toast.makeText(this, "Network log copied to clipboard", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNeutralButton("Save to Downloads", (d, w) -> {
+                    String loc = NetLog.exportLogToDownloads(this);
+                    Toast.makeText(this, "Exported to: " + (loc != null ? loc : "Downloads/NFSU2/"), Toast.LENGTH_LONG).show();
+                })
+                .setNegativeButton("Clear", (d, w) -> {
+                    NetLog.clear(this);
+                    Toast.makeText(this, "Network log cleared", Toast.LENGTH_SHORT).show();
+                })
                 .show();
     }
 

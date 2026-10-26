@@ -146,6 +146,8 @@ public final class VirtualSwitchClient {
                     boolean curSsl = trySsl[attempt];
                     try {
                         Log.i(TAG, "Connecting to /lan switch " + (curSsl ? "wss://" : "ws://") + host + ":" + curPort);
+                        NetLog.step(TAG, "Connecting to /lan switch: " + (curSsl ? "wss://" : "ws://") + host + ":" + curPort
+                                + " (attempt " + (attempt + 1) + "/" + tryPorts.length + ")");
                         if (curSsl) {
                             SSLSocketFactory factory = (SSLSocketFactory) SSLSocketFactory.getDefault();
                             wsSocket = factory.createSocket(host, curPort);
@@ -173,6 +175,7 @@ public final class VirtualSwitchClient {
                                 "Sec-WebSocket-Key: " + secKey + "\r\n" +
                                 "Sec-WebSocket-Version: 13\r\n" +
                                 "Origin: " + origin + "\r\n\r\n";
+                        NetLog.step(TAG, "Sending WebSocket Upgrade GET /lan (Host=" + hostHeader + ", Origin=" + origin + ")");
                         rawOut.write(handshake.getBytes(StandardCharsets.US_ASCII));
                         rawOut.flush();
 
@@ -190,10 +193,12 @@ public final class VirtualSwitchClient {
                         }
                         String statusLine = headerBuf.toString(StandardCharsets.ISO_8859_1.name());
                         if (!statusLine.contains("101")) {
+                            NetLog.fail(TAG, "WebSocket upgrade rejected by server: " + statusLine.split("\r\n")[0]);
                             throw new IOException("WebSocket upgrade rejected: " + statusLine.split("\r\n")[0]);
                         }
 
                         Log.i(TAG, "WebSocket connected successfully (101 Switching Protocols)");
+                        NetLog.success(TAG, "WebSocket upgrade accepted (101 Switching Protocols) on " + host + ":" + curPort);
                         connectedEver = true;
                         long lastPingTime = System.currentTimeMillis();
 
@@ -252,6 +257,7 @@ public final class VirtualSwitchClient {
                         if (running.get()) {
                             String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
                             Log.w(TAG, "Switch connection attempt failed (" + curPort + "): " + msg);
+                            NetLog.fail(TAG, "Connection attempt failed (" + curPort + "): " + msg, e);
                             if (attempt == tryPorts.length - 1 && listener != null) {
                                 listener.onDisconnected(msg);
                             }
@@ -272,6 +278,7 @@ public final class VirtualSwitchClient {
                 if (running.get()) {
                     String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
                     Log.w(TAG, "Switch error: " + msg);
+                    NetLog.fail(TAG, "Switch loop error: " + msg, e);
                     if (listener != null) listener.onDisconnected(msg);
                 }
             }
@@ -289,6 +296,7 @@ public final class VirtualSwitchClient {
                 myVirtualIp = obj.optInt("vip", 0);
                 String vipStr = obj.optString("vipStr", "");
                 Log.i(TAG, "Switch welcome: VIP=" + vipStr + " (" + myVirtualIp + ")");
+                NetLog.success(TAG, "Switch welcome: VIP=" + vipStr + " (" + myVirtualIp + "), token=" + obj.optString("token", "none"));
                 connected.set(true);
 
                 // Send hello packet with lan=1, bundle=0 for immediate datagrams
@@ -298,12 +306,14 @@ public final class VirtualSwitchClient {
                 hello.put("bundle", 0);
                 hello.put("deltas", 1);
                 hello.put("lan", 1);
+                NetLog.step(TAG, "Sending hello to switch: bundle=0, lan=1, name=" + playerName);
                 sendWsFrame(1, hello.toString().getBytes(StandardCharsets.UTF_8));
 
                 // Explicitly inform switch that LAN mode is active
                 JSONObject lanMsg = new JSONObject();
                 lanMsg.put("t", "lan");
                 lanMsg.put("on", 1);
+                NetLog.step(TAG, "Sending LAN mode activation: {\"t\":\"lan\",\"on\":1}");
                 sendWsFrame(1, lanMsg.toString().getBytes(StandardCharsets.UTF_8));
 
                 if (listener != null) listener.onConnected(myVirtualIp);
@@ -410,8 +420,11 @@ public final class VirtualSwitchClient {
             buf.put(payload);
 
             sendWsFrame(2, buf.array());
+            NetLog.i(TAG, "Sent switch UDP dgram to " + NetLog.ipStr(dstVip) + ":" + (dport != 0 ? dport : DEFAULT_GAME_PORT)
+                    + " (len=" + payload.length + ")");
         } catch (Exception e) {
             Log.d(TAG, "sendDgram failed: " + e.getMessage());
+            NetLog.fail(TAG, "sendDgram to " + NetLog.ipStr(dstVip) + " failed: " + e.getMessage(), e);
         }
     }
 

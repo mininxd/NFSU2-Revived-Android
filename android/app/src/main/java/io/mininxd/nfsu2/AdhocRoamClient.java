@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.mininxd.nfsu2.net.AdhocPostofficeClient;
 import io.mininxd.nfsu2.net.LocalOnlineBridge;
+import io.mininxd.nfsu2.net.NetLog;
 import io.mininxd.nfsu2.net.QuickChatManager;
 import io.mininxd.nfsu2.net.RoamNativeBridge;
 import io.mininxd.nfsu2.net.ServerApiClient;
@@ -120,6 +121,7 @@ public final class AdhocRoamClient {
                 adhocConnected.set(true);
                 connectionStatus = "connected to " + serverHost;
                 Log.i(TAG, "connected to " + serverHost + " (VIP: " + virtualIp + ")");
+                NetLog.success(TAG, "Connected to switch: VIP=" + NetLog.ipStr(virtualIp));
                 configureNativeRoam(0x0A4D00FD); // Hub at 10.77.0.253
                 if (isDisplayLogsEnabled()) {
                     new Thread(() -> apiClient.pollServerPlayers(serverHost, roomName, null), "InitialPoller").start();
@@ -130,12 +132,14 @@ public final class AdhocRoamClient {
             public void onDisconnected(String reason) {
                 adhocConnected.set(false);
                 connectionStatus = "error: " + reason;
+                NetLog.fail(TAG, "Switch disconnected: " + reason);
             }
 
             @Override
             public void onPeersCountUpdated(int totalPeers) {
                 if (totalPeers >= 0) {
                     apiClient.setRoomRoamPlayers(totalPeers);
+                    NetLog.i(TAG, "Total peers count: " + totalPeers);
                 }
             }
 
@@ -144,11 +148,14 @@ public final class AdhocRoamClient {
                 if (srcVip != 0x0A4D00FD) {
                     trackWsPeer(srcVip);
                 }
+                NetLog.i(TAG, "Datagram received from " + NetLog.ipStr(srcVip) + ":" + sport
+                        + " (len=" + (payload != null ? payload.length : 0) + ", hex=" + NetLog.hexPreview(payload, 16) + ")");
                 if (RoamNativeBridge.isLoaded()) {
                     try {
                         nativeRoamReceive(srcVip, sport, payload);
                     } catch (Throwable t) {
                         Log.d(TAG, "nativeRoamReceive: " + t.getMessage());
+                        NetLog.fail(TAG, "nativeRoamReceive failed: " + t.getMessage(), t);
                     }
                 }
             }
@@ -245,6 +252,10 @@ public final class AdhocRoamClient {
         this.playerName = (name != null && !name.trim().isEmpty()) ? name.trim() : "Racer";
         this.localMac = getOrCreateVirtualMac(context);
 
+        NetLog.init(context);
+        NetLog.step(TAG, "Starting Adhoc Roam: Server=" + serverHost + ", Room=" + roomName
+                + ", Name=" + playerName + ", Ghost=" + ghostMode + ", MAC=" + formatMac(localMac));
+
         running.set(true);
         peers.clear();
         connectionStatus = "connecting to " + serverHost + "...";
@@ -254,6 +265,7 @@ public final class AdhocRoamClient {
 
         boolean isWs = ServerApiClient.isWsHost(serverHost);
         activeMode = isWs ? MODE_WSS : MODE_ADHOC;
+        NetLog.step(TAG, "Backend selected: " + (isWs ? "WebSocket Virtual Switch (WSS)" : "Prometheus Adhoc"));
         configureNativeRoam(isWs ? 0x0A4D00FD : 0);
 
         new Thread(() -> {
@@ -276,6 +288,7 @@ public final class AdhocRoamClient {
         if (!running.getAndSet(false)) return;
 
         Log.i(TAG, "Stopping Adhoc Roam client");
+        NetLog.step(TAG, "Stopping Adhoc Roam client");
         connectionStatus = "disconnected";
 
         switchClient.stop();
@@ -301,9 +314,12 @@ public final class AdhocRoamClient {
         if (RoamNativeBridge.isLoaded()) {
             try {
                 String peerList = (hubIp != 0) ? "" : ("127.0.0.1:" + LOCAL_RELAY_PORT);
+                NetLog.step(TAG, "nativeRoamConfigure: Room=" + roomName + ", Name=" + playerName
+                        + ", Peers='" + peerList + "', Hub=" + (hubIp != 0 ? NetLog.ipStr(hubIp) : "none"));
                 nativeRoamConfigure(roomName, playerName, peerList, ghostMode, hubIp);
             } catch (Throwable t) {
                 Log.d(TAG, "nativeRoamConfigure: " + t.getMessage());
+                NetLog.fail(TAG, "nativeRoamConfigure error: " + t.getMessage(), t);
             }
         }
     }
@@ -359,6 +375,8 @@ public final class AdhocRoamClient {
     }
 
     private void handleNativeSend(int dstIp, int dstPort, byte[] data) {
+        NetLog.i(TAG, "Native sending to " + NetLog.ipStr(dstIp) + ":" + dstPort
+                + " (len=" + (data != null ? data.length : 0) + ", hex=" + NetLog.hexPreview(data, 16) + ")");
         if (activeMode == MODE_WSS) {
             sendWebSocketDgram(dstIp, dstPort, data);
         } else {

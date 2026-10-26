@@ -203,6 +203,7 @@ public final class GameActivity extends NativeActivity {
     }
     @Override protected void onCreate(Bundle saved) {
         super.onCreate(saved);
+        io.mininxd.nfsu2.net.NetLog.init(this);
         inputManager=(android.hardware.input.InputManager)getSystemService(INPUT_SERVICE);
         tiltSensors=(android.hardware.SensorManager)getSystemService(SENSOR_SERVICE);
         tiltSensor=tiltSensors==null?null:tiltSensors.getDefaultSensor(android.hardware.Sensor.TYPE_ACCELEROMETER);

@@ -167,6 +167,7 @@ public final class ServerApiClient {
             for (String tryBase : tryBases) {
                 try {
                     String endpoint = tryBase + "/players" + query;
+                    NetLog.step(TAG, "Polling /players: " + endpoint);
                     URL url = new URL(endpoint);
                     conn = (HttpURLConnection) url.openConnection();
                     conn.setConnectTimeout(4000);
@@ -199,14 +200,18 @@ public final class ServerApiClient {
                         int activeRoomOrRoam = (rm >= 0 && hash != 0) ? rm : (r >= 0 ? r : p);
                         Log.i(TAG, "player_count: " + activeRoomOrRoam
                                 + " (roam=" + totalRoamPlayers + ", online=" + totalOnlinePlayers + ", total=" + totalServerPlayers + ", room=" + roomRoamPlayers + ")");
+                        NetLog.success(TAG, "Polling /players succeeded: total=" + totalServerPlayers
+                                + ", roam=" + totalRoamPlayers + ", online=" + totalOnlinePlayers + ", room=" + roomRoamPlayers);
 
                         if (callback != null) {
                             callback.onStatsUpdated(totalServerPlayers, totalRoamPlayers, totalOnlinePlayers, roomRoamPlayers);
                         }
                         return true;
+                    } else {
+                        NetLog.fail(TAG, "Polling /players returned HTTP " + code + " on " + endpoint);
                     }
                 } catch (Exception ex) {
-                    // Try next fallback URL if available
+                    NetLog.fail(TAG, "Polling /players failed on " + tryBase + ": " + ex.getMessage(), ex);
                 } finally {
                     if (conn != null) {
                         try { conn.disconnect(); } catch (Exception ignored) {}
