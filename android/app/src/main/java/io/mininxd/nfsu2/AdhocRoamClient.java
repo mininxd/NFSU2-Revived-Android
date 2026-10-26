@@ -252,10 +252,12 @@ public final class AdhocRoamClient {
         Log.i(TAG, "Starting Adhoc Roam: Server=" + serverHost + " Room=" + roomName
                 + " Name=" + playerName + " Ghost=" + ghostMode + " MAC=" + formatMac(localMac));
 
+        boolean isWs = ServerApiClient.isWsHost(serverHost);
+        activeMode = isWs ? MODE_WSS : MODE_ADHOC;
+        configureNativeRoam(isWs ? 0x0A4D00FD : 0);
+
         new Thread(() -> {
             if (!running.get()) return;
-            boolean isWs = ServerApiClient.isWsHost(serverHost);
-            activeMode = isWs ? MODE_WSS : MODE_ADHOC;
             Log.i(TAG, "Backend selected for " + serverHost + ": " + (isWs ? "WebSocket Virtual Switch (WSS)" : "Prometheus Adhoc"));
 
             if (isWs) {
@@ -265,10 +267,8 @@ public final class AdhocRoamClient {
             } else {
                 postofficeClient.start(serverHost, roomName, playerName, localMac);
             }
-            configureNativeRoam(isWs ? 0x0A4D00FD : 0);
         }, "BackendSelector").start();
 
-        configureNativeRoam(0);
         startRoamTickThread();
     }
 
@@ -300,7 +300,8 @@ public final class AdhocRoamClient {
     private void configureNativeRoam(int hubIp) {
         if (RoamNativeBridge.isLoaded()) {
             try {
-                nativeRoamConfigure(roomName, playerName, "127.0.0.1:" + LOCAL_RELAY_PORT, ghostMode, hubIp);
+                String peerList = (hubIp != 0) ? "" : ("127.0.0.1:" + LOCAL_RELAY_PORT);
+                nativeRoamConfigure(roomName, playerName, peerList, ghostMode, hubIp);
             } catch (Throwable t) {
                 Log.d(TAG, "nativeRoamConfigure: " + t.getMessage());
             }

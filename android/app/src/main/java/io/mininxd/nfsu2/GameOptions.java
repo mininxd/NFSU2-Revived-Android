@@ -170,8 +170,26 @@ public final class GameOptions {
         return validServer(value) ? value : DEFAULT_ONLINE_SERVER;
     }
 
-    static boolean validServer(String value) {
-        return value != null && value.length() <= 253 && value.matches("[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*");
+    public static boolean validServer(String value) {
+        if (value == null || value.trim().isEmpty()) return false;
+        String s = value.trim();
+        if (s.startsWith("http://")) s = s.substring(7);
+        else if (s.startsWith("https://")) s = s.substring(8);
+        else if (s.startsWith("ws://")) s = s.substring(5);
+        else if (s.startsWith("wss://")) s = s.substring(6);
+        if (s.contains("/")) s = s.substring(0, s.indexOf("/"));
+        if (s.contains(":")) {
+            String[] parts = s.split(":");
+            if (parts.length != 2) return false;
+            try {
+                int p = Integer.parseInt(parts[1]);
+                if (p <= 0 || p > 65535) return false;
+            } catch (Exception e) {
+                return false;
+            }
+            s = parts[0];
+        }
+        return s.length() <= 253 && s.matches("[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*");
     }
 
     /** The game's language folder name (LANGUAGES/<file>.bin) chosen in the launcher. */

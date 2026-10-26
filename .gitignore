@@ -6,6 +6,8 @@ build/
 # Run logs and crash dumps (contain guest memory/addresses)
 logs/*
 !logs/.gitkeep
+logs.txt
+*.log
 # Any copy of game binaries/assets that might land here by accident
 *.EXE
 *.exe

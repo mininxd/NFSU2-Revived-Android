@@ -105,20 +105,25 @@ public final class VirtualSwitchClient {
                 String host = serverHost;
                 boolean useSsl = true;
                 int port = 443;
+                boolean explicitPort = false;
                 if (host.startsWith("wss://")) {
                     host = host.substring(6);
                     useSsl = true;
+                    explicitPort = true;
                 } else if (host.startsWith("ws://")) {
                     host = host.substring(5);
                     useSsl = false;
                     port = 80;
+                    explicitPort = true;
                 } else if (host.startsWith("https://")) {
                     host = host.substring(8);
                     useSsl = true;
+                    explicitPort = true;
                 } else if (host.startsWith("http://")) {
                     host = host.substring(7);
                     useSsl = false;
                     port = 80;
+                    explicitPort = true;
                 }
                 if (host.contains("/")) {
                     host = host.substring(0, host.indexOf("/"));
@@ -126,122 +131,152 @@ public final class VirtualSwitchClient {
                 if (host.contains(":")) {
                     String[] parts = host.split(":");
                     host = parts[0];
-                    try { port = Integer.parseInt(parts[1]); } catch (Exception ignored) {}
+                    try {
+                        port = Integer.parseInt(parts[1]);
+                        explicitPort = true;
+                    } catch (Exception ignored) {}
                 }
 
-                Log.i(TAG, "Connecting to /lan switch " + (useSsl ? "wss://" : "ws://") + host + ":" + port);
-                if (useSsl) {
-                    SSLSocketFactory factory = (SSLSocketFactory) SSLSocketFactory.getDefault();
-                    wsSocket = factory.createSocket(host, port);
-                } else {
-                    wsSocket = new Socket(host, port);
-                }
-                wsSocket.setTcpNoDelay(true);
-                wsSocket.setSoTimeout(35000);
+                int[] tryPorts = explicitPort ? new int[] { port } : (useSsl ? new int[] { 443, 80 } : new int[] { 80, 443 });
+                boolean[] trySsl = explicitPort ? new boolean[] { useSsl } : (useSsl ? new boolean[] { true, false } : new boolean[] { false, true });
 
-                OutputStream rawOut = new BufferedOutputStream(wsSocket.getOutputStream());
-                InputStream rawIn = new BufferedInputStream(wsSocket.getInputStream());
-
-                synchronized (this) {
-                    wsOut = rawOut;
-                }
-
-                // RFC 6455 Handshake
-                String secKey = Base64.encodeToString(UUID.randomUUID().toString().substring(0, 16).getBytes(StandardCharsets.US_ASCII), Base64.NO_WRAP);
-                String handshake = "GET /lan HTTP/1.1\r\n" +
-                        "Host: " + host + "\r\n" +
-                        "Upgrade: websocket\r\n" +
-                        "Connection: Upgrade\r\n" +
-                        "Sec-WebSocket-Key: " + secKey + "\r\n" +
-                        "Sec-WebSocket-Version: 13\r\n" +
-                        "Origin: https://" + host + "\r\n\r\n";
-                rawOut.write(handshake.getBytes(StandardCharsets.US_ASCII));
-                rawOut.flush();
-
-                // Read HTTP response status
-                ByteArrayOutputStream headerBuf = new ByteArrayOutputStream();
-                int b;
-                while ((b = rawIn.read()) != -1) {
-                    headerBuf.write(b);
-                    byte[] arr = headerBuf.toByteArray();
-                    if (arr.length >= 4 &&
-                            arr[arr.length - 4] == '\r' && arr[arr.length - 3] == '\n' &&
-                            arr[arr.length - 2] == '\r' && arr[arr.length - 1] == '\n') {
-                        break;
-                    }
-                }
-                String statusLine = headerBuf.toString(StandardCharsets.ISO_8859_1.name());
-                if (!statusLine.contains("101")) {
-                    throw new IOException("WebSocket upgrade rejected: " + statusLine.split("\r\n")[0]);
-                }
-
-                Log.i(TAG, "WebSocket connected successfully (101 Switching Protocols)");
-                long lastPingTime = System.currentTimeMillis();
-
-                // Receive loop
-                while (running.get()) {
-                    int b0 = rawIn.read();
-                    if (b0 == -1) break;
-                    int b1 = rawIn.read();
-                    if (b1 == -1) break;
-
-                    int opcode = b0 & 0x0F;
-                    boolean masked = (b1 & 0x80) != 0;
-                    int payloadLen = b1 & 0x7F;
-
-                    if (payloadLen == 126) {
-                        payloadLen = ((rawIn.read() & 0xFF) << 8) | (rawIn.read() & 0xFF);
-                    } else if (payloadLen == 127) {
-                        long bigLen = 0;
-                        for (int i = 0; i < 8; i++) {
-                            bigLen = (bigLen << 8) | (rawIn.read() & 0xFF);
+                boolean connectedEver = false;
+                for (int attempt = 0; attempt < tryPorts.length && running.get(); attempt++) {
+                    int curPort = tryPorts[attempt];
+                    boolean curSsl = trySsl[attempt];
+                    try {
+                        Log.i(TAG, "Connecting to /lan switch " + (curSsl ? "wss://" : "ws://") + host + ":" + curPort);
+                        if (curSsl) {
+                            SSLSocketFactory factory = (SSLSocketFactory) SSLSocketFactory.getDefault();
+                            wsSocket = factory.createSocket(host, curPort);
+                        } else {
+                            wsSocket = new Socket(host, curPort);
                         }
-                        payloadLen = (int) bigLen;
-                    }
+                        wsSocket.setTcpNoDelay(true);
+                        wsSocket.setSoTimeout(35000);
 
-                    byte[] maskKey = null;
-                    if (masked) {
-                        maskKey = new byte[4];
-                        readBytes(rawIn, maskKey, 4);
-                    }
+                        OutputStream rawOut = new BufferedOutputStream(wsSocket.getOutputStream());
+                        InputStream rawIn = new BufferedInputStream(wsSocket.getInputStream());
 
-                    byte[] payload = new byte[payloadLen];
-                    readBytes(rawIn, payload, payloadLen);
-
-                    if (masked && maskKey != null) {
-                        for (int i = 0; i < payloadLen; i++) {
-                            payload[i] ^= maskKey[i % 4];
+                        synchronized (this) {
+                            wsOut = rawOut;
                         }
+
+                        // RFC 6455 Handshake
+                        String secKey = Base64.encodeToString(UUID.randomUUID().toString().substring(0, 16).getBytes(StandardCharsets.US_ASCII), Base64.NO_WRAP);
+                        String origin = (curSsl ? "https://" : "http://") + host + (curPort == 80 || curPort == 443 ? "" : (":" + curPort));
+                        String hostHeader = host + (curPort == 80 || curPort == 443 ? "" : (":" + curPort));
+                        String handshake = "GET /lan HTTP/1.1\r\n" +
+                                "Host: " + hostHeader + "\r\n" +
+                                "Upgrade: websocket\r\n" +
+                                "Connection: Upgrade\r\n" +
+                                "Sec-WebSocket-Key: " + secKey + "\r\n" +
+                                "Sec-WebSocket-Version: 13\r\n" +
+                                "Origin: " + origin + "\r\n\r\n";
+                        rawOut.write(handshake.getBytes(StandardCharsets.US_ASCII));
+                        rawOut.flush();
+
+                        // Read HTTP response status
+                        ByteArrayOutputStream headerBuf = new ByteArrayOutputStream();
+                        int b;
+                        while ((b = rawIn.read()) != -1) {
+                            headerBuf.write(b);
+                            byte[] arr = headerBuf.toByteArray();
+                            if (arr.length >= 4 &&
+                                    arr[arr.length - 4] == '\r' && arr[arr.length - 3] == '\n' &&
+                                    arr[arr.length - 2] == '\r' && arr[arr.length - 1] == '\n') {
+                                break;
+                            }
+                        }
+                        String statusLine = headerBuf.toString(StandardCharsets.ISO_8859_1.name());
+                        if (!statusLine.contains("101")) {
+                            throw new IOException("WebSocket upgrade rejected: " + statusLine.split("\r\n")[0]);
+                        }
+
+                        Log.i(TAG, "WebSocket connected successfully (101 Switching Protocols)");
+                        connectedEver = true;
+                        long lastPingTime = System.currentTimeMillis();
+
+                        // Receive loop
+                        while (running.get()) {
+                            int b0 = rawIn.read();
+                            if (b0 == -1) break;
+                            int b1 = rawIn.read();
+                            if (b1 == -1) break;
+
+                            int opcode = b0 & 0x0F;
+                            boolean masked = (b1 & 0x80) != 0;
+                            int payloadLen = b1 & 0x7F;
+
+                            if (payloadLen == 126) {
+                                payloadLen = ((rawIn.read() & 0xFF) << 8) | (rawIn.read() & 0xFF);
+                            } else if (payloadLen == 127) {
+                                long bigLen = 0;
+                                for (int i = 0; i < 8; i++) {
+                                    bigLen = (bigLen << 8) | (rawIn.read() & 0xFF);
+                                }
+                                payloadLen = (int) bigLen;
+                            }
+
+                            byte[] maskKey = null;
+                            if (masked) {
+                                maskKey = new byte[4];
+                                readBytes(rawIn, maskKey, 4);
+                            }
+
+                            byte[] payload = new byte[payloadLen];
+                            readBytes(rawIn, payload, payloadLen);
+
+                            if (masked && maskKey != null) {
+                                for (int i = 0; i < payloadLen; i++) {
+                                    payload[i] ^= maskKey[i % 4];
+                                }
+                            }
+
+                            if (opcode == 1) { // Text frame
+                                handleTextMessage(new String(payload, StandardCharsets.UTF_8));
+                            } else if (opcode == 2) { // Binary frame
+                                handleBinaryMessage(payload);
+                            } else if (opcode == 9) { // Ping
+                                sendWsFrame(10, payload); // Pong
+                            } else if (opcode == 8) { // Close
+                                break;
+                            }
+
+                            if (System.currentTimeMillis() - lastPingTime > 2500) {
+                                sendPing();
+                                lastPingTime = System.currentTimeMillis();
+                            }
+                        }
+                    } catch (Exception e) {
+                        if (running.get()) {
+                            String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                            Log.w(TAG, "Switch connection attempt failed (" + curPort + "): " + msg);
+                            if (attempt == tryPorts.length - 1 && listener != null) {
+                                listener.onDisconnected(msg);
+                            }
+                        }
+                    } finally {
+                        connected.set(false);
+                        synchronized (this) {
+                            wsOut = null;
+                        }
+                        closeQuietly(wsSocket);
                     }
 
-                    if (opcode == 1) { // Text frame
-                        handleTextMessage(new String(payload, StandardCharsets.UTF_8));
-                    } else if (opcode == 2) { // Binary frame
-                        handleBinaryMessage(payload);
-                    } else if (opcode == 9) { // Ping
-                        sendWsFrame(10, payload); // Pong
-                    } else if (opcode == 8) { // Close
+                    if (connectedEver) {
                         break;
-                    }
-
-                    if (System.currentTimeMillis() - lastPingTime > 2500) {
-                        sendPing();
-                        lastPingTime = System.currentTimeMillis();
                     }
                 }
             } catch (Exception e) {
                 if (running.get()) {
                     String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-                    Log.w(TAG, "Switch connection dropped: " + msg + ", reconnecting in 4s...");
+                    Log.w(TAG, "Switch error: " + msg);
                     if (listener != null) listener.onDisconnected(msg);
-                    sleepQuietly(4000);
                 }
-            } finally {
-                connected.set(false);
-                synchronized (this) {
-                    wsOut = null;
-                }
-                closeQuietly(wsSocket);
+            }
+            if (running.get()) {
+                sleepQuietly(4000);
             }
         }
     }
@@ -256,11 +291,11 @@ public final class VirtualSwitchClient {
                 Log.i(TAG, "Switch welcome: VIP=" + vipStr + " (" + myVirtualIp + ")");
                 connected.set(true);
 
-                // Send hello packet with lan=1
+                // Send hello packet with lan=1, bundle=0 for immediate datagrams
                 JSONObject hello = new JSONObject();
                 hello.put("t", "hello");
                 hello.put("name", playerName != null ? playerName : "Racer");
-                hello.put("bundle", 1);
+                hello.put("bundle", 0);
                 hello.put("deltas", 1);
                 hello.put("lan", 1);
                 sendWsFrame(1, hello.toString().getBytes(StandardCharsets.UTF_8));

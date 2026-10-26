@@ -325,6 +325,7 @@ int roam_plat_start(const roam_plat_cfg *cfg, rc_session *s) {
         s->conf.hub_ip = g_hub_ip;
         s->conf.hub_port = cfg && cfg->port ? cfg->port : 47210;
         s->conf.snap_states = 1;
+        s->hub_hello_tx = INT64_MIN / 4;
         __android_log_print(ANDROID_LOG_INFO, "NFSU2-Roam", "Enabled Free Roam Hub: %08x:%u", g_hub_ip, s->conf.hub_port);
     }
 
@@ -477,6 +478,7 @@ static void roam_do_configure(JNIEnv *env, jstring jRoom, jstring jName, jstring
         g_s->conf.hub_ip = g_hub_ip;
         g_s->conf.hub_port = 47210;
         g_s->conf.snap_states = 1;
+        g_s->hub_hello_tx = INT64_MIN / 4;
         roam_plat_unlock();
     }
     if (!env) return;

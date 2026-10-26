@@ -152,44 +152,67 @@ public final class ServerApiClient {
 
             String base = getHttpBaseUrl(host);
             int hash = roomHash(room);
-            String endpoint = base + "/players" + (hash != 0 ? "?room=" + (hash & 0xFFFFFFFFL) : "");
-            URL url = new URL(endpoint);
-            conn = (HttpURLConnection) url.openConnection();
-            conn.setConnectTimeout(4000);
-            conn.setReadTimeout(4000);
-            conn.setRequestProperty("User-Agent", "NFSU2-Revived-Android");
-            conn.setRequestProperty("Accept", "application/json");
+            String query = (hash != 0 ? "?room=" + (hash & 0xFFFFFFFFL) : "");
 
-            int code = conn.getResponseCode();
-            if (code == 200) {
-                InputStream in = conn.getInputStream();
-                ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                byte[] buf = new byte[1024];
-                int n;
-                while ((n = in.read(buf)) != -1) {
-                    baos.write(buf, 0, n);
+            boolean hasExplicitScheme = host.startsWith("http://") || host.startsWith("https://")
+                    || host.startsWith("ws://") || host.startsWith("wss://");
+
+            String[] tryBases;
+            if (!hasExplicitScheme && base.startsWith("https://")) {
+                tryBases = new String[] { base, base.replaceFirst("^https://", "http://") };
+            } else {
+                tryBases = new String[] { base };
+            }
+
+            for (String tryBase : tryBases) {
+                try {
+                    String endpoint = tryBase + "/players" + query;
+                    URL url = new URL(endpoint);
+                    conn = (HttpURLConnection) url.openConnection();
+                    conn.setConnectTimeout(4000);
+                    conn.setReadTimeout(4000);
+                    conn.setRequestProperty("User-Agent", "NFSU2-Revived-Android");
+                    conn.setRequestProperty("Accept", "application/json");
+
+                    int code = conn.getResponseCode();
+                    if (code == 200) {
+                        InputStream in = conn.getInputStream();
+                        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                        byte[] buf = new byte[1024];
+                        int n;
+                        while ((n = in.read(buf)) != -1) {
+                            baos.write(buf, 0, n);
+                        }
+                        in.close();
+
+                        JSONObject obj = new JSONObject(baos.toString(StandardCharsets.UTF_8.name()));
+                        int p = obj.optInt("players", -1);
+                        int r = obj.optInt("roam", -1);
+                        int on = obj.optInt("online", -1);
+                        int rm = obj.has("room") ? obj.optInt("room", -1) : r;
+
+                        if (p >= 0) totalServerPlayers = p;
+                        if (r >= 0) totalRoamPlayers = r;
+                        if (on >= 0) totalOnlinePlayers = on;
+                        if (rm >= 0) roomRoamPlayers = rm;
+
+                        int activeRoomOrRoam = (rm >= 0 && hash != 0) ? rm : (r >= 0 ? r : p);
+                        Log.i(TAG, "player_count: " + activeRoomOrRoam
+                                + " (roam=" + totalRoamPlayers + ", online=" + totalOnlinePlayers + ", total=" + totalServerPlayers + ", room=" + roomRoamPlayers + ")");
+
+                        if (callback != null) {
+                            callback.onStatsUpdated(totalServerPlayers, totalRoamPlayers, totalOnlinePlayers, roomRoamPlayers);
+                        }
+                        return true;
+                    }
+                } catch (Exception ex) {
+                    // Try next fallback URL if available
+                } finally {
+                    if (conn != null) {
+                        try { conn.disconnect(); } catch (Exception ignored) {}
+                        conn = null;
+                    }
                 }
-                in.close();
-
-                JSONObject obj = new JSONObject(baos.toString(StandardCharsets.UTF_8.name()));
-                int p = obj.optInt("players", -1);
-                int r = obj.optInt("roam", -1);
-                int on = obj.optInt("online", -1);
-                int rm = obj.has("room") ? obj.optInt("room", -1) : r;
-
-                if (p >= 0) totalServerPlayers = p;
-                if (r >= 0) totalRoamPlayers = r;
-                if (on >= 0) totalOnlinePlayers = on;
-                if (rm >= 0) roomRoamPlayers = rm;
-
-                int activeRoomOrRoam = (rm >= 0 && hash != 0) ? rm : (r >= 0 ? r : p);
-                Log.i(TAG, "player_count: " + activeRoomOrRoam
-                        + " (roam=" + totalRoamPlayers + ", online=" + totalOnlinePlayers + ", total=" + totalServerPlayers + ", room=" + roomRoamPlayers + ")");
-
-                if (callback != null) {
-                    callback.onStatsUpdated(totalServerPlayers, totalRoamPlayers, totalOnlinePlayers, roomRoamPlayers);
-                }
-                return true;
             }
         } catch (Exception e) {
             Log.d(TAG, "pollServerPlayers failed: " + e.getMessage());
