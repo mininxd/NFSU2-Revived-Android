@@ -23,7 +23,6 @@ import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
 import android.widget.FrameLayout;
-import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -434,7 +433,7 @@ public final class LauncherActivity extends Activity {
         optionsList.addView(optionRow("Ghost Mode", GameOptions.isGhostModeEnabled(this) ? "On" : "Off", this::toggleGhostMode));
         optionsList.addView(optionRow("Online Server", serverStatusSummary(), this::chooseOnlineServer));
         optionsList.addView(optionRow("Room Name", GameOptions.roamRoom(this).isEmpty() ? "Default (Public)" : GameOptions.roamRoom(this), this::chooseRoamRoom));
-        optionsList.addView(optionRow("Network Log", "View / Export / Clear", this::showNetworkLogDialog));
+        optionsList.addView(optionRow("Export Network Log", "Save NFSU2-network.log", this::exportNetworkLog));
         optionsList.addView(optionRow("Check for updates",
                 checkingUpdates ? "Checking GitHub…" : "Version " + ReleaseUpdates.installed(this), () -> checkUpdates(true)));
         optionsList.addView(optionRow("Report an issue", "Report on GitHub / Save ZIP", () -> showReportDialog(null)));
@@ -776,40 +775,21 @@ public final class LauncherActivity extends Activity {
                 .show();
     }
 
-    private void showNetworkLogDialog() {
-        List<String> lines = NetLog.getRecentLogLines(this, 120);
-        String logText = lines.isEmpty() ? "No network logs recorded yet.\nLaunch Free Roam or Online mode to begin recording." : String.join("\n", lines);
-        File logFile = NetLog.getPrimaryLogFile(this);
-        String path = (logFile != null) ? logFile.getAbsolutePath() : "net_log.txt";
-
-        ScrollView scroll = new ScrollView(this);
-        scroll.setPadding(dp(12), dp(12), dp(12), dp(12));
-        HorizontalScrollView hScroll = new HorizontalScrollView(this);
-        TextView tv = new TextView(this);
-        tv.setText(logText);
-        tv.setTypeface(Typeface.MONOSPACE);
-        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10.5f);
-        tv.setTextColor(0xFFE0E0E0);
-        tv.setTextIsSelectable(true);
-        hScroll.addView(tv);
-        scroll.addView(hScroll);
+    private void exportNetworkLog() {
+        String loc = NetLog.exportLogToDownloads(this);
+        String full = NetLog.getFullLogText(this);
+        ClipboardManager cb = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        if (cb != null && full != null && !full.trim().isEmpty()) {
+            cb.setPrimaryClip(ClipData.newPlainText("NFSU2 Network Log", full));
+        }
 
         new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle("Network Log")
-                .setMessage("Location: " + path)
-                .setView(scroll)
-                .setPositiveButton("Copy All", (d, w) -> {
-                    ClipboardManager cb = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-                    if (cb != null) {
-                        cb.setPrimaryClip(ClipData.newPlainText("NFSU2 Network Log", NetLog.getFullLogText(this)));
-                        Toast.makeText(this, "Network log copied to clipboard", Toast.LENGTH_SHORT).show();
-                    }
-                })
-                .setNeutralButton("Save to Downloads", (d, w) -> {
-                    String loc = NetLog.exportLogToDownloads(this);
-                    Toast.makeText(this, "Exported to: " + (loc != null ? loc : "Downloads/NFSU2/"), Toast.LENGTH_LONG).show();
-                })
-                .setNegativeButton("Clear", (d, w) -> {
+                .setTitle("Export Network Log")
+                .setMessage("Log exported to:\n• " + (loc != null ? loc : "Downloads/NFSU2/NFSU2-network.log")
+                        + "\n• /sdcard/NFSU2/NFSU2-network.log"
+                        + "\n\n(Full log content was also copied to your clipboard).")
+                .setPositiveButton("OK", null)
+                .setNeutralButton("Clear Log", (d, w) -> {
                     NetLog.clear(this);
                     Toast.makeText(this, "Network log cleared", Toast.LENGTH_SHORT).show();
                 })

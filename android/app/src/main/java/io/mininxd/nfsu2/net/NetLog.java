@@ -257,13 +257,26 @@ public final class NetLog {
     public static String exportLogToDownloads(Context ctx) {
         File source = getPrimaryLogFile(ctx);
         if (source == null || !source.exists()) {
-            return null;
+            String mem = getFullLogText(ctx);
+            if (mem == null || mem.trim().isEmpty()) {
+                return null;
+            }
+            if (source != null) {
+                try {
+                    File p = source.getParentFile();
+                    if (p != null && !p.exists()) p.mkdirs();
+                    try (FileWriter fw = new FileWriter(source)) {
+                        fw.write(mem);
+                    }
+                } catch (Throwable ignored) {}
+            }
         }
 
-        // Try MediaStore Downloads
+        String exportedPath = null;
+        // 1. Try MediaStore Downloads
         try {
             ContentValues values = new ContentValues();
-            values.put(MediaStore.MediaColumns.DISPLAY_NAME, "NFSU2-net_log.txt");
+            values.put(MediaStore.MediaColumns.DISPLAY_NAME, "NFSU2-network.log");
             values.put(MediaStore.MediaColumns.MIME_TYPE, "text/plain");
             values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/NFSU2");
             ContentResolver resolver = ctx.getContentResolver();
@@ -277,17 +290,17 @@ public final class NetLog {
                         while ((n = input.read(buffer)) != -1) {
                             output.write(buffer, 0, n);
                         }
-                        return "Downloads/NFSU2/NFSU2-net_log.txt";
+                        exportedPath = "Downloads/NFSU2/NFSU2-network.log";
                     }
                 }
             }
         } catch (Throwable ignored) {}
 
-        // Fallback public Downloads folder
+        // 2. Try public Downloads/NFSU2/
         try {
             File dl = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "NFSU2");
             if (!dl.isDirectory()) dl.mkdirs();
-            File dest = new File(dl, "net_log.txt");
+            File dest = new File(dl, "NFSU2-network.log");
             try (InputStream in = new FileInputStream(source);
                  FileOutputStream out = new FileOutputStream(dest)) {
                 byte[] buf = new byte[8192];
@@ -295,11 +308,26 @@ public final class NetLog {
                 while ((n = in.read(buf)) != -1) {
                     out.write(buf, 0, n);
                 }
-                return dest.getAbsolutePath();
+                if (exportedPath == null) exportedPath = dest.getAbsolutePath();
             }
         } catch (Throwable ignored) {}
 
-        return source.getAbsolutePath();
+        // 3. Try /sdcard/NFSU2/
+        try {
+            File sdcardDir = new File(Environment.getExternalStorageDirectory(), "NFSU2");
+            if (!sdcardDir.isDirectory()) sdcardDir.mkdirs();
+            File dest = new File(sdcardDir, "NFSU2-network.log");
+            try (InputStream in = new FileInputStream(source);
+                 FileOutputStream out = new FileOutputStream(dest)) {
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = in.read(buf)) != -1) {
+                    out.write(buf, 0, n);
+                }
+            }
+        } catch (Throwable ignored) {}
+
+        return exportedPath != null ? exportedPath : (source != null ? source.getAbsolutePath() : null);
     }
 
     public static void clear(Context ctx) {
