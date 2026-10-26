@@ -27,6 +27,7 @@ public final class LocalOnlineBridge {
 
     public static final int VHOST_VIP = 0x0A4D0001; // 10.77.0.1
     public static final int PORT_REDIRECTOR = 20920;
+    public static final int PORT_REDIRECTOR_SSL = 20921; // in case guest connects to 20921
     public static final int PORT_LOBBY = 20922;
     public static final int PORT_BUDDY = 13505;
 
@@ -43,10 +44,12 @@ public final class LocalOnlineBridge {
     private final AtomicBoolean running = new AtomicBoolean(false);
 
     private ServerSocket server20920;
+    private ServerSocket server20921;
     private ServerSocket server20922;
     private ServerSocket server13505;
 
     private Thread thread20920;
+    private Thread thread20921;
     private Thread thread20922;
     private Thread thread13505;
 
@@ -89,20 +92,23 @@ public final class LocalOnlineBridge {
         if (running.getAndSet(true)) return;
 
         connections.clear();
-        thread20920 = startListener(PORT_REDIRECTOR, s -> server20920 = s);
-        thread20922 = startListener(PORT_LOBBY, s -> server20922 = s);
-        thread13505 = startListener(PORT_BUDDY, s -> server13505 = s);
-        Log.i(TAG, "Local Online Bridge started (ports 20920, 20922, 13505)");
+        thread20920 = startListener(PORT_REDIRECTOR, PORT_REDIRECTOR, s -> server20920 = s);
+        thread20921 = startListener(PORT_REDIRECTOR_SSL, PORT_REDIRECTOR, s -> server20921 = s);
+        thread20922 = startListener(PORT_LOBBY, PORT_LOBBY, s -> server20922 = s);
+        thread13505 = startListener(PORT_BUDDY, PORT_BUDDY, s -> server13505 = s);
+        Log.i(TAG, "Local Online Bridge started (ports 20920, 20921, 20922, 13505)");
     }
 
     public synchronized void stop() {
         if (!running.getAndSet(false)) return;
 
         closeQuietly(server20920);
+        closeQuietly(server20921);
         closeQuietly(server20922);
         closeQuietly(server13505);
 
         interruptQuietly(thread20920);
+        interruptQuietly(thread20921);
         interruptQuietly(thread20922);
         interruptQuietly(thread13505);
 
@@ -117,27 +123,27 @@ public final class LocalOnlineBridge {
         void accept(ServerSocket s);
     }
 
-    private Thread startListener(int port, ServerSocketConsumer consumer) {
+    private Thread startListener(int listenPort, int targetPort, ServerSocketConsumer consumer) {
         Thread t = new Thread(() -> {
             ServerSocket server = null;
             try {
-                server = new ServerSocket(port, 50, InetAddress.getByName("127.0.0.1"));
+                server = new ServerSocket(listenPort, 50, InetAddress.getByName("127.0.0.1"));
                 consumer.accept(server);
-                Log.i(TAG, "Listening on 127.0.0.1:" + port + " for Online Mode");
+                Log.i(TAG, "Listening on 127.0.0.1:" + listenPort + " -> 10.77.0.1:" + targetPort);
 
                 while (running.get() && !server.isClosed()) {
                     Socket client = server.accept();
                     client.setTcpNoDelay(true);
-                    handleLocalClient(client, port);
+                    handleLocalClient(client, targetPort);
                 }
             } catch (Exception e) {
                 if (running.get()) {
-                    Log.d(TAG, "Listener on port " + port + " stopped: " + e.getMessage());
+                    Log.d(TAG, "Listener on port " + listenPort + " stopped: " + e.getMessage());
                 }
             } finally {
                 closeQuietly(server);
             }
-        }, "OnlineListener-" + port);
+        }, "OnlineListener-" + listenPort);
         t.setDaemon(true);
         t.start();
         return t;
@@ -176,7 +182,7 @@ public final class LocalOnlineBridge {
                 // Read from local socket and forward DATA (op 4) to 10.77.0.1
                 byte[] buf = new byte[1440];
                 int n;
-                while (running.get() && conn.established && (n = localIn.read(buf)) != -1) {
+                while (running.get() && (n = localIn.read(buf)) != -1) {
                     if (n > 0) {
                         byte[] payload = new byte[n];
                         System.arraycopy(buf, 0, payload, 0, n);
@@ -247,7 +253,15 @@ public final class LocalOnlineBridge {
                     connections.remove(cid);
                 }
             }
-        } else if (op == TCP_OP_FIN || op == TCP_OP_RST) {
+        } else if (op == TCP_OP_FIN) {
+            conn.established = false;
+            conn.synAckLatch.countDown();
+            try {
+                if (conn.localSocket != null && !conn.localSocket.isOutputShutdown()) {
+                    conn.localSocket.shutdownOutput();
+                }
+            } catch (Exception ignored) {}
+        } else if (op == TCP_OP_RST) {
             conn.established = false;
             conn.synAckLatch.countDown();
             conn.close();

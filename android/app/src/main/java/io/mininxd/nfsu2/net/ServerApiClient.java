@@ -12,6 +12,8 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 import io.mininxd.nfsu2.GameOptions;
 
@@ -32,6 +34,10 @@ public final class ServerApiClient {
         void onError(String message);
     }
 
+    public static final long MIN_POLL_INTERVAL_MS = 5000;
+    private final AtomicLong lastPollTime = new AtomicLong(0);
+    private final AtomicBoolean isPolling = new AtomicBoolean(false);
+
     private volatile int totalServerPlayers = 0;
     private volatile int totalRoamPlayers = 0;
     private volatile int totalOnlinePlayers = 0;
@@ -41,6 +47,7 @@ public final class ServerApiClient {
     public int getTotalRoamPlayers() { return totalRoamPlayers; }
     public int getTotalOnlinePlayers() { return totalOnlinePlayers; }
     public int getRoomRoamPlayers() { return roomRoamPlayers; }
+    public void setRoomRoamPlayers(int count) { if (count >= 0) this.roomRoamPlayers = count; }
 
     public static String getHttpBaseUrl(String hostInput) {
         if (hostInput == null || hostInput.trim().isEmpty()) {
@@ -110,10 +117,39 @@ public final class ServerApiClient {
 
     /**
      * Poll /players endpoint and update state.
+     * Enforces a minimum interval of 5000 ms between network requests to prevent spam.
      */
     public boolean pollServerPlayers(String host, String room, StatsCallback callback) {
+        return pollServerPlayers(host, room, false, callback);
+    }
+
+    public boolean pollServerPlayers(String host, String room, boolean force, StatsCallback callback) {
+        long now = System.currentTimeMillis();
+        if (!force && (now - lastPollTime.get() < MIN_POLL_INTERVAL_MS)) {
+            if (callback != null) {
+                callback.onStatsUpdated(totalServerPlayers, totalRoamPlayers, totalOnlinePlayers, roomRoamPlayers);
+            }
+            return false;
+        }
+
+        if (!isPolling.compareAndSet(false, true)) {
+            if (callback != null) {
+                callback.onStatsUpdated(totalServerPlayers, totalRoamPlayers, totalOnlinePlayers, roomRoamPlayers);
+            }
+            return false;
+        }
+
         HttpURLConnection conn = null;
         try {
+            now = System.currentTimeMillis();
+            if (!force && (now - lastPollTime.get() < MIN_POLL_INTERVAL_MS)) {
+                if (callback != null) {
+                    callback.onStatsUpdated(totalServerPlayers, totalRoamPlayers, totalOnlinePlayers, roomRoamPlayers);
+                }
+                return false;
+            }
+            lastPollTime.set(now);
+
             String base = getHttpBaseUrl(host);
             int hash = roomHash(room);
             String endpoint = base + "/players" + (hash != 0 ? "?room=" + (hash & 0xFFFFFFFFL) : "");
@@ -158,6 +194,7 @@ public final class ServerApiClient {
         } catch (Exception e) {
             Log.d(TAG, "pollServerPlayers failed: " + e.getMessage());
         } finally {
+            isPolling.set(false);
             if (conn != null) {
                 try { conn.disconnect(); } catch (Exception ignored) {}
             }

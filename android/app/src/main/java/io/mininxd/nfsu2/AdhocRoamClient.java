@@ -131,7 +131,9 @@ public final class AdhocRoamClient {
 
             @Override
             public void onPeersCountUpdated(int totalPeers) {
-                apiClient.pollServerPlayers(serverHost, roomName, null);
+                if (totalPeers >= 0) {
+                    apiClient.setRoomRoamPlayers(totalPeers);
+                }
             }
 
             @Override
@@ -323,7 +325,7 @@ public final class AdhocRoamClient {
         playersPollerThread = new Thread(() -> {
             while (running.get()) {
                 pollServerPlayers();
-                for (int i = 0; i < 120 && running.get(); i++) {
+                for (int i = 0; i < 50 && running.get(); i++) {
                     try { Thread.sleep(100); } catch (InterruptedException ignored) {}
                 }
             }

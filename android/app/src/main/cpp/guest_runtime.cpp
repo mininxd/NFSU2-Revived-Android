@@ -860,6 +860,15 @@ std::string connectGuestRuntime(const char* executable) {
         configureD3D9Bridge(memory->base(),allocate,freeD3DGuest);
 #endif
         loadImage(executable);
+        // Online Mode Lobby Patch: removes '*' from "*pcnfs05.ea.com" at 0x7FBDBCu (SPEED2.EXE v1.2 NA)
+        // so DirtySock connects via plain TCP on port 20920 instead of SSL 2.0 on 20921.
+        if (memory->readable(0x7FBDBCu, 16)) {
+            uint8_t* p = static_cast<uint8_t*>(ptr(0x7FBDBCu, 16));
+            if (p && std::memcmp(p, "*pcnfs05.ea.com", 15) == 0) {
+                std::memcpy(p, "pcnfs05.ea.com\0", 16);
+                NFS_RUNTIME_LOG(ANDROID_LOG_INFO, "NFSU2", "Patched 0x7FBDBC: removed '*' from *pcnfs05.ea.com for plain TCP lobby");
+            }
+        }
         if(guestWidescreen){
             nfs_widescreen_init(hostGameRoot.c_str());
             nfs_widescreen_set_hud_safe_area(guestHudSafeArea ? 1 : 0);
@@ -962,7 +971,17 @@ void setGuestKey(unsigned scan,bool down){if(scan>=256)return;std::lock_guard<st
 void clearGuestInput(){std::lock_guard<std::mutex> lock(inputMutex);for(unsigned scan=0;scan<256;++scan)if(inputKeys[scan]){recordInputKey(scan,false);enqueueGuestKey(scan,false);}inputKeys.fill(0);inputMouseButtons.fill(0);inputMouseX=inputMouseY=inputMouseZ=0;}
 void setGuestPointer(float x,float y,int phase){guestPointerX=std::clamp(x,0.f,1.f);guestPointerY=std::clamp(y,0.f,1.f);if(phase!=1){std::lock_guard<std::mutex> lock(inputMutex);inputMouseButtons[0]=phase==0?0x80:0;}enqueueGuestPointer(phase);}
 void typeGuestText(const std::vector<uint32_t>& characters){enqueueGuestText(characters);}
-void setGuestOnlineServer(const std::string& host){std::lock_guard<MachineMutex> lock(machine);if(!memory&&!host.empty())onlineServer=host;}
+void setGuestOnlineServer(const std::string& host){
+    std::lock_guard<MachineMutex> lock(machine);
+    if(!host.empty())onlineServer=host;
+    if(memory&&memory->readable(0x7FBDBCu,16)){
+        uint8_t* p=static_cast<uint8_t*>(ptr(0x7FBDBCu,16));
+        if(p&&std::memcmp(p,"*pcnfs05.ea.com",15)==0){
+            std::memcpy(p,"pcnfs05.ea.com\0",16);
+            NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Patched 0x7FBDBC: removed '*' from *pcnfs05.ea.com for plain TCP lobby");
+        }
+    }
+}
 void setGuestWidescreen(bool enabled){std::lock_guard<MachineMutex> lock(machine);if(!memory)guestWidescreen=enabled;}
 void setGuestHudSafeArea(bool enabled){std::lock_guard<MachineMutex> lock(machine);guestHudSafeArea=enabled;if(memory)nfs_widescreen_set_hud_safe_area(enabled?1:0);}
 void setGuestLanguage(const char* language){

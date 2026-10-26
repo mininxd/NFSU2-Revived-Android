@@ -280,10 +280,11 @@ public final class GameActivity extends NativeActivity {
         if (cheats == null) cheats = GameOptions.getActiveCheatCodes(this);
         if (!cheats.isEmpty()) applyCheatCodes(cheats);
 
+        boolean isWs = io.mininxd.nfsu2.net.ServerApiClient.isWsHost(configuredServer);
         boolean roamEnabled = launch.getBooleanExtra("roamEnabled", GameOptions.isRoamEnabled(this));
-        if (roamEnabled) {
+        if (roamEnabled || isWs) {
             String roamServer = launch.getStringExtra("roamServer");
-            if (roamServer == null || roamServer.isEmpty()) roamServer = GameOptions.roamServer(this);
+            if (roamServer == null || roamServer.isEmpty()) roamServer = configuredServer;
             String roamRoom = launch.hasExtra("roamRoom") ? launch.getStringExtra("roamRoom") : GameOptions.roamRoom(this);
             if (roamRoom == null) roamRoom = "";
             String roamName = launch.getStringExtra("roamName");

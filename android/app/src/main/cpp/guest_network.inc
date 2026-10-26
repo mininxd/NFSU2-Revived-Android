@@ -250,7 +250,17 @@ void socketConnect(){
     auto* in=reinterpret_cast<sockaddr_in*>(&address);char text[INET_ADDRSTRLEN]{};inet_ntop(AF_INET,&in->sin_addr,text,sizeof text);
     NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Winsock: connect %08x to %s:%u",handle,text,ntohs(in->sin_port));
     if(::connect(socket->fd,reinterpret_cast<sockaddr*>(&address),length)==0){ret(0,3);return;}
-    if(errno!=EINPROGRESS){ret(net::failErrno(),3);return;}
+    if(errno!=EINPROGRESS){
+        if(socket->guestNonBlocking){
+            // Windows Winsock: non-blocking connect always returns WSAEWOULDBLOCK.
+            // Connection errors (e.g. ECONNREFUSED) are reported asynchronously via select() SO_ERROR.
+            socket->connecting=true;
+            ret(net::fail(net::wsaEwouldblock),3);
+            return;
+        }
+        ret(net::failErrno(),3);
+        return;
+    }
     if(socket->guestNonBlocking){socket->connecting=true;ret(net::fail(net::wsaEwouldblock),3);return;}
     int fd=socket->fd;net::wait(fd,POLLOUT,0);
     int error=0;socklen_t size=sizeof error;
@@ -465,19 +475,24 @@ void hostByName(){
     if(net::localName(name))addresses=net::interfaceAddresses(name=="localhost");
     else{
         std::string lookup=name;
-        if(name=="ea.com"||net::endsWith(name,".ea.com"))lookup=onlineServer;
-        addrinfo hints{};hints.ai_family=AF_INET;hints.ai_socktype=SOCK_STREAM;
-        addrinfo* result=nullptr;
-        int status=net::released([&]{return ::getaddrinfo(lookup.c_str(),nullptr,&hints,&result);});
-        if(status){
-            NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","Winsock: %s -> %s no resuelve (%s)",requested.c_str(),lookup.c_str(),gai_strerror(status));
-            lastError=status==EAI_AGAIN?11002:status==EAI_NONAME?net::wsaHostNotFound:net::wsaNoData;ret(0,1);return;
+        if(name=="ea.com"||net::endsWith(name,".ea.com")||name.find("pcnfs05")!=std::string::npos||name.find("ea.com")!=std::string::npos)lookup=onlineServer;
+        in_addr parsedAddress{};
+        if(::inet_pton(AF_INET,lookup.c_str(),&parsedAddress)==1){
+            addresses.push_back(parsedAddress);
+        }else{
+            addrinfo hints{};hints.ai_family=AF_INET;hints.ai_socktype=SOCK_STREAM;
+            addrinfo* result=nullptr;
+            int status=net::released([&]{return ::getaddrinfo(lookup.c_str(),nullptr,&hints,&result);});
+            if(status){
+                NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","Winsock: %s -> %s no resuelve (%s)",requested.c_str(),lookup.c_str(),gai_strerror(status));
+                lastError=status==EAI_AGAIN?11002:status==EAI_NONAME?net::wsaHostNotFound:net::wsaNoData;ret(0,1);return;
+            }
+            for(auto* entry=result;entry&&addresses.size()<8;entry=entry->ai_next){
+                in_addr value=reinterpret_cast<sockaddr_in*>(entry->ai_addr)->sin_addr;
+                if(std::none_of(addresses.begin(),addresses.end(),[&](in_addr a){return a.s_addr==value.s_addr;}))addresses.push_back(value);
+            }
+            freeaddrinfo(result);
         }
-        for(auto* entry=result;entry&&addresses.size()<8;entry=entry->ai_next){
-            in_addr value=reinterpret_cast<sockaddr_in*>(entry->ai_addr)->sin_addr;
-            if(std::none_of(addresses.begin(),addresses.end(),[&](in_addr a){return a.s_addr==value.s_addr;}))addresses.push_back(value);
-        }
-        freeaddrinfo(result);
         char text[INET_ADDRSTRLEN]{};if(!addresses.empty())inet_ntop(AF_INET,&addresses[0],text,sizeof text);
         NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Winsock: gethostbyname %s%s%s -> %s",requested.c_str(),lookup!=name?" via ":"",lookup!=name?lookup.c_str():"",text);
     }
