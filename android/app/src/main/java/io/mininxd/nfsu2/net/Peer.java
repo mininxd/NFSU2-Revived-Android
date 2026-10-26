@@ -5,7 +5,7 @@ import java.net.DatagramSocket;
 /**
  * Representation of a connected peer in the Free Roam network.
  */
-public final class Peer {
+public class Peer {
     public final String name;
     public final byte[] mac;
     public final int ip;

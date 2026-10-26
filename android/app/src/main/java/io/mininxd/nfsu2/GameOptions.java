@@ -7,7 +7,7 @@ import android.content.SharedPreferences;
  * Launcher options. GameActivity reads them when the game process starts and hands them to the native
  * runtime before the guest boots; changing one takes effect on the next PLAY.
  */
-final class GameOptions {
+public final class GameOptions {
     static final class Option {
         final String key, title, defaultValue;
         final String[] values, labels;
@@ -83,10 +83,10 @@ final class GameOptions {
     /** Free Roam Multiplayer options (Prometheus Adhoc over adhoc.eahub.eu). */
     static final String ROAM_ENABLED = "roam_enabled", ROAM_SERVER = "roam_server",
             ROAM_ROOM = "roam_room", ROAM_NAME = "roam_name", ROAM_SOLID = "roam_solid";
-    static final String DEFAULT_ROAM_SERVER = "adhoc.eahub.eu";
-    static final String DEFAULT_ROAM_ROOM = "";
-    static final int ADHOCCTL_PORT = 27312;
-    static final int POSTOFFICE_PORT = 27313;
+    public static final String DEFAULT_ROAM_SERVER = "adhoc.eahub.eu";
+    public static final String DEFAULT_ROAM_ROOM = "";
+    public static final int ADHOCCTL_PORT = 27312;
+    public static final int POSTOFFICE_PORT = 27313;
 
     static boolean isRoamEnabled(Context context) {
         return prefs(context).getBoolean(ROAM_ENABLED, true);
@@ -98,7 +98,7 @@ final class GameOptions {
 
     static final String ROAM_GHOST = "roam_ghost";
 
-    static boolean isGhostModeEnabled(Context context) {
+    public static boolean isGhostModeEnabled(Context context) {
         return prefs(context).getBoolean(ROAM_GHOST, true);
     }
 
@@ -106,7 +106,7 @@ final class GameOptions {
         prefs(context).edit().putBoolean(ROAM_GHOST, enabled).apply();
     }
 
-    static String roamServer(Context context) {
+    public static String roamServer(Context context) {
         String server = onlineServer(context);
         if (DEFAULT_ONLINE_SERVER.equalsIgnoreCase(server) || "eahub.eu".equalsIgnoreCase(server)) {
             return DEFAULT_ROAM_SERVER;
@@ -114,7 +114,7 @@ final class GameOptions {
         return server;
     }
 
-    static String roamRoom(Context context) {
+    public static String roamRoom(Context context) {
         return prefs(context).getString(ROAM_ROOM, DEFAULT_ROAM_ROOM);
     }
 
@@ -126,7 +126,7 @@ final class GameOptions {
         return detectSavegamePlayerName();
     }
 
-    static String detectSavegamePlayerName() {
+    public static String detectSavegamePlayerName() {
         try {
             java.io.File appData = new java.io.File(android.os.Environment.getExternalStorageDirectory(),
                     "nfsu2/AppData/Local/NFS Underground 2");
@@ -159,7 +159,7 @@ final class GameOptions {
     }
 
     /** EA Nation replacement server: the game's *.ea.com hosts resolve to this name or IPv4 address. */
-    static String onlineServer(Context context) {
+    public static String onlineServer(Context context) {
         String value = prefs(context).getString(ONLINE_SERVER, DEFAULT_ONLINE_SERVER);
         return validServer(value) ? value : DEFAULT_ONLINE_SERVER;
     }
