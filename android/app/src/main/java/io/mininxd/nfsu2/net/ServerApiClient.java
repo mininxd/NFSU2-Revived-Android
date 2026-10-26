@@ -203,6 +203,10 @@ public final class ServerApiClient {
     }
 
     public void queryServerPlayers(Context context, Runnable onDone) {
+        if (!GameOptions.isDisplayLogsEnabled(context)) {
+            if (onDone != null) onDone.run();
+            return;
+        }
         String server = GameOptions.onlineServer(context);
         if (!isWsHost(server)) {
             if (onDone != null) onDone.run();

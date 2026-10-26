@@ -35,7 +35,9 @@ public final class VirtualSwitchClient {
 
     public static final int DEFAULT_GAME_PORT = 47210;
     public static final int KIND_UDP = 1;
+    public static final int KIND_LAN_UDP = 3;
     public static final int KIND_TCP = 4;
+    public static final int KIND_LAN_ICMP = 5;
     public static final int KIND_BUNDLE = 32;
 
     public interface SwitchListener {
@@ -222,7 +224,7 @@ public final class VirtualSwitchClient {
                         break;
                     }
 
-                    if (System.currentTimeMillis() - lastPingTime > 15000) {
+                    if (System.currentTimeMillis() - lastPingTime > 2500) {
                         sendPing();
                         lastPingTime = System.currentTimeMillis();
                     }
@@ -254,13 +256,20 @@ public final class VirtualSwitchClient {
                 Log.i(TAG, "Switch welcome: VIP=" + vipStr + " (" + myVirtualIp + ")");
                 connected.set(true);
 
-                // Send hello packet
+                // Send hello packet with lan=1
                 JSONObject hello = new JSONObject();
                 hello.put("t", "hello");
                 hello.put("name", playerName != null ? playerName : "Racer");
                 hello.put("bundle", 1);
                 hello.put("deltas", 1);
+                hello.put("lan", 1);
                 sendWsFrame(1, hello.toString().getBytes(StandardCharsets.UTF_8));
+
+                // Explicitly inform switch that LAN mode is active
+                JSONObject lanMsg = new JSONObject();
+                lanMsg.put("t", "lan");
+                lanMsg.put("on", 1);
+                sendWsFrame(1, lanMsg.toString().getBytes(StandardCharsets.UTF_8));
 
                 if (listener != null) listener.onConnected(myVirtualIp);
             } else if ("ping".equals(type)) {
@@ -294,6 +303,8 @@ public final class VirtualSwitchClient {
 
         if (kind == KIND_UDP) {
             parseUdpFrame(data);
+        } else if (kind == KIND_LAN_UDP) {
+            parseLanUdpFrame(data);
         } else if (kind == KIND_TCP) {
             if (onlineBridge != null) {
                 onlineBridge.handleServerTcpFrame(data);
@@ -310,6 +321,8 @@ public final class VirtualSwitchClient {
                     int frameKind = frame[0] & 0xFF;
                     if (frameKind == KIND_UDP) {
                         parseUdpFrame(frame);
+                    } else if (frameKind == KIND_LAN_UDP) {
+                        parseLanUdpFrame(frame);
                     } else if (frameKind == KIND_TCP) {
                         if (onlineBridge != null) {
                             onlineBridge.handleServerTcpFrame(frame);
@@ -328,6 +341,19 @@ public final class VirtualSwitchClient {
         if (sport == 0) sport = DEFAULT_GAME_PORT;
         if (srcVip != myVirtualIp) {
             byte[] payload = Arrays.copyOfRange(frame, 16, frame.length);
+            if (listener != null) {
+                listener.onDatagramReceived(srcVip, sport, payload);
+            }
+        }
+    }
+
+    private void parseLanUdpFrame(byte[] frame) {
+        if (frame.length < 24) return;
+        int srcVip = ((frame[4] & 0xFF) << 24) | ((frame[5] & 0xFF) << 16) | ((frame[6] & 0xFF) << 8) | (frame[7] & 0xFF);
+        int sport = ((frame[12] & 0xFF) << 8) | (frame[13] & 0xFF);
+        if (sport == 0) sport = DEFAULT_GAME_PORT;
+        if (srcVip != myVirtualIp) {
+            byte[] payload = Arrays.copyOfRange(frame, 24, frame.length);
             if (listener != null) {
                 listener.onDatagramReceived(srcVip, sport, payload);
             }

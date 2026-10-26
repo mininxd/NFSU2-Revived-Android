@@ -102,6 +102,12 @@ public final class GameOptions {
         return prefs(context).getBoolean(ROAM_GHOST, true);
     }
 
+    public static boolean isDisplayLogsEnabled(Context context) {
+        if (context == null) return false;
+        String val = get(context, DISPLAY_LOGS);
+        return val != null && !"off".equalsIgnoreCase(val);
+    }
+
     static void setGhostModeEnabled(Context context, boolean enabled) {
         prefs(context).edit().putBoolean(ROAM_GHOST, enabled).apply();
     }

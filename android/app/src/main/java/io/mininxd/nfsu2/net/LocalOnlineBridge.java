@@ -168,8 +168,8 @@ public final class LocalOnlineBridge {
                 Log.i(TAG, "Connecting TCP stream to 10.77.0.1:" + targetPort + " (cid=" + cid + ", lport=" + localPort + ")");
                 wsClient.sendTcpFrame(VHOST_VIP, localPort, targetPort, TCP_OP_SYN, 64, cid, new byte[0]);
 
-                // Wait for SYNACK from virtual host (up to 4s)
-                if (!conn.synAckLatch.await(4000, TimeUnit.MILLISECONDS) || !conn.established) {
+                // Wait for SYNACK from virtual host (up to 6s)
+                if (!conn.synAckLatch.await(6000, TimeUnit.MILLISECONDS) || !conn.established) {
                     Log.w(TAG, "TCP SYN to 10.77.0.1:" + targetPort + " timed out or was refused");
                     wsClient.sendTcpFrame(VHOST_VIP, localPort, targetPort, TCP_OP_RST, 64, cid, new byte[0]);
                     conn.close();

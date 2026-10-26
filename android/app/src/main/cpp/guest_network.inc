@@ -209,6 +209,8 @@ void socketCreate(){
         NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","Winsock: socket(af=%u,type=%u,protocol=%u) failed: %s",family,type,protocol,std::strerror(errno));
         lastError=net::wsaError(errno);ret(net::invalidSocket,3);return;
     }
+    int reuseOpt=1;
+    ::setsockopt(fd,SOL_SOCKET,SO_REUSEADDR,&reuseOpt,sizeof reuseOpt);
     uint32_t handle=net::newHandle(fd,false);
     NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Winsock: socket %08x %s from %08x",handle,type==SOCK_STREAM?"TCP":"UDP",read32(g_esp));
     ret(handle,3);
@@ -249,7 +251,7 @@ void socketConnect(){
     if(!length){ret(net::fail(net::wsaEfault),3);return;}
     auto* in=reinterpret_cast<sockaddr_in*>(&address);char text[INET_ADDRSTRLEN]{};inet_ntop(AF_INET,&in->sin_addr,text,sizeof text);
     NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Winsock: connect %08x to %s:%u",handle,text,ntohs(in->sin_port));
-    if(::connect(socket->fd,reinterpret_cast<sockaddr*>(&address),length)==0){ret(0,3);return;}
+    if(::connect(socket->fd,reinterpret_cast<sockaddr*>(&address),length)==0){socket->connecting=false;ret(0,3);return;}
     if(errno!=EINPROGRESS){
         if(socket->guestNonBlocking){
             // Windows Winsock: non-blocking connect always returns WSAEWOULDBLOCK.

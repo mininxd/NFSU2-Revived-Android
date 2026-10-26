@@ -107,7 +107,7 @@ public final class LauncherActivity extends Activity {
         super.onResume();
         resumed = true;
         refresh();
-        if (GameOptions.isRoamEnabled(this)) {
+        if (GameOptions.isRoamEnabled(this) && GameOptions.isDisplayLogsEnabled(this)) {
             AdhocRoamClient.getInstance().queryServerPlayers(this, () -> {
                 if (resumed) runOnUiThread(this::refreshOptions);
             });

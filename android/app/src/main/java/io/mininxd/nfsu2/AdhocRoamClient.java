@@ -101,6 +101,7 @@ public final class AdhocRoamClient {
     private final Map<String, Peer> peers = new ConcurrentHashMap<>();
 
     private volatile int activeMode = MODE_ADHOC;
+    private Context appContext;
     private String serverHost = GameOptions.DEFAULT_ROAM_SERVER;
     private String roomName = GameOptions.DEFAULT_ROAM_ROOM;
     private String playerName = "Racer";
@@ -120,7 +121,9 @@ public final class AdhocRoamClient {
                 connectionStatus = "connected to " + serverHost;
                 Log.i(TAG, "connected to " + serverHost + " (VIP: " + virtualIp + ")");
                 configureNativeRoam(0x0A4D00FD); // Hub at 10.77.0.253
-                new Thread(() -> apiClient.pollServerPlayers(serverHost, roomName, null), "InitialPoller").start();
+                if (isDisplayLogsEnabled()) {
+                    new Thread(() -> apiClient.pollServerPlayers(serverHost, roomName, null), "InitialPoller").start();
+                }
             }
 
             @Override
@@ -225,6 +228,7 @@ public final class AdhocRoamClient {
 
     public synchronized void start(Context context, String host, String room, String name, boolean ghostMode) {
         QuickChatManager.setContext(context);
+        this.appContext = context != null ? context.getApplicationContext() : null;
         this.ghostMode = ghostMode;
         if (running.get()) {
             if (host.equals(serverHost) && room.equals(roomName) && name.equals(playerName)) {
@@ -321,10 +325,16 @@ public final class AdhocRoamClient {
         roamTickThread.start();
     }
 
+    public boolean isDisplayLogsEnabled() {
+        return appContext != null && GameOptions.isDisplayLogsEnabled(appContext);
+    }
+
     private void startPlayersPollerThread() {
         playersPollerThread = new Thread(() -> {
             while (running.get()) {
-                pollServerPlayers();
+                if (isDisplayLogsEnabled()) {
+                    pollServerPlayers();
+                }
                 for (int i = 0; i < 50 && running.get(); i++) {
                     try { Thread.sleep(100); } catch (InterruptedException ignored) {}
                 }
@@ -335,10 +345,15 @@ public final class AdhocRoamClient {
     }
 
     public void pollServerPlayers() {
+        if (!isDisplayLogsEnabled()) return;
         apiClient.pollServerPlayers(serverHost, roomName, null);
     }
 
     public void queryServerPlayers(Context context, Runnable onDone) {
+        if (!GameOptions.isDisplayLogsEnabled(context)) {
+            if (onDone != null) onDone.run();
+            return;
+        }
         apiClient.queryServerPlayers(context, onDone);
     }
 
