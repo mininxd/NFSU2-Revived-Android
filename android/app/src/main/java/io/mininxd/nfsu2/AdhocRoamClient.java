@@ -48,37 +48,61 @@ public final class AdhocRoamClient {
     // Native JNI Method Declarations delegating to RoamNativeBridge
     public static void nativeRoamConfigure(String room, String name, String peers, boolean ghostMode, int hubIp) {
         if (RoamNativeBridge.isLoaded()) {
-            RoamNativeBridge.nativeRoamConfigure(room, name, peers, ghostMode, hubIp);
+            try {
+                RoamNativeBridge.nativeRoamConfigure(room, name, peers, ghostMode, hubIp);
+            } catch (Throwable t) {
+                Log.d(TAG, "nativeRoamConfigure: " + t.getMessage());
+            }
         }
     }
 
     public static void nativeRoamReceive(int srcIp, int srcPort, byte[] data) {
         if (RoamNativeBridge.isLoaded()) {
-            RoamNativeBridge.nativeRoamReceive(srcIp, srcPort, data);
+            try {
+                RoamNativeBridge.nativeRoamReceive(srcIp, srcPort, data);
+            } catch (Throwable t) {
+                Log.d(TAG, "nativeRoamReceive: " + t.getMessage());
+            }
         }
     }
 
     public static void nativeRoamTick() {
         if (RoamNativeBridge.isLoaded()) {
-            RoamNativeBridge.nativeRoamTick();
+            try {
+                RoamNativeBridge.nativeRoamTick();
+            } catch (Throwable t) {
+                Log.d(TAG, "nativeRoamTick: " + t.getMessage());
+            }
         }
     }
 
     public static void nativeRoamSay(int phrase) {
         if (RoamNativeBridge.isLoaded()) {
-            RoamNativeBridge.nativeRoamSay(phrase);
+            try {
+                RoamNativeBridge.nativeRoamSay(phrase);
+            } catch (Throwable t) {
+                Log.d(TAG, "nativeRoamSay: " + t.getMessage());
+            }
         }
     }
 
     public static void nativeRoamStick(float x, float y) {
         if (RoamNativeBridge.isLoaded()) {
-            RoamNativeBridge.nativeRoamStick(x, y);
+            try {
+                RoamNativeBridge.nativeRoamStick(x, y);
+            } catch (Throwable t) {
+                Log.d(TAG, "nativeRoamStick: " + t.getMessage());
+            }
         }
     }
 
     public static void nativeRoamHorn(boolean held) {
         if (RoamNativeBridge.isLoaded()) {
-            RoamNativeBridge.nativeRoamHorn(held);
+            try {
+                RoamNativeBridge.nativeRoamHorn(held);
+            } catch (Throwable t) {
+                Log.d(TAG, "nativeRoamHorn: " + t.getMessage());
+            }
         }
     }
 

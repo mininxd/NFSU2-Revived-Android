@@ -37,6 +37,9 @@ public final class GameOptions {
             new Option(FPS, "FPS Limit", "120",
                     new String[] {"30", "60", "90", "120", "0"},
                     new String[] {"30 FPS · battery saver", "60 FPS", "90 FPS", "120 FPS", "Uncapped"}),
+            new Option(DISPLAY_LOGS, "Display Logs", "off",
+                    new String[] {"off", "compact", "full"},
+                    new String[] {"Off", "Compact", "Full"}),
             new Option(WIDESCREEN, "Widescreen", "on",
                     new String[] {"on", "off"},
                     new String[] {"Corrected HUD and camera", "Original 4:3 stretched"}),
@@ -60,12 +63,16 @@ public final class GameOptions {
     }
 
     static Option find(String key) {
+        if (key == null) return null;
         for (Option o : ALL) if (o.key.equals(key)) return o;
-        throw new IllegalArgumentException(key);
+        return null;
     }
 
     static String get(Context context, String key) {
         Option o = find(key);
+        if (o == null) {
+            return prefs(context).getString(key, "off");
+        }
         String value = prefs(context).getString(key, o.defaultValue);
         for (String allowed : o.values) if (allowed.equals(value)) return value;
         return o.defaultValue;
