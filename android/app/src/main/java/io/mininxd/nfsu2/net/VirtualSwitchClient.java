@@ -299,22 +299,15 @@ public final class VirtualSwitchClient {
                 NetLog.success(TAG, "Switch welcome: VIP=" + vipStr + " (" + myVirtualIp + "), token=" + obj.optString("token", "none"));
                 connected.set(true);
 
-                // Send hello packet with lan=1, bundle=0 for immediate datagrams
+                // Send hello packet with lan=0, bundle=0 for immediate Free Roam datagrams
                 JSONObject hello = new JSONObject();
                 hello.put("t", "hello");
                 hello.put("name", playerName != null ? playerName : "Racer");
                 hello.put("bundle", 0);
                 hello.put("deltas", 1);
-                hello.put("lan", 1);
-                NetLog.step(TAG, "Sending hello to switch: bundle=0, lan=1, name=" + playerName);
+                hello.put("lan", 0);
+                NetLog.step(TAG, "Sending hello to switch: bundle=0, lan=0, name=" + playerName);
                 sendWsFrame(1, hello.toString().getBytes(StandardCharsets.UTF_8));
-
-                // Explicitly inform switch that LAN mode is active
-                JSONObject lanMsg = new JSONObject();
-                lanMsg.put("t", "lan");
-                lanMsg.put("on", 1);
-                NetLog.step(TAG, "Sending LAN mode activation: {\"t\":\"lan\",\"on\":1}");
-                sendWsFrame(1, lanMsg.toString().getBytes(StandardCharsets.UTF_8));
 
                 if (listener != null) listener.onConnected(myVirtualIp);
             } else if ("ping".equals(type)) {
@@ -384,6 +377,7 @@ public final class VirtualSwitchClient {
         int srcVip = ((frame[4] & 0xFF) << 24) | ((frame[5] & 0xFF) << 16) | ((frame[6] & 0xFF) << 8) | (frame[7] & 0xFF);
         int sport = ((frame[12] & 0xFF) << 8) | (frame[13] & 0xFF);
         if (sport == 0) sport = DEFAULT_GAME_PORT;
+        if (sport == 9999) return;
         if (srcVip != myVirtualIp) {
             byte[] payload = Arrays.copyOfRange(frame, 16, frame.length);
             if (listener != null) {
@@ -397,6 +391,7 @@ public final class VirtualSwitchClient {
         int srcVip = ((frame[4] & 0xFF) << 24) | ((frame[5] & 0xFF) << 16) | ((frame[6] & 0xFF) << 8) | (frame[7] & 0xFF);
         int sport = ((frame[12] & 0xFF) << 8) | (frame[13] & 0xFF);
         if (sport == 0) sport = DEFAULT_GAME_PORT;
+        if (sport == 9999) return;
         if (srcVip != myVirtualIp) {
             byte[] payload = Arrays.copyOfRange(frame, 24, frame.length);
             if (listener != null) {
@@ -455,8 +450,11 @@ public final class VirtualSwitchClient {
             }
 
             sendWsFrame(2, buf.array());
+            NetLog.i(TAG, "Sent TCP frame: op=" + op + ", dst=" + NetLog.ipStr(dstVip) + ":" + dport
+                    + ", cid=" + cid + ", len=" + payloadLen + (payloadLen > 0 ? ", hex=" + NetLog.hexPreview(data, 16) : ""));
         } catch (Exception e) {
             Log.d(TAG, "sendTcpFrame failed: " + e.getMessage());
+            NetLog.fail(TAG, "sendTcpFrame failed: " + e.getMessage(), e);
         }
     }
 

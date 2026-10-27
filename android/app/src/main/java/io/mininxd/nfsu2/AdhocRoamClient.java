@@ -45,15 +45,49 @@ public final class AdhocRoamClient {
         }
     }
 
-    // Native JNI Method Declarations for backward compatibility and JNI symbol resolution
-    public static native void nativeRoamConfigure(String room, String name, String peers, boolean ghostMode, int hubIp);
-    public static native void nativeRoamReceive(int srcIp, int srcPort, byte[] data);
-    public static native void nativeRoamTick();
-    public static native void nativeRoamSay(int phrase);
-    public static native void nativeRoamStick(float x, float y);
-    public static native void nativeRoamHorn(boolean held);
+    // Native JNI Method Declarations delegating to RoamNativeBridge
+    public static void nativeRoamConfigure(String room, String name, String peers, boolean ghostMode, int hubIp) {
+        if (RoamNativeBridge.isLoaded()) {
+            RoamNativeBridge.nativeRoamConfigure(room, name, peers, ghostMode, hubIp);
+        }
+    }
+
+    public static void nativeRoamReceive(int srcIp, int srcPort, byte[] data) {
+        if (RoamNativeBridge.isLoaded()) {
+            RoamNativeBridge.nativeRoamReceive(srcIp, srcPort, data);
+        }
+    }
+
+    public static void nativeRoamTick() {
+        if (RoamNativeBridge.isLoaded()) {
+            RoamNativeBridge.nativeRoamTick();
+        }
+    }
+
+    public static void nativeRoamSay(int phrase) {
+        if (RoamNativeBridge.isLoaded()) {
+            RoamNativeBridge.nativeRoamSay(phrase);
+        }
+    }
+
+    public static void nativeRoamStick(float x, float y) {
+        if (RoamNativeBridge.isLoaded()) {
+            RoamNativeBridge.nativeRoamStick(x, y);
+        }
+    }
+
+    public static void nativeRoamHorn(boolean held) {
+        if (RoamNativeBridge.isLoaded()) {
+            RoamNativeBridge.nativeRoamHorn(held);
+        }
+    }
 
     static {
+        try {
+            System.loadLibrary("nfsu2_roam");
+        } catch (Throwable t) {
+            Log.d(TAG, "libnfsu2_roam not loaded directly: " + t.getMessage());
+        }
         RoamNativeBridge.setSendListener((dstIp, dstPort, data) -> INSTANCE.handleNativeSend(dstIp, dstPort, data));
     }
 
@@ -145,6 +179,10 @@ public final class AdhocRoamClient {
 
             @Override
             public void onDatagramReceived(int srcVip, int sport, byte[] payload) {
+                if (sport == 9999) {
+                    // Ignore broadcast LAN announcements from server-rs to prevent buffer and JNI saturation
+                    return;
+                }
                 if (srcVip != 0x0A4D00FD) {
                     trackWsPeer(srcVip);
                 }

@@ -191,15 +191,19 @@ public final class LocalOnlineBridge {
                     if (n > 0) {
                         byte[] payload = new byte[n];
                         System.arraycopy(buf, 0, payload, 0, n);
+                        NetLog.i(TAG, "Local TCP -> 10.77.0.1:" + targetPort + " [cid=" + cid + "] (len=" + n
+                                + ", hex=" + NetLog.hexPreview(payload, 32) + ")");
                         wsClient.sendTcpFrame(VHOST_VIP, localPort, targetPort, TCP_OP_DATA, 64, cid, payload);
                     }
                 }
 
+                NetLog.step(TAG, "Local TCP stream closed by client: 10.77.0.1:" + targetPort + " (cid=" + cid + ")");
                 // Send FIN (op 5) when local socket closes
                 wsClient.sendTcpFrame(VHOST_VIP, localPort, targetPort, TCP_OP_FIN, 64, cid, new byte[0]);
             } catch (Exception e) {
                 if (running.get()) {
                     Log.d(TAG, "Local client " + cid + " stream closed: " + e.getMessage());
+                    NetLog.w(TAG, "Local client " + cid + " stream error: " + e.getMessage());
                 }
                 wsClient.sendTcpFrame(VHOST_VIP, localPort, targetPort, TCP_OP_RST, 64, cid, new byte[0]);
             } finally {
@@ -239,6 +243,7 @@ public final class LocalOnlineBridge {
         if (conn == null) return;
 
         if (op == TCP_OP_SYNACK) {
+            NetLog.success(TAG, "Server TCP SYNACK from 10.77.0.1:" + sport + " (cid=" + cid + ")");
             conn.established = true;
             conn.synAckLatch.countDown();
         } else if (op == TCP_OP_DATA) {
@@ -250,15 +255,20 @@ public final class LocalOnlineBridge {
                 // Rewrite "10.77.0.1" -> "127.0.0.1" in incoming server messages
                 rewriteServerAddresses(payload);
 
+                NetLog.i(TAG, "Server TCP -> Local [cid=" + cid + ", sport=" + sport + "] (len=" + payloadLen
+                        + ", hex=" + NetLog.hexPreview(payload, 32) + ")");
+
                 try {
                     conn.localOut.write(payload);
                     conn.localOut.flush();
                 } catch (Exception e) {
+                    NetLog.fail(TAG, "Failed writing server data to local socket [cid=" + cid + "]: " + e.getMessage());
                     conn.close();
                     connections.remove(cid);
                 }
             }
         } else if (op == TCP_OP_FIN) {
+            NetLog.step(TAG, "Server TCP FIN from 10.77.0.1:" + sport + " (cid=" + cid + ")");
             conn.established = false;
             conn.synAckLatch.countDown();
             try {
@@ -267,6 +277,7 @@ public final class LocalOnlineBridge {
                 }
             } catch (Exception ignored) {}
         } else if (op == TCP_OP_RST) {
+            NetLog.fail(TAG, "Server TCP RST from 10.77.0.1:" + sport + " (cid=" + cid + ")");
             conn.established = false;
             conn.synAckLatch.countDown();
             conn.close();

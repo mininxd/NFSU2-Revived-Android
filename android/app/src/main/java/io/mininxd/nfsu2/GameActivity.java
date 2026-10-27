@@ -152,7 +152,13 @@ public final class GameActivity extends NativeActivity {
     private static void nativeResolution(int width, int height) { com.nfsu2.androidevolved.GameActivity.nativeResolution(width, height); }
     private static void nativeFrameLimit(int framesPerSecond) { com.nfsu2.androidevolved.GameActivity.nativeFrameLimit(framesPerSecond); }
     private static void nativeWidescreen(boolean enabled) { com.nfsu2.androidevolved.GameActivity.nativeWidescreen(enabled); }
-    private static void nativeOnlineServer(String host) { com.nfsu2.androidevolved.GameActivity.nativeOnlineServer(host); }
+    private static void nativeOnlineServer(String host) {
+        try {
+            com.nfsu2.androidevolved.GameActivity.nativeOnlineServer(host);
+        } catch (Throwable t) {
+            android.util.Log.w("GameActivity", "nativeOnlineServer: " + t.getMessage());
+        }
+    }
     private static void nativeGamepadConnected(boolean connected) { com.nfsu2.androidevolved.GameActivity.nativeGamepadConnected(connected); }
     private static void nativeGamepadDevices(int[] ids) { com.nfsu2.androidevolved.GameActivity.nativeGamepadDevices(ids); }
     private static void nativeMinimapTop(boolean top) { com.nfsu2.androidevolved.GameActivity.nativeMinimapTop(top); }
