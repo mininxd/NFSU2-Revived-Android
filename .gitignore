@@ -38,6 +38,9 @@ onlinemod/
 # Lifted server.dll (derived from the game binary)
 src/recomp/gen_server/
 
+# Reference repositories for reference coding (XERJ)
+ref/
+
 # Tester diagnostic reports
 NFSU2-diagnostic-*.zip
 NFSU2-diagnostico-*.zip
