@@ -22,12 +22,22 @@ public final class GameOptions {
 
     static final String RESOLUTION = "resolution", FPS = "fps", WIDESCREEN = "widescreen", LATENCY = "latency",
             TEXTURES = "textures", MINIMAP = "minimap", LANGUAGE = "language",
-            CUTOUT = "cutout", HUD_SAFE = "hud_safe", DISPLAY_LOGS = "display_logs";
+            CUTOUT = "cutout", HUD_SAFE = "hud_safe", DISPLAY_LOGS = "display_logs",
+            TOUCH_SIZE = "touch_size", MENU_BUTTON_SIZE = "menu_size", HORN = "horn",
+            AUTOSAVE = "autosave", SHOW_HIDDEN_RACES = "show_hidden_races",
+            STARTUP_MOVIES = "intro", CUTSCENE_BORDERS = "cutscene_borders",
+            ROAM_CARS_LIMIT = "roam_max_cars", ROAM_CREW = "roam_crew";
 
     static final Option[] ALL = {
             new Option(RESOLUTION, "Internal Resolution", "75",
-                    new String[] {"25", "30", "35", "40", "45", "50", "55", "60", "65", "70", "75", "80", "85", "90", "95", "100"},
-                    new String[] {"25%", "30%", "35%", "40%", "45%", "50%", "55%", "60%", "65%", "70%", "75%", "80%", "85%", "90%", "95%", "100%"}),
+                    new String[] {"25", "30", "35", "40", "45", "50", "55", "60", "65", "70", "75", "80", "85", "90", "95", "100", "125", "150", "200"},
+                    new String[] {"25%", "30%", "35%", "40%", "45%", "50%", "55%", "60%", "65%", "70%", "75%", "80%", "85%", "90%", "95%", "100%", "125%", "150%", "200%"}),
+            new Option(TOUCH_SIZE, "Touch Controls Size", "auto",
+                    new String[] {"auto", "80", "100", "125", "150", "175", "200"},
+                    new String[] {"Auto · Responsive to screen", "80% · Compact", "100% · Normal", "125% · Large", "150% · Extra Large", "175% · Huge", "200% · Big (200%)"}),
+            new Option(MENU_BUTTON_SIZE, "In-Game Menu Button Size", "auto",
+                    new String[] {"auto", "100", "125", "150", "175", "200"},
+                    new String[] {"Auto · Scaled for touch fingers", "100% · Original", "125%", "150%", "175%", "200% · Big (200%)"}),
             new Option(CUTOUT, "Display Cutout (Notch)", "fullscreen",
                     new String[] {"fullscreen", "safe"},
                     new String[] {"Full Screen · bypass notch", "Letterbox · avoid cutout"}),
@@ -46,6 +56,24 @@ public final class GameOptions {
             new Option(MINIMAP, "Minimap", "top",
                     new String[] {"top", "bottom"},
                     new String[] {"Top left", "Bottom left (original)"}),
+            new Option(HORN, "Your Horn", "dual",
+                    new String[] {"dual", "single", "truck", "train", "klaxon", "cucaracha", "clown", "trombone"},
+                    new String[] {"Dual tone (Default)", "Single tone", "Air horn", "Train horn", "Klaxon", "La Cucaracha", "Clown horn", "Sad trombone"}),
+            new Option(SHOW_HIDDEN_RACES, "Show Hidden Races Mod", "on",
+                    new String[] {"on", "off"},
+                    new String[] {"On · Show 33 career hidden races on map", "Off · Original hidden"}),
+            new Option(AUTOSAVE, "Autosave", "on",
+                    new String[] {"on", "off"},
+                    new String[] {"On · Save without prompting", "Off · Original prompt"}),
+            new Option(STARTUP_MOVIES, "Startup Movies", "skippable",
+                    new String[] {"skippable", "original", "off"},
+                    new String[] {"Skippable · Tap/Enter skips logos", "Original · Unskippable logos", "Off · Skip directly to main menu"}),
+            new Option(CUTSCENE_BORDERS, "Cutscene Bars", "off",
+                    new String[] {"off", "full"},
+                    new String[] {"Off · No black letterbox bars", "Full · Black bars across wide screen"}),
+            new Option(ROAM_CARS_LIMIT, "Players' Cars Shown", "24",
+                    new String[] {"16", "20", "24", "28", "32"},
+                    new String[] {"16 cars · Low memory", "20 cars", "24 cars · Default", "28 cars", "32 cars · Max"}),
             new Option(LATENCY, "CPU/GPU Sync", "2",
                     new String[] {"2", "1"},
                     new String[] {"Performance · CPU and GPU in parallel", "Low latency · lower FPS"}),
@@ -166,6 +194,14 @@ public final class GameOptions {
 
     static boolean isRoamSolid(Context context) {
         return false;
+    }
+
+    public static String roamCrew(Context context) {
+        return prefs(context).getString(ROAM_CREW, "");
+    }
+
+    static void setRoamCrew(Context context, String crew) {
+        prefs(context).edit().putString(ROAM_CREW, crew != null ? crew.trim() : "").apply();
     }
 
     /** EA Nation replacement server: the game's *.ea.com hosts resolve to this name or IPv4 address. */

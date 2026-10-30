@@ -59,7 +59,10 @@ public final class LauncherActivity extends Activity {
         {"Italiano", "Italian", "Italian"}, {"Nederlands", "Dutch", "Dutch"},
         {"Svenska", "Swedish", "Swedish"}, {"Dansk", "Danish", "Danish"},
         {"日本語", "Japanese", "Japanese"}, {"한국어", "Korean", "Korean"},
-        {"繁體中文", "Chinese (Traditional)", "Chinese"}, {"ไทย", "Thai", "Thailand"}
+        {"繁體中文", "Chinese (Traditional)", "Chinese"}, {"ไทย", "Thai", "Thailand"},
+        {"Português (Brasil)", "Portuguese", "Portuguese"}, {"Polski", "Polish", "Polish"},
+        {"Русский", "Russian", "Russian"}, {"Türkçe", "Turkish", "Turkish"},
+        {"Magyar", "Hungarian", "Hungarian"}
     };
 
     private LinearLayout checksList, optionsList;
@@ -433,6 +436,7 @@ public final class LauncherActivity extends Activity {
         optionsList.addView(optionRow("Ghost Mode", GameOptions.isGhostModeEnabled(this) ? "On" : "Off", this::toggleGhostMode));
         optionsList.addView(optionRow("Online Server", serverStatusSummary(), this::chooseOnlineServer));
         optionsList.addView(optionRow("Room Name", GameOptions.roamRoom(this).isEmpty() ? "Default (Public)" : GameOptions.roamRoom(this), this::chooseRoamRoom));
+        optionsList.addView(optionRow("Crew Name", GameOptions.roamCrew(this).isEmpty() ? "None" : GameOptions.roamCrew(this), this::chooseRoamCrew));
         optionsList.addView(optionRow("Export Network Log", "Save NFSU2-network.log", this::exportNetworkLog));
         optionsList.addView(optionRow("Check for updates",
                 checkingUpdates ? "Checking GitHub…" : "Version " + ReleaseUpdates.installed(this), () -> checkUpdates(true)));
@@ -457,7 +461,10 @@ public final class LauncherActivity extends Activity {
         List<String[]> found = new ArrayList<>();
         File root = gameRoot();
         for (String[] language : LANGUAGES)
-            if (new File(root, "LANGUAGES/" + language[2] + ".bin").isFile()) found.add(language);
+            if (new File(root, "LANGUAGES/" + language[2] + ".bin").isFile()
+                    || new File(root, "LANGPACKS/" + language[2].toLowerCase()).isDirectory()
+                    || new File(root, "LANGPACKS/" + language[1].toLowerCase()).isDirectory()
+                    || new File(root, "LANGPACKS/" + language[2] + ".bin").isFile()) found.add(language);
         return found;
     }
 
@@ -492,7 +499,12 @@ public final class LauncherActivity extends Activity {
         for (int i = 0; i < option.values.length; i++) if (option.values[i].equals(current)) checked = i;
         new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle(option.title)
                 .setSingleChoiceItems(option.labels, checked, (dialog, which) -> {
-                    GameOptions.set(this, option.key, option.values[which]);
+                    String val = option.values[which];
+                    GameOptions.set(this, option.key, val);
+                    if (GameOptions.TOUCH_SIZE.equals(option.key)) {
+                        getSharedPreferences("touch_layouts_v2", MODE_PRIVATE)
+                                .edit().putString("control_size", val).apply();
+                    }
                     dialog.dismiss(); refreshOptions();
                 }).setNegativeButton("Cancel", null).show();
     }
@@ -597,6 +609,31 @@ public final class LauncherActivity extends Activity {
                 })
                 .setNeutralButton("Clear (Public)", (dialog, which) -> {
                     GameOptions.setRoamRoom(this, "");
+                    refreshOptions();
+                })
+                .setNegativeButton("Cancel", null).show();
+    }
+
+    private void chooseRoamCrew() {
+        android.widget.EditText input = new android.widget.EditText(this);
+        input.setSingleLine(true);
+        input.setHint("Crew name (e.g. DRIFT, SPEED)");
+        input.setText(GameOptions.roamCrew(this));
+        input.setSelection(input.getText().length());
+        android.widget.FrameLayout box = new android.widget.FrameLayout(this);
+        int pad = (int) (20 * getResources().getDisplayMetrics().density);
+        box.setPadding(pad, pad / 2, pad, 0);
+        box.addView(input);
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle("Crew Name")
+                .setMessage("Friends who type the same crew name always see each other in free roam, however far apart, with names and map arrows in the crew's colour. Up to 4 crews. Anyone who types the name joins.")
+                .setView(box)
+                .setPositiveButton("Save", (dialog, which) -> {
+                    String value = input.getText().toString().trim();
+                    GameOptions.setRoamCrew(this, value);
+                    refreshOptions();
+                })
+                .setNeutralButton("Clear", (dialog, which) -> {
+                    GameOptions.setRoamCrew(this, "");
                     refreshOptions();
                 })
                 .setNegativeButton("Cancel", null).show();
@@ -841,6 +878,7 @@ public final class LauncherActivity extends Activity {
                 .putExtra("roamRoom", GameOptions.roamRoom(this))
                 .putExtra("roamName", GameOptions.roamName(this))
                 .putExtra("roamSolid", GameOptions.isRoamSolid(this))
+                .putExtra("roamCrew", GameOptions.roamCrew(this))
                 .putStringArrayListExtra("cheats", GameOptions.getActiveCheatCodes(this)));
     }
 

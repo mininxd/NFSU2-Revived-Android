@@ -225,6 +225,45 @@ public final class GameActivity extends NativeActivity {
         android.view.WindowManager.LayoutParams windowParams=getWindow().getAttributes();
         windowParams.preferredRefreshRate=Math.min(120,refresh);
         Intent launch = getIntent();
+        try {
+            String menuScale = GameOptions.get(this, GameOptions.MENU_BUTTON_SIZE);
+            if ("auto".equals(menuScale)) android.system.Os.setenv("NFSU2_MENU_SCALE", "1.5", true);
+            else if ("100".equals(menuScale)) android.system.Os.setenv("NFSU2_MENU_SCALE", "1.0", true);
+            else if ("125".equals(menuScale)) android.system.Os.setenv("NFSU2_MENU_SCALE", "1.25", true);
+            else if ("150".equals(menuScale)) android.system.Os.setenv("NFSU2_MENU_SCALE", "1.5", true);
+            else if ("175".equals(menuScale)) android.system.Os.setenv("NFSU2_MENU_SCALE", "1.75", true);
+            else if ("200".equals(menuScale)) android.system.Os.setenv("NFSU2_MENU_SCALE", "2.0", true);
+            else android.system.Os.setenv("NFSU2_MENU_SCALE", menuScale, true);
+
+            String horn = GameOptions.get(this, GameOptions.HORN);
+            android.system.Os.setenv("NFSU2_HORN", horn, true);
+
+            String hiddenRaces = GameOptions.get(this, GameOptions.SHOW_HIDDEN_RACES);
+            android.system.Os.setenv("NFSU2_SHOW_HIDDEN_RACES", "on".equals(hiddenRaces) ? "1" : "0", true);
+
+            String autosave = GameOptions.get(this, GameOptions.AUTOSAVE);
+            android.system.Os.setenv("NFSU2_AUTOSAVE", "on".equals(autosave) ? "1" : "0", true);
+
+            String intro = GameOptions.get(this, GameOptions.STARTUP_MOVIES);
+            android.system.Os.setenv("NFSU2_INTRO", intro, true);
+
+            String borders = GameOptions.get(this, GameOptions.CUTSCENE_BORDERS);
+            android.system.Os.setenv("NFSU2_CUTSCENE_BORDERS", borders, true);
+
+            String roamMaxCars = GameOptions.get(this, GameOptions.ROAM_CARS_LIMIT);
+            android.system.Os.setenv("NFSU2_ROAM_MAX_CARS", roamMaxCars, true);
+
+            String crew = launch.getStringExtra("roamCrew");
+            if (crew == null) crew = GameOptions.roamCrew(this);
+            if (crew != null && !crew.trim().isEmpty()) {
+                android.system.Os.setenv("NFSU2_ROAM_CREW", crew.trim(), true);
+            }
+
+            // Sync touch control size
+            String touchSize = GameOptions.get(this, GameOptions.TOUCH_SIZE);
+            getSharedPreferences("touch_layouts_v2", MODE_PRIVATE)
+                    .edit().putString("control_size", touchSize).apply();
+        } catch (Throwable ignored) {}
         String cutout = launch.getStringExtra("cutout");
         if (cutout == null) cutout = GameOptions.get(this, GameOptions.CUTOUT);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {

@@ -99,8 +99,27 @@ static inline uint64_t rh_ns(void) {
 /* Audio stubs & Horn Integration */
 int roam_android_horn_held(void);
 #define rh_horn_held(stick) ((void)(stick), roam_android_horn_held())
-#define rh_horn_mine()   0
-#define rh_horn_name(k)  ((void)(k), "stock")
+
+static inline int rh_horn_mine(void) {
+    const char *e = getenv("NFSU2_HORN");
+    if (!e || !*e) return 0;
+    static const char *const kinds[] = {
+        "dual", "single", "truck", "train", "klaxon", "cucaracha", "clown", "trombone"
+    };
+    for (int k = 0; k < 8; k++) {
+        if (!strcasecmp(e, kinds[k])) return k;
+    }
+    return 0;
+}
+
+static inline const char *rh_horn_name(int k) {
+    static const char *const kinds[] = {
+        "dual", "single", "truck", "train", "klaxon", "cucaracha", "clown", "trombone"
+    };
+    return (k >= 0 && k < 8) ? kinds[k] : "dual";
+}
+
+void dispatch_patch(uint32_t a, void (*f)(CPU *));
 #define rh_horn_begin(pos, fwd, vel)   ((void)(pos), (void)(fwd), (void)(vel))
 #define rh_horn_sound(who, name, kind, p, v) ((void)(who), (void)(name), (void)(kind), (void)(p), (void)(v))
 #define rh_horn_end()    ((void)0)

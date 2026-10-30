@@ -18,7 +18,8 @@ target_compile_definitions(nfsu2_roam PRIVATE
 
 target_compile_options(nfsu2_roam PRIVATE
     -std=c11
-    -O2
+    -O3
+    -fomit-frame-pointer
     -ffp-contract=off
     -fno-strict-aliasing
     -Wall

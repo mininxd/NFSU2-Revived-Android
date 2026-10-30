@@ -32,23 +32,34 @@ recomp_func_t (*g_p_recomp_lookup)(uint32_t va) = NULL;
 #define G_CARPOOL_KB 0x007fa9d4u
 #define CARPOOL_KB   48000
 
+static int g_online_patched = 0;
+static int g_carpool_patched = 0;
+
 /* Online Mode Lobby Patch: removes '*' from "*pcnfs05.ea.com" at 0x7FBDBCu
  * so DirtySock connects via plain TCP on port 20920 instead of SSL 2.0 on 20921 */
 static void roam_android_patch_online(void) {
-    if (!g_p_mem_base || !*g_p_mem_base) return;
+    if (g_online_patched || !g_p_mem_base || !*g_p_mem_base) return;
     uint8_t *p = GPTR(0x7FBDBCu);
     if (memcmp(p, "*pcnfs05.ea.com", 15) == 0) {
         memcpy(p, "pcnfs05.ea.com\0", 15);
+        g_online_patched = 1;
         __android_log_print(ANDROID_LOG_INFO, "NFSU2-Roam", "Patched 0x7FBDBC: removed '*' from *pcnfs05.ea.com for plain TCP lobby");
     }
 }
 
-int roam_android_init_symbols(void) {
-    if (g_p_mem_base && g_p_recomp_lookup && g_p_esp && *g_p_mem_base != 0) {
+static inline void roam_android_patch_carpool(void) {
+    if (!g_carpool_patched && g_p_mem_base && *g_p_mem_base) {
         if (MR32(G_CARPOOL_KB) < CARPOOL_KB) {
             MR32(G_CARPOOL_KB) = CARPOOL_KB;
+            g_carpool_patched = 1;
         }
-        roam_android_patch_online();
+    }
+}
+
+int roam_android_init_symbols(void) {
+    if (__builtin_expect(g_p_mem_base && g_p_recomp_lookup && g_p_esp && *g_p_mem_base != 0, 1)) {
+        if (!g_carpool_patched) roam_android_patch_carpool();
+        if (!g_online_patched) roam_android_patch_online();
         return 1;
     }
 
@@ -64,10 +75,8 @@ int roam_android_init_symbols(void) {
     if (!g_p_edx) g_p_edx = (uint32_t *)dlsym(h, "g_edx");
 
     if (g_p_mem_base && *g_p_mem_base != 0 && g_p_recomp_lookup && g_p_esp) {
-        if (MR32(G_CARPOOL_KB) < CARPOOL_KB) {
-            MR32(G_CARPOOL_KB) = CARPOOL_KB;
-        }
-        roam_android_patch_online();
+        if (!g_carpool_patched) roam_android_patch_carpool();
+        if (!g_online_patched) roam_android_patch_online();
         return 1;
     }
     return 0;
@@ -157,7 +166,46 @@ int roam_plat_said(const char *json) {
 }
 
 void roam_plat_say_marks(const uint32_t *ids, const float *xys, int n) { (void)ids; (void)xys; (void)n; }
-uint32_t roam_plat_crews(uint32_t crews[RC_CREW_MAX], uint32_t rgb[RC_CREW_MAX]) { (void)crews; (void)rgb; return 0; }
+
+static uint32_t g_crew_gen = 1;
+static char g_last_crew_str[256] = "";
+
+uint32_t roam_plat_crews(uint32_t crews[RC_CREW_MAX], uint32_t rgb[RC_CREW_MAX]) {
+    const char *env_crew = getenv("NFSU2_ROAM_CREW");
+    if (!env_crew || !*env_crew) return 0;
+
+    static const uint32_t default_rgb[RC_CREW_MAX] = { 0x3cd2ff, 0xff50c8, 0xa078ff, 0xff4646 };
+    char copy[256];
+    strncpy(copy, env_crew, sizeof copy - 1);
+    copy[sizeof copy - 1] = 0;
+
+    char *token = strtok(copy, ",;");
+    int count = 0;
+    while (token && count < RC_CREW_MAX) {
+        while (*token == ' ' || *token == '\t') token++;
+        char *end = token + strlen(token);
+        while (end > token && (*(end - 1) == ' ' || *(end - 1) == '\t')) *(--end) = 0;
+        if (*token) {
+            uint32_t h = rc_room_hash(token);
+            if (h) {
+                crews[count] = h;
+                rgb[count] = default_rgb[count % 4];
+                count++;
+            }
+        }
+        token = strtok(NULL, ",;");
+    }
+    for (int i = count; i < RC_CREW_MAX; i++) {
+        crews[i] = 0;
+        rgb[i] = 0;
+    }
+    if (strcmp(g_last_crew_str, env_crew) != 0) {
+        strncpy(g_last_crew_str, env_crew, sizeof g_last_crew_str - 1);
+        g_crew_gen++;
+    }
+    return g_crew_gen;
+}
+
 int roam_plat_test_mode(void) { return 0; }
 
 const char *roam_ip_str(uint32_t ip, char *b) {
@@ -413,9 +461,202 @@ int roam_plat_parse_peers(const char *list, int test_mode, uint16_t defport, uin
 /* Free Roam Engine Per-Frame Hook */
 extern void roam_game_frame(CPU *c);
 
+/* Weak dispatch_patch fallback if host engine does not export it */
+__attribute__((weak)) void dispatch_patch(uint32_t a, void (*f)(CPU *)) {
+    (void)a; (void)f;
+}
+
+/* Hidden Races Mod: unhides 33 career races & raises stage caps to 8 */
+#define G_RACES         0x008383e0u   /* races, RACE_SZ each, [G_NRACES] of them */
+#define G_NRACES        0x008383e4u
+#define G_STAGES        0x0083841cu   /* stages, STAGE_SZ each, [G_NSTAGES] of them */
+#define G_NSTAGES       0x00838418u
+#define RACE_SZ         0x88u
+#define STAGE_SZ        0x50u
+#define R_HIDDEN        0x7fu         /* race: 1 hidden */
+#define S_CAPS          0x30u         /* stage: 5 caps, a signed byte each */
+#define CAP             8
+
+static int g_hidden_on = -1;
+static uint32_t g_hidden_done = 0;
+
+static inline int rh_mem_committed(uint32_t a, uint32_t n) {
+    return g_p_mem_base && *g_p_mem_base && a >= 0x00010000u && (a + n) >= 0x00010000u;
+}
+
+static void hiddenraces_frame_tick(void) {
+    if (__builtin_expect(g_hidden_done != 0, 1)) return;
+    if (g_hidden_on < 0) {
+        const char *e = getenv("NFSU2_SHOW_HIDDEN_RACES");
+        g_hidden_on = e && *e && *e != '0' && strcasecmp(e, "off") && strcasecmp(e, "no") && strcasecmp(e, "false");
+    }
+    if (!g_hidden_on) return;
+    if (!rh_mem_committed(G_RACES, 4) || !rh_mem_committed(G_STAGES, 4)) return;
+    uint32_t races = MR32(G_RACES), nr = MR32(G_NRACES), stages = MR32(G_STAGES), ns = MR32(G_NSTAGES);
+    if (!races || races == g_hidden_done || nr > 1024u || ns > 16u || !rh_mem_committed(races, nr * RACE_SZ) || !rh_mem_committed(stages, ns * STAGE_SZ))
+        return;
+    int n = 0, caps = 0;
+    for (uint32_t i = 0; i < nr; i++) {
+        if (MR8(races + i * RACE_SZ + R_HIDDEN)) {
+            MR8(races + i * RACE_SZ + R_HIDDEN) = 0;
+            n++;
+        }
+    }
+    for (uint32_t s = 0; s < ns; s++) {
+        for (uint32_t k = 0; k < 5u; k++) {
+            uint32_t a = stages + s * STAGE_SZ + S_CAPS + k;
+            int8_t v = (int8_t)MR8(a);
+            if (v >= 0 && v < CAP) {
+                MR8(a) = CAP;
+                caps++;
+            }
+        }
+    }
+    g_hidden_done = races;
+    __android_log_print(ANDROID_LOG_INFO, "NFSU2-Roam", "[career] show hidden races: %d of %u races out of hiding, %d caps raised to %d",
+                        n, nr, caps, CAP);
+}
+
+/* In-game menu button scaling (Help bar and arrows up to 200%) */
+#define O_NEXT    0x04u
+#define O_TYPE    0x18u
+#define O_FLAGS   0x1cu
+#define O_DATA    0x2cu
+#define O_HASH    0x10u
+#define P_OBJS    0x4cu
+#define D_POS     0x1cu
+#define D_SIZE    0x38u
+#define T_IMAGE   1u
+#define T_STRING  2u
+#define F_DIRTY   0x400000u
+#define FRAME_W   100.f
+#define MAX_SCALE 2.5f
+#define MAX_OBJS  64
+#define KEPT_MAX  512
+
+typedef struct { uint32_t data; long seen; float own[4], put[4]; } Kept;
+static Kept g_kept[KEPT_MAX];
+static int  g_nkept = 0;
+static float g_last_menu_scale = 1.0f;
+
+static inline uint32_t ms_field(int j) { return (j < 2 ? D_POS : D_SIZE) + 4u * (uint32_t)(j & 1); }
+
+static Kept *ms_kept(uint32_t d) {
+    Kept *k = NULL;
+    for (int i = 0; i < g_nkept; i++) {
+        if (g_kept[i].data == d) { k = &g_kept[i]; break; }
+    }
+    if (!k) {
+        if (g_nkept < KEPT_MAX) k = &g_kept[g_nkept++];
+        else {
+            k = &g_kept[0];
+            for (int i = 1; i < KEPT_MAX; i++) if (g_kept[i].seen < k->seen) k = &g_kept[i];
+        }
+        k->data = d;
+        for (int j = 0; j < 4; j++) k->own[j] = k->put[j] = MRF32(d + ms_field(j));
+    }
+    for (int j = 0; j < 4; j++) {
+        float cur = MRF32(d + ms_field(j));
+        if (cur != k->put[j]) k->own[j] = cur;
+    }
+    k->seen = g_frame_count;
+    return k;
+}
+
+static void ms_put(uint32_t o, Kept *k, const float want[4]) {
+    int changed = 0;
+    for (int j = 0; j < 4; j++) {
+        if (MRF32(k->data + ms_field(j)) != want[j]) {
+            MRF32(k->data + ms_field(j)) = want[j];
+            changed = 1;
+        }
+        k->put[j] = want[j];
+    }
+    if (changed) MR32(o + O_FLAGS) |= F_DIRTY;
+}
+
+static void ms_apply_bar(uint32_t pkg, float s) {
+    uint32_t obj[MAX_OBJS]; Kept *k[MAX_OBJS]; int n = 0;
+    float px = 0.f, py = 0.f; int pivot = 0;
+    for (uint32_t o = MR32(pkg + P_OBJS); o && n < MAX_OBJS && rh_mem_committed(o, 0x30u); o = MR32(o + O_NEXT)) {
+        uint32_t t = MR32(o + O_TYPE), d = MR32(o + O_DATA);
+        if ((t != T_IMAGE && t != T_STRING) || !rh_mem_committed(d, 0x44u) || !(k[n] = ms_kept(d))) continue;
+        if (t == T_IMAGE && k[n]->own[2] > FRAME_W) {
+            float r = k[n]->own[0] + k[n]->own[2] * 0.5f, b = k[n]->own[1] + k[n]->own[3] * 0.5f;
+            if (!pivot || r > px) px = r;
+            if (!pivot || b > py) py = b;
+            pivot = 1;
+        }
+        obj[n++] = o;
+    }
+    for (int i = 0; pivot && i < n; i++) {
+        const float *own = k[i]->own;
+        float want[4] = { px + (own[0] - px) * s, py + (own[1] - py) * s, own[2] * s, own[3] * s };
+        ms_put(obj[i], k[i], want);
+    }
+}
+
+static const uint32_t ARROWS[] = { 0x444969fdu, 0x444969feu };
+static void ms_apply_arrows(uint32_t pkg, float s) {
+    int n = 0;
+    for (uint32_t o = MR32(pkg + P_OBJS); o && n < MAX_OBJS && rh_mem_committed(o, 0x30u); o = MR32(o + O_NEXT), n++) {
+        uint32_t h = MR32(o + O_HASH), d = MR32(o + O_DATA);
+        if (MR32(o + O_TYPE) != T_IMAGE || (h != ARROWS[0] && h != ARROWS[1]) || !rh_mem_committed(d, 0x44u)) continue;
+        Kept *k = ms_kept(d);
+        float want[4] = { k->own[0], k->own[1], k->own[2] * s, k->own[3] * s };
+        ms_put(o, k, want);
+    }
+}
+
+static float ms_scale_now(void) {
+    const char *e = getenv("NFSU2_MENU_SCALE");
+    if (!e || !*e) return 1.5f;
+    float s = (float)atof(e);
+    if (s > 10.0f) s /= 100.0f;
+    if (s < 1.0f) s = 1.0f;
+    if (s > MAX_SCALE) s = MAX_SCALE;
+    return s;
+}
+
+static void menusize_frame_tick(void) {
+    if ((g_frame_count & 3) != 0) return;
+    if (!rh_mem_committed(0x008384c4u, 4)) return;
+    uint32_t fe = MR32(0x008384c4u);
+    if (!fe || !rh_mem_committed(fe + 12, 4)) return;
+    uint32_t mg = MR32(fe + 8u);
+    if (!mg || !rh_mem_committed(mg, 0x100u)) return;
+
+    float s = ms_scale_now();
+    if (s == 1.0f && !g_nkept) return;
+
+    if (fabsf(s - g_last_menu_scale) > 0.01f) {
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Roam", "[menusize] active menu button scale: %.0f%%", (double)(s * 100.0f));
+        g_last_menu_scale = s;
+    }
+
+    for (uint32_t head = 0xe4u; head <= 0xf4u; head += 0x10u) {
+        uint32_t pkg = MR32(mg + head);
+        for (int k = 0; pkg && k < 64 && rh_mem_committed(pkg, 0x50u); k++) {
+            uint32_t name_ptr = MR32(pkg + 0x0cu);
+            if (name_ptr && rh_mem_committed(name_ptr, 16)) {
+                const char *nm = (const char *)GPTR(name_ptr);
+                if (nm && *nm) {
+                    if (strstr(nm, "UI_PC_Help_Bar")) {
+                        ms_apply_bar(pkg, s);
+                    }
+                    ms_apply_arrows(pkg, s);
+                }
+            }
+            pkg = MR32(pkg + 0x04u);
+        }
+    }
+}
+
 void nfs_roam_frame_tick(void) {
     if (!roam_android_init_symbols()) return;
     g_frame_count++;
+    hiddenraces_frame_tick();
+    menusize_frame_tick();
     roam_game_frame(NULL);
 }
 

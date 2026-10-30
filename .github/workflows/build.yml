@@ -47,7 +47,7 @@ jobs:
             CLANG_BIN=$(which aarch64-linux-gnu-gcc || which clang || find / -name "*clang" 2>/dev/null | head -n 1)
           fi
           echo "Using compiler: $CLANG_BIN"
-          $CLANG_BIN -std=c11 -O2 -shared -fPIC -ffp-contract=off -fno-strict-aliasing \
+          $CLANG_BIN -std=c11 -O3 -fomit-frame-pointer -shared -fPIC -ffp-contract=off -fno-strict-aliasing \
             -DROAM_HOST_ANDROID -DROAM_HOST_WIN=1 \
             -Iandroid/app/src/main/cpp/roam \
             android/app/src/main/cpp/roam/roam_core.c \

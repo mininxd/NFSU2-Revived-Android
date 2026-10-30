@@ -6,10 +6,14 @@ import android.app.AlertDialog;
 import android.widget.EditText;
 import android.widget.Toast;
 import org.json.JSONObject;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffColorFilter;
 import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.view.HapticFeedbackConstants;
@@ -70,6 +74,12 @@ final class RacingControlsView extends View {
     private float dragX, dragY;
     private final SharedPreferences layouts;
     private float scale = 1.0f;
+    private Bitmap nitroBitmap;
+    private final Paint bitmapPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+    private final RectF nitroDestRect = new RectF();
+    private final PorterDuffColorFilter filterIdle = new PorterDuffColorFilter(COLOR_TEXT, PorterDuff.Mode.SRC_IN);
+    private final PorterDuffColorFilter filterActive = new PorterDuffColorFilter(COLOR_LIME, PorterDuff.Mode.SRC_IN);
+    private boolean driftActive = false;
 
     private static final class Control {
         final RectF area;
@@ -98,6 +108,18 @@ final class RacingControlsView extends View {
         this.configureTilt = configureTilt;
         this.configureFrameLimit = configureFrameLimit;
 
+        try {
+            int resId = getResources().getIdentifier("nitro", "drawable", getContext().getPackageName());
+            if (resId != 0) {
+                nitroBitmap = BitmapFactory.decodeResource(getResources(), resId);
+            }
+            if (nitroBitmap == null) {
+                java.io.InputStream is = getContext().getAssets().open("nitro.png");
+                nitroBitmap = BitmapFactory.decodeStream(is);
+                is.close();
+            }
+        } catch (Throwable ignored) {}
+
         setContentDescription("Game controls");
         setHapticFeedbackEnabled(true);
 
@@ -109,6 +131,25 @@ final class RacingControlsView extends View {
         text.setTypeface(Typeface.create("sans-serif", Typeface.BOLD_ITALIC));
     }
 
+    private float getButtonScaleMultiplier() {
+        String val = layouts.getString("control_size", "auto");
+        if ("auto".equals(val)) {
+            val = GameOptions.get(getContext(), GameOptions.TOUCH_SIZE);
+        }
+        if ("auto".equals(val)) {
+            float minDim = Math.min(getWidth(), getHeight()) / getResources().getDisplayMetrics().density;
+            if (minDim >= 600f) {
+                return Math.min(1.25f, 1.0f + (minDim - 600f) / 400f * 0.25f);
+            }
+            return 1.0f;
+        }
+        try {
+            return Integer.parseInt(val) / 100f;
+        } catch (Exception e) {
+            return 1.0f;
+        }
+    }
+
     private void add(float x, float y, float size, String icon, int scan) {
         add(x, y, size, size, ROUND, icon, scan);
     }
@@ -117,9 +158,11 @@ final class RacingControlsView extends View {
         Control c = new Control(x, y, w, h, shape, icon, scan);
         c.id = "web." + (racing ? "race." + (style.equals("classic") ? "" : style + ".") : "menu.") + scan;
         float factor = layouts.getFloat(c.id + ".size", 1.0f);
+        float multiplier = getButtonScaleMultiplier();
+        float totalFactor = factor * multiplier;
         float cx = layouts.getFloat(c.id + ".x", c.area.centerX() / (getWidth() / scale)) * (getWidth() / scale);
         float cy = layouts.getFloat(c.id + ".y", c.area.centerY() / (getHeight() / scale)) * (getHeight() / scale);
-        c.area.set(cx - w * factor / 2f, cy - h * factor / 2f, cx + w * factor / 2f, cy + h * factor / 2f);
+        c.area.set(cx - w * totalFactor / 2f, cy - h * totalFactor / 2f, cx + w * totalFactor / 2f, cy + h * totalFactor / 2f);
         clamp(c);
         controls.add(c);
     }
@@ -179,13 +222,14 @@ final class RacingControlsView extends View {
         if (racing) {
             // Top row small buttons (44dp circular)
             add(16, 16, 44, "pause", 0x01);     // Esc: Pause
-            add(70, 16, 44, "camera", 0x2e);    // C: Camera
-            add(124, 16, 44, "look", 0x30);     // B: Look back
-            add(178, 16, 44, "reset", 0x13);    // R: Reset
-            add(232, 16, 44, "map", 0x32);      // M: World Map
-            add(286, 16, 44, "msgs", 0x0f);     // Tab: Messages
-            add(340, 16, 44, "horn", 0x31);     // N: Horn
-            add(394, 16, 44, "chat", CHAT);     // Quick chat
+            add(68, 16, 44, "camera", 0x2e);    // C: Camera
+            add(120, 16, 44, "look", 0x30);     // B: Look back
+            add(172, 16, 44, "reset", 0x13);    // R: Reset
+            add(224, 16, 44, "map", 0x32);      // M: World Map
+            add(276, 16, 44, "msgs", 0x0f);     // Tab: Messages
+            add(328, 16, 44, "drift", 0x2d);    // X: Drift mode
+            add(380, 16, 44, "horn", 0x31);     // N: Horn
+            add(432, 16, 44, "chat", CHAT);     // Quick chat
 
             // Start event button (Pill, Enter: 0x1c)
             add(20, bottom - 148, 96, 40, PILL, "start", 0x1c);
@@ -255,7 +299,7 @@ final class RacingControlsView extends View {
     }
 
     private void drawControl(Canvas canvas, Control c) {
-        boolean on = c.held > 0, picked = editing && c == selected;
+        boolean on = c.held > 0 || (c.scan == 0x2d && driftActive), picked = editing && c == selected;
         float cx = c.area.centerX(), cy = c.area.centerY();
         float r = Math.min(c.area.width(), c.area.height()) / 2f;
 
@@ -309,7 +353,18 @@ final class RacingControlsView extends View {
                 chevron(canvas, cx, cy - s * 0.75f, s * 0.55f, false);
                 break;
             case "nitro":
-                glyph(canvas, "NOS", cx, cy, 17f, on);
+                if (nitroBitmap != null) {
+                    bitmapPaint.setColorFilter(on ? filterActive : filterIdle);
+                    float bw = r * 1.55f;
+                    float bh = bw * ((float) nitroBitmap.getHeight() / (float) nitroBitmap.getWidth());
+                    nitroDestRect.set(cx - bw / 2f, cy - bh / 2f, cx + bw / 2f, cy + bh / 2f);
+                    canvas.drawBitmap(nitroBitmap, null, nitroDestRect, bitmapPaint);
+                } else {
+                    glyph(canvas, "NOS", cx, cy, 17f, on);
+                }
+                break;
+            case "drift":
+                glyph(canvas, "DRIFT", cx, cy, 11f, on || driftActive);
                 break;
             case "hb":
                 text.setTextSize(12f);
@@ -486,19 +541,22 @@ final class RacingControlsView extends View {
 
     private void resizeSelected(float change) {
         if (selected == null) return;
-        float factor = Math.max(0.55f, Math.min(2.5f, selected.area.width() / selected.original.width() + change));
+        float mult = getButtonScaleMultiplier();
+        float currentFactor = selected.area.width() / (selected.original.width() * mult);
+        float factor = Math.max(0.55f, Math.min(3.0f, currentFactor + change));
         float cx = selected.area.centerX(), cy = selected.area.centerY();
-        float w = selected.original.width() * factor, h = selected.original.height() * factor;
+        float w = selected.original.width() * mult * factor, h = selected.original.height() * mult * factor;
         selected.area.set(cx - w / 2f, cy - h / 2f, cx + w / 2f, cy + h / 2f);
         clamp(selected);
     }
 
     private void saveLayout() {
         SharedPreferences.Editor save = layouts.edit();
+        float mult = getButtonScaleMultiplier();
         for (Control c : controls) {
             save.putFloat(c.id + ".x", c.area.centerX() / (getWidth() / scale))
                 .putFloat(c.id + ".y", c.area.centerY() / (getHeight() / scale))
-                .putFloat(c.id + ".size", c.area.width() / c.original.width());
+                .putFloat(c.id + ".size", c.area.width() / (c.original.width() * mult));
         }
         save.apply();
     }
@@ -557,13 +615,41 @@ final class RacingControlsView extends View {
         return true;
     }
 
+    private void chooseButtonSize() {
+        String[] ids = {"auto", "80", "100", "125", "150", "175", "200"};
+        String[] labels = {"Auto · Responsive to screen", "80% · Compact", "100% · Normal", "125% · Large", "150% · Extra Large", "175% · Huge", "200% · Big (200%)"};
+        String current = layouts.getString("control_size", "auto");
+        int selectedIndex = 0;
+        for (int i = 0; i < ids.length; i++) {
+            if (ids[i].equals(current)) { selectedIndex = i; break; }
+        }
+        new AlertDialog.Builder(getContext()).setTitle("Touch Button Size")
+                .setSingleChoiceItems(labels, selectedIndex, (dialog, which) -> {
+                    String chosen = ids[which];
+                    layouts.edit().putString("control_size", chosen).apply();
+                    GameOptions.set(getContext(), GameOptions.TOUCH_SIZE, chosen);
+                    layoutControls();
+                    dialog.dismiss();
+                }).setNegativeButton("Cancel", null).show();
+    }
+
     private void showOptions() {
+        String currentSize = layouts.getString("control_size", "auto");
+        String sizeLabel = currentSize.equals("auto") ? "Auto" : currentSize + "%";
         new AlertDialog.Builder(getContext()).setTitle("Control Options")
-                .setItems(new String[]{"Steering: Buttons / Thumb stick", "Tilt steering", "FPS limit", "Save layout preset", "Load layout preset"}, (dialog, which) -> {
-                    if (which == 0) chooseStyle();
-                    else if (which == 1) configureTilt.run();
-                    else if (which == 2) configureFrameLimit.run();
-                    else if (which == 3) saveNamedLayout();
+                .setItems(new String[]{
+                        "Touch Button Size (" + sizeLabel + ")",
+                        "Steering: Buttons / Thumb stick",
+                        "Tilt steering",
+                        "FPS limit",
+                        "Save layout preset",
+                        "Load layout preset"
+                }, (dialog, which) -> {
+                    if (which == 0) chooseButtonSize();
+                    else if (which == 1) chooseStyle();
+                    else if (which == 2) configureTilt.run();
+                    else if (which == 3) configureFrameLimit.run();
+                    else if (which == 4) saveNamedLayout();
                     else loadNamedLayout();
                 }).setNegativeButton("Close", null).show();
     }
@@ -677,6 +763,10 @@ final class RacingControlsView extends View {
         if (c == null || ++c.held != 1) return;
         if (c.scan >= 0) {
             keys.set(c.scan, true);
+            // Drift mode (0x2d / X) toggle in free roam
+            if (c.scan == 0x2d) {
+                driftActive = !driftActive;
+            }
             // Horn (0x31 / N) triggers Free Roam horn packet & audio
             if (c.scan == 0x31) {
                 AdhocRoamClient.setHorn(true);
