@@ -400,9 +400,11 @@ inline void syncPreTimestepPacing() {
 
     if (memory->readable(0x008654a4u, 4) && read32(0x008654a4u) == 6u) {
         if (real_elapsed > 0.010f && real_elapsed < 0.150f) {
-            float current_wdt = 0.0f;
+            float current_wdt = 0.0f, current_realdt = 0.0f;
             std::memcpy(&current_wdt, ptr(0x00865154u, 4), 4);
-            if (current_wdt > 0.0f && current_wdt < real_elapsed * 0.90f) {
+            std::memcpy(&current_realdt, ptr(0x00865198u, 4), 4);
+            float effective_dt = (current_wdt > 0.0f) ? current_wdt : current_realdt;
+            if (effective_dt > 0.0f && effective_dt < real_elapsed * 0.90f) {
                 std::memcpy(ptr(0x00865154u, 4), &real_elapsed, 4);
                 std::memcpy(ptr(0x00865198u, 4), &real_elapsed, 4);
                 write32(0x00865140u, static_cast<uint32_t>(real_elapsed * 1800.0f));

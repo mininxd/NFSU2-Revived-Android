@@ -54,9 +54,6 @@ public final class GameOptions {
             new Option(MINIMAP, "Minimap", "top",
                     new String[] {"top", "bottom"},
                     new String[] {"Top left", "Bottom left (original)"}),
-            new Option(SHOW_HIDDEN_RACES, "Show Hidden Races Mod", "on",
-                    new String[] {"on", "off"},
-                    new String[] {"On · Show 33 career hidden races on map", "Off · Original hidden"}),
             new Option(AUTOSAVE, "Autosave", "on",
                     new String[] {"on", "off"},
                     new String[] {"On · Save without prompting", "Off · Original prompt"}),
@@ -255,6 +252,7 @@ public final class GameOptions {
     }
 
     static final Cheat[] CHEATS = {
+        new Cheat("hidden_races", "Show Hidden Career Races", "Reveal all 33 hidden career races on world map"),
         new Cheat("districts", "Unlock All Districts", "Explore Coal Harbor, Jackson Heights & all map areas (opendoors)", "opendoors"),
         new Cheat("cars_parts", "Unlock All Cars & Circuit Parts", "All vehicles & performance parts in Career (ordermebaby)", "ordermebaby"),
         new Cheat("perf_lv1", "Unlock Performance Parts Lv 1", "Engine, transmission, ECU, nitrous Lv 1 (needperformance1)", "needperformance1"),
@@ -267,11 +265,24 @@ public final class GameOptions {
     };
 
     static boolean isCheatEnabled(Context context, String id) {
+        if ("hidden_races".equals(id)) {
+            SharedPreferences p = prefs(context);
+            if (p.contains("cheat_hidden_races")) {
+                return p.getBoolean("cheat_hidden_races", true);
+            }
+            if (p.contains(SHOW_HIDDEN_RACES)) {
+                return "on".equals(p.getString(SHOW_HIDDEN_RACES, "on"));
+            }
+            return true;
+        }
         return prefs(context).getBoolean("cheat_" + id, false);
     }
 
     static void setCheatEnabled(Context context, String id, boolean enabled) {
         prefs(context).edit().putBoolean("cheat_" + id, enabled).apply();
+        if ("hidden_races".equals(id)) {
+            prefs(context).edit().putString(SHOW_HIDDEN_RACES, enabled ? "on" : "off").apply();
+        }
     }
 
     static java.util.ArrayList<String> getActiveCheatCodes(Context context) {

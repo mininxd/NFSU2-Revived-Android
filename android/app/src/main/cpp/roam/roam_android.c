@@ -733,10 +733,35 @@ static void framerate_pacing_fix(void) {
      * maintain full real speed regardless of 30/60/uncapped render rates. */
     MRF32(0x007875bcu) = 0.016666668f;
 
+    /* Disarm internal busy-spin framerate limiters */
+    MRF32(0x00865558u) = 0.0f;
+    if (rh_mem_committed(0x007fb710u, 4)) MRF32(0x007fb710u) = 0.0f;
+
+    /* Force NTSC 60 Hz mode (0x7fb700 = 1). Prevents PAL 50 Hz lock (20 ms clamp). */
+    if (rh_mem_committed(0x007fb700u, 4)) MR32(0x007fb700u) = 1;
+
+    /* Expand maximum allowable frame delta multiplier (0x7fb714).
+     * Default 3.0f clamps frames to 3*16.67ms = 50 ms (20 FPS), causing slow motion
+     * whenever render rate drops to 30 FPS or lower. 6.0f allows up to 100 ms (10 FPS)
+     * so 30 FPS or frame drops maintain real-time speed. */
+    if (rh_mem_committed(0x007fb714u, 4)) MRF32(0x007fb714u) = 6.0f;
+
+    /* High refresh rate patch at 0x0057A084:
+     * Change 'jne 0x57a08b' (0x75) to 'jmp 0x57a08b' (0xEB).
+     * Prevents spurious 'mov eax, 1' when frame time is under 1/60s (90/120/uncapped FPS). */
+    static int s_high_fps_patched = 0;
+    if (!s_high_fps_patched && rh_mem_committed(0x0057a084u, 1)) {
+        if (MR8(0x0057a084u) == 0x75) {
+            MR8(0x0057a084u) = 0xEB;
+        }
+        s_high_fps_patched = 1;
+    }
+
     /* Prevent slow motion during racing: track real wall-clock elapsed time.
-     * If the frame took longer due to race load (e.g. 50-70 ms) and the game's
-     * internal dt was clamped too low, scale G_WORLDDT (0x865154) and A_REALDT (0x865198)
-     * to real elapsed time so the physics simulation keeps pace with the wall clock. */
+     * Note: G_WORLDDT (0x865154) is zeroed at the end of each frame by SPEED2.EXE (0x57A17D),
+     * but A_REALDT (0x865198) preserves the measured delta. If the game's internal delta
+     * fell behind real elapsed time (e.g. 30 FPS or frame drops), scale physics dt
+     * to real elapsed time. */
     static int64_t s_last_tick_us = 0;
     int64_t now_us = roam_plat_now_us();
     if (s_last_tick_us > 0) {
@@ -744,12 +769,14 @@ static void framerate_pacing_fix(void) {
         if (real_elapsed > 0.010f && real_elapsed < 0.150f) {
             if (rh_mem_committed(0x00865154u, 4) && rh_mem_committed(0x00865198u, 4)) {
                 float current_wdt = MRF32(0x00865154u);
+                float current_realdt = MRF32(0x00865198u);
+                float effective_dt = (current_wdt > 0.0f) ? current_wdt : current_realdt;
 #ifdef ROAM_CORE_RUST
-                float target_dt = nfs_pacing_filter_dt(real_elapsed, current_wdt);
+                float target_dt = nfs_pacing_filter_dt(real_elapsed, effective_dt);
 #else
-                float target_dt = (current_wdt > 0.0f && current_wdt < real_elapsed * 0.88f) ? real_elapsed : current_wdt;
+                float target_dt = (effective_dt > 0.0f && effective_dt < real_elapsed * 0.90f) ? real_elapsed : effective_dt;
 #endif
-                if (target_dt != current_wdt) {
+                if (target_dt != effective_dt) {
                     MRF32(0x00865154u) = target_dt;
                     MRF32(0x00865198u) = target_dt;
                     if (rh_mem_committed(0x00865140u, 4)) {

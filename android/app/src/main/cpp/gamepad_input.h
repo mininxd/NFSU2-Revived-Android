@@ -63,8 +63,10 @@ public:
         state.leftX=stickX_;state.leftY=stickY_;state.rightX=rightX_;state.rightY=rightY_;
         state.leftTrigger=std::fmax(leftTrigger_,buttons_[L2]?1.f:0.f);
         state.rightTrigger=std::fmax(rightTrigger_,buttons_[R2]?1.f:0.f);
-        static constexpr Button order[]={A,B,X,Y,L1,R1,Select,Start,ThumbL,ThumbR};
-        for(unsigned i=0;i<10;++i)if(buttons_[order[i]])state.buttons|=1u<<i;
+        static constexpr Button order[]={A,B,X,Y,L1,R1,Select,Start,ThumbL,ThumbR,L2,R2};
+        for(unsigned i=0;i<12;++i)if(buttons_[order[i]])state.buttons|=1u<<i;
+        if(state.leftTrigger>=0.5f)state.buttons|=1u<<10;
+        if(state.rightTrigger>=0.5f)state.buttons|=1u<<11;
         state.hatX=buttons_[Left]||hatX_<-.5f?-1:buttons_[Right]||hatX_>.5f?1:0;
         state.hatY=buttons_[Up]||hatY_<-.5f?-1:buttons_[Down]||hatY_>.5f?1:0;
         return state;

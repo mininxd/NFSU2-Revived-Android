@@ -51,6 +51,9 @@ const PadObject padObjects[]={
     {0xa36d02f0u,52,0x0004u|(4u<<8),0,"Button 4"},{0xa36d02f0u,53,0x0004u|(5u<<8),0,"Button 5"},
     {0xa36d02f0u,54,0x0004u|(6u<<8),0,"Button 6"},{0xa36d02f0u,55,0x0004u|(7u<<8),0,"Button 7"},
     {0xa36d02f0u,56,0x0004u|(8u<<8),0,"Button 8"},{0xa36d02f0u,57,0x0004u|(9u<<8),0,"Button 9"},
+    {0xa36d02f0u,58,0x0004u|(10u<<8),0,"Button 10"},{0xa36d02f0u,59,0x0004u|(11u<<8),0,"Button 11"},
+    {0xa36d02f0u,60,0x0004u|(12u<<8),0,"Button 12"},{0xa36d02f0u,61,0x0004u|(13u<<8),0,"Button 13"},
+    {0xa36d02f0u,62,0x0004u|(14u<<8),0,"Button 14"},{0xa36d02f0u,63,0x0004u|(15u<<8),0,"Button 15"},
 };
 // The value DirectInput would report for a resolved format item (type: class
 // in the low byte, our object index in bits 8..23, 0xffff = not on this pad).
@@ -70,7 +73,7 @@ uint32_t padItemValue(const InputObject& object,const InputFormatObject& item){
         static const uint32_t angles[3][3]={{31500,0,4500},{27000,0xffffffffu,9000},{22500,18000,13500}};
         return angles[inputPad.hatY+1][inputPad.hatX+1];
     }
-    return index<10&&(inputPad.buttons>>index&1)?0x80u:0u;
+    return index<16&&(inputPad.buttons>>index&1)?0x80u:0u;
 }
 std::map<uint32_t,InputObject> inputObjects;
 std::map<uint32_t,uint32_t> inputMethodCalls;
@@ -149,7 +152,7 @@ bool joystickMethod(InputObject& object,uint32_t self,uint32_t method){
     switch(method){
     case 3:{uint32_t output=arg(1);if(!output||read32(output)!=44){ret(diInvalid,2);return true;}
         std::memset(ptr(output+4,40),0,40);write32(output+4,1);write32(output+8,0x10215);
-        write32(output+12,6);write32(output+16,10);write32(output+20,1);ret(0,2);return true;}
+        write32(output+12,6);write32(output+16,16);write32(output+20,1);ret(0,2);return true;}
     case 4:{uint32_t callback=arg(1),context=arg(2),flags=arg(3);if(!callback){ret(diInvalid,4);return true;}
         uint32_t instance=allocate(316);
         try{for(auto& entry:padObjects){
@@ -212,7 +215,7 @@ bool joystickMethod(InputObject& object,uint32_t self,uint32_t method){
         if(!format||read32(format)!=24||read32(format+4)!=16){ret(diInvalid,2);return true;}
         uint32_t size=read32(format+12),count=read32(format+16),array=read32(format+20);
         if(!size||size>4096||count>256||(count&&!array)){ret(diInvalid,2);return true;}
-        std::vector<InputFormatObject> items;std::array<bool,6> axisUsed{};std::array<bool,10> buttonUsed{};bool povUsed=false;
+        std::vector<InputFormatObject> items;std::array<bool,6> axisUsed{};std::array<bool,16> buttonUsed{};bool povUsed=false;
         for(uint32_t i=0;i<count;++i){
             uint32_t guidAddress=read32(array+i*16),offset=read32(array+i*16+4),type=read32(array+i*16+8);
             uint32_t category=type&0x1f,instance=(type>>8)&0xffff,index=0xffff;
@@ -227,9 +230,9 @@ bool joystickMethod(InputObject& object,uint32_t self,uint32_t method){
             }else if(category&0x10){
                 if((instance==0xffff||instance==0)&&!povUsed){index=0;povUsed=true;}
             }else if(category&12){
-                if(instance!=0xffff){if(instance<10)index=instance;}
-                else for(uint32_t b=0;b<10;++b)if(!buttonUsed[b]){index=b;break;}
-                if(index<10)buttonUsed[index]=true;
+                if(instance!=0xffff){if(instance<16)index=instance;}
+                else for(uint32_t b=0;b<16;++b)if(!buttonUsed[b]){index=b;break;}
+                if(index<16)buttonUsed[index]=true;
             }else{ret(diInvalid,2);return true;}
             if(offset>size||bytes>size-offset){ret(diInvalid,2);return true;}
             // A required object this pad lacks fails like DirectInput does.
@@ -283,11 +286,11 @@ void keyboardMouseObjectInfo(uint32_t kind){
         if(how==2&&!(objectId&0x0c)){ret(0x80070002,4);return;}
         name=keyboardKeyName(offset);type=0x0cu|(offset<<8);guidData1=0x55728220u;guidData2=0xd33c;  // GUID_Key
     }else{
-        static const char* const axes[]={"Eje X","Eje Y","Rueda"};
+        static const char* const axes[]={"X Axis","Y Axis","Wheel"};
         if(how==1&&offset<12&&offset%4==0){name=axes[offset/4];type=(offset==8?0x02u:0x01u)|((offset/4)<<8);guidData1=0xa36d02e0u+offset/4;}
-        else if(how==1&&offset>=12&&offset<20){name="Boton "+std::to_string(offset-12);type=0x04u|((offset-12)<<8);guidData1=0xa36d02f0u;}
+        else if(how==1&&offset>=12&&offset<20){name="Button "+std::to_string(offset-12);type=0x04u|((offset-12)<<8);guidData1=0xa36d02f0u;}
         else if(how==2&&(objectId&3)&&offset<3){name=axes[offset];type=objectId&0xffff03u;guidData1=0xa36d02e0u+offset;offset*=4;}
-        else if(how==2&&(objectId&0x0c)&&offset<8){name="Boton "+std::to_string(offset);type=objectId&0xffff0cu;guidData1=0xa36d02f0u;offset+=12;}
+        else if(how==2&&(objectId&0x0c)&&offset<8){name="Button "+std::to_string(offset);type=objectId&0xffff0cu;guidData1=0xa36d02f0u;offset+=12;}
         else{ret(0x80070002,4);return;}
     }
     uint32_t bytes=read32(output);std::memset(ptr(output+4,bytes-4),0,bytes-4);

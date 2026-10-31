@@ -245,8 +245,8 @@ public final class GameActivity extends NativeActivity {
             String horn = GameOptions.get(this, GameOptions.HORN);
             android.system.Os.setenv("NFSU2_HORN", horn, true);
 
-            String hiddenRaces = GameOptions.get(this, GameOptions.SHOW_HIDDEN_RACES);
-            android.system.Os.setenv("NFSU2_SHOW_HIDDEN_RACES", "on".equals(hiddenRaces) ? "1" : "0", true);
+            boolean hiddenRaces = GameOptions.isCheatEnabled(this, "hidden_races");
+            android.system.Os.setenv("NFSU2_SHOW_HIDDEN_RACES", hiddenRaces ? "1" : "0", true);
 
             String autosave = GameOptions.get(this, GameOptions.AUTOSAVE);
             android.system.Os.setenv("NFSU2_AUTOSAVE", "on".equals(autosave) ? "1" : "0", true);
