@@ -86,7 +86,7 @@ public final class QuickChatManager {
                 int group = obj.getInt("group");
                 if (group >= 0 && group < GROUP_NAMES.length) {
                     StringBuilder sb = new StringBuilder();
-                    sb.append("💬 Chat ").append(GROUP_NAMES[group]).append(":\n");
+                    sb.append("Chat ").append(GROUP_NAMES[group]).append(":\n");
                     String[] phrases = QUICK_CHAT_GROUPS[group];
                     String[] arrows = { "↑", "→", "↓", "←" };
                     for (int i = 0; i < 4; i++) {
@@ -103,7 +103,7 @@ public final class QuickChatManager {
                 if (group >= 0 && group < QUICK_CHAT_GROUPS.length && idx >= 0 && idx < 4) {
                     String phraseText = QUICK_CHAT_GROUPS[group][idx];
                     String display = (isMe ? "You" : name) + ": \"" + phraseText + "\"";
-                    showToast("💬 " + display);
+                    showToast(display);
                 }
             }
         } catch (Exception e) {

@@ -200,6 +200,11 @@ static void q_integrate(const float *q0, const float *w, float dt, float *o){
     for (int i = 0; i < 4; i++) o[i] = q[i];
 }
 
+int rc_name_blocked(const char *name) {
+    return name_blocked(name);
+}
+
+#ifndef ROAM_CORE_RUST
 /* ---- states on the wire ------------------------------------------------------ */
 static int16_t q16(float f, float scale){ int32_t v = f_round(f * scale); return (int16_t)(v > 32767 ? 32767 : v < -32767 ? -32767 : v); }
 static void put_state(rc_w *w, const rc_state *s){
@@ -560,6 +565,7 @@ int rc_decode(const uint8_t *buf, int len, rc_msg *m){
     if (r.n != r.len) return RC_E_TRAIL;
     return RC_OK;
 }
+#endif /* !ROAM_CORE_RUST */
 
 /* ---- car-look record --------------------------------------------------------------- */
 #ifndef ROAM_CORE_RUST

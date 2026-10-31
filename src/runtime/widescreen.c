@@ -181,14 +181,9 @@ void nfs_widescreen_apply_frame_rate(void) {
     if (rdf(0x00865558u) != s_frame_time) {
         wrf(0x00865558u, s_frame_time);   /* main loop pacing (SetFrameRate) */
         wrf(0x007FB710u, s_frame_time);
-        /* Keep 0x007875BC at least 1/60 s (or 1/30 s when 30 fps is explicitly requested)
-         * so the game's max dt clamp (multiplier * [0x7875BC]) never drops below 50 ms.
-         * Forcing 1/120 s causes severe slow-motion whenever render rate drops below 40 fps.
-         * Also expand the max dt clamp multiplier at 0x007FB714 from 3.0 to 6.0 so frames
-         * as low as 10 FPS simulate full real-time delta without physics slow-motion. */
-        float sim_frame_time = s_frame_time > (1.0f / 60.0f) ? s_frame_time : (1.0f / 60.0f);
-        wrf(0x007875BCu, sim_frame_time); /* video mode / tick base frame time */
-        wrf(0x007FB714u, 6.0f);           /* expand max dt clamp multiplier from 3.0 to 6.0 */
+        /* Keep 0x007875BC locked strictly to 1/60 s base constant so internal clocks
+         * (WorldTimeFrames, particles, camera) maintain correct real-time scaling. */
+        wrf(0x007875BCu, 1.0f / 60.0f);   /* video mode / tick base constant: 60 Hz */
         wrf(0x007FC858u, s_frame_time);   /* smokeable frame time */
     }
 }

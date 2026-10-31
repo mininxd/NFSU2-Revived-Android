@@ -717,19 +717,30 @@ static void menusize_frame_tick(void) {
 
 static void framerate_pacing_fix(void) {
     if (!rh_mem_committed(0x007875bcu, 4) || !rh_mem_committed(0x00865558u, 4)) return;
-    float frame60 = MRF32(0x007875bcu);
-    /* 0x007875BC is the game's simulation time step and max clamp base (3 * [0x7875BC]).
-     * If widescreen or uncapped mode set it to 1/120 s (0.00833s), the max dt clamp shrinks
-     * from 50 ms to 25 ms, causing severe slow-motion whenever render FPS drops below 40.
-     * We clamp it so it is never faster than 1/60 s (0.016667s), and expand [0x7fb714] to 6.0f. */
-    if (frame60 > 0.0f && frame60 < 0.0166666f) {
-        MRF32(0x007875bcu) = 0.016666668f;
-    }
-    if (rh_mem_committed(0x007fb714u, 4)) {
-        if (MRF32(0x007fb714u) < 6.0f) {
-            MRF32(0x007fb714u) = 6.0f;
+    /* 0x007875BC is the game's simulation time step base (60 Hz).
+     * Must be locked strictly to 1/60s so internal clocks (A_WTF, particles)
+     * maintain full real speed regardless of 30/60/uncapped render rates. */
+    MRF32(0x007875bcu) = 0.016666668f;
+
+    /* Prevent slow motion during racing: track real wall-clock elapsed time.
+     * If the frame took longer due to race load (e.g. 50-70 ms) and the game's
+     * internal dt was clamped too low, scale G_WORLDDT (0x865154) and A_REALDT (0x865198)
+     * to real elapsed time so the physics simulation keeps pace with the wall clock. */
+    static int64_t s_last_tick_us = 0;
+    int64_t now_us = roam_plat_now_us();
+    if (s_last_tick_us > 0) {
+        float real_elapsed = (float)(now_us - s_last_tick_us) / 1000000.0f;
+        if (real_elapsed > 0.010f && real_elapsed < 0.150f) {
+            if (rh_mem_committed(0x00865154u, 4) && rh_mem_committed(0x00865198u, 4)) {
+                float current_wdt = MRF32(0x00865154u);
+                if (current_wdt > 0.0f && current_wdt < real_elapsed * 0.88f) {
+                    MRF32(0x00865154u) = real_elapsed;
+                    MRF32(0x00865198u) = real_elapsed;
+                }
+            }
         }
     }
+    s_last_tick_us = now_us;
 }
 
 __attribute__((visibility("default"))) void nfs_roam_frame_tick(void) {
@@ -976,8 +987,9 @@ int nfs_bind_to_perf_cores(void) {
         }
     }
 
+    sched_setaffinity(getpid(), sizeof(cpu_set_t), &cpuset);
     int ret = sched_setaffinity(0, sizeof(cpu_set_t), &cpuset);
-    __android_log_print(ANDROID_LOG_INFO, "NFSU2-PerfCores", "Bound process to %d performance cores (ret=%d)", count, ret);
+    __android_log_print(ANDROID_LOG_INFO, "NFSU2-PerfCores", "Bound process and threads to %d performance cores (ret=%d)", count, ret);
     return ret;
 }
 

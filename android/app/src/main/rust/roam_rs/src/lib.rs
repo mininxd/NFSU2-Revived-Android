@@ -5,9 +5,11 @@ pub mod hash;
 pub mod wire;
 pub mod math;
 pub mod carcfg;
+pub mod msg;
 
 pub use crc::*;
 pub use hash::*;
 pub use wire::*;
 pub use math::*;
 pub use carcfg::*;
+pub use msg::*;

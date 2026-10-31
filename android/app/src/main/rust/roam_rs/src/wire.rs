@@ -163,6 +163,33 @@ impl<'a> PacketReader<'a> {
     }
 
     #[inline]
+    pub fn position(&self) -> usize {
+        self.offset
+    }
+
+    #[inline]
+    pub fn skip(&mut self, n: usize) {
+        if self.offset + n <= self.buf.len() && !self.error {
+            self.offset += n;
+        } else {
+            self.error = true;
+            self.offset = self.buf.len();
+        }
+    }
+
+    #[inline]
+    pub fn get_slice(&mut self, n: usize) -> &'a [u8] {
+        if self.offset + n <= self.buf.len() && !self.error {
+            let slice = &self.buf[self.offset..self.offset + n];
+            self.offset += n;
+            slice
+        } else {
+            self.error = true;
+            &[]
+        }
+    }
+
+    #[inline]
     pub fn get_bytes<'b>(&mut self, dst: &mut [u8]) {
         if self.offset + dst.len() <= self.buf.len() && !self.error {
             dst.copy_from_slice(&self.buf[self.offset..self.offset + dst.len()]);

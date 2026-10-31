@@ -116,8 +116,14 @@ impl CpuCluster {
     pub fn apply_affinity(&self) -> Result<(), i32> {
         let mask = self.perf_cores_mask;
         unsafe {
-            // Linux sched_setaffinity: 0 = calling thread/process
+            // Linux sched_setaffinity: 0 = calling thread, getpid() = entire process
             let mask_val = mask as c_long;
+            let _ = libc::syscall(
+                libc::SYS_sched_setaffinity,
+                libc::getpid() as c_int,
+                std::mem::size_of::<c_long>(),
+                &mask_val as *const c_long,
+            );
             let ret = libc::syscall(
                 libc::SYS_sched_setaffinity,
                 0 as c_int,

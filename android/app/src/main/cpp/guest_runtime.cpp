@@ -284,7 +284,7 @@ uint32_t allocate(uint32_t bytes) {
 }
 void unsupported() {
     uint32_t index = (lastImport-importBase)/16;
-    throw GuestStop("HLE pendiente: " + imports.at(index).name + " desde " + hex(g_cur_func));
+    throw GuestStop("HLE pending: " + imports.at(index).name + " from " + hex(g_cur_func));
 }
 void getVersion() {
     uint32_t out = arg(0), bytes=read32(out);
@@ -360,7 +360,6 @@ void d3dDispatch(){
         // machine while this thread waits. Late frames incur no extra delay.
         renderThread=true;
         if(deadline>now)yieldGuestMachine(0,deadline);
-        else if(machine.hasWaiters()){auto before=std::chrono::steady_clock::now();yieldGuestMachine();++renderYields;renderWait+=std::chrono::steady_clock::now()-before;}
         static unsigned frames=0;static auto since=std::chrono::steady_clock::now();
         if(++frames==120){serviceGuestSound();auto now=std::chrono::steady_clock::now();double seconds=std::chrono::duration<double>(now-since).count();
             NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Guest D3D9 presentation %.1f FPS over %.2f seconds; bridge ~%.2f ms/frame (present %.2f), %.0f calls/frame",
@@ -846,7 +845,7 @@ extern "C" int nfs_android_resolution(){
 
 std::string connectGuestRuntime(const char* executable) {
     std::unique_lock<MachineMutex> guard(machine);machineLease=&guard;
-    if (memory) return "Runtime guest ya inicializado";
+    if (memory) return "Guest runtime already initialized";
     State original; original.save();
     try {
         stopRequested=false;
@@ -912,7 +911,7 @@ std::string connectGuestRuntime(const char* executable) {
         shutdownD3D9Bridge();
 #endif
         original.load();
-        return "Entrada guest terminada: "+std::to_string(result);
+        return "Guest entry finished: "+std::to_string(result);
     } catch (const std::exception& e) {
         NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","Guest integration boundary: %s",e.what());
         joinGuestThreads(guard);machineLease=nullptr;shutdownGuestSound();
@@ -920,7 +919,7 @@ std::string connectGuestRuntime(const char* executable) {
         shutdownD3D9Bridge();
 #endif
         original.load();
-        return std::string("Arranque guest detenido: ")+e.what();
+        return std::string("Guest boot halted: ")+e.what();
     }
 }
 void requestGuestRuntimeStop() {stopRequested=true;}
