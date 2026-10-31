@@ -505,6 +505,12 @@ public final class LauncherActivity extends Activity {
                         getSharedPreferences("touch_layouts_v2", MODE_PRIVATE)
                                 .edit().putString("control_size", val).apply();
                     }
+                    if (GameOptions.MENU_BUTTON_SIZE.equals(option.key)
+                            || GameOptions.HUD_SAFE.equals(option.key)
+                            || GameOptions.STARTUP_MOVIES.equals(option.key)
+                            || GameOptions.CUTSCENE_BORDERS.equals(option.key)) {
+                        GameOptions.syncWidescreenIni(this);
+                    }
                     dialog.dismiss(); refreshOptions();
                 }).setNegativeButton("Cancel", null).show();
     }
@@ -858,6 +864,8 @@ public final class LauncherActivity extends Activity {
                 Math.min(metrics.widthPixels, metrics.heightPixels));
         String[] loader = GpuDrivers.loaderArguments(this);
         ensureScriptsInstalled(gameRoot());
+        GameOptions.syncWidescreenIni(this);
+        PerformanceCores.bindToPerformanceCores();
         boolean logsEnabled = !"off".equals(GameOptions.get(this, GameOptions.DISPLAY_LOGS));
         GameOptions.syncWidescreenHudDat(this, logsEnabled);
         startActivity(new Intent(this, GameActivity.class)
@@ -884,7 +892,11 @@ public final class LauncherActivity extends Activity {
 
     // ---- Storage ---------------------------------------------------------------------------------------
 
-    private static File gameRoot() { return new File(Environment.getExternalStorageDirectory(), "nfsu2"); }
+    public static File gameRoot() {
+        File f = new File(Environment.getExternalStorageDirectory(), "NFSU2");
+        if (f.isDirectory()) return f;
+        return new File(Environment.getExternalStorageDirectory(), "nfsu2");
+    }
 
     private boolean allowed() {
         return Build.VERSION.SDK_INT >= 30 ? Environment.isExternalStorageManager()

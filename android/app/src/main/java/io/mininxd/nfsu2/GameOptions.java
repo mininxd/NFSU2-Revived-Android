@@ -288,6 +288,84 @@ public final class GameOptions {
     }
 
     /**
+     * Synchronizes scripts/NFSUnderground2.WidescreenFix.ini settings.
+     * Updates FEScale (button & UI sizing up to 200%), HudAspectRatioConstraint,
+     * AutoFitFE, SingleCoreAffinity, SkipIntro, and DisableCutsceneBorders.
+     */
+    static void syncWidescreenIni(Context context) {
+        try {
+            java.io.File iniFile = new java.io.File(LauncherActivity.gameRoot(),
+                    "scripts/NFSUnderground2.WidescreenFix.ini");
+            if (!iniFile.isFile()) {
+                iniFile = new java.io.File(android.os.Environment.getExternalStorageDirectory(),
+                        "nfsu2/scripts/NFSUnderground2.WidescreenFix.ini");
+                if (!iniFile.isFile()) {
+                    iniFile = new java.io.File(android.os.Environment.getExternalStorageDirectory(),
+                            "NFSU2/scripts/NFSUnderground2.WidescreenFix.ini");
+                }
+            }
+            if (!iniFile.isFile()) return;
+
+            String menuSize = get(context, MENU_BUTTON_SIZE);
+            String feScale = "2.00";
+            if ("100".equals(menuSize)) feScale = "1.00";
+            else if ("125".equals(menuSize)) feScale = "1.25";
+            else if ("150".equals(menuSize)) feScale = "1.50";
+            else if ("175".equals(menuSize)) feScale = "1.75";
+            else if ("200".equals(menuSize) || "auto".equals(menuSize)) feScale = "2.00";
+
+            String hudSafe = get(context, HUD_SAFE);
+            String aspect = "on".equals(hudSafe) ? "16:9" : "Auto";
+
+            String intro = get(context, STARTUP_MOVIES);
+            String skipIntro = "original".equals(intro) ? "0" : "1";
+
+            String borders = get(context, CUTSCENE_BORDERS);
+            String cutsceneBorders = "full".equals(borders) ? "0" : "1";
+
+            java.util.List<String> lines = new java.util.ArrayList<>();
+            boolean changed = false;
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(iniFile))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    String trimmed = line.trim();
+                    if (trimmed.startsWith("FEScale")) {
+                        String target = "FEScale = " + feScale + "                           ; Set the size of UI elements here. (Default = 1.00, Xbox = 0.92)";
+                        if (!line.startsWith("FEScale = " + feScale)) { line = target; changed = true; }
+                    } else if (trimmed.startsWith("HudAspectRatioConstraint")) {
+                        String target = "HudAspectRatioConstraint = " + aspect + "          ; Constrains the HUD to an aspect ratio. Use Auto, 16:9, 21:9, or a custom ratio.";
+                        if (!line.startsWith("HudAspectRatioConstraint = " + aspect)) { line = target; changed = true; }
+                    } else if (trimmed.startsWith("AutoFitFE")) {
+                        String target = "AutoFitFE = 1                            ; Automatically fits 16:9 UI content to smaller aspect ratios.";
+                        if (!line.startsWith("AutoFitFE = 1")) { line = target; changed = true; }
+                    } else if (trimmed.startsWith("SingleCoreAffinity")) {
+                        String target = "SingleCoreAffinity = 0                   ; Limits game to one CPU core to prevent crashing.";
+                        if (!line.startsWith("SingleCoreAffinity = 0")) { line = target; changed = true; }
+                    } else if (trimmed.startsWith("SkipIntro")) {
+                        String target = "SkipIntro = " + skipIntro + "                            ; Skips FMVs that play when you launch the game.";
+                        if (!line.startsWith("SkipIntro = " + skipIntro)) { line = target; changed = true; }
+                    } else if (trimmed.startsWith("DisableCutsceneBorders")) {
+                        String target = "DisableCutsceneBorders = " + cutsceneBorders + "               ; Removes letterboxing that appears during cutscenes.";
+                        if (!line.startsWith("DisableCutsceneBorders = " + cutsceneBorders)) { line = target; changed = true; }
+                    }
+                    lines.add(line);
+                }
+            }
+
+            if (changed) {
+                try (java.io.PrintWriter writer = new java.io.PrintWriter(new java.io.FileWriter(iniFile))) {
+                    for (String l : lines) {
+                        writer.println(l);
+                    }
+                }
+                android.util.Log.i("NFSU2", "Synchronized WidescreenFix.ini (FEScale=" + feScale + ", Aspect=" + aspect + ")");
+            }
+        } catch (Exception e) {
+            android.util.Log.w("NFSU2", "Failed to synchronize WidescreenFix.ini", e);
+        }
+    }
+
+    /**
      * Synchronizes scripts/NFSUnderground2.WidescreenFix.dat layout.
      * When displayLogs is enabled, repositions the Bank money GUI to the left and
      * offsets the SMS and Navigation GUI downward to keep the right telemetry HUD clear.

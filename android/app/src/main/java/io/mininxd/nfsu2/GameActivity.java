@@ -209,6 +209,8 @@ public final class GameActivity extends NativeActivity {
     }
     @Override protected void onCreate(Bundle saved) {
         super.onCreate(saved);
+        GameOptions.syncWidescreenIni(this);
+        PerformanceCores.bindToPerformanceCores();
         io.mininxd.nfsu2.net.NetLog.init(this);
         inputManager=(android.hardware.input.InputManager)getSystemService(INPUT_SERVICE);
         tiltSensors=(android.hardware.SensorManager)getSystemService(SENSOR_SERVICE);

@@ -1,0 +1,21 @@
+[package]
+name = "perf_cores"
+version = "0.1.0"
+edition = "2021"
+authors = ["mininxd"]
+description = "CPU Performance Cores affinity binder for NFSU2 Android launcher"
+
+[lib]
+name = "perf_cores"
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+jni = { version = "0.21", default-features = false }
+libc = { version = "0.2", default-features = false }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

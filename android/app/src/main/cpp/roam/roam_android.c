@@ -20,6 +20,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <dlfcn.h>
+#include <sched.h>
 #include <jni.h>
 
 ptrdiff_t *g_p_mem_base = NULL;
@@ -654,6 +655,11 @@ static void menusize_frame_tick(void) {
 
 void nfs_roam_frame_tick(void) {
     if (!roam_android_init_symbols()) return;
+    static int s_perf_bound = 0;
+    if (!s_perf_bound) {
+        s_perf_bound = 1;
+        nfs_bind_to_perf_cores();
+    }
     g_frame_count++;
     hiddenraces_frame_tick();
     menusize_frame_tick();
@@ -845,6 +851,110 @@ JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_net_RoamNativeBridge_nativeRoamHorn
         JNIEnv *env, jclass clazz, jboolean held) {
     (void)env; (void)clazz;
     roam_do_horn(held);
+}
+
+/* Performance cores CPU affinity binding */
+int nfs_bind_to_perf_cores(void) {
+    long highest_freq = 0;
+    long freqs[64] = {0};
+    int total_cpus = sysconf(_SC_NPROCESSORS_CONF);
+    if (total_cpus <= 0 || total_cpus > 64) total_cpus = 8;
+
+    for (int i = 0; i < total_cpus; i++) {
+        char path[128];
+        snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq", i);
+        FILE *f = fopen(path, "r");
+        if (f) {
+            long freq = 0;
+            if (fscanf(f, "%ld", &freq) == 1 && freq > 0) {
+                freqs[i] = freq;
+                if (freq > highest_freq) highest_freq = freq;
+            }
+            fclose(f);
+        }
+    }
+
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    int count = 0;
+    long threshold = (long)(highest_freq * 0.80);
+
+    if (highest_freq > 0) {
+        for (int i = 0; i < total_cpus; i++) {
+            if (freqs[i] >= threshold) {
+                CPU_SET(i, &cpuset);
+                count++;
+            }
+        }
+    }
+
+    if (count == 0) {
+        int start = total_cpus > 1 ? total_cpus / 2 : 0;
+        for (int i = start; i < total_cpus; i++) {
+            CPU_SET(i, &cpuset);
+            count++;
+        }
+    }
+
+    int ret = sched_setaffinity(0, sizeof(cpu_set_t), &cpuset);
+    __android_log_print(ANDROID_LOG_INFO, "NFSU2-PerfCores", "Bound process to %d performance cores (ret=%d)", count, ret);
+    return ret;
+}
+
+/* JNI Bindings for io.mininxd.nfsu2.PerformanceCores */
+JNIEXPORT jint JNICALL Java_io_mininxd_nfsu2_PerformanceCores_nativeBindToPerformanceCores(
+        JNIEnv *env, jclass clazz) {
+    (void)env; (void)clazz;
+    return nfs_bind_to_perf_cores();
+}
+
+JNIEXPORT jlong JNICALL Java_io_mininxd_nfsu2_PerformanceCores_nativeGetPerformanceCoresMask(
+        JNIEnv *env, jclass clazz) {
+    (void)env; (void)clazz;
+    long highest_freq = 0;
+    long freqs[64] = {0};
+    int total_cpus = sysconf(_SC_NPROCESSORS_CONF);
+    if (total_cpus <= 0 || total_cpus > 64) total_cpus = 8;
+    for (int i = 0; i < total_cpus; i++) {
+        char path[128];
+        snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq", i);
+        FILE *f = fopen(path, "r");
+        if (f) {
+            long freq = 0;
+            if (fscanf(f, "%ld", &freq) == 1 && freq > 0) {
+                freqs[i] = freq;
+                if (freq > highest_freq) highest_freq = freq;
+            }
+            fclose(f);
+        }
+    }
+    jlong mask = 0;
+    long threshold = (long)(highest_freq * 0.80);
+    if (highest_freq > 0) {
+        for (int i = 0; i < total_cpus; i++) {
+            if (freqs[i] >= threshold) mask |= (1ULL << i);
+        }
+    }
+    if (mask == 0) {
+        int start = total_cpus > 1 ? total_cpus / 2 : 0;
+        for (int i = start; i < total_cpus; i++) mask |= (1ULL << i);
+    }
+    return mask;
+}
+
+JNIEXPORT jint JNICALL Java_io_mininxd_nfsu2_PerformanceCores_nativeGetCoreCount(
+        JNIEnv *env, jclass clazz) {
+    (void)env; (void)clazz;
+    int c = sysconf(_SC_NPROCESSORS_CONF);
+    return c > 0 ? c : 8;
+}
+
+JNIEXPORT jstring JNICALL Java_io_mininxd_nfsu2_PerformanceCores_nativeGetSummary(
+        JNIEnv *env, jclass clazz) {
+    (void)clazz;
+    char buf[128];
+    snprintf(buf, sizeof(buf), "Cores: %ld", sysconf(_SC_NPROCESSORS_CONF));
+    return (*env)->NewStringUTF(env, buf);
 }
 
 #ifdef __cplusplus

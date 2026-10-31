@@ -57,6 +57,23 @@ jobs:
             -o android/app/src/main/jniLibs/arm64-v8a/libnfsu2_roam.so
           ls -lh android/app/src/main/jniLibs/arm64-v8a/libnfsu2_roam.so
 
+      - name: Build Rust Performance Cores Crate (libperf_cores.so)
+        continue-on-error: true
+        run: |
+          rustup target add aarch64-linux-android || true
+          CLANG_BIN=$(find "$ANDROID_HOME/ndk" "$ANDROID_NDK_ROOT" /usr/local/lib/android/sdk/ndk -name "aarch64-linux-android29-clang" 2>/dev/null | head -n 1)
+          if [ -z "$CLANG_BIN" ]; then
+            CLANG_BIN=$(find "$ANDROID_HOME/ndk" "$ANDROID_NDK_ROOT" /usr/local/lib/android/sdk/ndk -name "aarch64-linux-android*-clang" 2>/dev/null | grep -E "android(29|30|31|32|33|34|35)-clang" | sort -V | head -n 1)
+          fi
+          if [ -n "$CLANG_BIN" ]; then
+            export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$CLANG_BIN"
+            cd android/app/src/main/rust/perf_cores
+            cargo build --target aarch64-linux-android --release && \
+              cp target/aarch64-linux-android/release/libperf_cores.so ../../../jniLibs/arm64-v8a/
+            cd ../../../../..
+            ls -lh android/app/src/main/jniLibs/arm64-v8a/libperf_cores.so || true
+          fi
+
       - name: Configure Gamefiles Direct Link from Secret (if set)
         env:
           GAMEFILES_URL: ${{ secrets.GAMEFILES_URL || secrets.GAMEFILES_ZIP_URL }}

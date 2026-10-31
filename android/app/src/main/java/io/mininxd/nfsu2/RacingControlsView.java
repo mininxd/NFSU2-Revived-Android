@@ -215,9 +215,8 @@ final class RacingControlsView extends View {
         float w = getWidth() / scale, h = getHeight() / scale;
         float bottom = h - 16;
 
-        // Top-right header buttons
-        add(w - 56, 16, 44, "settings", EDIT);
-        add(w - 110, 16, 44, "mode", MODE);
+        // Top-right header button
+        add(w - 56, 16, 44, "mode", MODE);
 
         if (racing) {
             // Top row small buttons (44dp circular)
@@ -228,8 +227,6 @@ final class RacingControlsView extends View {
             add(224, 16, 44, "map", 0x32);      // M: World Map
             add(276, 16, 44, "msgs", 0x0f);     // Tab: Messages
             add(328, 16, 44, "drift", 0x2d);    // X: Drift mode
-            add(380, 16, 44, "horn", 0x31);     // N: Horn
-            add(432, 16, 44, "chat", CHAT);     // Quick chat
 
             // Start event button (Pill, Enter: 0x1c)
             add(20, bottom - 148, 96, 40, PILL, "start", 0x1c);
@@ -381,16 +378,16 @@ final class RacingControlsView extends View {
                 glyph(canvas, "BACK", cx, cy, 16f, on);
                 break;
             case "left":
-                filledTriangle(canvas, cx, cy, s * 1.1f, true);
+                drawArrow(canvas, cx, cy, s * 1.15f, 2);
                 break;
             case "right":
-                filledTriangle(canvas, cx, cy, s * 1.1f, false);
+                drawArrow(canvas, cx, cy, s * 1.15f, 3);
                 break;
             case "up":
-                chevron(canvas, cx, cy, s * 0.9f, true);
+                drawArrow(canvas, cx, cy, s * 1.15f, 0);
                 break;
             case "down":
-                chevron(canvas, cx, cy, s * 0.9f, false);
+                drawArrow(canvas, cx, cy, s * 1.15f, 1);
                 break;
             case "shiftUp":
                 chevron(canvas, cx, cy - s * 0.3f, s * 0.7f, true);
@@ -448,45 +445,13 @@ final class RacingControlsView extends View {
                 path.lineTo(cx + s * 0.9f, cy - s * 0.55f);
                 canvas.drawPath(path, line);
                 break;
-            case "horn":
-                path.reset();
-                path.moveTo(cx - s * 0.65f, cy - s * 0.3f);
-                path.lineTo(cx - s * 0.25f, cy - s * 0.3f);
-                path.lineTo(cx + s * 0.35f, cy - s * 0.7f);
-                path.lineTo(cx + s * 0.35f, cy + s * 0.7f);
-                path.lineTo(cx - s * 0.25f, cy + s * 0.3f);
-                path.lineTo(cx - s * 0.65f, cy + s * 0.3f);
-                path.close();
-                canvas.drawPath(path, line);
-                canvas.drawArc(cx + s * 0.45f, cy - s * 0.45f, cx + s * 0.85f, cy + s * 0.45f, -40, 80, false, line);
-                break;
-            case "chat":
-                path.reset();
-                path.moveTo(cx - s * 0.75f, cy - s * 0.65f);
-                path.lineTo(cx + s * 0.75f, cy - s * 0.65f);
-                path.lineTo(cx + s * 0.75f, cy + s * 0.35f);
-                path.lineTo(cx - s * 0.15f, cy + s * 0.35f);
-                path.lineTo(cx - s * 0.55f, cy + s * 0.75f);
-                path.lineTo(cx - s * 0.45f, cy + s * 0.35f);
-                path.lineTo(cx - s * 0.75f, cy + s * 0.35f);
-                path.close();
-                canvas.drawPath(path, line);
-                break;
             case "mode":
                 if (style.equals("stick")) {
                     canvas.drawCircle(cx, cy, s * 0.8f, line);
                     canvas.drawCircle(cx, cy, s * 0.28f, fill);
                 } else {
-                    filledTriangle(canvas, cx - s * 0.35f, cy, s * 0.55f, true);
-                    filledTriangle(canvas, cx + s * 0.35f, cy, s * 0.55f, false);
-                }
-                break;
-            case "settings":
-                for (int i = -1; i <= 1; ++i) {
-                    float y = cy + i * s * 0.6f;
-                    float k = cx + (i == 0 ? s * 0.35f : -s * 0.35f);
-                    canvas.drawLine(cx - s * 0.8f, y, cx + s * 0.8f, y, line);
-                    canvas.drawCircle(k, y, s * 0.22f, fill);
+                    drawArrow(canvas, cx - s * 0.35f, cy, s * 0.55f, 2);
+                    drawArrow(canvas, cx + s * 0.35f, cy, s * 0.55f, 3);
                 }
                 break;
             case "keyboard":
@@ -513,13 +478,37 @@ final class RacingControlsView extends View {
         canvas.drawPath(path, line);
     }
 
-    private void filledTriangle(Canvas canvas, float x, float y, float s, boolean left) {
-        float d = left ? -1 : 1;
+    private void drawArrow(Canvas canvas, float x, float y, float s, int dir) {
+        // dir: 0 = UP, 1 = DOWN, 2 = LEFT, 3 = RIGHT
+        float span = s * 1.15f;
+        float len = s * 0.8f;
         path.reset();
-        path.moveTo(x + d * s * 0.5f, y);
-        path.lineTo(x - d * s * 0.5f, y - s * 0.6f);
-        path.lineTo(x - d * s * 0.5f, y + s * 0.6f);
-        path.close();
+        switch (dir) {
+            case 0: // UP
+                path.moveTo(x, y - len * 0.55f);
+                path.lineTo(x + span * 0.5f, y + len * 0.45f);
+                path.lineTo(x - span * 0.5f, y + len * 0.45f);
+                path.close();
+                break;
+            case 1: // DOWN
+                path.moveTo(x, y + len * 0.55f);
+                path.lineTo(x + span * 0.5f, y - len * 0.45f);
+                path.lineTo(x - span * 0.5f, y - len * 0.45f);
+                path.close();
+                break;
+            case 2: // LEFT
+                path.moveTo(x - len * 0.55f, y);
+                path.lineTo(x + len * 0.45f, y - span * 0.5f);
+                path.lineTo(x + len * 0.45f, y + span * 0.5f);
+                path.close();
+                break;
+            case 3: // RIGHT
+                path.moveTo(x + len * 0.55f, y);
+                path.lineTo(x - len * 0.45f, y - span * 0.5f);
+                path.lineTo(x - len * 0.45f, y + span * 0.5f);
+                path.close();
+                break;
+        }
         canvas.drawPath(path, fill);
     }
 
@@ -925,13 +914,6 @@ final class RacingControlsView extends View {
                 } else if (c.scan == TEXT) {
                     releaseAll();
                     textInput.run();
-                } else if (c.scan == EDIT) {
-                    releaseAll();
-                    editing = true;
-                    selected = null;
-                } else if (c.scan == CHAT) {
-                    releaseAll();
-                    AdhocRoamClient.showQuickChatDialog(getContext());
                 }
                 performClick();
             }
