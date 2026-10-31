@@ -17,6 +17,16 @@ uint32_t soundToken{};
 AAudioStream* soundStream=nullptr;
 int32_t soundLastXruns=0;
 std::atomic<uint32_t> soundCallbackPeakUs{0};
+static std::atomic<bool> soundStreamRestartPending{false};
+
+void soundErrorCallback(AAudioStream*,void*,aaudio_result_t error){
+    NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","AAudio error callback: %d (%s)",int(error),AAudio_convertResultToText(error));
+    if(error==AAUDIO_ERROR_DISCONNECTED||error==AAUDIO_ERROR_TIMEOUT||
+       error==AAUDIO_ERROR_INTERNAL||error==AAUDIO_ERROR_INVALID_STATE){
+        soundStreamRestartPending.store(true,std::memory_order_release);
+    }
+}
+
 aaudio_data_callback_result_t soundCallback(AAudioStream*,void*,void* data,int32_t frames){
     if(guestPaused.load(std::memory_order_relaxed)){
         std::memset(data,0,sizeof(float)*2*frames);
@@ -43,8 +53,11 @@ AAudioStream* openSoundStream(aaudio_performance_mode_t mode){
     AAudioStreamBuilder_setChannelCount(builder,2);
     AAudioStreamBuilder_setSharingMode(builder,AAUDIO_SHARING_MODE_SHARED);
     AAudioStreamBuilder_setPerformanceMode(builder,mode);
+    AAudioStreamBuilder_setUsage(builder,AAUDIO_USAGE_GAME);
+    AAudioStreamBuilder_setContentType(builder,AAUDIO_CONTENT_TYPE_GAME);
     AAudioStreamBuilder_setBufferCapacityInFrames(builder,48000*soundMaximumMs/1000);
     AAudioStreamBuilder_setDataCallback(builder,soundCallback,nullptr);
+    AAudioStreamBuilder_setErrorCallback(builder,soundErrorCallback,nullptr);
     AAudioStream* stream=nullptr;
     auto status=AAudioStreamBuilder_openStream(builder,&stream);AAudioStreamBuilder_delete(builder);
     return status==AAUDIO_OK?stream:nullptr;
@@ -70,6 +83,23 @@ bool startSoundStream(){
     if(status!=AAUDIO_OK){AAudioStream_close(soundStream);soundStream=nullptr;return false;}
     NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","AAudio stereo float stream started: %u Hz",soundMixer.rate);return true;
 }
+
+void closeSoundStreamOnly(){
+    if(soundStream){
+        AAudioStream* s=soundStream;
+        soundStream=nullptr;
+        AAudioStream_requestStop(s);
+        AAudioStream_close(s);
+    }
+}
+
+bool restartSoundStreamOnly(){
+    NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Recreating AAudio stream on route change (preserving all voices & DirectSound buffers)");
+    closeSoundStreamOnly();
+    soundStreamRestartPending.store(false,std::memory_order_release);
+    return startSoundStream();
+}
+
 // Called on the guest thread after Present, never from the real-time callback.
 // Grow only after an actual underrun, one burst at a time, bounded by capacity.
 void serviceGuestSound(){
@@ -77,11 +107,15 @@ void serviceGuestSound(){
         if(!guestPaused.load(std::memory_order_relaxed))startSoundStream();
         return;
     }
+    bool pending=soundStreamRestartPending.exchange(false,std::memory_order_acq_rel);
     aaudio_stream_state_t state=AAudioStream_getState(soundStream);
-    if(state==AAUDIO_STREAM_STATE_DISCONNECTED||state==AAUDIO_STREAM_STATE_CLOSING||state==AAUDIO_STREAM_STATE_CLOSED){
-        NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","AAudio stream disconnected (state=%d), restarting...",int(state));
-        shutdownGuestSound();
-        if(!guestPaused.load(std::memory_order_relaxed))startSoundStream();
+    if(pending||state==AAUDIO_STREAM_STATE_DISCONNECTED||state==AAUDIO_STREAM_STATE_CLOSING||state==AAUDIO_STREAM_STATE_CLOSED){
+        NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","AAudio stream disconnected (state=%d, pending=%d), restarting stream...",int(state),int(pending));
+        if(!guestPaused.load(std::memory_order_relaxed)){
+            restartSoundStreamOnly();
+        }else{
+            closeSoundStreamOnly();
+        }
         return;
     }
     int32_t xruns=AAudioStream_getXRunCount(soundStream),burst=AAudioStream_getFramesPerBurst(soundStream);
@@ -109,10 +143,12 @@ void serviceGuestSound(){
 #else
 void serviceGuestSound(){}
 bool startSoundStream(){return true;} // Host tests inspect the mixer; no physical audio output.
+inline void closeSoundStreamOnly(){}
+inline bool restartSoundStreamOnly(){return true;}
 #endif
 void shutdownGuestSound(){
 #ifdef __ANDROID__
-    if(soundStream){AAudioStream_requestStop(soundStream);AAudioStream_close(soundStream);soundStream=nullptr;}
+    closeSoundStreamOnly();
 #endif
     for(auto& item:soundObjects){auto& object=item.second;if(object.voice)soundMixer.remove(object.voice);
         if(object.guestSamples)heaps->free(GuestHeaps::process,object.guestSamples);
@@ -140,7 +176,11 @@ void directSoundCreate(){
 }
 void soundDispatch(){
     uint32_t kind=(soundToken-soundMethodBase)/0x1000,method=((soundToken-soundMethodBase)%0x1000)/16,self=arg(0);
-    auto found=soundObjects.find(self);if(found==soundObjects.end()||found->second.kind!=kind)throw GuestStop("Invalid DirectSound object");
+    auto found=soundObjects.find(self);
+    if(found==soundObjects.end()||found->second.kind!=kind){
+        NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","DirectSound unknown object %08x kind=%u method=%u, ignoring to avoid halt",self,kind,method);
+        lastError=6;ret(0x8878000a,1);return;
+    }
     auto& object=found->second;
     if(++soundMethodCalls[soundToken]<=3)NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","DirectSound kind=%u method=%u",kind,method);
     if(method==0){

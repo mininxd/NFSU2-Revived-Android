@@ -215,8 +215,9 @@ final class RacingControlsView extends View {
         float w = getWidth() / scale, h = getHeight() / scale;
         float bottom = h - 16;
 
-        // Top-right header button
-        add(w - 56, 16, 44, "mode", MODE);
+        // Top-right header buttons
+        add(w - 56, 16, 44, "settings", EDIT);
+        add(w - 110, 16, 44, "mode", MODE);
 
         if (racing) {
             // Top row small buttons (44dp circular)
@@ -452,6 +453,14 @@ final class RacingControlsView extends View {
                 } else {
                     drawArrow(canvas, cx - s * 0.35f, cy, s * 0.55f, 2);
                     drawArrow(canvas, cx + s * 0.35f, cy, s * 0.55f, 3);
+                }
+                break;
+            case "settings":
+                for (int i = -1; i <= 1; ++i) {
+                    float y = cy + i * s * 0.6f;
+                    float k = cx + (i == 0 ? s * 0.35f : -s * 0.35f);
+                    canvas.drawLine(cx - s * 0.8f, y, cx + s * 0.8f, y, line);
+                    canvas.drawCircle(k, y, s * 0.22f, fill);
                 }
                 break;
             case "keyboard":
@@ -914,6 +923,10 @@ final class RacingControlsView extends View {
                 } else if (c.scan == TEXT) {
                     releaseAll();
                     textInput.run();
+                } else if (c.scan == EDIT) {
+                    releaseAll();
+                    editing = true;
+                    selected = null;
                 }
                 performClick();
             }

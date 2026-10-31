@@ -926,15 +926,13 @@ void setGuestPaused(bool paused) {
     if(previous!=paused&&soundStream&&!paused){
         aaudio_stream_state_t state=AAudioStream_getState(soundStream);
         if(state==AAUDIO_STREAM_STATE_DISCONNECTED||state==AAUDIO_STREAM_STATE_CLOSING||state==AAUDIO_STREAM_STATE_CLOSED){
-            NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","AAudio stream disconnected while paused, recreating...");
-            shutdownGuestSound();
-            startSoundStream();
+            NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","AAudio stream disconnected while paused, recreating stream...");
+            restartSoundStreamOnly();
         }else{
             aaudio_result_t status=AAudioStream_requestStart(soundStream);
             if(status!=AAUDIO_OK&&status!=AAUDIO_ERROR_INVALID_STATE){
                 NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","AAudio resume failed: %d, recreating stream",int(status));
-                shutdownGuestSound();
-                startSoundStream();
+                restartSoundStreamOnly();
             }
         }
     }

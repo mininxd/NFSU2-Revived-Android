@@ -211,6 +211,7 @@ public final class GameActivity extends NativeActivity {
         super.onCreate(saved);
         GameOptions.syncWidescreenIni(this);
         PerformanceCores.bindToPerformanceCores();
+        GameLog.init(this);
         io.mininxd.nfsu2.net.NetLog.init(this);
         inputManager=(android.hardware.input.InputManager)getSystemService(INPUT_SERVICE);
         tiltSensors=(android.hardware.SensorManager)getSystemService(SENSOR_SERVICE);
@@ -236,6 +237,10 @@ public final class GameActivity extends NativeActivity {
             else if ("175".equals(menuScale)) android.system.Os.setenv("NFSU2_MENU_SCALE", "1.75", true);
             else if ("200".equals(menuScale)) android.system.Os.setenv("NFSU2_MENU_SCALE", "2.0", true);
             else android.system.Os.setenv("NFSU2_MENU_SCALE", menuScale, true);
+
+            try {
+                android.system.Os.setenv("NFSU2_DATA_DIR", LauncherActivity.gameRoot().getAbsolutePath(), true);
+            } catch (Throwable ignored) {}
 
             String horn = GameOptions.get(this, GameOptions.HORN);
             android.system.Os.setenv("NFSU2_HORN", horn, true);
@@ -264,11 +269,6 @@ public final class GameActivity extends NativeActivity {
             String backend = launch.getStringExtra("graphicsBackend");
             if (backend == null) backend = GameOptions.get(this, GameOptions.GRAPHICS_BACKEND);
             android.system.Os.setenv("NFSU2_RENDERER", backend, true);
-            if ("opengl".equals(backend)) {
-                android.system.Os.setenv("LIBGL_ALWAYS_SOFTWARE", "0", true);
-                android.system.Os.setenv("MESA_LOADER_DRIVER_OVERRIDE", "zink", true);
-                android.system.Os.setenv("GALLIUM_DRIVER", "zink", true);
-            }
 
             // Sync touch control size
             String touchSize = GameOptions.get(this, GameOptions.TOUCH_SIZE);
@@ -378,15 +378,28 @@ public final class GameActivity extends NativeActivity {
     }
     public void setStatus(String message) {
         if (message != null) {
+            String backend = GameOptions.get(this, GameOptions.GRAPHICS_BACKEND);
+            if ("opengl".equals(backend)) {
+                message = message.replace("Vulkan 1.1: presentación activa", "OpenGL ES: presentation active")
+                                 .replace("Vulkan 1.1: presentation active", "OpenGL ES: presentation active");
+            } else {
+                message = message.replace("Vulkan 1.1: presentación activa", "Vulkan 1.1: presentation active");
+            }
             message = message
                     .replace("Datos accesibles: memoria interna/nfsu2", "Accessible data: internal storage/nfsu2")
-                    .replace("Vulkan 1.1: presentación activa", "Vulkan 1.1: presentation active")
                     .replace("Ejecutando entrada CRT del juego…", "Executing game CRT entry…")
                     .replace("Ejecutando entrada CRT del juego", "Executing game CRT entry…")
                     .replace("Arranque guest detenido:", "Guest boot halted:")
                     .replace("Entrada guest terminada:", "Guest entry finished:");
         }
         final String text = message;
+        if (text != null) {
+            GameLog.i("Status", text);
+            if (text.contains("halted") || text.contains("detenido") || text.contains("Error")
+                    || text.contains("failed") || text.contains("terminada") || text.contains("finished")) {
+                GameLog.logHalt(this, text);
+            }
+        }
         runOnUiThread(() -> {
             if (statusHideTask != null) status.removeCallbacks(statusHideTask);
             if (text != null && (text.contains("Executing game CRT entry") || text.contains("Ejecutando entrada CRT"))) {

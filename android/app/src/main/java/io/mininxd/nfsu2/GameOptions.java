@@ -60,9 +60,6 @@ public final class GameOptions {
             new Option(MINIMAP, "Minimap", "top",
                     new String[] {"top", "bottom"},
                     new String[] {"Top left", "Bottom left (original)"}),
-            new Option(HORN, "Your Horn", "dual",
-                    new String[] {"dual", "single", "truck", "train", "klaxon", "cucaracha", "clown", "trombone"},
-                    new String[] {"Dual tone (Default)", "Single tone", "Air horn", "Train horn", "Klaxon", "La Cucaracha", "Clown horn", "Sad trombone"}),
             new Option(SHOW_HIDDEN_RACES, "Show Hidden Races Mod", "on",
                     new String[] {"on", "off"},
                     new String[] {"On · Show 33 career hidden races on map", "Off · Original hidden"}),
@@ -343,8 +340,8 @@ public final class GameOptions {
                         String target = "AutoFitFE = 1                            ; Automatically fits 16:9 UI content to smaller aspect ratios.";
                         if (!line.startsWith("AutoFitFE = 1")) { line = target; changed = true; }
                     } else if (trimmed.startsWith("SingleCoreAffinity")) {
-                        String target = "SingleCoreAffinity = 0                   ; Limits game to one CPU core to prevent crashing.";
-                        if (!line.startsWith("SingleCoreAffinity = 0")) { line = target; changed = true; }
+                        String target = "SingleCoreAffinity = 1                   ; Limits game to one CPU core to prevent crashing.";
+                        if (!line.startsWith("SingleCoreAffinity = 1")) { line = target; changed = true; }
                     } else if (trimmed.startsWith("SkipIntro")) {
                         String target = "SkipIntro = " + skipIntro + "                            ; Skips FMVs that play when you launch the game.";
                         if (!line.startsWith("SkipIntro = " + skipIntro)) { line = target; changed = true; }

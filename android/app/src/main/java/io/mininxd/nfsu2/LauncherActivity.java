@@ -438,6 +438,7 @@ public final class LauncherActivity extends Activity {
         optionsList.addView(optionRow("Room Name", GameOptions.roamRoom(this).isEmpty() ? "Default (Public)" : GameOptions.roamRoom(this), this::chooseRoamRoom));
         optionsList.addView(optionRow("Crew Name", GameOptions.roamCrew(this).isEmpty() ? "None" : GameOptions.roamCrew(this), this::chooseRoamCrew));
         optionsList.addView(optionRow("Export Network Log", "Save NFSU2-network.log", this::exportNetworkLog));
+        optionsList.addView(optionRow("Export Game Log", "Save NFSU2-game.log", this::exportGameLog));
         optionsList.addView(optionRow("Check for updates",
                 checkingUpdates ? "Checking GitHub…" : "Version " + ReleaseUpdates.installed(this), () -> checkUpdates(true)));
         optionsList.addView(optionRow("Report an issue", "Report on GitHub / Save ZIP", () -> showReportDialog(null)));
@@ -835,6 +836,28 @@ public final class LauncherActivity extends Activity {
                 .setNeutralButton("Clear Log", (d, w) -> {
                     NetLog.clear(this);
                     Toast.makeText(this, "Network log cleared", Toast.LENGTH_SHORT).show();
+                })
+                .show();
+    }
+
+    private void exportGameLog() {
+        String loc = GameLog.exportLogToDownloads(this);
+        String full = GameLog.getFullLogText(this);
+        ClipboardManager cb = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        if (cb != null && full != null && !full.trim().isEmpty()) {
+            cb.setPrimaryClip(ClipData.newPlainText("NFSU2 Game Log", full));
+        }
+
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Export Game & Halt Log")
+                .setMessage("Log exported to:\n• " + (loc != null ? loc : "Downloads/NFSU2/NFSU2-game.log")
+                        + "\n• /sdcard/NFSU2/game_log.txt"
+                        + "\n• /sdcard/NFSU2/halt_log.txt"
+                        + "\n\n(Full log content was also copied to your clipboard).")
+                .setPositiveButton("OK", null)
+                .setNeutralButton("Clear Log", (d, w) -> {
+                    GameLog.clear(this);
+                    Toast.makeText(this, "Game log cleared", Toast.LENGTH_SHORT).show();
                 })
                 .show();
     }

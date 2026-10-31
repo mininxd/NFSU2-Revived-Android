@@ -430,7 +430,10 @@ void android_main(android_app* app) {
             auto status=host.guestWorker.status();
             if(status!=host.guestStatus){
                 host.guestStatus=status;
-                showStatus(app,("Accessible data: internal storage/nfsu2\nVulkan 1.1: presentation active\n"+status).c_str());
+                const char* rend = getenv("NFSU2_RENDERER");
+                bool isGl = rend && (strcmp(rend, "opengl") == 0 || strcmp(rend, "opengl_es") == 0);
+                std::string apiBanner = isGl ? "OpenGL ES: presentation active\n" : "Vulkan 1.1: presentation active\n";
+                showStatus(app,("Accessible data: " + getGameRoot() + "\n" + apiBanner + status).c_str());
             }
             if (host.renderer.device&&!host.renderer.draw()) host.renderer.stop();
         } catch (const std::exception& e) {

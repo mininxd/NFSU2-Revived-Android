@@ -91,6 +91,7 @@ final class Diagnostics {
             add(zip, "report.txt", info.toString().getBytes(StandardCharsets.UTF_8));
             add(zip, "logcat.txt", logcat(0));
             add(zip, "NFSU2-network.log", io.mininxd.nfsu2.net.NetLog.getLogBytes(context));
+            add(zip, "NFSU2-game.log", GameLog.getLogBytes(context));
             ActivityManager manager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
             if (Build.VERSION.SDK_INT >= 30 && manager != null) addExitInfo(zip, manager, context);
         } catch (Exception error) {

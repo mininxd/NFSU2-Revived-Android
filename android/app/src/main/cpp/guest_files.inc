@@ -1,4 +1,10 @@
 std::string guestWorkingDirectory="C:\\nfsu2";
+static inline std::filesystem::path safe_weakly_canonical(const std::filesystem::path& p) {
+    std::error_code ec;
+    auto res = std::filesystem::weakly_canonical(p, ec);
+    if (!ec && !res.empty()) return res;
+    return p.lexically_normal();
+}
 void logicalDrives(){ret(4,0);}
 void driveType(){auto path=lower(guestString(arg(0)));ret(path.empty()||path.rfind("c:",0)==0?3:1,1);}
 uint32_t fileError(){switch(errno){case ENOENT:return 2;case EACCES:case EPERM:return 5;case EEXIST:return 80;case ENOSPC:return 112;case EBADF:return 6;default:return 1;}}
@@ -14,7 +20,7 @@ std::filesystem::path gamePath(std::string guest){
         for(auto& entry:std::filesystem::directory_iterator(result,error))if(lower(entry.path().filename().string())==lower(part.string())){result=entry.path();found=true;break;}
         if(!found)result/=part;
     }
-    auto root=std::filesystem::weakly_canonical(hostGameRoot);auto resolved=std::filesystem::weakly_canonical(result);
+    auto root=safe_weakly_canonical(hostGameRoot);auto resolved=safe_weakly_canonical(result);
     auto check=resolved.lexically_relative(root);for(const auto& part:check)if(part=="..")throw GuestStop("Guest symlink leaves data root");return resolved;
 }
 std::map<uint32_t,int> fileHandles;uint32_t nextFileHandle=0xf0060000;
@@ -24,7 +30,7 @@ std::map<uint32_t,int> fileHandles;uint32_t nextFileHandle=0xf0060000;
 bool discCheckSwitch(const std::filesystem::path& path){
     std::error_code error;
     return lower(path.filename().string())=="foobar"&&!std::filesystem::exists(path,error)&&
-        std::filesystem::weakly_canonical(path.parent_path())==std::filesystem::weakly_canonical(hostGameRoot);
+        safe_weakly_canonical(path.parent_path())==safe_weakly_canonical(hostGameRoot);
 }
 bool closeGuestFile(uint32_t handle){auto file=fileHandles.find(handle);if(file==fileHandles.end())return false;::close(file->second);fileHandles.erase(file);return true;}
 void fileType(){
@@ -35,7 +41,7 @@ void fileType(){
 }
 void longPath(){
     auto path=gamePath(guestString(arg(0)));std::error_code error;if(!std::filesystem::exists(path,error)){lastError=2;ret(0,3);return;}
-    auto relative=path.lexically_relative(std::filesystem::weakly_canonical(hostGameRoot)).string();
+    auto relative=path.lexically_relative(safe_weakly_canonical(hostGameRoot)).string();
     std::string result="C:\\nfsu2";if(relative!="."&&!relative.empty())result+="\\"+relative;std::replace(result.begin(),result.end(),'/','\\');
     if(arg(2)<=result.size()){ret(result.size()+1,3);return;}std::memcpy(ptr(arg(1),result.size()+1),result.c_str(),result.size()+1);ret(result.size(),3);
 }
@@ -44,7 +50,8 @@ void createFile(){
     if(flags&0x40000000u)throw GuestStop("Overlapped CreateFile requires asynchronous file service");
     int options=access&0x40000000u?(access&0x80000000u?O_RDWR:O_WRONLY):O_RDONLY;
     switch(disposition){case 1:options|=O_CREAT|O_EXCL;break;case 2:options|=O_CREAT|O_TRUNC;break;case 3:break;case 4:options|=O_CREAT;break;case 5:options|=O_TRUNC;break;default:lastError=87;ret(UINT32_MAX,7);return;}
-    bool existed=std::filesystem::exists(path);
+    std::error_code ecExists;
+    bool existed=std::filesystem::exists(path,ecExists);
     int descriptor=disposition==3&&!(access&0x40000000u)&&discCheckSwitch(path) ? ::open("/dev/null",O_RDONLY|O_CLOEXEC) : ::open(path.c_str(),options|O_CLOEXEC,0600);
     NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Guest file %s access=%x disposition=%u",path.filename().string().c_str(),access,disposition);
     if(descriptor<0){lastError=fileError();ret(UINT32_MAX,7);return;}uint32_t handle=nextFileHandle++;fileHandles.emplace(handle,descriptor);lastError=(disposition==2||disposition==4)&&existed?183:0;ret(handle,7);
@@ -123,7 +130,7 @@ void findFirstFile(){
     for(auto& entry:std::filesystem::directory_iterator(directory,error)){
         if(!filePatternMatches(pattern,entry.path().filename().string()))continue;
         // Apply the same containment check used for ordinary file opens.
-        auto logical="C:/nfsu2/"+entry.path().lexically_relative(std::filesystem::weakly_canonical(hostGameRoot)).string();
+        auto logical="C:/nfsu2/"+entry.path().lexically_relative(safe_weakly_canonical(hostGameRoot)).string();
         gamePath(logical);search.paths.push_back(entry.path());
     }
     if(error){lastError=error==std::errc::no_such_file_or_directory?3:5;ret(UINT32_MAX,2);return;}
@@ -142,7 +149,7 @@ void createDirectory(){if(arg(1))throw GuestStop("CreateDirectory security attri
 }
 void fullPathName(){
     auto requested=guestString(arg(0));if(requested.empty()){lastError=123;ret(0,4);return;}
-    auto path=gamePath(requested);auto relative=path.lexically_relative(std::filesystem::weakly_canonical(hostGameRoot)).string();
+    auto path=gamePath(requested);auto relative=path.lexically_relative(safe_weakly_canonical(hostGameRoot)).string();
     std::string logical="C:\\nfsu2";if(relative!="."&&!relative.empty())logical+="\\"+relative;
     std::replace(logical.begin(),logical.end(),'/','\\');if(requested.back()=='/'||requested.back()=='\\')logical+='\\';
     uint32_t capacity=arg(1),out=arg(2),part=arg(3);if(capacity<=logical.size()){ret(uint32_t(logical.size()+1),4);return;}
