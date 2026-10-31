@@ -2,6 +2,7 @@ package io.mininxd.nfsu2;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.app.Activity;
 import android.app.AlertDialog;
 import android.widget.EditText;
 import android.widget.Toast;
@@ -285,13 +286,14 @@ final class RacingControlsView extends View {
         }
 
         if (editing) {
-            float w = getWidth() / scale;
-            drawToolbarButton(canvas, new RectF(w / 2f - 250, 18, w / 2f - 150, 58), "RESET");
-            drawToolbarButton(canvas, new RectF(w / 2f - 142, 18, w / 2f - 102, 58), "−");
-            drawToolbarButton(canvas, new RectF(w / 2f - 94, 18, w / 2f - 54, 58), "+");
-            drawToolbarButton(canvas, new RectF(w / 2f - 46, 18, w / 2f + 58, 58), "SAVE");
-            drawToolbarButton(canvas, new RectF(w / 2f + 66, 18, w / 2f + 170, 58), "CANCEL");
-            drawToolbarButton(canvas, new RectF(w / 2f - 65, 70, w / 2f + 65, 106), "OPTIONS");
+            float w = getWidth() / scale, cx = w / 2f;
+            drawToolbarButton(canvas, new RectF(cx - 245, 18, cx - 155, 58), "RESET", 0xE0182028, 0x44FFFFFF, COLOR_TEXT);
+            drawToolbarButton(canvas, new RectF(cx - 145, 18, cx - 105, 58), "−", 0xE01E2836, 0x66FFFFFF, Color.WHITE);
+            drawToolbarButton(canvas, new RectF(cx - 95, 18, cx - 55, 58), "+", 0xE01E2836, 0x66FFFFFF, Color.WHITE);
+            drawToolbarButton(canvas, new RectF(cx - 45, 18, cx + 50, 58), "SAVE", 0xE018301C, 0xAA88E060, COLOR_LIME);
+            drawToolbarButton(canvas, new RectF(cx + 60, 18, cx + 150, 58), "CANCEL", 0xE0182028, 0x44FFFFFF, COLOR_TEXT);
+            drawToolbarButton(canvas, new RectF(cx + 160, 18, cx + 250, 58), "EXIT", 0xE036181C, 0xAAFF6B6B, 0xFFFF7B7B);
+            drawToolbarButton(canvas, new RectF(cx - 65, 68, cx + 65, 106), "OPTIONS", 0xE0162534, 0xAA5AC8FA, 0xFF5AC8FA);
         }
         canvas.restore();
     }
@@ -527,11 +529,15 @@ final class RacingControlsView extends View {
         canvas.drawText(value, x, y - (text.ascent() + text.descent()) / 2f, text);
     }
 
-    private void drawToolbarButton(Canvas canvas, RectF area, String label) {
-        fill.setColor(0xE014202C);
-        canvas.drawRoundRect(area, 12, 12, fill);
-        text.setColor(COLOR_LIME);
-        text.setTextSize(label.length() > 2 ? 12 : 24);
+    private void drawToolbarButton(Canvas canvas, RectF area, String label, int bgCol, int strokeCol, int textCol) {
+        fill.setColor(bgCol);
+        line.setColor(strokeCol);
+        line.setStrokeWidth(1.5f);
+        float radius = Math.min(14f, area.height() / 2f);
+        canvas.drawRoundRect(area, radius, radius, fill);
+        canvas.drawRoundRect(area, radius, radius, line);
+        text.setColor(textCol);
+        text.setTextSize(label.length() > 3 ? 12 : 20);
         canvas.drawText(label, area.centerX(), area.centerY() - (text.ascent() + text.descent()) / 2f, text);
     }
 
@@ -563,26 +569,29 @@ final class RacingControlsView extends View {
         int action = e.getActionMasked(), index = e.getActionIndex();
         float x = e.getX(index) / scale, y = e.getY(index) / scale, w = getWidth() / scale;
         if (action == MotionEvent.ACTION_DOWN) {
-            if (x >= w / 2f - 65 && x <= w / 2f + 65 && y >= 70 && y <= 106) {
+            float cx = w / 2f;
+            if (x >= cx - 65 && x <= cx + 65 && y >= 66 && y <= 108) {
                 showOptions();
                 return true;
             }
-            if (y >= 18 && y <= 58) {
+            if (y >= 16 && y <= 60) {
                 boolean handled = true;
-                if (x >= w / 2f - 250 && x <= w / 2f - 150) {
+                if (x >= cx - 245 && x <= cx - 155) {
                     for (Control c : controls) c.area.set(c.original);
                     selected = null;
-                } else if (x >= w / 2f - 142 && x <= w / 2f - 102) {
+                } else if (x >= cx - 145 && x <= cx - 105) {
                     resizeSelected(-0.1f);
-                } else if (x >= w / 2f - 94 && x <= w / 2f - 54) {
+                } else if (x >= cx - 95 && x <= cx - 55) {
                     resizeSelected(0.1f);
-                } else if (x >= w / 2f - 46 && x <= w / 2f + 58) {
+                } else if (x >= cx - 45 && x <= cx + 50) {
                     saveLayout();
                     editing = false;
                     layoutControls();
-                } else if (x >= w / 2f + 66 && x <= w / 2f + 170) {
+                } else if (x >= cx + 60 && x <= cx + 150) {
                     editing = false;
                     layoutControls();
+                } else if (x >= cx + 160 && x <= cx + 250) {
+                    confirmExitToLauncher();
                 } else {
                     handled = false;
                 }
@@ -615,13 +624,13 @@ final class RacingControlsView extends View {
 
     private void chooseButtonSize() {
         String[] ids = {"auto", "80", "100", "125", "150", "175", "200"};
-        String[] labels = {"Auto · Responsive to screen", "80% · Compact", "100% · Normal", "125% · Large", "150% · Extra Large", "175% · Huge", "200% · Big (200%)"};
+        String[] labels = {"Auto (Responsive)", "80% (Compact)", "100% (Normal)", "125% (Large)", "150% (Extra Large)", "175% (Huge)", "200% (Max)"};
         String current = layouts.getString("control_size", "auto");
         int selectedIndex = 0;
         for (int i = 0; i < ids.length; i++) {
             if (ids[i].equals(current)) { selectedIndex = i; break; }
         }
-        new AlertDialog.Builder(getContext()).setTitle("Touch Button Size")
+        new AlertDialog.Builder(getContext(), android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle("Touch Button Size")
                 .setSingleChoiceItems(labels, selectedIndex, (dialog, which) -> {
                     String chosen = ids[which];
                     layouts.edit().putString("control_size", chosen).apply();
@@ -634,27 +643,48 @@ final class RacingControlsView extends View {
     private void showOptions() {
         String currentSize = layouts.getString("control_size", "auto");
         String sizeLabel = currentSize.equals("auto") ? "Auto" : currentSize + "%";
-        new AlertDialog.Builder(getContext()).setTitle("Control Options")
+        Context ctx = getContext();
+        new AlertDialog.Builder(ctx, android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle("Control Options")
                 .setItems(new String[]{
                         "Touch Button Size (" + sizeLabel + ")",
                         "Steering: Buttons / Thumb stick",
                         "Tilt steering",
                         "FPS limit",
                         "Save layout preset",
-                        "Load layout preset"
+                        "Load layout preset",
+                        "Exit to Launcher"
                 }, (dialog, which) -> {
                     if (which == 0) chooseButtonSize();
                     else if (which == 1) chooseStyle();
                     else if (which == 2) configureTilt.run();
                     else if (which == 3) configureFrameLimit.run();
                     else if (which == 4) saveNamedLayout();
-                    else loadNamedLayout();
-                }).setNegativeButton("Close", null).show();
+                    else if (which == 5) loadNamedLayout();
+                    else if (which == 6) confirmExitToLauncher();
+                })
+                .setPositiveButton("Close", null)
+                .setNegativeButton("Exit to Launcher", (dialog, which) -> confirmExitToLauncher())
+                .show();
+    }
+
+    private void confirmExitToLauncher() {
+        Context ctx = getContext();
+        new AlertDialog.Builder(ctx, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Exit to Launcher")
+                .setMessage("Are you sure you want to exit to the launcher?")
+                .setPositiveButton("Exit", (dialog, which) -> {
+                    dialog.dismiss();
+                    if (ctx instanceof Activity) {
+                        ((Activity) ctx).finish();
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     private void chooseStyle() {
         String[] ids = {"classic", "stick"};
-        new AlertDialog.Builder(getContext()).setTitle("Steering Mode")
+        new AlertDialog.Builder(getContext(), android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle("Steering Mode")
                 .setSingleChoiceItems(new String[]{"Buttons (◀ ▶ arrows)", "Thumb stick (Analog stick)"},
                         style.equals("stick") ? 1 : 0, (dialog, which) -> {
                     style = ids[which];
@@ -669,7 +699,7 @@ final class RacingControlsView extends View {
         name.setSingleLine();
         name.setHint("Layout name");
         name.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(24)});
-        AlertDialog dialog = new AlertDialog.Builder(getContext()).setTitle("Save " + (racing ? "driving" : "menu") + " layout")
+        AlertDialog dialog = new AlertDialog.Builder(getContext(), android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle("Save " + (racing ? "driving" : "menu") + " layout")
                 .setView(name).setPositiveButton("Save", null).setNegativeButton("Cancel", null).create();
         dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
             String value = name.getText().toString().trim();
@@ -709,7 +739,7 @@ final class RacingControlsView extends View {
             Toast.makeText(getContext(), "No saved layouts for this mode yet", Toast.LENGTH_SHORT).show();
             return;
         }
-        new AlertDialog.Builder(getContext()).setTitle("Load layout").setItems(names.toArray(new String[0]), (dialog, which) -> {
+        new AlertDialog.Builder(getContext(), android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle("Load layout").setItems(names.toArray(new String[0]), (dialog, which) -> {
             try {
                 JSONObject data = new JSONObject(layouts.getString(prefix + names.get(which), "{}"));
                 style = data.optString("style", "classic");

@@ -36,12 +36,6 @@ public final class GameOptions {
             new Option(RESOLUTION, "Internal Resolution", "75",
                     new String[] {"25", "30", "35", "40", "45", "50", "55", "60", "65", "70", "75", "80", "85", "90", "95", "100", "125", "150", "200"},
                     new String[] {"25%", "30%", "35%", "40%", "45%", "50%", "55%", "60%", "65%", "70%", "75%", "80%", "85%", "90%", "95%", "100%", "125%", "150%", "200%"}),
-            new Option(TOUCH_SIZE, "Touch Controls Size", "auto",
-                    new String[] {"auto", "80", "100", "125", "150", "175", "200"},
-                    new String[] {"Auto · Responsive to screen", "80% · Compact", "100% · Normal", "125% · Large", "150% · Extra Large", "175% · Huge", "200% · Big (200%)"}),
-            new Option(MENU_BUTTON_SIZE, "In-Game Menu Button Size", "auto",
-                    new String[] {"auto", "100", "125", "150", "175", "200"},
-                    new String[] {"Auto · Scaled for touch fingers", "100% · Original", "125% · Large", "150% · Extra Large", "175% · Huge", "200% · Big (200%)"}),
             new Option(CUTOUT, "Display Cutout (Notch)", "fullscreen",
                     new String[] {"fullscreen", "safe"},
                     new String[] {"Full Screen · bypass notch", "Letterbox · avoid cutout"}),
@@ -50,7 +44,7 @@ public final class GameOptions {
                     new String[] {"16:9 Centered · safe from notch", "Screen edges · ultra-wide"}),
             new Option(FPS, "FPS Limit", "30",
                     new String[] {"30", "60", "90", "120", "0"},
-                    new String[] {"30 FPS (Recommended · Real-time speed)", "60 FPS (Smooth 60 Hz · Real-time speed)", "90 FPS", "120 FPS", "Uncapped (Real-time speed)"}),
+                    new String[] {"30 FPS", "60 FPS", "90 FPS", "120 FPS", "Uncapped"}),
             new Option(DISPLAY_LOGS, "Display Logs", "off",
                     new String[] {"off", "compact", "full"},
                     new String[] {"Off", "Compact", "Full"}),
@@ -100,6 +94,8 @@ public final class GameOptions {
     static String get(Context context, String key) {
         Option o = find(key);
         if (o == null) {
+            if (TOUCH_SIZE.equals(key)) return prefs(context).getString(key, "auto");
+            if (MENU_BUTTON_SIZE.equals(key)) return prefs(context).getString(key, "auto");
             return prefs(context).getString(key, "off");
         }
         String value = prefs(context).getString(key, o.defaultValue);
