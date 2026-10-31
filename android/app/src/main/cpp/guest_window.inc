@@ -140,6 +140,7 @@ bool takeWindowMessage(uint32_t output,uint32_t handle,uint32_t minimum,uint32_t
     return false;
 }
 void peekMessage(){
+    syncPreTimestepPacing();
     if(!arg(0)||(arg(1)&&arg(1)!=UINT32_MAX&&!windows.count(arg(1)))){lastError=1400;ret(0,5);return;}
     if(arg(4)&0xfffcu)throw GuestStop("PeekMessage flags pending: "+hex(arg(4)));
     ret(takeWindowMessage(arg(0),arg(1),arg(2),arg(3),arg(4)&1),5);

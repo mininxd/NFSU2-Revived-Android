@@ -349,6 +349,7 @@ void d3dDispatch(){
         static void (*s_roam_tick)()=nullptr;
         if(!s_roam_tick)s_roam_tick=reinterpret_cast<void(*)()>(dlsym(RTLD_DEFAULT,"nfs_roam_frame_tick"));
         if(s_roam_tick)s_roam_tick();
+        serviceGuestSound();
         lastPresentMs=steadyMs();
         startStallWatch();
     }
@@ -383,6 +384,33 @@ uint32_t callGuest(uint32_t va,const uint32_t* args,size_t count,uint32_t cleanu
 // many times a frame and a std::vector per call cost a malloc/free pair.
 inline uint32_t callGuest(uint32_t va,std::initializer_list<uint32_t> args,uint32_t cleanup=0,bool threadStart=false){return callGuest(va,args.begin(),args.size(),cleanup,threadStart);}
 inline uint32_t callGuest(uint32_t va,const std::vector<uint32_t>& args,uint32_t cleanup=0,bool threadStart=false){return callGuest(va,args.data(),args.size(),cleanup,threadStart);}
+
+inline void syncPreTimestepPacing() {
+    static auto s_last_phys_time = std::chrono::steady_clock::now();
+    static uint32_t s_last_frame_counter = 0;
+    if (!memory || !memory->writable(0x00865154u, 4) || !memory->writable(0x00865198u, 4) || !memory->writable(0x00865140u, 4)) return;
+    uint32_t frame_cnt = 0;
+    if (memory->readable(0x00870818u, 4)) frame_cnt = read32(0x00870818u);
+    if (frame_cnt && frame_cnt == s_last_frame_counter) return;
+    s_last_frame_counter = frame_cnt;
+
+    auto now = std::chrono::steady_clock::now();
+    float real_elapsed = std::chrono::duration<float>(now - s_last_phys_time).count();
+    s_last_phys_time = now;
+
+    if (memory->readable(0x008654a4u, 4) && read32(0x008654a4u) == 6u) {
+        if (real_elapsed > 0.010f && real_elapsed < 0.150f) {
+            float current_wdt = 0.0f;
+            std::memcpy(&current_wdt, ptr(0x00865154u, 4), 4);
+            if (current_wdt > 0.0f && current_wdt < real_elapsed * 0.90f) {
+                std::memcpy(ptr(0x00865154u, 4), &real_elapsed, 4);
+                std::memcpy(ptr(0x00865198u, 4), &real_elapsed, 4);
+                write32(0x00865140u, static_cast<uint32_t>(real_elapsed * 1800.0f));
+            }
+        }
+    }
+}
+
 #include "guest_threads.inc"
 #include "guest_files.inc"
 #include "guest_kernel.inc"

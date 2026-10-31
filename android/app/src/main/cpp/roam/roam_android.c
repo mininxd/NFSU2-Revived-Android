@@ -672,17 +672,28 @@ static void ms_apply_arrows(uint32_t pkg, float s) {
     }
 }
 
+#ifdef ROAM_CORE_RUST
+extern float nfs_pacing_filter_dt(float real_elapsed, float current_wdt);
+#endif
+
 static float ms_scale_now(void) {
+    static float s_cached = -1.0f;
+    if (__builtin_expect(s_cached >= 1.0f, 1)) return s_cached;
     const char *e = getenv("NFSU2_MENU_SCALE");
-    if (!e || !*e) return 1.5f;
+    if (!e || !*e) { s_cached = 1.5f; return 1.5f; }
     float s = (float)atof(e);
     if (s > 10.0f) s /= 100.0f;
     if (s < 1.0f) s = 1.0f;
     if (s > MAX_SCALE) s = MAX_SCALE;
+    s_cached = s;
     return s;
 }
 
 static void menusize_frame_tick(void) {
+    /* Optimization for offline racing: when in the world / racing (G_FLOW == 6),
+     * 2D menu bars and dialogs are not active. Skip traversing UI elements. */
+    if (rh_mem_committed(0x008654a4u, 4) && MR32(0x008654a4u) == 6u) return;
+
     if (!rh_mem_committed(0x008384c4u, 4)) return;
     uint32_t fe = MR32(0x008384c4u);
     if (!fe || !rh_mem_committed(fe + 12, 4)) return;
@@ -733,9 +744,17 @@ static void framerate_pacing_fix(void) {
         if (real_elapsed > 0.010f && real_elapsed < 0.150f) {
             if (rh_mem_committed(0x00865154u, 4) && rh_mem_committed(0x00865198u, 4)) {
                 float current_wdt = MRF32(0x00865154u);
-                if (current_wdt > 0.0f && current_wdt < real_elapsed * 0.88f) {
-                    MRF32(0x00865154u) = real_elapsed;
-                    MRF32(0x00865198u) = real_elapsed;
+#ifdef ROAM_CORE_RUST
+                float target_dt = nfs_pacing_filter_dt(real_elapsed, current_wdt);
+#else
+                float target_dt = (current_wdt > 0.0f && current_wdt < real_elapsed * 0.88f) ? real_elapsed : current_wdt;
+#endif
+                if (target_dt != current_wdt) {
+                    MRF32(0x00865154u) = target_dt;
+                    MRF32(0x00865198u) = target_dt;
+                    if (rh_mem_committed(0x00865140u, 4)) {
+                        MR32(0x00865140u) = (uint32_t)(target_dt * 1800.0f);
+                    }
                 }
             }
         }
@@ -746,7 +765,7 @@ static void framerate_pacing_fix(void) {
 __attribute__((visibility("default"))) void nfs_roam_frame_tick(void) {
     if (!roam_android_init_symbols()) return;
     static int s_perf_bound = 0;
-    if (!s_perf_bound) {
+    if (!s_perf_bound || (g_frame_count % 300) == 0) {
         s_perf_bound = 1;
         nfs_bind_to_perf_cores();
     }

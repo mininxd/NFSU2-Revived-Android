@@ -186,7 +186,7 @@ bool joystickMethod(InputObject& object,uint32_t self,uint32_t method){
             else write32(header+16,(property==5?object.deadZone:object.saturation)[a]);
         }
         ret(0,3);return true;}
-    case 9:{if(!object.acquired){ret(diNotAcquired,3);return true;}
+    case 9:{syncPreTimestepPacing();if(!object.acquired){ret(diNotAcquired,3);return true;}
         if(arg(1)!=object.size||!arg(2)){ret(diInvalid,3);return true;}
         std::lock_guard<std::mutex> lock(inputMutex);std::memset(ptr(arg(2),object.size),0,object.size);
         for(auto& item:object.format){uint32_t value=padItemValue(object,item);
@@ -394,7 +394,7 @@ void inputDispatch(){
              NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Gamepad acquired by the game: %zu objects",object.format.size());}}
         object.acquired=true;ret(0,1);return;
     case 8:{bool previous=object.acquired;object.acquired=false;if(previous&&kind==4)--inputPadAcquired;ret(previous?0:1,1);return;}
-    case 9:{if(!object.acquired){ret(diNotAcquired,3);return;}
+    case 9:{syncPreTimestepPacing();if(!object.acquired){ret(diNotAcquired,3);return;}
         if(arg(1)!=object.size||!arg(2)){ret(diInvalid,3);return;}
         std::lock_guard<std::mutex> lock(inputMutex);std::memset(ptr(arg(2),object.size),0,object.size);
         for(auto item:object.format){uint32_t index=(item.type>>8)&0xffff,category=item.type&0xff;
