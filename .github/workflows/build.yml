@@ -36,6 +36,32 @@ jobs:
           rm -f /tmp/lib_arm64.tar.gz
           ls -la android/app/src/main/jniLibs/arm64-v8a
 
+      - name: Build Rust Native Modules (perf_cores and roam_rs)
+        continue-on-error: true
+        run: |
+          rustup target add aarch64-linux-android || true
+          CLANG_BIN=$(find "$ANDROID_HOME/ndk" "$ANDROID_NDK_ROOT" /usr/local/lib/android/sdk/ndk -name "aarch64-linux-android29-clang" 2>/dev/null | head -n 1)
+          if [ -z "$CLANG_BIN" ]; then
+            CLANG_BIN=$(find "$ANDROID_HOME/ndk" "$ANDROID_NDK_ROOT" /usr/local/lib/android/sdk/ndk -name "aarch64-linux-android*-clang" 2>/dev/null | grep -E "android(29|30|31|32|33|34|35)-clang" | sort -V | head -n 1)
+          fi
+          if [ -z "$CLANG_BIN" ]; then
+            CLANG_BIN=$(which aarch64-linux-gnu-gcc || which clang || find / -name "*clang" 2>/dev/null | head -n 1)
+          fi
+          if [ -n "$CLANG_BIN" ]; then
+            export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$CLANG_BIN"
+            mkdir -p android/app/src/main/jniLibs/arm64-v8a
+
+            echo "Building Rust perf_cores crate..."
+            cargo build --manifest-path android/app/src/main/rust/perf_cores/Cargo.toml --target aarch64-linux-android --release && \
+              cp android/app/src/main/rust/perf_cores/target/aarch64-linux-android/release/libperf_cores.so android/app/src/main/jniLibs/arm64-v8a/
+
+            echo "Building Rust roam_rs crate..."
+            cargo build --manifest-path android/app/src/main/rust/roam_rs/Cargo.toml --target aarch64-linux-android --release && \
+              cp android/app/src/main/rust/roam_rs/target/aarch64-linux-android/release/libroam_rs.so android/app/src/main/jniLibs/arm64-v8a/ || true
+
+            ls -lh android/app/src/main/jniLibs/arm64-v8a/lib*.so || true
+          fi
+
       - name: Build Native Free Roam Companion (libnfsu2_roam.so)
         run: |
           CLANG_BIN=$(find "$ANDROID_HOME/ndk" "$ANDROID_NDK_ROOT" /usr/local/lib/android/sdk/ndk -name "aarch64-linux-android29-clang" 2>/dev/null | head -n 1)
@@ -47,32 +73,26 @@ jobs:
             CLANG_BIN=$(which aarch64-linux-gnu-gcc || which clang || find / -name "*clang" 2>/dev/null | head -n 1)
           fi
           echo "Using compiler: $CLANG_BIN"
+
+          ROAM_RUST_LIB="android/app/src/main/rust/roam_rs/target/aarch64-linux-android/release/libroam_rs.a"
+          RUST_FLAGS=""
+          RUST_OBJS=""
+          if [ -f "$ROAM_RUST_LIB" ]; then
+            echo "Found compiled pure Rust roam_rs static library ($ROAM_RUST_LIB)"
+            RUST_FLAGS="-DROAM_CORE_RUST=1"
+            RUST_OBJS="$ROAM_RUST_LIB"
+          fi
+
           $CLANG_BIN -std=c11 -O3 -fomit-frame-pointer -shared -fPIC -ffp-contract=off -fno-strict-aliasing \
-            -DROAM_HOST_ANDROID -DROAM_HOST_WIN=1 \
+            -DROAM_HOST_ANDROID -DROAM_HOST_WIN=1 $RUST_FLAGS \
             -Iandroid/app/src/main/cpp/roam \
             android/app/src/main/cpp/roam/roam_core.c \
             android/app/src/main/cpp/roam/roam_game.c \
             android/app/src/main/cpp/roam/roam_android.c \
+            $RUST_OBJS \
             -lm -llog -ldl \
             -o android/app/src/main/jniLibs/arm64-v8a/libnfsu2_roam.so
           ls -lh android/app/src/main/jniLibs/arm64-v8a/libnfsu2_roam.so
-
-      - name: Build Rust Performance Cores Crate (libperf_cores.so)
-        continue-on-error: true
-        run: |
-          rustup target add aarch64-linux-android || true
-          CLANG_BIN=$(find "$ANDROID_HOME/ndk" "$ANDROID_NDK_ROOT" /usr/local/lib/android/sdk/ndk -name "aarch64-linux-android29-clang" 2>/dev/null | head -n 1)
-          if [ -z "$CLANG_BIN" ]; then
-            CLANG_BIN=$(find "$ANDROID_HOME/ndk" "$ANDROID_NDK_ROOT" /usr/local/lib/android/sdk/ndk -name "aarch64-linux-android*-clang" 2>/dev/null | grep -E "android(29|30|31|32|33|34|35)-clang" | sort -V | head -n 1)
-          fi
-          if [ -n "$CLANG_BIN" ]; then
-            export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$CLANG_BIN"
-            cd android/app/src/main/rust/perf_cores
-            cargo build --target aarch64-linux-android --release && \
-              cp target/aarch64-linux-android/release/libperf_cores.so ../../../jniLibs/arm64-v8a/
-            cd ../../../../..
-            ls -lh android/app/src/main/jniLibs/arm64-v8a/libperf_cores.so || true
-          fi
 
       - name: Configure Gamefiles Direct Link from Secret (if set)
         env:

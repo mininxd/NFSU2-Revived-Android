@@ -1,0 +1,20 @@
+[package]
+name = "roam_rs"
+version = "0.1.0"
+edition = "2021"
+authors = ["mininxd"]
+description = "Pure Rust Free Roam multiplayer protocol, packet serialization, and math engine for NFSU2 Android"
+
+[lib]
+name = "roam_rs"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+libc = { version = "0.2", default-features = false }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
