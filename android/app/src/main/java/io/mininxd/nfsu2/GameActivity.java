@@ -354,6 +354,37 @@ public final class GameActivity extends NativeActivity {
         if (diagnosticOverlay.isEnabled()) {
             diagnosticOverlay.start();
         }
+        startCompanionTicker();
+    }
+
+    private Thread mCompanionTickerThread;
+    private final java.util.concurrent.atomic.AtomicBoolean mCompanionRunning = new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    private void startCompanionTicker() {
+        if (!io.mininxd.nfsu2.net.RoamNativeBridge.isLoaded() || mCompanionRunning.get()) return;
+        mCompanionRunning.set(true);
+        mCompanionTickerThread = new Thread(() -> {
+            while (mCompanionRunning.get()) {
+                try {
+                    io.mininxd.nfsu2.net.RoamNativeBridge.nativeRoamTick();
+                    Thread.sleep(16);
+                } catch (InterruptedException ignored) {
+                    break;
+                } catch (Throwable t) {
+                    try { Thread.sleep(50); } catch (Exception ignored) { break; }
+                }
+            }
+        }, "GameCompanionTicker");
+        mCompanionTickerThread.setDaemon(true);
+        mCompanionTickerThread.start();
+    }
+
+    private void stopCompanionTicker() {
+        mCompanionRunning.set(false);
+        if (mCompanionTickerThread != null) {
+            mCompanionTickerThread.interrupt();
+            mCompanionTickerThread = null;
+        }
     }
 
     private void applyCheatCodes(java.util.List<String> codes) {
@@ -461,6 +492,7 @@ public final class GameActivity extends NativeActivity {
     }
     @Override protected void onPause() {
         foreground=false;
+        stopCompanionTicker();
         holdLanBroadcasts(false);
         updateTiltSensor();
         if(inputManager!=null)inputManager.unregisterInputDeviceListener(gamepadListener);
@@ -472,6 +504,7 @@ public final class GameActivity extends NativeActivity {
     @Override protected void onResume() {
         super.onResume();
         foreground=true;
+        startCompanionTicker();
         holdLanBroadcasts(true);
         updateTiltSensor();
         if(inputManager!=null){inputManager.registerInputDeviceListener(gamepadListener,null);updateGamepads();}
@@ -542,6 +575,7 @@ public final class GameActivity extends NativeActivity {
 
     @Override protected void onDestroy() {
         super.onDestroy();
+        stopCompanionTicker();
         if (diagnosticOverlay != null) diagnosticOverlay.stop();
         AdhocRoamClient.getInstance().stop();
         // Each launch uses a fresh guest machine in the dedicated :game process.

@@ -344,7 +344,14 @@ void d3dDispatch(){
     static std::array<std::chrono::nanoseconds,4096> methodTime{};
     if(timed){auto spent=std::chrono::steady_clock::now()-bridgeStart;bridgeTime+=token==0x7e002110u?spent:spent*64;presentTime+=token==0x7e002110u?spent:std::chrono::nanoseconds{};
         methodTime[((token-0x7e000000u)/16u)&4095u]+=token==0x7e002110u?spent:spent*64;}
-    if(token==0x7e002110u){nfs_widescreen_apply_frame_rate();lastPresentMs=steadyMs();startStallWatch();}
+    if(token==0x7e002110u){
+        nfs_widescreen_apply_frame_rate();
+        static void (*s_roam_tick)()=nullptr;
+        if(!s_roam_tick)s_roam_tick=reinterpret_cast<void(*)()>(dlsym(RTLD_DEFAULT,"nfs_roam_frame_tick"));
+        if(s_roam_tick)s_roam_tick();
+        lastPresentMs=steadyMs();
+        startStallWatch();
+    }
     if(token==0x7e002110u&&result==0){
         static FramePacer pacer;
         auto now=std::chrono::steady_clock::now();
@@ -961,8 +968,8 @@ void setGuestResolution(unsigned width,unsigned height){
 }
 void setGuestFrameLimit(unsigned framesPerSecond){
     frameLimit=(framesPerSecond>=30&&framesPerSecond<=240)?framesPerSecond:0;
-    // The game paces itself to 1/60 s; let it run at the cap (uncapped: the 120 Hz display).
-    nfs_widescreen_set_frame_rate(frameLimit.load()?frameLimit.load():120);
+    // The game paces itself to 1/60 s; let it run at 60 Hz base tick pacing when uncapped.
+    nfs_widescreen_set_frame_rate(frameLimit.load()?frameLimit.load():60);
     NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Android frame limit %u FPS (0 means uncapped)",frameLimit.load());
 }
 void setGuestKey(unsigned scan,bool down){if(scan>=256)return;std::lock_guard<std::mutex> lock(inputMutex);if(bool(inputKeys[scan])==down)return;inputKeys[scan]=down?0x80:0;recordInputKey(scan,down);enqueueGuestKey(scan,down);}

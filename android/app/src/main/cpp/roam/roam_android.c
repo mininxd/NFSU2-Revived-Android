@@ -535,7 +535,7 @@ static void hiddenraces_frame_tick(void) {
 #define FRAME_W   100.f
 #define MAX_SCALE 2.5f
 #define MAX_OBJS  64
-#define KEPT_MAX  512
+#define KEPT_MAX  4096
 
 typedef struct { uint32_t data; long seen; float own[4], put[4]; } Kept;
 static Kept g_kept[KEPT_MAX];
@@ -579,34 +579,95 @@ static void ms_put(uint32_t o, Kept *k, const float want[4]) {
 }
 
 static void ms_apply_bar(uint32_t pkg, float s) {
-    uint32_t obj[MAX_OBJS]; Kept *k[MAX_OBJS]; int n = 0;
-    float px = 0.f, py = 0.f; int pivot = 0;
+    if (s <= 1.001f && g_last_menu_scale <= 1.001f) return;
+    uint32_t obj[MAX_OBJS];
+    Kept *k[MAX_OBJS];
+    uint32_t otype[MAX_OBJS];
+    int n = 0;
+
+    float min_x = 999999.0f, max_x = -999999.0f;
+    float min_y = 999999.0f, max_y = -999999.0f;
+    int have_bounds = 0;
+
     for (uint32_t o = MR32(pkg + P_OBJS); o && n < MAX_OBJS && rh_mem_committed(o, 0x30u); o = MR32(o + O_NEXT)) {
         uint32_t t = MR32(o + O_TYPE), d = MR32(o + O_DATA);
-        if ((t != T_IMAGE && t != T_STRING) || !rh_mem_committed(d, 0x44u) || !(k[n] = ms_kept(d))) continue;
-        if (t == T_IMAGE && k[n]->own[2] > FRAME_W) {
-            float r = k[n]->own[0] + k[n]->own[2] * 0.5f, b = k[n]->own[1] + k[n]->own[3] * 0.5f;
-            if (!pivot || r > px) px = r;
-            if (!pivot || b > py) py = b;
-            pivot = 1;
-        }
-        obj[n++] = o;
+        if ((t != T_IMAGE && t != T_STRING) || !rh_mem_committed(d, 0x44u)) continue;
+        Kept *kp = ms_kept(d);
+        if (!kp) continue;
+        obj[n] = o;
+        k[n] = kp;
+        otype[n] = t;
+
+        float cx = kp->own[0] + (t == T_IMAGE ? kp->own[2] * 0.5f : 0.0f);
+        float cy = kp->own[1] + (t == T_IMAGE ? kp->own[3] * 0.5f : 0.0f);
+        if (cx < min_x) min_x = cx;
+        if (cx > max_x) max_x = cx;
+        if (cy < min_y) min_y = cy;
+        if (cy > max_y) max_y = cy;
+        have_bounds = 1;
+        n++;
     }
-    for (int i = 0; pivot && i < n; i++) {
+
+    if (!have_bounds || n == 0) return;
+
+    float group_cx = (min_x + max_x) * 0.5f;
+    float group_cy = (min_y + max_y) * 0.5f;
+
+    for (int i = 0; i < n; i++) {
         const float *own = k[i]->own;
-        float want[4] = { px + (own[0] - px) * s, py + (own[1] - py) * s, own[2] * s, own[3] * s };
+        uint32_t t = otype[i];
+        float want[4];
+
+        if (t == T_IMAGE) {
+            float obj_cx = own[0] + own[2] * 0.5f;
+            float obj_cy = own[1] + own[3] * 0.5f;
+            float new_cx = group_cx + (obj_cx - group_cx) * s;
+            float new_cy = group_cy + (obj_cy - group_cy) * s;
+            float new_w = own[2] * s;
+            float new_h = own[3] * s;
+            want[0] = new_cx - new_w * 0.5f;
+            want[1] = new_cy - new_h * 0.5f;
+            want[2] = new_w;
+            want[3] = new_h;
+            /* Clamp to screen margins so buttons never clip beyond screen bounds */
+            if (want[0] + want[2] > 316.0f) want[0] = 316.0f - want[2];
+            if (want[0] < -316.0f) want[0] = -316.0f;
+            if (want[1] + want[3] > 234.0f) want[1] = 234.0f - want[3];
+            if (want[1] < -234.0f) want[1] = -234.0f;
+        } else {
+            // T_STRING: position is text origin; size is font scale
+            float obj_cx = own[0];
+            float obj_cy = own[1];
+            float new_cx = group_cx + (obj_cx - group_cx) * s;
+            float new_cy = group_cy + (obj_cy - group_cy) * s;
+            want[0] = new_cx;
+            want[1] = new_cy;
+            want[2] = own[2] * s;
+            want[3] = own[3] * s;
+            if (want[0] > 310.0f) want[0] = 310.0f;
+            if (want[0] < -310.0f) want[0] = -310.0f;
+            if (want[1] > 230.0f) want[1] = 230.0f;
+            if (want[1] < -230.0f) want[1] = -230.0f;
+        }
+
         ms_put(obj[i], k[i], want);
     }
 }
 
 static const uint32_t ARROWS[] = { 0x444969fdu, 0x444969feu };
 static void ms_apply_arrows(uint32_t pkg, float s) {
+    if (s <= 1.001f && g_last_menu_scale <= 1.001f) return;
     int n = 0;
     for (uint32_t o = MR32(pkg + P_OBJS); o && n < MAX_OBJS && rh_mem_committed(o, 0x30u); o = MR32(o + O_NEXT), n++) {
         uint32_t h = MR32(o + O_HASH), d = MR32(o + O_DATA);
         if (MR32(o + O_TYPE) != T_IMAGE || (h != ARROWS[0] && h != ARROWS[1]) || !rh_mem_committed(d, 0x44u)) continue;
         Kept *k = ms_kept(d);
-        float want[4] = { k->own[0], k->own[1], k->own[2] * s, k->own[3] * s };
+        if (!k) continue;
+        float cx = k->own[0] + k->own[2] * 0.5f;
+        float cy = k->own[1] + k->own[3] * 0.5f;
+        float nw = k->own[2] * s;
+        float nh = k->own[3] * s;
+        float want[4] = { cx - nw * 0.5f, cy - nh * 0.5f, nw, nh };
         ms_put(o, k, want);
     }
 }
@@ -622,7 +683,6 @@ static float ms_scale_now(void) {
 }
 
 static void menusize_frame_tick(void) {
-    if ((g_frame_count & 3) != 0) return;
     if (!rh_mem_committed(0x008384c4u, 4)) return;
     uint32_t fe = MR32(0x008384c4u);
     if (!fe || !rh_mem_committed(fe + 12, 4)) return;
@@ -644,7 +704,7 @@ static void menusize_frame_tick(void) {
             if (name_ptr && rh_mem_committed(name_ptr, 16)) {
                 const char *nm = (const char *)GPTR(name_ptr);
                 if (nm && *nm) {
-                    if (strstr(nm, "UI_PC_Help_Bar")) {
+                    if (strcasestr(nm, "Help_Bar") || strcasestr(nm, "HelpBar") || strcasestr(nm, "Dialog") || strcasestr(nm, "Popup")) {
                         ms_apply_bar(pkg, s);
                     }
                     ms_apply_arrows(pkg, s);
@@ -655,7 +715,24 @@ static void menusize_frame_tick(void) {
     }
 }
 
-void nfs_roam_frame_tick(void) {
+static void framerate_pacing_fix(void) {
+    if (!rh_mem_committed(0x007875bcu, 4) || !rh_mem_committed(0x00865558u, 4)) return;
+    float frame60 = MRF32(0x007875bcu);
+    /* 0x007875BC is the game's simulation time step and max clamp base (3 * [0x7875BC]).
+     * If widescreen or uncapped mode set it to 1/120 s (0.00833s), the max dt clamp shrinks
+     * from 50 ms to 25 ms, causing severe slow-motion whenever render FPS drops below 40.
+     * We clamp it so it is never faster than 1/60 s (0.016667s), and expand [0x7fb714] to 6.0f. */
+    if (frame60 > 0.0f && frame60 < 0.0166666f) {
+        MRF32(0x007875bcu) = 0.016666668f;
+    }
+    if (rh_mem_committed(0x007fb714u, 4)) {
+        if (MRF32(0x007fb714u) < 6.0f) {
+            MRF32(0x007fb714u) = 6.0f;
+        }
+    }
+}
+
+__attribute__((visibility("default"))) void nfs_roam_frame_tick(void) {
     if (!roam_android_init_symbols()) return;
     static int s_perf_bound = 0;
     if (!s_perf_bound) {
@@ -664,6 +741,7 @@ void nfs_roam_frame_tick(void) {
     }
     g_frame_count++;
     hiddenraces_frame_tick();
+    framerate_pacing_fix();
     menusize_frame_tick();
     roam_game_frame(NULL);
 }

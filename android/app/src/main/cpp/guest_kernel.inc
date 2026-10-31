@@ -139,10 +139,10 @@ void cpInfo() {
     uint32_t cp=arg(0);if(cp!=0&&cp!=1252&&cp!=437&&cp!=65001){lastError=87;ret(0,2);return;}
     uint32_t out=arg(1);std::memset(ptr(out,20),0,20);write32(out,cp==65001?4:1);*static_cast<char*>(ptr(out+4,1))='?';ret(1,2);
 }
-uint64_t counter() {return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());}
-void tickCount() {ret(static_cast<uint32_t>(counter()/1000000),0);}
+uint64_t counter() {return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());}
+void tickCount() {ret(static_cast<uint32_t>(counter()/1000),0);}
 void performanceCounter() {uint64_t now=counter();std::memcpy(ptr(arg(0),8),&now,8);ret(1,1);}
-void performanceFrequency() {uint64_t frequency=1000000000;std::memcpy(ptr(arg(0),8),&frequency,8);ret(1,1);}
+void performanceFrequency() {uint64_t frequency=1000000;std::memcpy(ptr(arg(0),8),&frequency,8);ret(1,1);}
 void systemFileTime() {uint64_t ticks=static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count()/100)+116444736000000000ull;std::memcpy(ptr(arg(0),8),&ticks,8);ret(0,1);}
 void fileTimeToLocalFileTime(){
     uint32_t input=arg(0),output=arg(1);
