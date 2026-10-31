@@ -261,6 +261,15 @@ public final class GameActivity extends NativeActivity {
                 android.system.Os.setenv("NFSU2_ROAM_CREW", crew.trim(), true);
             }
 
+            String backend = launch.getStringExtra("graphicsBackend");
+            if (backend == null) backend = GameOptions.get(this, GameOptions.GRAPHICS_BACKEND);
+            android.system.Os.setenv("NFSU2_RENDERER", backend, true);
+            if ("opengl".equals(backend)) {
+                android.system.Os.setenv("LIBGL_ALWAYS_SOFTWARE", "0", true);
+                android.system.Os.setenv("MESA_LOADER_DRIVER_OVERRIDE", "zink", true);
+                android.system.Os.setenv("GALLIUM_DRIVER", "zink", true);
+            }
+
             // Sync touch control size
             String touchSize = GameOptions.get(this, GameOptions.TOUCH_SIZE);
             getSharedPreferences("touch_layouts_v2", MODE_PRIVATE)

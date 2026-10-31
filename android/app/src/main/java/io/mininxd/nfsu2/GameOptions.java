@@ -20,15 +20,19 @@ public final class GameOptions {
         }
     }
 
-    static final String RESOLUTION = "resolution", FPS = "fps", WIDESCREEN = "widescreen", LATENCY = "latency",
+    public static final String RESOLUTION = "resolution", FPS = "fps", WIDESCREEN = "widescreen", LATENCY = "latency",
             TEXTURES = "textures", MINIMAP = "minimap", LANGUAGE = "language",
             CUTOUT = "cutout", HUD_SAFE = "hud_safe", DISPLAY_LOGS = "display_logs",
             TOUCH_SIZE = "touch_size", MENU_BUTTON_SIZE = "menu_size", HORN = "horn",
             AUTOSAVE = "autosave", SHOW_HIDDEN_RACES = "show_hidden_races",
             STARTUP_MOVIES = "intro", CUTSCENE_BORDERS = "cutscene_borders",
-            ROAM_CARS_LIMIT = "roam_max_cars", ROAM_CREW = "roam_crew";
+            ROAM_CARS_LIMIT = "roam_max_cars", ROAM_CREW = "roam_crew",
+            GRAPHICS_BACKEND = "graphics_backend";
 
     static final Option[] ALL = {
+            new Option(GRAPHICS_BACKEND, "Graphics API", "auto",
+                    new String[] {"auto", "vulkan", "opengl"},
+                    new String[] {"Auto (Recommended)", "Vulkan (DXVK)", "OpenGL (ES)"}),
             new Option(RESOLUTION, "Internal Resolution", "75",
                     new String[] {"25", "30", "35", "40", "45", "50", "55", "60", "65", "70", "75", "80", "85", "90", "95", "100", "125", "150", "200"},
                     new String[] {"25%", "30%", "35%", "40%", "45%", "50%", "55%", "60%", "65%", "70%", "75%", "80%", "85%", "90%", "95%", "100%", "125%", "150%", "200%"}),

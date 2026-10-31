@@ -30,6 +30,8 @@ uint32_t  *g_p_ecx = NULL;
 uint32_t  *g_p_edx = NULL;
 recomp_func_t (*g_p_recomp_lookup)(uint32_t va) = NULL;
 
+int nfs_bind_to_perf_cores(void);
+
 #define G_CARPOOL_KB 0x007fa9d4u
 #define CARPOOL_KB   48000
 

@@ -80,7 +80,9 @@ public final class DiagnosticOverlay {
                 + (Process.is64Bit() ? "arm64-v8a" : "armeabi-v7a");
 
         GpuDrivers.Driver driver = GpuDrivers.selected(activity);
-        this.gpuDriverName = (driver == null ? "System Vulkan" : driver.name);
+        String backend = GameOptions.get(activity, GameOptions.GRAPHICS_BACKEND);
+        String apiLabel = "opengl".equals(backend) ? "OpenGL ES" : (driver == null ? "System Vulkan" : driver.name);
+        this.gpuDriverName = apiLabel;
 
         initView();
     }
