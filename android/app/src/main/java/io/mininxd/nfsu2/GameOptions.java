@@ -32,7 +32,7 @@ public final class GameOptions {
     static final Option[] ALL = {
             new Option(GRAPHICS_BACKEND, "Graphics API", "auto",
                     new String[] {"auto", "vulkan", "opengl"},
-                    new String[] {"Auto (Recommended)", "Vulkan (DXVK)", "OpenGL (ES)"}),
+                    new String[] {"Auto", "Vulkan (DXVK)", "OpenGL (ES)"}),
             new Option(RESOLUTION, "Internal Resolution", "75",
                     new String[] {"25", "30", "35", "40", "45", "50", "55", "60", "65", "70", "75", "80", "85", "90", "95", "100", "125", "150", "200"},
                     new String[] {"25%", "30%", "35%", "40%", "45%", "50%", "55%", "60%", "65%", "70%", "75%", "80%", "85%", "90%", "95%", "100%", "125%", "150%", "200%"}),
@@ -241,6 +241,145 @@ public final class GameOptions {
         if (value.equals("720")) return new int[] {1280, 720};
         float scale = Integer.parseInt(value) / 100f;
         return new int[] {Math.round(width * scale / 2f) * 2, Math.round(height * scale / 2f) * 2};
+    }
+
+    /**
+     * Resolves the effective graphics backend to use.
+     * When "auto" is selected, checks config/graphics_api.json against the device CPU/SoC.
+     */
+    public static String getEffectiveGraphicsBackend(Context context) {
+        String selected = get(context, GRAPHICS_BACKEND);
+        if (!"auto".equalsIgnoreCase(selected)) {
+            return selected;
+        }
+
+        String jsonStr = loadGraphicsApiJson(context);
+        if (jsonStr != null && !jsonStr.trim().isEmpty()) {
+            try {
+                org.json.JSONObject obj = new org.json.JSONObject(jsonStr);
+                java.util.List<String> cpuIds = getCpuIdentifiers();
+
+                if (obj.has("opengl")) {
+                    org.json.JSONArray gl = obj.getJSONArray("opengl");
+                    for (int i = 0; i < gl.length(); i++) {
+                        String target = gl.getString(i);
+                        for (String id : cpuIds) {
+                            if (matchesCpu(id, target)) return "opengl";
+                        }
+                    }
+                }
+
+                if (obj.has("vulkan")) {
+                    org.json.JSONArray vk = obj.getJSONArray("vulkan");
+                    for (int i = 0; i < vk.length(); i++) {
+                        String target = vk.getString(i);
+                        for (String id : cpuIds) {
+                            if (matchesCpu(id, target)) return "vulkan";
+                        }
+                    }
+                }
+            } catch (Throwable t) {
+                android.util.Log.w("NFSU2", "Failed to parse graphics_api.json: " + t.getMessage());
+            }
+        }
+
+        return "vulkan";
+    }
+
+    private static boolean matchesCpu(String cpuId, String target) {
+        if (cpuId == null || target == null || target.isEmpty()) return false;
+        String c = cpuId.toLowerCase(java.util.Locale.US).replaceAll("[^a-z0-9]", "");
+        String t = target.toLowerCase(java.util.Locale.US).replaceAll("[^a-z0-9]", "");
+        if (c.contains(t) || t.contains(c)) return true;
+        if (t.startsWith("mt") && t.length() > 4) {
+            String num = t.substring(2);
+            if (c.contains("mt") && c.contains(num)) return true;
+        }
+        return false;
+    }
+
+    private static java.util.List<String> getCpuIdentifiers() {
+        java.util.List<String> ids = new java.util.ArrayList<>();
+        if (android.os.Build.HARDWARE != null && !android.os.Build.HARDWARE.isEmpty()) {
+            ids.add(android.os.Build.HARDWARE.toLowerCase(java.util.Locale.US).trim());
+        }
+        if (android.os.Build.BOARD != null && !android.os.Build.BOARD.isEmpty()) {
+            ids.add(android.os.Build.BOARD.toLowerCase(java.util.Locale.US).trim());
+        }
+        if (android.os.Build.VERSION.SDK_INT >= 31) {
+            try {
+                if (android.os.Build.SOC_MODEL != null && !android.os.Build.SOC_MODEL.isEmpty()) {
+                    ids.add(android.os.Build.SOC_MODEL.toLowerCase(java.util.Locale.US).trim());
+                }
+            } catch (Throwable ignored) {}
+        }
+        String[] propKeys = {"ro.board.platform", "ro.hardware", "ro.mediatek.platform", "ro.soc.model", "ro.boot.hardware"};
+        try {
+            Class<?> sp = Class.forName("android.os.SystemProperties");
+            java.lang.reflect.Method getMethod = sp.getMethod("get", String.class);
+            for (String key : propKeys) {
+                String val = (String) getMethod.invoke(null, key);
+                if (val != null && !val.trim().isEmpty()) {
+                    ids.add(val.toLowerCase(java.util.Locale.US).trim());
+                }
+            }
+        } catch (Throwable ignored) {}
+
+        try (java.io.BufferedReader br = new java.io.BufferedReader(new java.io.FileReader("/proc/cpuinfo"))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                if (line.toLowerCase(java.util.Locale.US).startsWith("hardware")) {
+                    int colon = line.indexOf(':');
+                    if (colon >= 0 && colon + 1 < line.length()) {
+                        String hw = line.substring(colon + 1).toLowerCase(java.util.Locale.US).trim();
+                        if (!hw.isEmpty()) ids.add(hw);
+                    }
+                }
+            }
+        } catch (Throwable ignored) {}
+
+        return ids;
+    }
+
+    private static String loadGraphicsApiJson(Context context) {
+        try {
+            java.io.File[] candidates = {
+                new java.io.File(LauncherActivity.gameRoot(), "config/graphics_api.json"),
+                new java.io.File(android.os.Environment.getExternalStorageDirectory(), "NFSU2/config/graphics_api.json"),
+                new java.io.File(android.os.Environment.getExternalStorageDirectory(), "nfsu2/config/graphics_api.json")
+            };
+            for (java.io.File f : candidates) {
+                if (f != null && f.isFile()) {
+                    return readFileToString(f);
+                }
+            }
+        } catch (Throwable ignored) {}
+
+        if (context != null) {
+            String[] assetPaths = {"config/graphics_api.json", "graphics_api.json"};
+            for (String path : assetPaths) {
+                try (java.io.InputStream is = context.getAssets().open(path)) {
+                    java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+                    byte[] buf = new byte[4096];
+                    int r;
+                    while ((r = is.read(buf)) != -1) bos.write(buf, 0, r);
+                    return bos.toString("UTF-8");
+                } catch (Throwable ignored) {}
+            }
+        }
+        return null;
+    }
+
+    private static String readFileToString(java.io.File file) {
+        try (java.io.FileInputStream fis = new java.io.FileInputStream(file);
+             java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream()) {
+            byte[] buf = new byte[4096];
+            int r;
+            while ((r = fis.read(buf)) != -1) bos.write(buf, 0, r);
+            return bos.toString("UTF-8");
+        } catch (Throwable ignored) {
+            return null;
+        }
     }
 
     static final class Cheat {

@@ -62,7 +62,7 @@ final class Diagnostics {
 
     static String summary(Context context) {
         GpuDrivers.Driver driver = GpuDrivers.selected(context);
-        String backend = GameOptions.get(context, GameOptions.GRAPHICS_BACKEND);
+        String backend = GameOptions.getEffectiveGraphicsBackend(context);
         String apiInfo = "opengl".equals(backend) ? "OpenGL ES" : (driver == null ? "System" : driver.name);
         return "NFSU2 " + ReleaseUpdates.installed(context)
                 + "\nAPK ABI: " + (Process.is64Bit() ? "arm64-v8a" : "armeabi-v7a")

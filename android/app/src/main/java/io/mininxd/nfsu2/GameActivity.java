@@ -267,7 +267,7 @@ public final class GameActivity extends NativeActivity {
             }
 
             String backend = launch.getStringExtra("graphicsBackend");
-            if (backend == null) backend = GameOptions.get(this, GameOptions.GRAPHICS_BACKEND);
+            if (backend == null || "auto".equalsIgnoreCase(backend)) backend = GameOptions.getEffectiveGraphicsBackend(this);
             android.system.Os.setenv("NFSU2_RENDERER", backend, true);
 
             // Sync touch control size
@@ -409,7 +409,7 @@ public final class GameActivity extends NativeActivity {
     }
     public void setStatus(String message) {
         if (message != null) {
-            String backend = GameOptions.get(this, GameOptions.GRAPHICS_BACKEND);
+            String backend = GameOptions.getEffectiveGraphicsBackend(this);
             if ("opengl".equals(backend)) {
                 message = message.replace("Vulkan 1.1: presentación activa", "OpenGL ES: presentation active")
                                  .replace("Vulkan 1.1: presentation active", "OpenGL ES: presentation active");

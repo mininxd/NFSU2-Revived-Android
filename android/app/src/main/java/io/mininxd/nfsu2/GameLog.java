@@ -96,8 +96,12 @@ public final class GameLog {
 
         if (context != null) {
             try {
-                String backend = GameOptions.get(context, GameOptions.GRAPHICS_BACKEND);
-                sb.append("Graphics API: ").append(backend).append("\n");
+                String selectedBackend = GameOptions.get(context, GameOptions.GRAPHICS_BACKEND);
+                String effectiveBackend = GameOptions.getEffectiveGraphicsBackend(context);
+                String backendLog = "auto".equalsIgnoreCase(selectedBackend)
+                        ? "auto (" + effectiveBackend + ")"
+                        : selectedBackend;
+                sb.append("Graphics API: ").append(backendLog).append("\n");
                 GpuDrivers.Driver driver = GpuDrivers.selected(context);
                 sb.append("GPU Driver: ").append(driver == null ? "System default" : driver.name).append("\n");
                 sb.append("Resolution: ").append(GameOptions.get(context, GameOptions.RESOLUTION)).append("%\n");
