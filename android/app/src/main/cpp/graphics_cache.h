@@ -81,6 +81,30 @@ void nfs_audio_resample_sinc_simd(
     float* out_right
 );
 
+// OpenGL / GLES Rendering Optimizer
+int nfs_gl_filter_enable(uint32_t cap_idx, int enabled);
+int nfs_gl_filter_blend_func(uint32_t src_rgb, uint32_t dst_rgb, uint32_t src_a, uint32_t dst_a);
+int nfs_gl_filter_depth_mask(uint32_t flag);
+int nfs_gl_filter_depth_func(uint32_t func);
+int nfs_gl_filter_bind_texture(uint32_t unit, uint32_t texture);
+int nfs_gl_filter_use_program(uint32_t program);
+int nfs_gl_filter_bind_buffer(uint32_t target, uint32_t buffer);
+int nfs_gl_filter_viewport(int x, int y, int w, int h);
+void nfs_gl_filter_invalidate(void);
+
+int nfs_dxt_decode_rgba8(uint32_t mode, uint32_t width, uint32_t height,
+                         const uint8_t* raw, size_t raw_size, uint8_t* out_rgba);
+
+void nfs_gl_program_cache_init(const char* cache_dir);
+int nfs_gl_program_cache_load(uint64_t shader_hash, uint8_t** out_binary,
+                              size_t* out_size, uint32_t* out_format);
+int nfs_gl_program_cache_save(uint64_t shader_hash, uint32_t binary_format,
+                              const uint8_t* data, size_t size);
+void nfs_gl_program_cache_free_buffer(uint8_t* buf, size_t size);
+
+int nfs_gl_vbo_ring_alloc(size_t bytes, size_t* out_offset);
+void nfs_gl_vbo_ring_reset(void);
+
 #ifdef __cplusplus
 }
 #endif
