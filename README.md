@@ -23,7 +23,7 @@ Issue-driven changes and remaining limits: [16 October review](docs/ISSUE_REVIEW
 [![Status](https://img.shields.io/badge/Status-Playable%20Race%20Prototype-brightgreen.svg)](#status)
 [![License](https://img.shields.io/badge/License-MIT%20(Tooling)-lightgrey.svg)](#legal)
 
-*NFSU2 Revived (not Evolve) is the continuation of the native Android port for **Need for Speed: Underground 2** (`SPEED2.EXE`, x86-32), building upon and crediting the original static binary recompilation by [codepdbh/nfsu2-recompiled](https://github.com/codepdbh/nfsu2-recompiled).*
+*NFSU2 Revived is the continuation of the native Android port for **Need for Speed: Underground 2** (`SPEED2.EXE`, x86-32), building upon and crediting the original static binary recompilation by [codepdbh/nfsu2-recompiled](https://github.com/codepdbh/nfsu2-recompiled).*
 
 [🎮 Android Showcase](#gameplay-showcase) • [⚡ Features](#features) • [📊 Status](#status) • [🛠️ Build Pipeline](#pipeline) • [📱 Android Guide](#android-port) • [⚖️ Legal](#legal)
 
