@@ -73,6 +73,35 @@ final class RacingControlsView extends View {
     private Control selected;
     private int dragPointer = -1;
     private float dragX, dragY;
+    private float dragStartX, dragStartY;
+    private boolean hasMovedControl = false;
+
+    public interface OnEditingChangeListener {
+        void onEditingChanged(boolean editing);
+    }
+    private OnEditingChangeListener onEditingChangeListener;
+
+    public void setOnEditingChangeListener(OnEditingChangeListener listener) {
+        this.onEditingChangeListener = listener;
+    }
+
+    public void setEditing(boolean edit) {
+        if (this.editing == edit) return;
+        this.editing = edit;
+        if (edit) {
+            this.hasMovedControl = false;
+        } else {
+            this.selected = null;
+            this.dragPointer = -1;
+        }
+        if (onEditingChangeListener != null) {
+            onEditingChangeListener.onEditingChanged(edit);
+        }
+    }
+
+    public boolean isEditing() {
+        return editing;
+    }
     private final SharedPreferences layouts;
     private float scale = 1.0f;
     private Bitmap nitroBitmap;
@@ -579,16 +608,19 @@ final class RacingControlsView extends View {
                 if (x >= cx - 245 && x <= cx - 155) {
                     for (Control c : controls) c.area.set(c.original);
                     selected = null;
+                    hasMovedControl = true;
                 } else if (x >= cx - 145 && x <= cx - 105) {
                     resizeSelected(-0.1f);
+                    hasMovedControl = true;
                 } else if (x >= cx - 95 && x <= cx - 55) {
                     resizeSelected(0.1f);
+                    hasMovedControl = true;
                 } else if (x >= cx - 45 && x <= cx + 50) {
                     saveLayout();
-                    editing = false;
+                    setEditing(false);
                     layoutControls();
                 } else if (x >= cx + 60 && x <= cx + 150) {
-                    editing = false;
+                    setEditing(false);
                     layoutControls();
                 } else if (x >= cx + 160 && x <= cx + 250) {
                     confirmExitToLauncher();
@@ -600,15 +632,27 @@ final class RacingControlsView extends View {
                     return true;
                 }
             }
-            selected = hit(e.getX(index), e.getY(index));
+            Control hitControl = hit(e.getX(index), e.getY(index));
+            if (!hasMovedControl && hitControl != null && hitControl.scan == EDIT) {
+                setEditing(false);
+                layoutControls();
+                invalidate();
+                return true;
+            }
+            selected = hitControl;
             dragPointer = e.getPointerId(index);
             dragX = x;
             dragY = y;
+            dragStartX = x;
+            dragStartY = y;
         } else if (action == MotionEvent.ACTION_MOVE && selected != null && dragPointer >= 0) {
             int i = e.findPointerIndex(dragPointer);
             if (i >= 0) {
                 x = e.getX(i) / scale;
                 y = e.getY(i) / scale;
+                if (!hasMovedControl && Math.hypot(x - dragStartX, y - dragStartY) > 4.0f) {
+                    hasMovedControl = true;
+                }
                 selected.area.offset(x - dragX, y - dragY);
                 clamp(selected);
                 dragX = x;
@@ -635,6 +679,7 @@ final class RacingControlsView extends View {
                     String chosen = ids[which];
                     layouts.edit().putString("control_size", chosen).apply();
                     GameOptions.set(getContext(), GameOptions.TOUCH_SIZE, chosen);
+                    hasMovedControl = true;
                     layoutControls();
                     dialog.dismiss();
                 }).setNegativeButton("Cancel", null).show();
@@ -689,6 +734,7 @@ final class RacingControlsView extends View {
                         style.equals("stick") ? 1 : 0, (dialog, which) -> {
                     style = ids[which];
                     layouts.edit().putString("style", style).apply();
+                    hasMovedControl = true;
                     layoutControls();
                     dialog.dismiss();
                 }).setNegativeButton("Cancel", null).show();
@@ -754,6 +800,7 @@ final class RacingControlsView extends View {
                         .putFloat(id + ".size", (float) item.getDouble("size"));
                 }
                 save.apply();
+                hasMovedControl = true;
                 layoutControls();
             } catch (org.json.JSONException exception) {
                 Toast.makeText(getContext(), "Could not load layout", Toast.LENGTH_SHORT).show();
@@ -955,7 +1002,7 @@ final class RacingControlsView extends View {
                     textInput.run();
                 } else if (c.scan == EDIT) {
                     releaseAll();
-                    editing = true;
+                    setEditing(true);
                     selected = null;
                 }
                 performClick();

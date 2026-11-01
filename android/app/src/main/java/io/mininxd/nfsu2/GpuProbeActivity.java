@@ -14,9 +14,7 @@ import android.widget.TextView;
  */
 public final class GpuProbeActivity extends Activity {
     static { System.loadLibrary("nfsu2_diagnostics"); }
-    private static String nativeGpuReport(String hooks, String temp, String directory, String library) {
-        return com.nfsu2.androidevolved.GpuProbeActivity.nativeGpuReport(hooks, temp, directory, library);
-    }
+    public static native String nativeGpuReport(String hooks, String temp, String directory, String library);
     private boolean finished;
 
     @Override protected void onCreate(Bundle state) {

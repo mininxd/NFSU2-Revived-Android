@@ -43,9 +43,6 @@ public final class GameActivity extends NativeActivity {
     private RacingControlsView touchControls;
     private boolean statusHidden;
     private Runnable statusHideTask;
-    private static void nativeKey(int scan, boolean down) { com.nfsu2.androidevolved.GameActivity.nativeKey(scan, down); }
-    private static boolean nativeDrivingControls() { return com.nfsu2.androidevolved.GameActivity.nativeDrivingControls(); }
-    private static boolean nativeGamepadUsed() { return com.nfsu2.androidevolved.GameActivity.nativeGamepadUsed(); }
     private final boolean[] touchKeys=new boolean[256],sentKeys=new boolean[256];
     private boolean tiltLeft,tiltRight,tiltEnabled,tiltCalibrate=true;
     private float tiltFiltered,tiltNeutral,tiltSensitivity=1;
@@ -146,30 +143,27 @@ public final class GameActivity extends NativeActivity {
             touchControls.postDelayed(this,250);
         }
     };
-    private static void nativeTypeText(String value, boolean replace) { com.nfsu2.androidevolved.GameActivity.nativeTypeText(value, replace); }
-    private static void nativePointer(float x, float y, int phase) { com.nfsu2.androidevolved.GameActivity.nativePointer(x, y, phase); }
-    private static void nativeLanguage(String language) { com.nfsu2.androidevolved.GameActivity.nativeLanguage(language); }
-    private static void nativeResolution(int width, int height) { com.nfsu2.androidevolved.GameActivity.nativeResolution(width, height); }
-    private static void nativeFrameLimit(int framesPerSecond) { com.nfsu2.androidevolved.GameActivity.nativeFrameLimit(framesPerSecond); }
-    private static void nativeWidescreen(boolean enabled) { com.nfsu2.androidevolved.GameActivity.nativeWidescreen(enabled); }
-    private static void nativeOnlineServer(String host) {
-        try {
-            com.nfsu2.androidevolved.GameActivity.nativeOnlineServer(host);
-        } catch (Throwable t) {
-            android.util.Log.w("GameActivity", "nativeOnlineServer: " + t.getMessage());
-        }
-    }
-    private static void nativeGamepadConnected(boolean connected) { com.nfsu2.androidevolved.GameActivity.nativeGamepadConnected(connected); }
-    private static void nativeGamepadDevices(int[] ids) { com.nfsu2.androidevolved.GameActivity.nativeGamepadDevices(ids); }
-    private static void nativeMinimapTop(boolean top) { com.nfsu2.androidevolved.GameActivity.nativeMinimapTop(top); }
-    private static void nativeBackBuffers(int count) { com.nfsu2.androidevolved.GameActivity.nativeBackBuffers(count); }
-    private static void nativeCpuTextures(boolean enabled) { com.nfsu2.androidevolved.GameActivity.nativeCpuTextures(enabled); }
-    private static void nativeGpuDriver(String hooks, String temp, String directory, String library) { com.nfsu2.androidevolved.GameActivity.nativeGpuDriver(hooks, temp, directory, library); }
+    public static native void nativeKey(int scan, boolean down);
+    public static native boolean nativeDrivingControls();
+    public static native boolean nativeGamepadUsed();
+    public static native void nativeTypeText(String value, boolean replace);
+    public static native void nativePointer(float x, float y, int phase);
+    public static native void nativeLanguage(String language);
+    public static native void nativeResolution(int width, int height);
+    public static native void nativeFrameLimit(int framesPerSecond);
+    public static native void nativeWidescreen(boolean enabled);
+    public static native void nativeOnlineServer(String host);
+    public static native void nativeGamepadConnected(boolean connected);
+    public static native void nativeGamepadDevices(int[] ids);
+    public static native void nativeMinimapTop(boolean top);
+    public static native void nativeBackBuffers(int count);
+    public static native void nativeCpuTextures(boolean enabled);
+    public static native void nativeGpuDriver(String hooks, String temp, String directory, String library);
     private void showFrameLimitOptions() {
         GameOptions.Option option=GameOptions.find(GameOptions.FPS);
         String saved=GameOptions.get(this,GameOptions.FPS);int selected=0;
         for(int i=0;i<option.values.length;i++)if(option.values[i].equals(saved))selected=i;
-        new AlertDialog.Builder(this).setTitle(option.title)
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle(option.title)
                 .setSingleChoiceItems(option.labels,selected,(dialog,which)->{
                     GameOptions.set(this,GameOptions.FPS,option.values[which]);
                     nativeFrameLimit(Integer.parseInt(option.values[which]));dialog.dismiss();
@@ -330,6 +324,11 @@ public final class GameActivity extends NativeActivity {
         statusWindow.setTouchable(false);
         touchControls = new RacingControlsView(this, this::setTouchKey, this::showTextInput,this::showTiltOptions,this::showFrameLimitOptions);
         touchControls.setPointer(GameActivity::nativePointer);
+        touchControls.setOnEditingChangeListener(editing -> {
+            if (diagnosticOverlay != null) {
+                diagnosticOverlay.setSuspended(editing);
+            }
+        });
         controlsWindow = new PopupWindow(touchControls, ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT, false);
         controlsWindow.setClippingEnabled(false);

@@ -375,6 +375,56 @@ extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeGpuDr
     if(!entry){customVulkanError="Could not load Vulkan driver "+l+". Choose system driver in the launcher.";return;}
     dxvkAndroidSetInstanceProcAddr(entry);
 }
+extern "C" {
+JNIEXPORT jboolean JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeGamepadUsed(JNIEnv* env, jclass cls) {
+    return Java_io_mininxd_nfsu2_GameActivity_nativeGamepadUsed(env, cls);
+}
+JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeKey(JNIEnv* env, jclass cls, jint scan, jboolean down) {
+    Java_io_mininxd_nfsu2_GameActivity_nativeKey(env, cls, scan, down);
+}
+JNIEXPORT jboolean JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeDrivingControls(JNIEnv* env, jclass cls) {
+    return Java_io_mininxd_nfsu2_GameActivity_nativeDrivingControls(env, cls);
+}
+JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativePointer(JNIEnv* env, jclass cls, jfloat x, jfloat y, jint phase) {
+    Java_io_mininxd_nfsu2_GameActivity_nativePointer(env, cls, x, y, phase);
+}
+JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeTypeText(JNIEnv* env, jclass cls, jstring value, jboolean replace) {
+    Java_io_mininxd_nfsu2_GameActivity_nativeTypeText(env, cls, value, replace);
+}
+JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeLanguage(JNIEnv* env, jclass cls, jstring language) {
+    Java_io_mininxd_nfsu2_GameActivity_nativeLanguage(env, cls, language);
+}
+JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeResolution(JNIEnv* env, jclass cls, jint width, jint height) {
+    Java_io_mininxd_nfsu2_GameActivity_nativeResolution(env, cls, width, height);
+}
+JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeFrameLimit(JNIEnv* env, jclass cls, jint cap) {
+    Java_io_mininxd_nfsu2_GameActivity_nativeFrameLimit(env, cls, cap);
+}
+JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeGamepadConnected(JNIEnv* env, jclass cls, jboolean connected) {
+    Java_io_mininxd_nfsu2_GameActivity_nativeGamepadConnected(env, cls, connected);
+}
+JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeGamepadDevices(JNIEnv* env, jclass cls, jintArray ids) {
+    Java_io_mininxd_nfsu2_GameActivity_nativeGamepadDevices(env, cls, ids);
+}
+JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeWidescreen(JNIEnv* env, jclass cls, jboolean enabled) {
+    Java_io_mininxd_nfsu2_GameActivity_nativeWidescreen(env, cls, enabled);
+}
+JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeOnlineServer(JNIEnv* env, jclass cls, jstring host) {
+    Java_io_mininxd_nfsu2_GameActivity_nativeOnlineServer(env, cls, host);
+}
+JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeMinimapTop(JNIEnv* env, jclass cls, jboolean top) {
+    Java_io_mininxd_nfsu2_GameActivity_nativeMinimapTop(env, cls, top);
+}
+JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeBackBuffers(JNIEnv* env, jclass cls, jint count) {
+    Java_io_mininxd_nfsu2_GameActivity_nativeBackBuffers(env, cls, count);
+}
+JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeCpuTextures(JNIEnv* env, jclass cls, jboolean enabled) {
+    Java_io_mininxd_nfsu2_GameActivity_nativeCpuTextures(env, cls, enabled);
+}
+JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeGpuDriver(JNIEnv* env, jclass cls, jstring hooks, jstring temp, jstring directory, jstring library) {
+    Java_io_mininxd_nfsu2_GameActivity_nativeGpuDriver(env, cls, hooks, temp, directory, library);
+}
+}
 static void configurePipelineCache(android_app* app){
     const char* files=app->activity->internalDataPath;
     setenv("DXVK_STATE_CACHE","0",1); // Keep startup usable if cache storage is unavailable.

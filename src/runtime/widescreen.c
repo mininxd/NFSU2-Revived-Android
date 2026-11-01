@@ -177,15 +177,15 @@ void nfs_widescreen_set_frame_rate(unsigned fps) {
 }
 
 void nfs_widescreen_apply_frame_rate(void) {
-    if (s_frame_time <= 0.0f) return;
     if (rdf(0x00865558u) != 0.0f) {
         wrf(0x00865558u, 0.0f);           /* disarm guest busy-spin limiter; pacing is handled by host FramePacer */
         wrf(0x007FB710u, 0.0f);
         /* Keep 0x007875BC locked strictly to 1/60 s base constant so internal clocks
          * (WorldTimeFrames, particles, camera) maintain correct real-time scaling. */
         wrf(0x007875BCu, 1.0f / 60.0f);   /* video mode / tick base constant: 60 Hz */
-        wrf(0x007FC858u, s_frame_time);   /* smokeable frame time */
     }
+    float smokeable = s_frame_time > 0.0f ? s_frame_time : (1.0f / 60.0f);
+    wrf(0x007FC858u, smokeable);          /* smokeable frame time */
 }
 
 static void set_esp_float(uint32_t offset, float value) { wrf(g_esp + offset, value); }

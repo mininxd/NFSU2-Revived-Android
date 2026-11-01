@@ -68,6 +68,20 @@ public final class DiagnosticOverlay {
     private final String systemPlatform;
     private final String cpuModel;
     private final String gpuDriverName;
+    private volatile boolean suspended = false;
+
+    public void setSuspended(boolean suspend) {
+        this.suspended = suspend;
+        if (suspend) {
+            hide();
+        } else if (isEnabled() && running && activity.hasWindowFocus()) {
+            show();
+        }
+    }
+
+    public boolean isSuspended() {
+        return suspended;
+    }
 
     public DiagnosticOverlay(Activity activity, String mode) {
         this.activity = activity;
@@ -176,7 +190,7 @@ public final class DiagnosticOverlay {
     }
 
     public void show() {
-        if (!isEnabled() || !running || attached) return;
+        if (!isEnabled() || !running || attached || suspended) return;
         View decor = activity.getWindow().getDecorView();
         if (decor.isAttachedToWindow() && activity.hasWindowFocus()) {
             try {
@@ -258,7 +272,7 @@ public final class DiagnosticOverlay {
 
             updateStats();
 
-            if (!attached && activity.hasWindowFocus()) {
+            if (!suspended && !attached && activity.hasWindowFocus()) {
                 show();
             }
 
