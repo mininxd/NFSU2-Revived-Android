@@ -1,4 +1,4 @@
-//! Asynchronous Shader & Pipeline Compilation Manager (Plan C).
+//! Asynchronous Shader & Pipeline Compilation Manager.
 //!
 //! Provides a dedicated worker pool for compiling Vulkan graphics pipelines
 //! asynchronously in the background. Worker threads can be pinned to CPU

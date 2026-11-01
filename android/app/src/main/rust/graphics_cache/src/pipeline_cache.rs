@@ -1,4 +1,4 @@
-//! Asynchronous Vulkan Pipeline Cache Manager (Plan B).
+//! Asynchronous Vulkan Pipeline Cache Manager.
 //!
 //! Handles safe loading, validation, crash detection, and asynchronous atomic
 //! persistence of compiled Vulkan pipeline caches.

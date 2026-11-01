@@ -6,7 +6,7 @@
 extern "C" {
 #endif
 
-// Plan B: Asynchronous Pipeline Cache Disk Persistence
+// Asynchronous Pipeline Cache Disk Persistence
 typedef struct PipelineCacheManager PipelineCacheManager;
 
 PipelineCacheManager* nfs_gfx_cache_create(const char* cache_path);
@@ -17,7 +17,7 @@ void nfs_gfx_cache_free_buffer(uint8_t* buf, size_t size);
 void nfs_gfx_cache_mark_loaded(PipelineCacheManager* mgr);
 int nfs_gfx_cache_save_async(PipelineCacheManager* mgr, const uint8_t* data, size_t size);
 
-// Plan C: Asynchronous Shader & Pipeline Compilation Engine
+// Asynchronous Shader & Pipeline Compilation Engine
 typedef struct AsyncCompilerEngine AsyncCompilerEngine;
 
 AsyncCompilerEngine* nfs_async_compiler_create(uint32_t worker_count, uint64_t perf_core_mask);

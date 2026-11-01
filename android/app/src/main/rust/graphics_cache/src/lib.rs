@@ -1,7 +1,6 @@
 //! Graphics Cache & Asynchronous Pipeline Engine for NFSU2 Android.
 //!
-//! Provides Plan B (Asynchronous Pipeline Cache Validation & Disk Persistence)
-//! and Plan C (Asynchronous Pipeline Compilation Workers).
+//! Pipeline cache validation, disk persistence, and background compilation workers.
 
 pub mod async_compiler;
 pub mod pipeline_cache;
@@ -17,9 +16,7 @@ use jni::objects::JClass;
 use jni::sys::{jint, jlong};
 use jni::JNIEnv;
 
-// ---------------------------------------------------------------------------
-// C-ABI Exported Functions (Plan B: Pipeline Cache Persistence)
-// ---------------------------------------------------------------------------
+// Pipeline cache persistence C-ABI exports
 
 #[no_mangle]
 pub unsafe extern "C" fn nfs_gfx_cache_create(
@@ -108,9 +105,7 @@ pub unsafe extern "C" fn nfs_gfx_cache_save_async(
     0
 }
 
-// ---------------------------------------------------------------------------
-// C-ABI Exported Functions (Plan C: Asynchronous Compiler Engine)
-// ---------------------------------------------------------------------------
+// Asynchronous compiler engine C-ABI exports
 
 #[no_mangle]
 pub unsafe extern "C" fn nfs_async_compiler_create(
