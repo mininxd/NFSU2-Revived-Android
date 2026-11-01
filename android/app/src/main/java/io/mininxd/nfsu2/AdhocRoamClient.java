@@ -106,6 +106,16 @@ public final class AdhocRoamClient {
         }
     }
 
+    public static void nativeSetFrameLimit(int fps) {
+        if (RoamNativeBridge.isLoaded()) {
+            try {
+                RoamNativeBridge.nativeSetFrameLimit(fps);
+            } catch (Throwable t) {
+                Log.d(TAG, "nativeSetFrameLimit: " + t.getMessage());
+            }
+        }
+    }
+
     static {
         try {
             System.loadLibrary("nfsu2_roam");

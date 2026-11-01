@@ -789,8 +789,60 @@ static void framerate_pacing_fix(void) {
     s_last_tick_us = now_us;
 }
 
+static volatile uint32_t s_target_fps = 0;
+
+__attribute__((visibility("default"))) void nfs_roam_set_frame_limit(uint32_t fps) {
+    s_target_fps = (fps >= 30 && fps <= 240) ? fps : 0;
+}
+
+static void pace_frame(void) {
+    static int s_env_checked = 0;
+    if (!s_env_checked && s_target_fps == 0) {
+        s_env_checked = 1;
+        const char *env_fps = getenv("NFSU2_FPS");
+        if (env_fps) {
+            int parsed = atoi(env_fps);
+            if (parsed >= 30 && parsed <= 240) {
+                s_target_fps = (uint32_t)parsed;
+            }
+        }
+    }
+
+    uint32_t limit = s_target_fps;
+    if (limit < 30 || limit > 240) {
+        return;
+    }
+
+    static uint32_t s_active_limit = 0;
+    static int64_t s_next_deadline_us = 0;
+
+    int64_t now_us = roam_plat_now_us();
+    if (limit != s_active_limit || s_next_deadline_us == 0) {
+        s_active_limit = limit;
+        s_next_deadline_us = now_us;
+    }
+
+    int64_t target_interval_us = 1000000 / (int64_t)limit;
+    if (s_next_deadline_us < now_us) {
+        s_next_deadline_us = now_us;
+    }
+
+    int64_t wait_us = s_next_deadline_us - now_us;
+    if (wait_us > 500 && wait_us <= target_interval_us) {
+        struct timespec req;
+        req.tv_sec = wait_us / 1000000;
+        req.tv_nsec = (wait_us % 1000000) * 1000;
+        nanosleep(&req, NULL);
+        now_us = roam_plat_now_us();
+    }
+
+    int64_t target = (now_us > s_next_deadline_us) ? now_us : s_next_deadline_us;
+    s_next_deadline_us = target + target_interval_us;
+}
+
 __attribute__((visibility("default"))) void nfs_roam_frame_tick(void) {
     if (!roam_android_init_symbols()) return;
+    pace_frame();
     static int s_perf_bound = 0;
     if (!s_perf_bound || (g_frame_count % 300) == 0) {
         s_perf_bound = 1;
@@ -988,6 +1040,18 @@ JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_net_RoamNativeBridge_nativeRoamHorn
         JNIEnv *env, jclass clazz, jboolean held) {
     (void)env; (void)clazz;
     roam_do_horn(held);
+}
+
+JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_net_RoamNativeBridge_nativeSetFrameLimit(
+        JNIEnv *env, jclass clazz, jint fps) {
+    (void)env; (void)clazz;
+    nfs_roam_set_frame_limit((uint32_t)fps);
+}
+
+JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_AdhocRoamClient_nativeSetFrameLimit(
+        JNIEnv *env, jclass clazz, jint fps) {
+    (void)env; (void)clazz;
+    nfs_roam_set_frame_limit((uint32_t)fps);
 }
 
 /* Performance cores CPU affinity binding */

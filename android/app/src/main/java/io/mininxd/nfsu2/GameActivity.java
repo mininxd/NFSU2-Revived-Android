@@ -143,22 +143,40 @@ public final class GameActivity extends NativeActivity {
             touchControls.postDelayed(this,250);
         }
     };
-    public static native void nativeKey(int scan, boolean down);
-    public static native boolean nativeDrivingControls();
-    public static native boolean nativeGamepadUsed();
-    public static native void nativeTypeText(String value, boolean replace);
-    public static native void nativePointer(float x, float y, int phase);
-    public static native void nativeLanguage(String language);
-    public static native void nativeResolution(int width, int height);
-    public static native void nativeFrameLimit(int framesPerSecond);
-    public static native void nativeWidescreen(boolean enabled);
-    public static native void nativeOnlineServer(String host);
-    public static native void nativeGamepadConnected(boolean connected);
-    public static native void nativeGamepadDevices(int[] ids);
-    public static native void nativeMinimapTop(boolean top);
-    public static native void nativeBackBuffers(int count);
-    public static native void nativeCpuTextures(boolean enabled);
-    public static native void nativeGpuDriver(String hooks, String temp, String directory, String library);
+    private static void nativeKey(int scan, boolean down) { com.nfsu2.androidevolved.GameActivity.nativeKey(scan, down); }
+    private static boolean nativeDrivingControls() { return com.nfsu2.androidevolved.GameActivity.nativeDrivingControls(); }
+    private static boolean nativeGamepadUsed() { return com.nfsu2.androidevolved.GameActivity.nativeGamepadUsed(); }
+    private static void nativeTypeText(String value, boolean replace) { com.nfsu2.androidevolved.GameActivity.nativeTypeText(value, replace); }
+    private static void nativePointer(float x, float y, int phase) { com.nfsu2.androidevolved.GameActivity.nativePointer(x, y, phase); }
+    private static void nativeLanguage(String language) { com.nfsu2.androidevolved.GameActivity.nativeLanguage(language); }
+    private static void nativeResolution(int width, int height) { com.nfsu2.androidevolved.GameActivity.nativeResolution(width, height); }
+    private static void nativeFrameLimit(int framesPerSecond) {
+        try {
+            com.nfsu2.androidevolved.GameActivity.nativeFrameLimit(framesPerSecond);
+        } catch (Throwable ignored) {}
+        try {
+            android.system.Os.setenv("NFSU2_FPS", String.valueOf(framesPerSecond), true);
+        } catch (Throwable ignored) {}
+        try {
+            if (io.mininxd.nfsu2.net.RoamNativeBridge.isLoaded()) {
+                io.mininxd.nfsu2.net.RoamNativeBridge.nativeSetFrameLimit(framesPerSecond);
+            }
+        } catch (Throwable ignored) {}
+    }
+    private static void nativeWidescreen(boolean enabled) { com.nfsu2.androidevolved.GameActivity.nativeWidescreen(enabled); }
+    private static void nativeOnlineServer(String host) {
+        try {
+            com.nfsu2.androidevolved.GameActivity.nativeOnlineServer(host);
+        } catch (Throwable t) {
+            android.util.Log.w("GameActivity", "nativeOnlineServer: " + t.getMessage());
+        }
+    }
+    private static void nativeGamepadConnected(boolean connected) { com.nfsu2.androidevolved.GameActivity.nativeGamepadConnected(connected); }
+    private static void nativeGamepadDevices(int[] ids) { com.nfsu2.androidevolved.GameActivity.nativeGamepadDevices(ids); }
+    private static void nativeMinimapTop(boolean top) { com.nfsu2.androidevolved.GameActivity.nativeMinimapTop(top); }
+    private static void nativeBackBuffers(int count) { com.nfsu2.androidevolved.GameActivity.nativeBackBuffers(count); }
+    private static void nativeCpuTextures(boolean enabled) { com.nfsu2.androidevolved.GameActivity.nativeCpuTextures(enabled); }
+    private static void nativeGpuDriver(String hooks, String temp, String directory, String library) { com.nfsu2.androidevolved.GameActivity.nativeGpuDriver(hooks, temp, directory, library); }
     private void showFrameLimitOptions() {
         GameOptions.Option option=GameOptions.find(GameOptions.FPS);
         String saved=GameOptions.get(this,GameOptions.FPS);int selected=0;

@@ -160,9 +160,3 @@ Java_io_mininxd_nfsu2_GpuProbeActivity_nativeGpuReport(JNIEnv* env, jclass, jstr
     std::string h = text(hooks), t = text(temp), d = text(directory), l = text(library);
     return env->NewStringUTF(probe(h.c_str(), t.c_str(), d.c_str(), l.c_str()).c_str());
 }
-
-extern "C" JNIEXPORT jstring JNICALL
-Java_com_nfsu2_androidevolved_GpuProbeActivity_nativeGpuReport(JNIEnv* env, jclass cls, jstring hooks, jstring temp,
-                                                               jstring directory, jstring library) {
-    return Java_io_mininxd_nfsu2_GpuProbeActivity_nativeGpuReport(env, cls, hooks, temp, directory, library);
-}
