@@ -1,0 +1,9 @@
+ref/
+prebuilt/
+build/
+logs/
+*.apk
+*.zip
+*.tar.gz*
+*.jks
+*.jar

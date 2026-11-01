@@ -1,0 +1,21 @@
+[package]
+name = "graphics_cache"
+version = "0.1.0"
+edition = "2021"
+authors = ["mininxd"]
+description = "High-performance asynchronous Vulkan graphics pipeline cache & compiler engine for NFSU2 Android"
+
+[lib]
+name = "graphics_cache"
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+libc = { version = "0.2", default-features = false }
+jni = { version = "0.21", default-features = false }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

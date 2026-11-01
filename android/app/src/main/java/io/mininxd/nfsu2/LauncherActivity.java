@@ -423,7 +423,6 @@ public final class LauncherActivity extends Activity {
             optionsList.addView(optionRow("Vulkan Driver", driver == null ? "System default" : driver.name, this::chooseDriver));
         optionsList.addView(optionRow("Test driver", "GPU and Vulkan features", () -> probeDriver(false)));
         optionsList.addView(optionRow("Language", languageLabel(), this::chooseLanguage));
-        optionsList.addView(optionRow("Reset graphics cache", "Regenerate shaders", () -> GraphicsCache.prompt(this)));
         for (GameOptions.Option option : GameOptions.ALL)
             optionsList.addView(optionRow(option.title, option.label(GameOptions.get(this, option.key)), () -> chooseOption(option)));
         optionsList.addView(optionRow("Cheat Codes", cheatCodesSummary(), this::chooseCheatCodes));
