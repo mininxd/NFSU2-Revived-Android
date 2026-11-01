@@ -324,6 +324,16 @@ void registryOpen(uint32_t output,uint32_t argc){
         const char path[]="C:\\nfsu2\\";gameRegistry.emplace("install dir",RegistryValue{1,{std::begin(path),std::end(path)}});
         auto language=guestLanguage;language.push_back('\0');gameRegistry.emplace("language",RegistryValue{1,{language.begin(),language.end()}});
         loadPersistedRegistry();
+        if(gameRegistry.find("g_worldlodlevel")==gameRegistry.end()){
+            uint32_t val=2;
+            const uint8_t* p=reinterpret_cast<const uint8_t*>(&val);
+            gameRegistry.emplace("g_worldlodlevel",RegistryValue{4,{p,p+4}});
+        }
+        if(gameRegistry.find("g_roadreflectionenable")==gameRegistry.end()){
+            uint32_t val=2;
+            const uint8_t* p=reinterpret_cast<const uint8_t*>(&val);
+            gameRegistry.emplace("g_roadreflectionenable",RegistryValue{4,{p,p+4}});
+        }
     }
     uint32_t handle=nextRegistryHandle++;registryHandles.emplace(handle,true);write32(output,handle);ret(0,argc);
 }

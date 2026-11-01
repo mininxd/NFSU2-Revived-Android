@@ -164,6 +164,11 @@ public final class GameActivity extends NativeActivity {
         } catch (Throwable ignored) {}
     }
     private static void nativeWidescreen(boolean enabled) { com.nfsu2.androidevolved.GameActivity.nativeWidescreen(enabled); }
+    private static void nativeDrawDistance(float distance) {
+        try {
+            com.nfsu2.androidevolved.GameActivity.nativeDrawDistance(distance);
+        } catch (Throwable ignored) {}
+    }
     private static void nativeOnlineServer(String host) {
         try {
             com.nfsu2.androidevolved.GameActivity.nativeOnlineServer(host);
@@ -282,6 +287,13 @@ public final class GameActivity extends NativeActivity {
             if (backend == null || "auto".equalsIgnoreCase(backend)) backend = GameOptions.getEffectiveGraphicsBackend(this);
             android.system.Os.setenv("NFSU2_RENDERER", backend, true);
 
+            String drawDist = GameOptions.get(this, GameOptions.DRAW_DISTANCE);
+            float distVal = 450.0f;
+            if ("performance".equals(drawDist)) distVal = 320.0f;
+            else if ("extended".equals(drawDist)) distVal = 650.0f;
+            else if ("original".equals(drawDist)) distVal = 0.0f;
+            android.system.Os.setenv("NFSU2_DRAW_DISTANCE", String.valueOf((int)distVal), true);
+
             // Sync touch control size
             String touchSize = GameOptions.get(this, GameOptions.TOUCH_SIZE);
             getSharedPreferences("touch_layouts_v2", MODE_PRIVATE)
@@ -315,6 +327,7 @@ public final class GameActivity extends NativeActivity {
         nativeLanguage(language);
         nativeFrameLimit(launch.getIntExtra("frameCap", Integer.parseInt(GameOptions.get(this, GameOptions.FPS))));
         nativeWidescreen(launch.getBooleanExtra("widescreen", GameOptions.get(this, GameOptions.WIDESCREEN).equals("on")));
+        nativeDrawDistance(distVal);
         String server = launch.getStringExtra("onlineServer");
         String configuredServer = GameOptions.validServer(server) ? server : GameOptions.onlineServer(this);
         // If connecting to a modern WebSocket switch server (nfsu2-web), route through LocalOnlineBridge

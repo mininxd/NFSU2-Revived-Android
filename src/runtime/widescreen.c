@@ -39,6 +39,7 @@ static int s_bank_left = 0;
 static float s_sms_nav_dy = 0.0f;
 /* Game frame time for FPSLimit (0 = the game's own 1/60 s). */
 static float s_frame_time = 0.0f;
+static float s_draw_distance = 450.0f;
 /* FOV multipliers chosen per view at 0x5C7F64 and applied at its three
  * reads of the 1.0/0.5/1.0 constants (the mod repoints those operands). */
 static double s_fov_scale[3] = {1.0, 1.0, 1.0};
@@ -127,6 +128,11 @@ void nfs_widescreen_init(const char* game_root) {
     load_dat(path);
     /* Ports may ship the mod's table themselves (MIT): NFSU2_WIDESCREEN_DAT=<path>. */
     if (!s_hud_count && getenv("NFSU2_WIDESCREEN_DAT")) load_dat(getenv("NFSU2_WIDESCREEN_DAT"));
+    const char* dd_env = getenv("NFSU2_DRAW_DISTANCE");
+    if (dd_env) {
+        float d = (float)atof(dd_env);
+        if (d >= 0.0f) s_draw_distance = d;
+    }
     s_enabled = 1;
 }
 
@@ -164,6 +170,10 @@ void nfs_widescreen_set_hud_safe_area(int enabled) {
     if (s_width > 0.0f && s_height > 0.0f) {
         nfs_widescreen_set_resolution((unsigned)s_width, (unsigned)s_height);
     }
+}
+
+void nfs_widescreen_set_draw_distance(float distance) {
+    s_draw_distance = distance;
 }
 
 /* FPSLimit (the mod's Misc.ixx): the game paces its main loop with a fixed
@@ -254,6 +264,16 @@ void recomp_hook(uint32_t va) {
         if (view == 1 || view == 4) { s_fov_scale[0] = hor; s_fov_scale[1] = 0.43511; s_fov_scale[2] = 1.22; }
         else { s_fov_scale[0] = 1.0; s_fov_scale[1] = 0.5; s_fov_scale[2] = 1.0; }
         g_st[0] = view == 3 ? 0.45 : 1.0;   /* rear-view mirror */
+        if (s_draw_distance > 0.0f && (view == 1 || view == 4) && g_ebp >= 0x10000u && g_ebp <= 0x7FFFF000u) {
+            uint32_t cam = MEM32(g_ebp + 0x40u);
+            if (cam >= 0x10000u && cam <= 0x7FFFF000u) {
+                float far_z = rdf(cam + 0xC0u);
+                float max_far = (view == 4) ? (s_draw_distance * 0.65f) : s_draw_distance;
+                if (far_z > max_far && max_far >= 50.0f) {
+                    wrf(cam + 0xC0u, max_far);
+                }
+            }
+        }
         break;
     }
     /* `fdivr [1.0]`, `fmul [0.5]`, `fdivr [1.0]`: rescale by new/original. */

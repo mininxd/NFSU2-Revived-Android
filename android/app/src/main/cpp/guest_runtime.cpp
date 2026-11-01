@@ -1045,6 +1045,11 @@ void setGuestResolution(unsigned width,unsigned height){
 #if defined(__ANDROID__) || defined(NFS_D3D9_BACKEND)
     setD3D9RenderSize(width,height);
 #endif
+    const char* dd=std::getenv("NFSU2_DRAW_DISTANCE");
+    if(dd){
+        float val=std::strtof(dd,nullptr);
+        nfs_widescreen_set_draw_distance(val);
+    }
     NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Selected render resolution %ux%u",width,height);
 }
 void setGuestFrameLimit(unsigned framesPerSecond){

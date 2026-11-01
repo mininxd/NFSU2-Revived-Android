@@ -27,7 +27,7 @@ public final class GameOptions {
             AUTOSAVE = "autosave", SHOW_HIDDEN_RACES = "show_hidden_races",
             STARTUP_MOVIES = "intro", CUTSCENE_BORDERS = "cutscene_borders",
             ROAM_CARS_LIMIT = "roam_max_cars", ROAM_CREW = "roam_crew",
-            GRAPHICS_BACKEND = "graphics_backend";
+            GRAPHICS_BACKEND = "graphics_backend", DRAW_DISTANCE = "draw_distance";
 
     static final Option[] ALL = {
             new Option(GRAPHICS_BACKEND, "Graphics API", "auto",
@@ -36,6 +36,9 @@ public final class GameOptions {
             new Option(RESOLUTION, "Internal Resolution", "75",
                     new String[] {"25", "30", "35", "40", "45", "50", "55", "60", "65", "70", "75", "80", "85", "90", "95", "100", "125", "150", "200"},
                     new String[] {"25%", "30%", "35%", "40%", "45%", "50%", "55%", "60%", "65%", "70%", "75%", "80%", "85%", "90%", "95%", "100%", "125%", "150%", "200%"}),
+            new Option(DRAW_DISTANCE, "Draw Distance", "balanced",
+                    new String[] {"balanced", "performance", "extended", "original"},
+                    new String[] {"Balanced · 450m (Smooth FPS)", "Performance · 320m (High FPS)", "Extended · 650m", "Original · Unlimited"}),
             new Option(CUTOUT, "Display Cutout (Notch)", "fullscreen",
                     new String[] {"fullscreen", "safe"},
                     new String[] {"Full Screen · bypass notch", "Letterbox · avoid cutout"}),
