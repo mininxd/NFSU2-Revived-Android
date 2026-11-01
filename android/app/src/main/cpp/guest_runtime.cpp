@@ -349,7 +349,11 @@ void d3dDispatch(){
     if(token==0x7e002110u){
         nfs_widescreen_apply_frame_rate();
         static void (*s_roam_tick)()=nullptr;
-        if(!s_roam_tick)s_roam_tick=reinterpret_cast<void(*)()>(dlsym(RTLD_DEFAULT,"nfs_roam_frame_tick"));
+        if(!s_roam_tick){
+            void* h=dlopen("libnfsu2_roam.so",RTLD_NOW|RTLD_GLOBAL);
+            if(h)s_roam_tick=reinterpret_cast<void(*)()>(dlsym(h,"nfs_roam_frame_tick"));
+            if(!s_roam_tick)s_roam_tick=reinterpret_cast<void(*)()>(dlsym(RTLD_DEFAULT,"nfs_roam_frame_tick"));
+        }
         if(s_roam_tick)s_roam_tick();
         serviceGuestSound();
         lastPresentMs=steadyMs();
@@ -391,6 +395,18 @@ inline void syncPreTimestepPacing() {
     static auto s_last_phys_time = std::chrono::steady_clock::now();
     static uint32_t s_last_frame_counter = 0;
     if (!memory || !memory->writable(0x00865154u, 4) || !memory->writable(0x00865198u, 4) || !memory->writable(0x00865140u, 4)) return;
+
+    static bool s_high_fps_patched = false;
+    if (!s_high_fps_patched && memory->writable(0x0057a084u, 1)) {
+        uint8_t op = 0;
+        std::memcpy(&op, ptr(0x0057a084u, 1), 1);
+        if (op == 0x75) {
+            uint8_t jmp_op = 0xEB;
+            std::memcpy(ptr(0x0057a084u, 1), &jmp_op, 1);
+        }
+        s_high_fps_patched = true;
+    }
+
     uint32_t frame_cnt = 0;
     if (memory->readable(0x00870818u, 4)) frame_cnt = read32(0x00870818u);
     if (frame_cnt && frame_cnt == s_last_frame_counter) return;
@@ -401,12 +417,12 @@ inline void syncPreTimestepPacing() {
     s_last_phys_time = now;
 
     if (memory->readable(0x008654a4u, 4) && read32(0x008654a4u) == 6u) {
-        if (real_elapsed > 0.010f && real_elapsed < 0.150f) {
+        if (real_elapsed > 0.005f && real_elapsed < 0.200f) {
             float current_wdt = 0.0f, current_realdt = 0.0f;
             std::memcpy(&current_wdt, ptr(0x00865154u, 4), 4);
             std::memcpy(&current_realdt, ptr(0x00865198u, 4), 4);
             float effective_dt = (current_wdt > 0.0f) ? current_wdt : current_realdt;
-            if (effective_dt > 0.0f && effective_dt < real_elapsed * 0.90f) {
+            if (effective_dt <= 0.0f || effective_dt < real_elapsed * 0.98f) {
                 std::memcpy(ptr(0x00865154u, 4), &real_elapsed, 4);
                 std::memcpy(ptr(0x00865198u, 4), &real_elapsed, 4);
                 write32(0x00865140u, static_cast<uint32_t>(real_elapsed * 1800.0f));
@@ -1033,8 +1049,7 @@ void setGuestResolution(unsigned width,unsigned height){
 }
 void setGuestFrameLimit(unsigned framesPerSecond){
     frameLimit=(framesPerSecond>=30&&framesPerSecond<=240)?framesPerSecond:0;
-    // The game paces itself to 1/60 s; let it run at 60 Hz base tick pacing when uncapped.
-    nfs_widescreen_set_frame_rate(frameLimit.load()?frameLimit.load():60);
+    nfs_widescreen_set_frame_rate(frameLimit.load());
     NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Android frame limit %u FPS (0 means uncapped)",frameLimit.load());
 }
 void setGuestKey(unsigned scan,bool down){if(scan>=256)return;std::lock_guard<std::mutex> lock(inputMutex);if(bool(inputKeys[scan])==down)return;inputKeys[scan]=down?0x80:0;recordInputKey(scan,down);enqueueGuestKey(scan,down);}

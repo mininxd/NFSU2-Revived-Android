@@ -766,7 +766,7 @@ static void framerate_pacing_fix(void) {
     int64_t now_us = roam_plat_now_us();
     if (s_last_tick_us > 0) {
         float real_elapsed = (float)(now_us - s_last_tick_us) / 1000000.0f;
-        if (real_elapsed > 0.010f && real_elapsed < 0.150f) {
+        if (real_elapsed > 0.005f && real_elapsed < 0.200f) {
             if (rh_mem_committed(0x00865154u, 4) && rh_mem_committed(0x00865198u, 4)) {
                 float current_wdt = MRF32(0x00865154u);
                 float current_realdt = MRF32(0x00865198u);
@@ -774,7 +774,7 @@ static void framerate_pacing_fix(void) {
 #ifdef ROAM_CORE_RUST
                 float target_dt = nfs_pacing_filter_dt(real_elapsed, effective_dt);
 #else
-                float target_dt = (effective_dt > 0.0f && effective_dt < real_elapsed * 0.90f) ? real_elapsed : effective_dt;
+                float target_dt = (effective_dt <= 0.0f || effective_dt < real_elapsed * 0.98f) ? real_elapsed : effective_dt;
 #endif
                 if (target_dt != effective_dt) {
                     MRF32(0x00865154u) = target_dt;

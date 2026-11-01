@@ -177,15 +177,16 @@ void nfs_widescreen_set_frame_rate(unsigned fps) {
 }
 
 void nfs_widescreen_apply_frame_rate(void) {
-    if (rdf(0x00865558u) != 0.0f) {
-        wrf(0x00865558u, 0.0f);           /* disarm guest busy-spin limiter; pacing is handled by host FramePacer */
-        wrf(0x007FB710u, 0.0f);
-        /* Keep 0x007875BC locked strictly to 1/60 s base constant so internal clocks
-         * (WorldTimeFrames, particles, camera) maintain correct real-time scaling. */
-        wrf(0x007875BCu, 1.0f / 60.0f);   /* video mode / tick base constant: 60 Hz */
-    }
-    float smokeable = s_frame_time > 0.0f ? s_frame_time : (1.0f / 60.0f);
-    wrf(0x007FC858u, smokeable);          /* smokeable frame time */
+    wrf(0x00865558u, 0.0f);           /* disarm guest busy-spin limiter; pacing is handled by host FramePacer */
+    wrf(0x007FB710u, 0.0f);
+    wrf(0x007FB714u, 6.0f);           /* expand max frame delta multiplier */
+    /* Keep 0x007875BC locked strictly to 1/60 s base constant so internal clocks
+     * (WorldTimeFrames, particles, camera) maintain correct real-time scaling. */
+    wrf(0x007875BCu, 1.0f / 60.0f);   /* video mode / tick base constant: 60 Hz */
+
+    float actual_realdt = rdf(0x00865198u);
+    float smokeable = (actual_realdt >= 0.020f) ? actual_realdt : (s_frame_time > 0.0f ? s_frame_time : (1.0f / 60.0f));
+    wrf(0x007FC858u, smokeable);      /* smokeable frame time */
 }
 
 static void set_esp_float(uint32_t offset, float value) { wrf(g_esp + offset, value); }
@@ -260,7 +261,15 @@ void recomp_hook(uint32_t va) {
     case FOV_CONST2: g_st[0] *= s_fov_scale[1] / rdf(0x00784260u); break;
     case FOV_CONST3: g_st[0] *= s_fov_scale[2] / rdf(0x00784250u); break;
     /* FPSLimit: eDisplayFrame pushes 1/60 s as the particle step. */
-    case FRAME_TIME: if (s_frame_time > 0.0f) set_esp_float(0x0, s_frame_time); break;
+    case FRAME_TIME: {
+        float actual_realdt = rdf(0x00865198u);
+        if (actual_realdt >= 0.020f) {
+            set_esp_float(0x0, actual_realdt);
+        } else if (s_frame_time > 0.0f) {
+            set_esp_float(0x0, s_frame_time);
+        }
+        break;
+    }
     default: break;
     }
 }

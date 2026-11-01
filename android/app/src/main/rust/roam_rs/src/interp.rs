@@ -208,9 +208,8 @@ impl WheelTelemetry {
 /// Returns the corrected real-time delta if clamped, or the original dt.
 #[inline]
 pub fn pacing_filter_dt(real_elapsed: f32, current_wdt: f32) -> f32 {
-    if real_elapsed > 0.010 && real_elapsed < 0.150 {
-        if current_wdt > 0.0 && current_wdt < real_elapsed * 0.90 {
-            // Clamped by the engine's 50 ms cap: advance simulation by real elapsed time
+    if real_elapsed > 0.005 && real_elapsed < 0.200 {
+        if current_wdt <= 0.0 || current_wdt < real_elapsed * 0.98 {
             return real_elapsed;
         }
     }
@@ -364,5 +363,9 @@ mod tests {
         // Normal dt (16.6 ms) while real elapsed took 16.6 ms: should return original
         let normal = pacing_filter_dt(0.0166, 0.0166);
         assert!((normal - 0.0166).abs() < 1e-5);
+
+        // 30 FPS render rate (33.3 ms) when engine delta lagged at 31.0 ms: should scale to 33.3 ms
+        let slowmo_fix = pacing_filter_dt(0.0333, 0.0310);
+        assert!((slowmo_fix - 0.0333).abs() < 1e-5);
     }
 }
