@@ -741,10 +741,8 @@ static void framerate_pacing_fix(void) {
     if (rh_mem_committed(0x007fb700u, 4)) MR32(0x007fb700u) = 1;
 
     /* Expand maximum allowable frame delta multiplier (0x7fb714).
-     * Default 3.0f clamps frames to 3*16.67ms = 50 ms (20 FPS), causing slow motion
-     * whenever render rate drops to 30 FPS or lower. 6.0f allows up to 100 ms (10 FPS)
-     * so 30 FPS or frame drops maintain real-time speed. */
-    if (rh_mem_committed(0x007fb714u, 4)) MRF32(0x007fb714u) = 6.0f;
+     * 10.0f allows up to 166.7 ms (6 FPS) so frame drops maintain real-time speed. */
+    if (rh_mem_committed(0x007fb714u, 4)) MRF32(0x007fb714u) = 10.0f;
 
     /* High refresh rate patch at 0x0057A084:
      * Change 'jne 0x57a08b' (0x75) to 'jmp 0x57a08b' (0xEB).
@@ -766,7 +764,7 @@ static void framerate_pacing_fix(void) {
     int64_t now_us = roam_plat_now_us();
     if (s_last_tick_us > 0) {
         float real_elapsed = (float)(now_us - s_last_tick_us) / 1000000.0f;
-        if (real_elapsed > 0.005f && real_elapsed < 0.200f) {
+        if (real_elapsed > 0.005f && real_elapsed < 0.250f) {
             if (rh_mem_committed(0x00865154u, 4) && rh_mem_committed(0x00865198u, 4)) {
                 float current_wdt = MRF32(0x00865154u);
                 float current_realdt = MRF32(0x00865198u);

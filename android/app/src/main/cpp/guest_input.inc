@@ -189,7 +189,7 @@ bool joystickMethod(InputObject& object,uint32_t self,uint32_t method){
             else write32(header+16,(property==5?object.deadZone:object.saturation)[a]);
         }
         ret(0,3);return true;}
-    case 9:{syncPreTimestepPacing();if(!object.acquired){ret(diNotAcquired,3);return true;}
+    case 9:{if(!object.acquired){ret(diNotAcquired,3);return true;}
         if(arg(1)!=object.size||!arg(2)){ret(diInvalid,3);return true;}
         std::lock_guard<std::mutex> lock(inputMutex);std::memset(ptr(arg(2),object.size),0,object.size);
         for(auto& item:object.format){uint32_t value=padItemValue(object,item);

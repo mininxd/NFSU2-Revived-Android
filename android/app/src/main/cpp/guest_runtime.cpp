@@ -407,9 +407,30 @@ inline void syncPreTimestepPacing() {
         s_high_fps_patched = true;
     }
 
+    if (memory->writable(0x007fb714u, 4)) {
+        float max_mult = 10.0f;
+        std::memcpy(ptr(0x007fb714u, 4), &max_mult, 4);
+    }
+    if (memory->writable(0x00865558u, 4)) {
+        float zero = 0.0f;
+        std::memcpy(ptr(0x00865558u, 4), &zero, 4);
+    }
+    if (memory->writable(0x007fb710u, 4)) {
+        float zero = 0.0f;
+        std::memcpy(ptr(0x007fb710u, 4), &zero, 4);
+    }
+
     uint32_t frame_cnt = 0;
     if (memory->readable(0x00870818u, 4)) frame_cnt = read32(0x00870818u);
     if (frame_cnt && frame_cnt == s_last_frame_counter) return;
+
+    float current_wdt = 0.0f;
+    std::memcpy(&current_wdt, ptr(0x00865154u, 4), 4);
+    if (current_wdt <= 0.0f) {
+        // sub_0057ead0 has not yet populated world dt for this frame; wait for pre-physics poll
+        return;
+    }
+
     s_last_frame_counter = frame_cnt;
 
     auto now = std::chrono::steady_clock::now();
@@ -417,9 +438,8 @@ inline void syncPreTimestepPacing() {
     s_last_phys_time = now;
 
     if (memory->readable(0x008654a4u, 4) && read32(0x008654a4u) == 6u) {
-        if (real_elapsed > 0.005f && real_elapsed < 0.200f) {
-            float current_wdt = 0.0f, current_realdt = 0.0f;
-            std::memcpy(&current_wdt, ptr(0x00865154u, 4), 4);
+        if (real_elapsed > 0.005f && real_elapsed < 0.250f) {
+            float current_realdt = 0.0f;
             std::memcpy(&current_realdt, ptr(0x00865198u, 4), 4);
             float effective_dt = (current_wdt > 0.0f) ? current_wdt : current_realdt;
             if (effective_dt <= 0.0f || effective_dt < real_elapsed * 0.98f) {
