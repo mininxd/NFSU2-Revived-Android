@@ -179,7 +179,7 @@ void nfs_widescreen_set_frame_rate(unsigned fps) {
 void nfs_widescreen_apply_frame_rate(void) {
     wrf(0x00865558u, 0.0f);           /* disarm guest busy-spin limiter; pacing is handled by host FramePacer */
     wrf(0x007FB710u, 0.0f);
-    wrf(0x007FB714u, 10.0f);          /* expand max frame delta multiplier (up to 166.7 ms = 6 FPS) */
+    wrf(0x007FB714u, 6.0f);           /* expand max frame delta multiplier */
     /* Keep 0x007875BC locked strictly to 1/60 s base constant so internal clocks
      * (WorldTimeFrames, particles, camera) maintain correct real-time scaling. */
     wrf(0x007875BCu, 1.0f / 60.0f);   /* video mode / tick base constant: 60 Hz */
