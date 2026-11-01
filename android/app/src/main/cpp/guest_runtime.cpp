@@ -1,12 +1,14 @@
 #include <initializer_list>
 #include <set>
 #include <condition_variable>
+#include <dlfcn.h>
 #include "guest_runtime.h"
 #include "android_resolution.h"
 #include "guest_memory.h"
 #include "guest_heap.h"
 #include "runtime_log.h"
 #include "frame_pacer.h"
+#include "graphics_cache.h"
 #if defined(__ANDROID__) || defined(NFS_D3D9_BACKEND)
 #include "d3d9_bridge.h"
 #include "nfs_widescreen.h"
@@ -659,8 +661,42 @@ void testGuestCriticalSections(){
 }
 uint32_t dynamicThunkAddress{};
 void generatedTestCallback(){++generatedTestCalls;ret(read32(arg(0)),0);}
+static uint32_t callLiftedThunkWrapper(size_t fn_ptr, uint32_t esi_val) {
+    uint32_t caller=g_cur_func,stack=g_esp;
+    g_esp-=4;write32(g_esp,esi_val);g_esp-=4;write32(g_esp,RECOMP_RETADDR);
+    auto fn=reinterpret_cast<recomp_func_t>(fn_ptr);
+    fn();g_esp+=4;g_cur_func=caller;
+    if(g_esp!=stack)throw GuestStop("Generated callback stack imbalance in fast thunk");
+    return g_eax;
+}
+static size_t recompLookupThunkWrapper(uint32_t target) {
+    if(generatedTestActive&&target==generatedTestTarget)return reinterpret_cast<size_t>(generatedTestCallback);
+    return reinterpret_cast<size_t>(recomp_lookup(target));
+}
 void dynamicThunk(){
-    uint32_t start=dynamicThunkAddress,pc=start;
+    uint32_t start=dynamicThunkAddress;
+    static auto s_fast_thunk = reinterpret_cast<int(*)(ThunkContext*)>(dlsym(RTLD_DEFAULT,"nfs_dynamic_thunk_run"));
+    if(s_fast_thunk && memory){
+        ThunkContext ctx{};
+        ctx.start_addr=start;
+        ctx.eax=g_eax;
+        ctx.ecx=g_ecx;
+        ctx.esi=g_esi;
+        ctx.esp=g_esp;
+        ctx.cur_func=g_cur_func;
+        ctx.mem_ptr=static_cast<uint8_t*>(memory->base());
+        ctx.mem_size=GuestMemory::size;
+        ctx.lookup_fn=recompLookupThunkWrapper;
+        ctx.call_fn=callLiftedThunkWrapper;
+        if(s_fast_thunk(&ctx)==0){
+            g_eax=ctx.eax;
+            g_ecx=ctx.ecx;
+            g_esi=ctx.esi;
+            g_esp=ctx.esp;
+            return;
+        }
+    }
+    uint32_t pc=start;
     if(!memory->readable(start,5)||read32(start)!=0x24748b56u||*static_cast<uint8_t*>(ptr(start+4,1))!=8)
         throw GuestStop("Invalid generated callback at "+hex(start));
     uint32_t originalEsi=g_esi,esi=0,eax=g_eax,ecx=g_ecx,originalEsp=g_esp;

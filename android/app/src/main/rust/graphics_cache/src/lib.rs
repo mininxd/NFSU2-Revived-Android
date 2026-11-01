@@ -3,7 +3,11 @@
 //! Pipeline cache validation, disk persistence, and background compilation workers.
 
 pub mod async_compiler;
+pub mod d3d9_filter;
+pub mod dynamic_thunk;
 pub mod pipeline_cache;
+pub mod render_queue;
+pub mod simd_audio;
 
 use async_compiler::AsyncCompilerEngine;
 use pipeline_cache::{PipelineCacheManager, VK_UUID_SIZE};
@@ -170,9 +174,7 @@ pub unsafe extern "C" fn nfs_async_compiler_completed_count(
     (*compiler).completed_count()
 }
 
-// ---------------------------------------------------------------------------
-// JNI Exported Functions (Java Integration)
-// ---------------------------------------------------------------------------
+// JNI exported functions for Java integration
 
 #[no_mangle]
 pub extern "system" fn Java_io_mininxd_nfsu2_GraphicsCacheManager_nativeGetStatus(

@@ -2,7 +2,9 @@
 #include "runtime_log.h"
 #include "dxt_shadow.h"
 #include "vertex_formats.h"
+#include "graphics_cache.h"
 #include <d3d9.h>
+#include <dlfcn.h>
 #include <algorithm>
 #include <map>
 #include <type_traits>
@@ -81,6 +83,8 @@ uint32_t wrapTexture(IDirect3DBaseTexture9* texture){if(!texture)return 0;switch
 void retireGuestObject(uint32_t address){
     cachedObjectAddress=0;cachedObject=nullptr;
     auto found=objects.find(address);if(found==objects.end())return;
+    static auto s_filter_retire = reinterpret_cast<void(*)()>(dlsym(RTLD_DEFAULT,"nfs_d3d9_filter_notify_retired"));
+    if(s_filter_retire) s_filter_retire();
     uint32_t table;std::memcpy(&table,pointer(address),4);
     freeGuest(table);freeGuest(address);addresses.erase(found->second.native);objects.erase(found);
 }
@@ -278,10 +282,17 @@ uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumen
         }
         }
     }
-    if(kind==2){auto device=static_cast<IDirect3DDevice9*>(object);switch(method){
+    if(kind==2){
+        static auto s_filter_state = reinterpret_cast<int(*)(uint32_t,const uint32_t*,uint32_t*)>(dlsym(RTLD_DEFAULT,"nfs_d3d9_filter_state"));
+        if(s_filter_state && s_filter_state(method, args, argumentCount)){
+            return D3D_OK;
+        }
+        auto device=static_cast<IDirect3DDevice9*>(object);switch(method){
         case 9:{*argumentCount=2;D3DDEVICE_CREATION_PARAMETERS p{};HRESULT status=device->GetCreationParameters(&p);if(SUCCEEDED(status)){write(args[1],p.AdapterOrdinal);write(args[1]+4,p.DeviceType);write(args[1]+8,0xf0000301);write(args[1]+12,p.BehaviorFlags);}return status;}
         case 13:{*argumentCount=3;auto p=presentation(args[1]);IDirect3DSwapChain9* result=nullptr;HRESULT status=device->CreateAdditionalSwapChain(&p,&result);write(args[2],SUCCEEDED(status)?wrap(result,Kind::SwapChain):0);return status;}
         case 16:{*argumentCount=2;auto p=presentation(args[1]);HRESULT status=D3DERR_DEVICELOST;
+            static auto s_filter_forget = reinterpret_cast<void(*)()>(dlsym(RTLD_DEFAULT,"nfs_d3d9_filter_forget_shadow"));
+            if(s_filter_forget) s_filter_forget();
             // DXVK throws (DxvkError) when it cannot rebuild the swap chain; Windows
             // would report a lost device, which the game retries (Mali G615 report).
             // The old Android window can stay busy for a moment: retry once before giving up.

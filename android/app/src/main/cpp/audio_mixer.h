@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cmath>
 #include <algorithm>
+#include <dlfcn.h>
 #include "audio_resampler.h"
 struct PcmVoice {
     std::vector<uint8_t> samples;
@@ -69,14 +70,24 @@ public:
                     float phase=fraction*nfs_audio::UpsampleKernel::phases;
                     unsigned index=std::min(unsigned(phase),nfs_audio::UpsampleKernel::phases-1);
                     float blend=phase-index,left=0,right=0;
+                    float samples_l[16], samples_r[16];
                     for(unsigned tap=0;tap<nfs_audio::UpsampleKernel::taps;++tap){
                         int64_t source=int64_t(a)+int(tap)-7;
                         if(source<0||uint64_t(source)>=count){
                             if(voice->loop){source%=int64_t(count);if(source<0)source+=count;}
                             else source=std::clamp(source,int64_t(0),int64_t(count)-1);
                         }
-                        float weight=kernel.weights[index][tap]+(kernel.weights[index+1][tap]-kernel.weights[index][tap])*blend;
-                        left+=sample(*voice,size_t(source),0)*weight;right+=sample(*voice,size_t(source),1)*weight;
+                        samples_l[tap]=sample(*voice,size_t(source),0);
+                        samples_r[tap]=sample(*voice,size_t(source),1);
+                    }
+                    static auto s_simd_resample = reinterpret_cast<void(*)(const float*,const float*,const float*,const float*,float,float*,float*)>(dlsym(RTLD_DEFAULT,"nfs_audio_resample_sinc_simd"));
+                    if(s_simd_resample){
+                        s_simd_resample(samples_l, samples_r, kernel.weights[index].data(), kernel.weights[index+1].data(), blend, &left, &right);
+                    }else{
+                        for(unsigned tap=0;tap<nfs_audio::UpsampleKernel::taps;++tap){
+                            float weight=kernel.weights[index][tap]+(kernel.weights[index+1][tap]-kernel.weights[index][tap])*blend;
+                            left+=samples_l[tap]*weight;right+=samples_r[tap]*weight;
+                        }
                     }
                     output[frame*2]+=left*voice->left;output[frame*2+1]+=right*voice->right;
                 }else for(unsigned channel=0;channel<2;++channel){float first=sample(*voice,a,channel),second=sample(*voice,b,channel);

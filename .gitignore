@@ -40,6 +40,7 @@ src/recomp/gen_server/
 
 # Reference repositories for reference coding (XERJ)
 ref/
+.agents/
 
 # Tester diagnostic reports
 NFSU2-diagnostic-*.zip
