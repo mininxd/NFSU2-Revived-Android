@@ -876,20 +876,24 @@ final class RacingControlsView extends View {
         x /= scale;
         y /= scale;
         Control best = null;
-        double bestDistance = Double.MAX_VALUE;
+        float bestDistanceSq = Float.MAX_VALUE;
         for (Control c : controls) {
             float cx = c.area.centerX(), cy = c.area.centerY();
-            double d;
+            float dx = x - cx, dy = y - cy;
+            float dSq;
             if (c.shape == PEDAL || c.shape == DPAD || c.shape == PILL) {
-                if (Math.abs(x - cx) > c.area.width() * 0.58f || Math.abs(y - cy) > c.area.height() * 0.58f) continue;
-                d = Math.hypot((x - cx) / c.area.width(), (y - cy) / c.area.height());
+                float halfW = c.area.width() * 0.58f, halfH = c.area.height() * 0.58f;
+                if (Math.abs(dx) > halfW || Math.abs(dy) > halfH) continue;
+                float nx = dx / c.area.width(), ny = dy / c.area.height();
+                dSq = nx * nx + ny * ny;
             } else {
                 float r = Math.min(c.area.width(), c.area.height()) / 2f;
-                d = Math.hypot(x - cx, y - cy) / r;
-                if (d > (c.shape == WHEEL ? 1.25 : 1.15)) continue;
+                float limit = (c.shape == WHEEL ? 1.25f : 1.15f) * r;
+                dSq = dx * dx + dy * dy;
+                if (dSq > limit * limit) continue;
             }
-            if (d < bestDistance) {
-                bestDistance = d;
+            if (dSq < bestDistanceSq) {
+                bestDistanceSq = dSq;
                 best = c;
             }
         }
@@ -1008,14 +1012,14 @@ final class RacingControlsView extends View {
 
         if (action == MotionEvent.ACTION_DOWN) {
             releaseAll();
-        } else {
+        } else if (action == MotionEvent.ACTION_POINTER_UP) {
             releaseLiftedFingers(e);
         }
 
         if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_POINTER_DOWN) {
             Control c = hit(e.getX(index), e.getY(index));
             if (c != null && c.scan == STICK && c.held > 0) c = null;
-            if (c == null && pointerId < 0 && hit(e.getX(index), e.getY(index)) == null) {
+            if (c == null && pointerId < 0 && !racing && hit(e.getX(index), e.getY(index)) == null) {
                 pointerId = id;
                 pointerTouch(e.getX(index), e.getY(index), 0);
             }
@@ -1023,16 +1027,19 @@ final class RacingControlsView extends View {
             hold(c);
             if (c != null && c.scan == STICK) steer(c, e.getX(index));
         } else if (action == MotionEvent.ACTION_MOVE) {
+            boolean changed = false;
             for (int i = 0; i < e.getPointerCount(); ++i) {
                 int pointer = e.getPointerId(i);
                 if (pointer == pointerId) {
-                    pointerTouch(e.getX(i), e.getY(i), 1);
+                    if (!racing) pointerTouch(e.getX(i), e.getY(i), 1);
                     continue;
                 }
                 Control old = fingers.get(pointer);
                 Control next = hit(e.getX(i), e.getY(i));
                 if (old != null && old.scan == STICK) {
+                    float oldSteer = old.steering;
                     steer(old, e.getX(i));
+                    if (Math.abs(old.steering - oldSteer) > 0.02f) changed = true;
                     continue;
                 }
                 // Menu-style buttons do not slide; pedals and arrows follow thumb
@@ -1045,12 +1052,15 @@ final class RacingControlsView extends View {
                     fingers.put(pointer, next);
                     hold(next);
                     if (next != null && next.scan == STICK) steer(next, e.getX(i));
+                    changed = true;
                 }
             }
+            if (changed) invalidate();
+            return true;
         } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP) {
             if (id == pointerId) {
                 pointerId = -1;
-                pointerTouch(e.getX(index), e.getY(index), 2);
+                if (!racing) pointerTouch(e.getX(index), e.getY(index), 2);
             }
             Control c = fingers.remove(id);
             release(c);
