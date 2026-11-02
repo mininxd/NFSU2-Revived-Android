@@ -157,7 +157,7 @@ uint32_t lastImport{};
 std::string hostGameRoot;
 std::string guestLanguage="Spanish";
 bool guestWidescreen=true;
-bool guestHudSafeArea=true;
+bool guestHudSafeArea=false;
 std::atomic<bool> stopRequested{false};
 std::atomic<bool> guestPaused{false};
 std::chrono::steady_clock::time_point bootDeadline;

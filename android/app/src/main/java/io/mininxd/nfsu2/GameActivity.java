@@ -269,11 +269,8 @@ public final class GameActivity extends NativeActivity {
             String autosave = GameOptions.get(this, GameOptions.AUTOSAVE);
             android.system.Os.setenv("NFSU2_AUTOSAVE", "on".equals(autosave) ? "1" : "0", true);
 
-            String intro = GameOptions.get(this, GameOptions.STARTUP_MOVIES);
-            android.system.Os.setenv("NFSU2_INTRO", intro, true);
-
-            String borders = GameOptions.get(this, GameOptions.CUTSCENE_BORDERS);
-            android.system.Os.setenv("NFSU2_CUTSCENE_BORDERS", borders, true);
+            android.system.Os.setenv("NFSU2_INTRO", "original", true);
+            android.system.Os.setenv("NFSU2_CUTSCENE_BORDERS", "full", true);
 
             String roamMaxCars = GameOptions.get(this, GameOptions.ROAM_CARS_LIMIT);
             android.system.Os.setenv("NFSU2_ROAM_MAX_CARS", roamMaxCars, true);
@@ -305,14 +302,8 @@ public final class GameActivity extends NativeActivity {
             getSharedPreferences("touch_layouts_v2", MODE_PRIVATE)
                     .edit().putString("control_size", touchSize).apply();
         } catch (Throwable ignored) {}
-        String cutout = launch.getStringExtra("cutout");
-        if (cutout == null) cutout = GameOptions.get(this, GameOptions.CUTOUT);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            if ("safe".equals(cutout)) {
-                windowParams.layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_NEVER;
-            } else {
-                windowParams.layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
-            }
+            windowParams.layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
         }
         getWindow().setAttributes(windowParams);
         // Launcher options travel as extras; a direct start (adb, recents) falls back to the saved ones.

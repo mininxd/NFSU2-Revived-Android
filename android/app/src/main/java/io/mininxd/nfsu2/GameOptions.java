@@ -43,12 +43,6 @@ public final class GameOptions {
             new Option(DRAW_DISTANCE, "Draw Distance", "balanced",
                     new String[] {"balanced", "performance", "extended", "original"},
                     new String[] {"Balanced · 450m (Smooth FPS)", "Performance · 320m (High FPS)", "Extended · 650m", "Original · Unlimited"}),
-            new Option(CUTOUT, "Display Cutout (Notch)", "fullscreen",
-                    new String[] {"fullscreen", "safe"},
-                    new String[] {"Full Screen · bypass notch", "Letterbox · avoid cutout"}),
-            new Option(HUD_SAFE, "HUD Safe Area (20:9 / Notch)", "on",
-                    new String[] {"on", "off"},
-                    new String[] {"16:9 Centered · safe from notch", "Screen edges · ultra-wide"}),
             new Option(FPS, "FPS Limit", "30",
                     new String[] {"30", "60", "90", "120", "0"},
                     new String[] {"30 FPS", "60 FPS", "90 FPS", "120 FPS", "Uncapped"}),
@@ -64,12 +58,6 @@ public final class GameOptions {
             new Option(AUTOSAVE, "Autosave", "on",
                     new String[] {"on", "off"},
                     new String[] {"On · Save without prompting", "Off · Original prompt"}),
-            new Option(STARTUP_MOVIES, "Startup Movies", "skippable",
-                    new String[] {"skippable", "original", "off"},
-                    new String[] {"Skippable · Tap/Enter skips logos", "Original · Unskippable logos", "Off · Skip directly to main menu"}),
-            new Option(CUTSCENE_BORDERS, "Cutscene Bars", "off",
-                    new String[] {"off", "full"},
-                    new String[] {"Off · No black letterbox bars", "Full · Black bars across wide screen"}),
             new Option(ROAM_CARS_LIMIT, "Players' Cars Shown", "24",
                     new String[] {"16", "20", "24", "28", "32"},
                     new String[] {"16 cars · Low memory", "20 cars", "24 cars · Default", "28 cars", "32 cars · Max"}),
@@ -468,14 +456,9 @@ public final class GameOptions {
             else if ("175".equals(menuSize)) feScale = "1.75";
             else if ("200".equals(menuSize) || "auto".equals(menuSize)) feScale = "2.00";
 
-            String hudSafe = get(context, HUD_SAFE);
-            String aspect = "on".equals(hudSafe) ? "16:9" : "Auto";
-
-            String intro = get(context, STARTUP_MOVIES);
-            String skipIntro = "original".equals(intro) ? "0" : "1";
-
-            String borders = get(context, CUTSCENE_BORDERS);
-            String cutsceneBorders = "full".equals(borders) ? "0" : "1";
+            String aspect = "Auto";
+            String skipIntro = "0";
+            String cutsceneBorders = "0";
 
             java.util.List<String> lines = new java.util.ArrayList<>();
             boolean changed = false;

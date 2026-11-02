@@ -500,10 +500,7 @@ public final class LauncherActivity extends Activity {
                         getSharedPreferences("touch_layouts_v2", MODE_PRIVATE)
                                 .edit().putString("control_size", val).apply();
                     }
-                    if (GameOptions.MENU_BUTTON_SIZE.equals(option.key)
-                            || GameOptions.HUD_SAFE.equals(option.key)
-                            || GameOptions.STARTUP_MOVIES.equals(option.key)
-                            || GameOptions.CUTSCENE_BORDERS.equals(option.key)) {
+                    if (GameOptions.MENU_BUTTON_SIZE.equals(option.key)) {
                         GameOptions.syncWidescreenIni(this);
                     }
                     dialog.dismiss(); refreshOptions();
@@ -894,8 +891,6 @@ public final class LauncherActivity extends Activity {
                 .putExtra("backBuffers", Integer.parseInt(GameOptions.get(this, GameOptions.LATENCY)))
                 .putExtra("cpuTextures", GameOptions.get(this, GameOptions.TEXTURES).equals("cpu"))
                 .putExtra("onlineServer", GameOptions.onlineServer(this))
-                .putExtra("cutout", GameOptions.get(this, GameOptions.CUTOUT))
-                .putExtra("hudSafeArea", GameOptions.get(this, GameOptions.HUD_SAFE).equals("on"))
                 .putExtra("driverLoader", loader)
                 .putExtra("graphicsBackend", GameOptions.getEffectiveGraphicsBackend(this))
                 .putExtra("displayLogs", GameOptions.get(this, GameOptions.DISPLAY_LOGS))

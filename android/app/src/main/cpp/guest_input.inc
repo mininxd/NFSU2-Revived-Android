@@ -271,7 +271,7 @@ std::string keyboardKeyName(uint32_t dik){
     case 0xc8:return "Up";case 0xc9:return "Page Up";case 0xcb:return "Left";case 0xcd:return "Right";
     case 0xcf:return "End";case 0xd0:return "Down";case 0xd1:return "Page Down";case 0xd2:return "Insert";case 0xd3:return "Delete";
     }
-    char text[16];std::snprintf(text,sizeof text,"Key %02X",dik);return text;
+    return "";
 }
 // IDirectInputDevice8::GetObjectInfo(DIDEVICEOBJECTINSTANCEA*, dwObj, dwHow) for the
 // keyboard (objects are DIK codes, c_dfDIKeyboard offsets) and the mouse (DIMOUSESTATE2).
@@ -290,7 +290,9 @@ void keyboardMouseObjectInfo(uint32_t kind){
     if(kind==2){
         if(offset>255){ret(0x80070002,4);return;}  // DIERR_NOTFOUND
         if(how==2&&!(objectId&0x0c)){ret(0x80070002,4);return;}
-        name=keyboardKeyName(offset);type=0x0cu|(offset<<8);guidData1=0x55728220u;guidData2=0xd33c;  // GUID_Key
+        name=keyboardKeyName(offset);
+        if(name.empty()){ret(0x80070002,4);return;}
+        type=0x04u|(offset<<8);guidData1=0x55728220u;guidData2=0xd33c;  // GUID_Key
     }else{
         static const char* const axes[]={"X Axis","Y Axis","Wheel"};
         if(how==1&&offset<12&&offset%4==0){name=axes[offset/4];type=(offset==8?0x02u:0x01u)|((offset/4)<<8);guidData1=0xa36d02e0u+offset/4;}
@@ -304,7 +306,7 @@ void keyboardMouseObjectInfo(uint32_t kind){
     std::memcpy(ptr(output+4,4),&guidData1,4);std::memcpy(ptr(output+8,2),&guidData2,2);std::memcpy(ptr(output+10,2),&guidData3,2);std::memcpy(ptr(output+12,8),tail,8);
     write32(output+20,offset);write32(output+24,type);write32(output+28,0);
     std::memcpy(ptr(output+32,name.size()+1),name.c_str(),name.size()+1);
-    if(bytes>=312){
+    if(bytes>=312&&kind==2){
         uint16_t usagePage=7,usage=0;
         std::memcpy(ptr(output+304,2),&usagePage,2);
         std::memcpy(ptr(output+306,2),&usage,2);
@@ -380,9 +382,10 @@ void inputDispatch(){
             if(kind==2){
                 uint32_t category=flags&0x1f;
                 if(!category||(category&0x0c)){
-                    for(uint32_t dik=0;dik<256;++dik){
+                    for(uint32_t dik=1;dik<256;++dik){
                         std::string name=keyboardKeyName(dik);
-                        uint32_t type=0x0cu|(dik<<8);
+                        if(name.empty())continue;
+                        uint32_t type=0x04u|(dik<<8);
                         uint32_t guidData1=0x55728220u;uint16_t guidData2=0xd33c,guidData3=0x11cf;
                         write32(instance,316);std::memset(ptr(instance+4,312),0,312);
                         const uint8_t tail[8]={0xbf,0xc7,0x44,0x45,0x53,0x54,0,0};
@@ -390,6 +393,9 @@ void inputDispatch(){
                         std::memcpy(ptr(instance+10,2),&guidData3,2);std::memcpy(ptr(instance+12,8),tail,8);
                         write32(instance+20,dik);write32(instance+24,type);write32(instance+28,0);
                         std::memcpy(ptr(instance+32,name.size()+1),name.c_str(),name.size()+1);
+                        uint16_t usagePage=7,usage=0;
+                        std::memcpy(ptr(instance+304,2),&usagePage,2);
+                        std::memcpy(ptr(instance+306,2),&usage,2);
                         if(!callGuest(callback,{instance,context}))break;
                     }
                 }

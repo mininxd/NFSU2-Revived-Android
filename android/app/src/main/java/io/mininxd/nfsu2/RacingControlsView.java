@@ -287,9 +287,8 @@ final class RacingControlsView extends View {
             add(276, 16, 44, "msgs", 0x0f);     // Tab: Messages
             add(328, 16, 44, "drift", 0x2d);    // X: Drift mode
             add(380, 16, 44, "status", 0x14);   // T: Career Status / Player Stats
-            add(432, 16, 44, "horn", 0x31);     // N: Horn
-            add(484, 16, 44, "lift", 0x23);     // H: Hydraulics pressurize
-            add(536, 16, 44, "bounce", 0x24);   // J: Hydraulics bounce
+            add(432, 16, 44, "lift", 0x23);     // H: Hydraulics pressurize
+            add(484, 16, 44, "bounce", 0x24);   // J: Hydraulics bounce
 
             // Start event button (Pill, Enter: 0x1c)
             add(20, bottom - 148, 96, 40, PILL, "start", 0x1c);
@@ -448,18 +447,6 @@ final class RacingControlsView extends View {
                     canvas.drawRect(cx - barW / 2f, cy - s * 0.45f, cx + barW / 2f, cy + s * 0.65f, fill);
                     canvas.drawRect(cx + s * 0.48f - barW, cy - s * 0.15f, cx + s * 0.48f, cy + s * 0.65f, fill);
                 }
-                break;
-            case "horn":
-                path.reset();
-                path.moveTo(cx - s * 0.5f, cy - s * 0.22f);
-                path.lineTo(cx - s * 0.15f, cy - s * 0.22f);
-                path.lineTo(cx + s * 0.25f, cy - s * 0.55f);
-                path.lineTo(cx + s * 0.25f, cy + s * 0.55f);
-                path.lineTo(cx - s * 0.15f, cy + s * 0.22f);
-                path.lineTo(cx - s * 0.5f, cy + s * 0.22f);
-                path.close();
-                canvas.drawPath(path, line);
-                canvas.drawArc(cx + s * 0.15f, cy - s * 0.35f, cx + s * 0.55f, cy + s * 0.35f, -40, 80, false, line);
                 break;
             case "lift":
                 glyph(canvas, "LIFT", cx, cy, 12f, on);
