@@ -155,7 +155,7 @@ uint32_t resourceRva{},resourceSize{};
 // plain globals, not thread_local, which cost a TLS descriptor call per COM call.
 uint32_t lastImport{};
 std::string hostGameRoot;
-std::string guestLanguage="Spanish";
+std::string guestLanguage="English UK";
 bool guestWidescreen=true;
 bool guestHudSafeArea=false;
 std::atomic<bool> stopRequested{false};
@@ -1076,7 +1076,7 @@ void setGuestWidescreen(bool enabled){std::lock_guard<MachineMutex> lock(machine
 void setGuestHudSafeArea(bool enabled){std::lock_guard<MachineMutex> lock(machine);guestHudSafeArea=enabled;if(memory)nfs_widescreen_set_hud_safe_area(enabled?1:0);}
 void setGuestLanguage(const char* language){
     std::lock_guard<MachineMutex> lock(machine);if(memory)return;
-    for(const char* known:{"Spanish","English UK","French","German","Italian","Dutch","Swedish","Danish","Japanese","Korean","Chinese (Traditional)","Thai"})
+    for(const char* known:{"English UK","English","Spanish","French","German","Italian","Dutch","Swedish","Danish","Japanese","Korean","Chinese (Traditional)","Thai"})
         if(language&&std::strcmp(known,language)==0){guestLanguage=known;NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Selected guest language: %s",known);return;}
-    guestLanguage="Spanish";
+    guestLanguage="English UK";
 }
