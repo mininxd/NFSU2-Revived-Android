@@ -202,6 +202,18 @@ void nfs_widescreen_apply_frame_rate(void) {
     if (MEM32(0x00870CC4u) > 1) {
         MEM32(0x00870CC4u) = 1;
     }
+
+    /* Suppress trackside spectator crowds (0x00870CD0 = g_CrowdEnable) on mobile to eliminate draw call and alpha-test spikes */
+    static int s_crowd_checked = 0;
+    static int s_crowd_allowed = 0;
+    if (!s_crowd_checked) {
+        s_crowd_checked = 1;
+        const char *env_crowd = getenv("NFSU2_CROWD");
+        s_crowd_allowed = (env_crowd && (strcmp(env_crowd, "1") == 0 || strcasecmp(env_crowd, "on") == 0));
+    }
+    if (!s_crowd_allowed && MEM32(0x00870CD0u) != 0) {
+        MEM32(0x00870CD0u) = 0;
+    }
 }
 
 static void set_esp_float(uint32_t offset, float value) { wrf(g_esp + offset, value); }

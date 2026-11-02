@@ -295,6 +295,11 @@ public final class GameActivity extends NativeActivity {
             else if ("original".equals(drawDist)) distVal = 0.0f;
             android.system.Os.setenv("NFSU2_DRAW_DISTANCE", String.valueOf((int)distVal), true);
 
+            String crowds = GameOptions.get(this, GameOptions.TRACKSIDE_CROWDS);
+            boolean crowdEnable = "on".equals(crowds);
+            android.system.Os.setenv("NFSU2_CROWD", crowdEnable ? "1" : "0", true);
+            GraphicsCacheManager.setCrowdSuppression(!crowdEnable);
+
             // Sync touch control size
             String touchSize = GameOptions.get(this, GameOptions.TOUCH_SIZE);
             getSharedPreferences("touch_layouts_v2", MODE_PRIVATE)

@@ -27,12 +27,16 @@ public final class GameOptions {
             AUTOSAVE = "autosave", SHOW_HIDDEN_RACES = "show_hidden_races",
             STARTUP_MOVIES = "intro", CUTSCENE_BORDERS = "cutscene_borders",
             ROAM_CARS_LIMIT = "roam_max_cars", ROAM_CREW = "roam_crew",
-            GRAPHICS_BACKEND = "graphics_backend", DRAW_DISTANCE = "draw_distance";
+            GRAPHICS_BACKEND = "graphics_backend", DRAW_DISTANCE = "draw_distance",
+            TRACKSIDE_CROWDS = "trackside_crowds";
 
     static final Option[] ALL = {
             new Option(GRAPHICS_BACKEND, "Graphics API", "auto",
                     new String[] {"auto", "vulkan", "opengl"},
                     new String[] {"Auto", "Vulkan (DXVK)", "OpenGL (ES)"}),
+            new Option(TRACKSIDE_CROWDS, "Trackside Crowds", "off",
+                    new String[] {"off", "on"},
+                    new String[] {"Off · High FPS (Suppress Spectators)", "On · Original 3D Spectators"}),
             new Option(RESOLUTION, "Internal Resolution", "75",
                     new String[] {"25", "30", "35", "40", "45", "50", "55", "60", "65", "70", "75", "80", "85", "90", "95", "100", "125", "150", "200"},
                     new String[] {"25%", "30%", "35%", "40%", "45%", "50%", "55%", "60%", "65%", "70%", "75%", "80%", "85%", "90%", "95%", "100%", "125%", "150%", "200%"}),

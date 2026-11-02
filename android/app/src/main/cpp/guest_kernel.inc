@@ -339,6 +339,12 @@ void registryOpen(uint32_t output,uint32_t argc){
             const uint8_t* p=reinterpret_cast<const uint8_t*>(&val);
             gameRegistry.emplace("g_carheadlightenable",RegistryValue{4,{p,p+4}});
         }
+        if(gameRegistry.find("g_crowdenable")==gameRegistry.end()){
+            const char* envCrowd=std::getenv("NFSU2_CROWD");
+            uint32_t val=(envCrowd&&(std::strcmp(envCrowd,"1")==0||strcasecmp(envCrowd,"on")==0))?1:0;
+            const uint8_t* p=reinterpret_cast<const uint8_t*>(&val);
+            gameRegistry.emplace("g_crowdenable",RegistryValue{4,{p,p+4}});
+        }
     }
     uint32_t handle=nextRegistryHandle++;registryHandles.emplace(handle,true);write32(output,handle);ret(0,argc);
 }
@@ -351,6 +357,13 @@ void regQueryValueExA(){
     if(name=="g_carheadlightenable"&&value->second.bytes.size()>=4){
         uint32_t val=*reinterpret_cast<const uint32_t*>(value->second.bytes.data());
         if(val>1){val=1;std::memcpy(const_cast<uint8_t*>(value->second.bytes.data()),&val,4);}
+    }
+    if(name=="g_crowdenable"&&value->second.bytes.size()>=4){
+        const char* envCrowd=std::getenv("NFSU2_CROWD");
+        bool allowCrowd=(envCrowd&&(std::strcmp(envCrowd,"1")==0||strcasecmp(envCrowd,"on")==0));
+        if(!allowCrowd){
+            uint32_t val=0;std::memcpy(const_cast<uint8_t*>(value->second.bytes.data()),&val,4);
+        }
     }
     if(!arg(5)){ret(87,6);return;}uint32_t size=read32(arg(5));write32(arg(5),value->second.bytes.size());
     if(arg(3))write32(arg(3),value->second.type);
@@ -365,6 +378,13 @@ void regSetValueExA(){
     if(name=="g_carheadlightenable"&&value.bytes.size()>=4){
         uint32_t val=*reinterpret_cast<const uint32_t*>(value.bytes.data());
         if(val>1){val=1;std::memcpy(value.bytes.data(),&val,4);}
+    }
+    if(name=="g_crowdenable"&&value.bytes.size()>=4){
+        const char* envCrowd=std::getenv("NFSU2_CROWD");
+        bool allowCrowd=(envCrowd&&(std::strcmp(envCrowd,"1")==0||strcasecmp(envCrowd,"on")==0));
+        if(!allowCrowd){
+            uint32_t val=0;std::memcpy(value.bytes.data(),&val,4);
+        }
     }
     gameRegistry[name]=std::move(value);
     if(registryPersisted(name))savePersistedRegistry();

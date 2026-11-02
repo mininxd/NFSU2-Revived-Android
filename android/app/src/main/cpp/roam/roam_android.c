@@ -32,6 +32,14 @@ recomp_func_t (*g_p_recomp_lookup)(uint32_t va) = NULL;
 
 int nfs_bind_to_perf_cores(void);
 
+#ifdef ROAM_CORE_RUST
+extern int nfs_rust_crowd_is_suppressed(void);
+extern void nfs_rust_set_crowd_suppression(int enable);
+extern uint32_t nfs_rust_filter_crowd_setting(uint32_t val);
+extern int nfs_rust_apply_crowd_suppression(uint8_t *mem_base);
+extern uint32_t nfs_rust_crowd_suppressed_frames(void);
+#endif
+
 #define G_CARPOOL_KB 0x007fa9d4u
 #define CARPOOL_KB   48000
 
@@ -761,6 +769,32 @@ static void framerate_pacing_fix(void) {
     if (rh_mem_committed(0x00870cc4u, 4) && MR32(0x00870cc4u) > 1) {
         MR32(0x00870cc4u) = 1;
     }
+
+    /* Trackside Crowd Suppression (0x00870cd0 = g_CrowdEnable) via pure Rust:
+     * Suppress 3D spectator models and alpha-tested fence crowds around stadium corners
+     * to prevent vertex transform and alpha test fillrate drops on mobile GPUs. */
+    static int s_crowd_env_checked = 0;
+    if (!s_crowd_env_checked) {
+        s_crowd_env_checked = 1;
+        const char *env_crowd = getenv("NFSU2_CROWD");
+        int allow_crowd = (env_crowd && (strcmp(env_crowd, "1") == 0 || strcasecmp(env_crowd, "on") == 0));
+#ifdef ROAM_CORE_RUST
+        nfs_rust_set_crowd_suppression(!allow_crowd);
+#endif
+    }
+#ifdef ROAM_CORE_RUST
+    if (g_p_mem_base && *g_p_mem_base) {
+        nfs_rust_apply_crowd_suppression((uint8_t *)(*g_p_mem_base));
+    }
+#else
+    if (rh_mem_committed(0x00870cd0u, 4)) {
+        const char *env_crowd = getenv("NFSU2_CROWD");
+        int allow_crowd = (env_crowd && (strcmp(env_crowd, "1") == 0 || strcasecmp(env_crowd, "on") == 0));
+        if (!allow_crowd) {
+            MR32(0x00870cd0u) = 0;
+        }
+    }
+#endif
 
     /* Prevent slow motion during racing: track real wall-clock elapsed time.
      * Note: G_WORLDDT (0x865154) is zeroed at the end of each frame by SPEED2.EXE (0x57A17D),

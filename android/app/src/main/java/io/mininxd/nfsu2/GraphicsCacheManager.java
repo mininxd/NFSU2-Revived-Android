@@ -21,6 +21,25 @@ public final class GraphicsCacheManager {
 
     public static native int nativeGetStatus(long pipelineHash);
     public static native long nativeGetCompletedCount();
+    public static native void nativeSetCrowdSuppression(boolean suppressed);
+    public static native boolean nativeIsCrowdSuppressed();
+
+    public static void setCrowdSuppression(boolean suppressed) {
+        if (nativeLoaded) {
+            try {
+                nativeSetCrowdSuppression(suppressed);
+            } catch (Throwable ignored) {}
+        }
+    }
+
+    public static boolean isCrowdSuppressed() {
+        if (nativeLoaded) {
+            try {
+                return nativeIsCrowdSuppressed();
+            } catch (Throwable ignored) {}
+        }
+        return true;
+    }
 
     public static boolean isAvailable() {
         return nativeLoaded;

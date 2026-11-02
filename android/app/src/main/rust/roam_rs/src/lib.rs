@@ -7,6 +7,7 @@ pub mod math;
 pub mod carcfg;
 pub mod msg;
 pub mod interp;
+pub mod crowd;
 
 pub use crc::*;
 pub use hash::*;
@@ -15,3 +16,4 @@ pub use math::*;
 pub use carcfg::*;
 pub use msg::*;
 pub use interp::*;
+pub use crowd::*;
