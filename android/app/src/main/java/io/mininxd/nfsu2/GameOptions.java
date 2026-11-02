@@ -14,16 +14,9 @@ public final class GameOptions {
         Option(String key, String title, String defaultValue, String[] values, String[] labels) {
             this.key = key; this.title = title; this.defaultValue = defaultValue; this.values = values; this.labels = labels;
         }
-        String label(Context context, String value) {
-            if (context != null && GRAPHICS_BACKEND.equals(key) && "auto".equalsIgnoreCase(value)) {
-                String effective = getEffectiveGraphicsBackend(context);
-                return "Auto · " + ("opengl".equalsIgnoreCase(effective) ? "OpenGL (ES)" : "Vulkan (DXVK)");
-            }
+        String label(String value) {
             for (int i = 0; i < values.length; i++) if (values[i].equals(value)) return labels[i];
             return value;
-        }
-        String label(String value) {
-            return label(null, value);
         }
     }
 

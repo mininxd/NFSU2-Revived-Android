@@ -424,7 +424,7 @@ public final class LauncherActivity extends Activity {
         optionsList.addView(optionRow("Test driver", "GPU and Vulkan features", () -> probeDriver(false)));
         optionsList.addView(optionRow("Language", languageLabel(), this::chooseLanguage));
         for (GameOptions.Option option : GameOptions.ALL)
-            optionsList.addView(optionRow(option.title, option.label(this, GameOptions.get(this, option.key)), () -> chooseOption(option)));
+            optionsList.addView(optionRow(option.title, option.label(GameOptions.get(this, option.key)), () -> chooseOption(option)));
         optionsList.addView(optionRow("Cheat Codes", cheatCodesSummary(), this::chooseCheatCodes));
         optionsList.addView(optionRow("Freeroam Online (beta)", GameOptions.isRoamEnabled(this) ? "On" : "Off", this::toggleFreeRoam));
         optionsList.addView(optionRow("Ghost Mode", GameOptions.isGhostModeEnabled(this) ? "On" : "Off", this::toggleGhostMode));
