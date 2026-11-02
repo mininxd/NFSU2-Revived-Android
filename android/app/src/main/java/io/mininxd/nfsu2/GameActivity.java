@@ -266,8 +266,7 @@ public final class GameActivity extends NativeActivity {
             boolean hiddenRaces = GameOptions.isCheatEnabled(this, "hidden_races");
             android.system.Os.setenv("NFSU2_SHOW_HIDDEN_RACES", hiddenRaces ? "1" : "0", true);
 
-            String autosave = GameOptions.get(this, GameOptions.AUTOSAVE);
-            android.system.Os.setenv("NFSU2_AUTOSAVE", "on".equals(autosave) ? "1" : "0", true);
+            android.system.Os.setenv("NFSU2_AUTOSAVE", "1", true);
 
             android.system.Os.setenv("NFSU2_INTRO", "original", true);
             android.system.Os.setenv("NFSU2_CUTSCENE_BORDERS", "full", true);
@@ -292,10 +291,8 @@ public final class GameActivity extends NativeActivity {
             else if ("original".equals(drawDist)) distVal = 0.0f;
             android.system.Os.setenv("NFSU2_DRAW_DISTANCE", String.valueOf((int)distVal), true);
 
-            String crowds = GameOptions.get(this, GameOptions.TRACKSIDE_CROWDS);
-            boolean crowdEnable = "on".equals(crowds);
-            android.system.Os.setenv("NFSU2_CROWD", crowdEnable ? "1" : "0", true);
-            GraphicsCacheManager.setCrowdSuppression(!crowdEnable);
+            android.system.Os.setenv("NFSU2_CROWD", "0", true);
+            GraphicsCacheManager.setCrowdSuppression(true);
 
             // Sync touch control size
             String touchSize = GameOptions.get(this, GameOptions.TOUCH_SIZE);
