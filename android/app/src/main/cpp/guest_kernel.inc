@@ -330,9 +330,19 @@ void registryOpen(uint32_t output,uint32_t argc){
             gameRegistry.emplace("g_worldlodlevel",RegistryValue{4,{p,p+4}});
         }
         if(gameRegistry.find("g_roadreflectionenable")==gameRegistry.end()){
-            uint32_t val=2;
+            uint32_t val=0;
             const uint8_t* p=reinterpret_cast<const uint8_t*>(&val);
             gameRegistry.emplace("g_roadreflectionenable",RegistryValue{4,{p,p+4}});
+        }
+        if(gameRegistry.find("g_carenvironmentmapenable")==gameRegistry.end()){
+            uint32_t val=0;
+            const uint8_t* p=reinterpret_cast<const uint8_t*>(&val);
+            gameRegistry.emplace("g_carenvironmentmapenable",RegistryValue{4,{p,p+4}});
+        }
+        if(gameRegistry.find("g_motionblurenable")==gameRegistry.end()){
+            uint32_t val=0;
+            const uint8_t* p=reinterpret_cast<const uint8_t*>(&val);
+            gameRegistry.emplace("g_motionblurenable",RegistryValue{4,{p,p+4}});
         }
         if(gameRegistry.find("g_carheadlightenable")==gameRegistry.end()){
             uint32_t val=1;

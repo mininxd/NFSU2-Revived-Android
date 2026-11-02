@@ -279,7 +279,13 @@ void keyboardMouseObjectInfo(uint32_t kind){
     uint32_t output=arg(1),objectId=arg(2),how=arg(3);
     if(!output||(read32(output)!=316&&read32(output)!=280)){ret(diInvalid,4);return;}
     if(how!=1&&how!=2){ret(diInvalid,4);return;}  // DIPH_BYOFFSET / DIPH_BYID
+    uint32_t self=arg(0);auto foundObj=inputObjects.find(self);
     uint32_t offset=how==1?objectId:(objectId>>8)&0xffff;
+    if(kind==2&&how==1&&foundObj!=inputObjects.end()&&!foundObj->second.format.empty()){
+        for(const auto& item:foundObj->second.format){
+            if(item.offset==objectId){offset=(item.type>>8)&0xffff;break;}
+        }
+    }
     std::string name;uint32_t type,guidData1;uint16_t guidData2=0xc9f3;
     if(kind==2){
         if(offset>255){ret(0x80070002,4);return;}  // DIERR_NOTFOUND
@@ -298,6 +304,11 @@ void keyboardMouseObjectInfo(uint32_t kind){
     std::memcpy(ptr(output+4,4),&guidData1,4);std::memcpy(ptr(output+8,2),&guidData2,2);std::memcpy(ptr(output+10,2),&guidData3,2);std::memcpy(ptr(output+12,8),tail,8);
     write32(output+20,offset);write32(output+24,type);write32(output+28,0);
     std::memcpy(ptr(output+32,name.size()+1),name.c_str(),name.size()+1);
+    if(bytes>=312){
+        uint16_t usagePage=7,usage=0;
+        std::memcpy(ptr(output+304,2),&usagePage,2);
+        std::memcpy(ptr(output+306,2),&usage,2);
+    }
     ret(0,4);
 }
 void inputDispatch(){
@@ -326,7 +337,7 @@ void inputDispatch(){
             if(!callback||flags&~0x70111u){ret(diInvalid,5);return;}
             NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","DirectInput EnumDevices type=%u flags=%x gamepad=1",type,flags);
             uint32_t instance=allocate(580);
-            try{for(uint32_t device:{3u,4u}){
+            try{for(uint32_t device:{2u,3u,4u}){
                 if(device==4&&(flags&0x100u))continue;  // no force feedback
                 uint32_t deviceType=device==2?0x13:device==3?0x12:0x15;
                 uint32_t deviceClass=device==2?3:device==3?2:4;
@@ -387,6 +398,9 @@ void inputDispatch(){
         heaps->free(GuestHeaps::process,instance);ret(0,4);return;}
     case 5:case 6:{uint32_t property=arg(1),header=arg(2);
         if(!header||read32(header)!=20||read32(header+4)!=16||read32(header+12)!=0){ret(diInvalid,3);return;}
+        if(property==3){if(method==6){ret(0x80004001,3);return;}write32(header+16,1);ret(0,3);return;}
+        if(property==2){if(method==5)write32(header+16,0);ret(method==6&&read32(header+16)?0x80004001:0,3);return;}
+        if(property==9){if(method==5)write32(header+16,0);ret(0,3);return;}
         if(property!=1){ret(0x80004001,3);return;}
         if(method==6){if(object.acquired){ret(0x800700aa,3);return;}if(read32(header+16)>4096){ret(diInvalid,3);return;}object.bufferSize=read32(header+16);}
         else write32(header+16,object.bufferSize);
@@ -441,7 +455,19 @@ void inputDispatch(){
     case 13:{uint32_t flags=arg(2);if(!windows.count(arg(1))||flags&~31u||(!(flags&3))||((flags&3)==3)||(!(flags&12))||((flags&12)==12)){ret(diInvalid,3);return;}
         if((flags&9)==9){ret(0x80004001,3);return;}object.cooperative=flags;ret(0,3);return;}
     case 15:{uint32_t output=arg(1);if(!output||(read32(output)!=580&&read32(output)!=560)){ret(diInvalid,2);return;}inputDeviceInstance(output,kind,read32(output));ret(0,2);return;}
+    case 16:ret(0x80004001,3);return; // RunControlPanel
+    case 17:ret(0,4);return;          // Initialize
+    case 18:ret(0x80004001,5);return; // CreateEffect
+    case 19:ret(0,4);return;          // EnumEffects
+    case 20:ret(0x80004001,3);return; // GetEffectInfo
+    case 21:ret(0x80004001,2);return; // GetForceFeedbackState
+    case 22:ret(0x80004001,2);return; // SendForceFeedbackCommand
+    case 23:ret(0,3);return;          // EnumCreatedEffectObjects
+    case 24:ret(0x80004001,2);return; // Escape
     case 25:ret(object.acquired?0:diNotAcquired,1);return;
+    case 26:ret(0x80004001,5);return; // SendDeviceData
+    case 27:ret(0x80004001,5);return; // EnumEffectsInFile
+    case 28:ret(0x80004001,5);return; // WriteEffectToFile
     case 29:{if(!validActionFormat(arg(1))||(arg(3)!=0&&arg(3)!=1&&arg(3)!=2&&arg(3)!=4)){ret(diInvalid,4);return;}
         if(kind!=2){ret(0x80004001,4);return;}auto mapped=buildKeyboardActions(arg(1));
         NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Keyboard BuildActionMap mapped %u actions",mapped);ret(0,4);return;}
@@ -459,6 +485,7 @@ void inputDispatch(){
         object.format=std::move(items);object.size=read32(format+8);object.bufferSize=read32(format+40);object.pending.clear();object.overflow=false;
         inputDrivingMode=std::any_of(object.format.begin(),object.format.end(),[](const InputFormatObject& item){return item.user==1&&((item.type>>8)&0xffff)==0xc8;});
         NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Keyboard SetActionMap installed %zu actions, %u bytes, buffer=%u",object.format.size(),object.size,object.bufferSize);ret(0,4);return;}
+    case 31:ret(0x80004001,2);return; // GetImageInfo
     default:throw GuestStop("DirectInput device method pending: "+std::to_string(method));
     }
 }

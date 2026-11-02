@@ -40,9 +40,12 @@ jobs:
         continue-on-error: true
         run: |
           rustup target add aarch64-linux-android || true
-          CLANG_BIN=$(find "$ANDROID_HOME/ndk" "$ANDROID_NDK_ROOT" /usr/local/lib/android/sdk/ndk -name "aarch64-linux-android29-clang" 2>/dev/null | head -n 1)
+          CLANG_BIN=$(find "$ANDROID_HOME/ndk" "$ANDROID_NDK_ROOT" /usr/local/lib/android/sdk/ndk -name "aarch64-linux-android26-clang" 2>/dev/null | head -n 1)
           if [ -z "$CLANG_BIN" ]; then
-            CLANG_BIN=$(find "$ANDROID_HOME/ndk" "$ANDROID_NDK_ROOT" /usr/local/lib/android/sdk/ndk -name "aarch64-linux-android*-clang" 2>/dev/null | grep -E "android(29|30|31|32|33|34|35)-clang" | sort -V | head -n 1)
+            CLANG_BIN=$(find "$ANDROID_HOME/ndk" "$ANDROID_NDK_ROOT" /usr/local/lib/android/sdk/ndk -name "aarch64-linux-android28-clang" 2>/dev/null | head -n 1)
+          fi
+          if [ -z "$CLANG_BIN" ]; then
+            CLANG_BIN=$(find "$ANDROID_HOME/ndk" "$ANDROID_NDK_ROOT" /usr/local/lib/android/sdk/ndk -name "aarch64-linux-android*-clang" 2>/dev/null | grep -E "android(26|27|28|29|30|31|32|33|34|35)-clang" | sort -V | head -n 1)
           fi
           if [ -z "$CLANG_BIN" ]; then
             CLANG_BIN=$(which aarch64-linux-gnu-gcc || which clang || find / -name "*clang" 2>/dev/null | head -n 1)
@@ -68,9 +71,12 @@ jobs:
 
       - name: Build Native Free Roam Companion (libnfsu2_roam.so)
         run: |
-          CLANG_BIN=$(find "$ANDROID_HOME/ndk" "$ANDROID_NDK_ROOT" /usr/local/lib/android/sdk/ndk -name "aarch64-linux-android29-clang" 2>/dev/null | head -n 1)
+          CLANG_BIN=$(find "$ANDROID_HOME/ndk" "$ANDROID_NDK_ROOT" /usr/local/lib/android/sdk/ndk -name "aarch64-linux-android26-clang" 2>/dev/null | head -n 1)
           if [ -z "$CLANG_BIN" ]; then
-            CLANG_BIN=$(find "$ANDROID_HOME/ndk" "$ANDROID_NDK_ROOT" /usr/local/lib/android/sdk/ndk -name "aarch64-linux-android*-clang" 2>/dev/null | grep -E "android(29|30|31|32|33|34|35)-clang" | sort -V | head -n 1)
+            CLANG_BIN=$(find "$ANDROID_HOME/ndk" "$ANDROID_NDK_ROOT" /usr/local/lib/android/sdk/ndk -name "aarch64-linux-android28-clang" 2>/dev/null | head -n 1)
+          fi
+          if [ -z "$CLANG_BIN" ]; then
+            CLANG_BIN=$(find "$ANDROID_HOME/ndk" "$ANDROID_NDK_ROOT" /usr/local/lib/android/sdk/ndk -name "aarch64-linux-android*-clang" 2>/dev/null | grep -E "android(26|27|28|29|30|31|32|33|34|35)-clang" | sort -V | head -n 1)
           fi
           if [ -z "$CLANG_BIN" ]; then
             echo "Searching system for aarch64 clang..."

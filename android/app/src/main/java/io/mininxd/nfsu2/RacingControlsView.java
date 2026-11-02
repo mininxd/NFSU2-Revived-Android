@@ -105,8 +105,12 @@ final class RacingControlsView extends View {
     private final SharedPreferences layouts;
     private float scale = 1.0f;
     private Bitmap nitroBitmap;
+    private Bitmap statusBitmap;
+    private Bitmap driftBitmap;
     private final Paint bitmapPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
     private final RectF nitroDestRect = new RectF();
+    private final RectF statusDestRect = new RectF();
+    private final RectF driftDestRect = new RectF();
     private final PorterDuffColorFilter filterIdle = new PorterDuffColorFilter(COLOR_TEXT, PorterDuff.Mode.SRC_IN);
     private final PorterDuffColorFilter filterActive = new PorterDuffColorFilter(COLOR_LIME, PorterDuff.Mode.SRC_IN);
     private boolean driftActive = false;
@@ -146,6 +150,30 @@ final class RacingControlsView extends View {
             if (nitroBitmap == null) {
                 java.io.InputStream is = getContext().getAssets().open("nitro.png");
                 nitroBitmap = BitmapFactory.decodeStream(is);
+                is.close();
+            }
+        } catch (Throwable ignored) {}
+
+        try {
+            int resId = getResources().getIdentifier("status", "drawable", getContext().getPackageName());
+            if (resId != 0) {
+                statusBitmap = BitmapFactory.decodeResource(getResources(), resId);
+            }
+            if (statusBitmap == null) {
+                java.io.InputStream is = getContext().getAssets().open("status.png");
+                statusBitmap = BitmapFactory.decodeStream(is);
+                is.close();
+            }
+        } catch (Throwable ignored) {}
+
+        try {
+            int resId = getResources().getIdentifier("drift", "drawable", getContext().getPackageName());
+            if (resId != 0) {
+                driftBitmap = BitmapFactory.decodeResource(getResources(), resId);
+            }
+            if (driftBitmap == null) {
+                java.io.InputStream is = getContext().getAssets().open("drift.png");
+                driftBitmap = BitmapFactory.decodeStream(is);
                 is.close();
             }
         } catch (Throwable ignored) {}
@@ -258,6 +286,10 @@ final class RacingControlsView extends View {
             add(224, 16, 44, "map", 0x32);      // M: World Map
             add(276, 16, 44, "msgs", 0x0f);     // Tab: Messages
             add(328, 16, 44, "drift", 0x2d);    // X: Drift mode
+            add(380, 16, 44, "status", 0x14);   // T: Career Status / Player Stats
+            add(432, 16, 44, "horn", 0x31);     // N: Horn
+            add(484, 16, 44, "lift", 0x23);     // H: Hydraulics pressurize
+            add(536, 16, 44, "bounce", 0x24);   // J: Hydraulics bounce
 
             // Start event button (Pill, Enter: 0x1c)
             add(20, bottom - 148, 96, 40, PILL, "start", 0x1c);
@@ -393,7 +425,50 @@ final class RacingControlsView extends View {
                 }
                 break;
             case "drift":
-                glyph(canvas, "DRIFT", cx, cy, 11f, on || driftActive);
+                if (driftBitmap != null) {
+                    bitmapPaint.setColorFilter((on || driftActive) ? filterActive : filterIdle);
+                    float bw = r * 1.4f;
+                    float bh = bw * ((float) driftBitmap.getHeight() / (float) driftBitmap.getWidth());
+                    driftDestRect.set(cx - bw / 2f, cy - bh / 2f, cx + bw / 2f, cy + bh / 2f);
+                    canvas.drawBitmap(driftBitmap, null, driftDestRect, bitmapPaint);
+                } else {
+                    glyph(canvas, "DRIFT", cx, cy, 11f, on || driftActive);
+                }
+                break;
+            case "status":
+                if (statusBitmap != null) {
+                    bitmapPaint.setColorFilter(on ? filterActive : filterIdle);
+                    float bw = r * 1.3f;
+                    float bh = bw * ((float) statusBitmap.getHeight() / (float) statusBitmap.getWidth());
+                    statusDestRect.set(cx - bw / 2f, cy - bh / 2f, cx + bw / 2f, cy + bh / 2f);
+                    canvas.drawBitmap(statusBitmap, null, statusDestRect, bitmapPaint);
+                } else {
+                    float barW = s * 0.26f;
+                    canvas.drawRect(cx - s * 0.48f, cy + s * 0.15f, cx - s * 0.48f + barW, cy + s * 0.65f, fill);
+                    canvas.drawRect(cx - barW / 2f, cy - s * 0.45f, cx + barW / 2f, cy + s * 0.65f, fill);
+                    canvas.drawRect(cx + s * 0.48f - barW, cy - s * 0.15f, cx + s * 0.48f, cy + s * 0.65f, fill);
+                }
+                break;
+            case "horn":
+                path.reset();
+                path.moveTo(cx - s * 0.5f, cy - s * 0.22f);
+                path.lineTo(cx - s * 0.15f, cy - s * 0.22f);
+                path.lineTo(cx + s * 0.25f, cy - s * 0.55f);
+                path.lineTo(cx + s * 0.25f, cy + s * 0.55f);
+                path.lineTo(cx - s * 0.15f, cy + s * 0.22f);
+                path.lineTo(cx - s * 0.5f, cy + s * 0.22f);
+                path.close();
+                canvas.drawPath(path, line);
+                canvas.drawArc(cx + s * 0.15f, cy - s * 0.35f, cx + s * 0.55f, cy + s * 0.35f, -40, 80, false, line);
+                break;
+            case "lift":
+                glyph(canvas, "LIFT", cx, cy, 12f, on);
+                chevron(canvas, cx, cy - s * 0.65f, s * 0.48f, true);
+                break;
+            case "bounce":
+                glyph(canvas, "BOUNCE", cx, cy, 9f, on);
+                chevron(canvas, cx, cy - s * 0.65f, s * 0.42f, true);
+                chevron(canvas, cx, cy - s * 0.38f, s * 0.42f, true);
                 break;
             case "hb":
                 text.setTextSize(12f);

@@ -7,11 +7,13 @@ pub mod crowd_filter;
 pub mod d3d9_filter;
 pub mod dynamic_thunk;
 pub mod gles_optimizer;
+pub mod headlights;
 pub mod pipeline_cache;
 pub mod render_queue;
 pub mod simd_audio;
 
 pub use crowd_filter::*;
+pub use headlights::*;
 
 use async_compiler::AsyncCompilerEngine;
 use pipeline_cache::{PipelineCacheManager, VK_UUID_SIZE};
