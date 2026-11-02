@@ -245,6 +245,7 @@ public final class GameActivity extends NativeActivity {
         android.view.WindowManager.LayoutParams windowParams=getWindow().getAttributes();
         windowParams.preferredRefreshRate=Math.min(120,refresh);
         Intent launch = getIntent();
+        float distVal = 450.0f;
         try {
             String menuScale = GameOptions.get(this, GameOptions.MENU_BUTTON_SIZE);
             if ("auto".equals(menuScale)) android.system.Os.setenv("NFSU2_MENU_SCALE", "1.5", true);
@@ -288,7 +289,7 @@ public final class GameActivity extends NativeActivity {
             android.system.Os.setenv("NFSU2_RENDERER", backend, true);
 
             String drawDist = GameOptions.get(this, GameOptions.DRAW_DISTANCE);
-            float distVal = 450.0f;
+            distVal = 450.0f;
             if ("performance".equals(drawDist)) distVal = 320.0f;
             else if ("extended".equals(drawDist)) distVal = 650.0f;
             else if ("original".equals(drawDist)) distVal = 0.0f;

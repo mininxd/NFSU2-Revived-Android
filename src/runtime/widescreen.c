@@ -197,6 +197,11 @@ void nfs_widescreen_apply_frame_rate(void) {
     float actual_realdt = rdf(0x00865198u);
     float smokeable = (actual_realdt >= 0.020f) ? actual_realdt : (s_frame_time > 0.0f ? s_frame_time : (1.0f / 60.0f));
     wrf(0x007FC858u, smokeable);      /* smokeable frame time */
+
+    /* Clamp g_CarHeadlightEnable (0x00870CC4) to 1 (Player only), preventing NPC traffic cars from projecting dynamic road lights */
+    if (MEM32(0x00870CC4u) > 1) {
+        MEM32(0x00870CC4u) = 1;
+    }
 }
 
 static void set_esp_float(uint32_t offset, float value) { wrf(g_esp + offset, value); }

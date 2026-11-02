@@ -334,6 +334,11 @@ void registryOpen(uint32_t output,uint32_t argc){
             const uint8_t* p=reinterpret_cast<const uint8_t*>(&val);
             gameRegistry.emplace("g_roadreflectionenable",RegistryValue{4,{p,p+4}});
         }
+        if(gameRegistry.find("g_carheadlightenable")==gameRegistry.end()){
+            uint32_t val=1;
+            const uint8_t* p=reinterpret_cast<const uint8_t*>(&val);
+            gameRegistry.emplace("g_carheadlightenable",RegistryValue{4,{p,p+4}});
+        }
     }
     uint32_t handle=nextRegistryHandle++;registryHandles.emplace(handle,true);write32(output,handle);ret(0,argc);
 }
@@ -343,6 +348,10 @@ void regQueryValueExA(){
     auto name=lower(guestString(arg(1)));NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Registry query %08x value=%s",arg(0),name.c_str());
     if(!registryHandles.count(arg(0))){ret(6,6);return;}
     auto value=gameRegistry.find(name);if(value==gameRegistry.end()){ret(2,6);return;}
+    if(name=="g_carheadlightenable"&&value->second.bytes.size()>=4){
+        uint32_t val=*reinterpret_cast<const uint32_t*>(value->second.bytes.data());
+        if(val>1){val=1;std::memcpy(const_cast<uint8_t*>(value->second.bytes.data()),&val,4);}
+    }
     if(!arg(5)){ret(87,6);return;}uint32_t size=read32(arg(5));write32(arg(5),value->second.bytes.size());
     if(arg(3))write32(arg(3),value->second.type);
     if(arg(4)){if(size<value->second.bytes.size()){ret(234,6);return;}std::memcpy(ptr(arg(4),value->second.bytes.size()),value->second.bytes.data(),value->second.bytes.size());}
@@ -352,7 +361,12 @@ void regSetValueExA(){
     if(!registryHandles.count(arg(0))){ret(6,6);return;}
     uint32_t size=arg(5);if(size>1048576){ret(87,6);return;}
     RegistryValue value{arg(3),std::vector<uint8_t>(size)};if(size)std::memcpy(value.bytes.data(),ptr(arg(4),size),size);
-    auto name=lower(guestString(arg(1)));gameRegistry[name]=std::move(value);
+    auto name=lower(guestString(arg(1)));
+    if(name=="g_carheadlightenable"&&value.bytes.size()>=4){
+        uint32_t val=*reinterpret_cast<const uint32_t*>(value.bytes.data());
+        if(val>1){val=1;std::memcpy(value.bytes.data(),&val,4);}
+    }
+    gameRegistry[name]=std::move(value);
     if(registryPersisted(name))savePersistedRegistry();
     ret(0,6);
 }

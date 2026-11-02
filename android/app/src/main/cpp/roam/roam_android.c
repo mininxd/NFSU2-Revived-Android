@@ -757,6 +757,11 @@ static void framerate_pacing_fix(void) {
         s_high_fps_patched = 1;
     }
 
+    /* Clamp g_CarHeadlightEnable (0x00870cc4) to 1 (Player only), preventing NPC cars from casting projector headlights */
+    if (rh_mem_committed(0x00870cc4u, 4) && MR32(0x00870cc4u) > 1) {
+        MR32(0x00870cc4u) = 1;
+    }
+
     /* Prevent slow motion during racing: track real wall-clock elapsed time.
      * Note: G_WORLDDT (0x865154) is zeroed at the end of each frame by SPEED2.EXE (0x57A17D),
      * but A_REALDT (0x865198) preserves the measured delta. If the game's internal delta
@@ -766,21 +771,16 @@ static void framerate_pacing_fix(void) {
     int64_t now_us = roam_plat_now_us();
     if (s_last_tick_us > 0) {
         float real_elapsed = (float)(now_us - s_last_tick_us) / 1000000.0f;
-        if (real_elapsed > 0.005f && real_elapsed < 0.200f) {
+        if (real_elapsed > 0.010f && real_elapsed < 0.200f) {
             if (rh_mem_committed(0x00865154u, 4) && rh_mem_committed(0x00865198u, 4)) {
                 float current_wdt = MRF32(0x00865154u);
                 float current_realdt = MRF32(0x00865198u);
                 float effective_dt = (current_wdt > 0.0f) ? current_wdt : current_realdt;
-#ifdef ROAM_CORE_RUST
-                float target_dt = nfs_pacing_filter_dt(real_elapsed, effective_dt);
-#else
-                float target_dt = (effective_dt <= 0.0f || effective_dt < real_elapsed * 0.98f) ? real_elapsed : effective_dt;
-#endif
-                if (target_dt != effective_dt) {
-                    MRF32(0x00865154u) = target_dt;
-                    MRF32(0x00865198u) = target_dt;
+                if (effective_dt > 0.0f && effective_dt < real_elapsed * 0.90f) {
+                    MRF32(0x00865154u) = real_elapsed;
+                    MRF32(0x00865198u) = real_elapsed;
                     if (rh_mem_committed(0x00865140u, 4)) {
-                        MR32(0x00865140u) = (uint32_t)(target_dt * 1800.0f);
+                        MR32(0x00865140u) = (uint32_t)(real_elapsed * 1800.0f);
                     }
                 }
             }
@@ -796,48 +796,8 @@ __attribute__((visibility("default"))) void nfs_roam_set_frame_limit(uint32_t fp
 }
 
 static void pace_frame(void) {
-    static int s_env_checked = 0;
-    if (!s_env_checked && s_target_fps == 0) {
-        s_env_checked = 1;
-        const char *env_fps = getenv("NFSU2_FPS");
-        if (env_fps) {
-            int parsed = atoi(env_fps);
-            if (parsed >= 30 && parsed <= 240) {
-                s_target_fps = (uint32_t)parsed;
-            }
-        }
-    }
-
-    uint32_t limit = s_target_fps;
-    if (limit < 30 || limit > 240) {
-        return;
-    }
-
-    static uint32_t s_active_limit = 0;
-    static int64_t s_next_deadline_us = 0;
-
-    int64_t now_us = roam_plat_now_us();
-    if (limit != s_active_limit || s_next_deadline_us == 0) {
-        s_active_limit = limit;
-        s_next_deadline_us = now_us;
-    }
-
-    int64_t target_interval_us = 1000000 / (int64_t)limit;
-    if (s_next_deadline_us < now_us) {
-        s_next_deadline_us = now_us;
-    }
-
-    int64_t wait_us = s_next_deadline_us - now_us;
-    if (wait_us > 500 && wait_us <= target_interval_us) {
-        struct timespec req;
-        req.tv_sec = wait_us / 1000000;
-        req.tv_nsec = (wait_us % 1000000) * 1000;
-        nanosleep(&req, NULL);
-        now_us = roam_plat_now_us();
-    }
-
-    int64_t target = (now_us > s_next_deadline_us) ? now_us : s_next_deadline_us;
-    s_next_deadline_us = target + target_interval_us;
+    /* Pacing is handled cooperatively by host FramePacer in guest_runtime via yieldGuestMachine.
+     * Avoid blocking nanosleep here which double-waits and starves guest background threads. */
 }
 
 __attribute__((visibility("default"))) void nfs_roam_frame_tick(void) {
