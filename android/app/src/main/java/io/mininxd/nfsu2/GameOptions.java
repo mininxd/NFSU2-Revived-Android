@@ -14,9 +14,16 @@ public final class GameOptions {
         Option(String key, String title, String defaultValue, String[] values, String[] labels) {
             this.key = key; this.title = title; this.defaultValue = defaultValue; this.values = values; this.labels = labels;
         }
-        String label(String value) {
+        String label(Context context, String value) {
+            if (context != null && GRAPHICS_BACKEND.equals(key) && "auto".equalsIgnoreCase(value)) {
+                String effective = getEffectiveGraphicsBackend(context);
+                return "Auto · " + ("opengl".equalsIgnoreCase(effective) ? "OpenGL (ES)" : "Vulkan (DXVK)");
+            }
             for (int i = 0; i < values.length; i++) if (values[i].equals(value)) return labels[i];
             return value;
+        }
+        String label(String value) {
+            return label(null, value);
         }
     }
 
@@ -470,8 +477,8 @@ public final class GameOptions {
                         String target = "AutoFitFE = 1                            ; Automatically fits 16:9 UI content to smaller aspect ratios.";
                         if (!line.startsWith("AutoFitFE = 1")) { line = target; changed = true; }
                     } else if (trimmed.startsWith("SingleCoreAffinity")) {
-                        String target = "SingleCoreAffinity = 1                   ; Limits game to one CPU core to prevent crashing.";
-                        if (!line.startsWith("SingleCoreAffinity = 1")) { line = target; changed = true; }
+                        String target = "SingleCoreAffinity = 0                   ; Performance core affinity manager handles CPU allocation.";
+                        if (!line.startsWith("SingleCoreAffinity = 0")) { line = target; changed = true; }
                     } else if (trimmed.startsWith("SkipIntro")) {
                         String target = "SkipIntro = " + skipIntro + "                            ; Skips FMVs that play when you launch the game.";
                         if (!line.startsWith("SkipIntro = " + skipIntro)) { line = target; changed = true; }

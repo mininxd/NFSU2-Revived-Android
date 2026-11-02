@@ -958,6 +958,7 @@ final class RacingControlsView extends View {
 
     private void pointerTouch(float x, float y, int phase) {
         if (pointer == null || getWidth() == 0 || getHeight() == 0) return;
+        if (phase == 1 && Math.abs(x - pointerX) < 2f && Math.abs(y - pointerY) < 2f) return;
         pointerX = x;
         pointerY = y;
         pointer.touch(x / getWidth(), y / getHeight(), phase);

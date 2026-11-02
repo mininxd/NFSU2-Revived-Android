@@ -248,10 +248,17 @@ public final class DiagnosticOverlay {
         logcatThread.start();
     }
 
+    private int perfBindCount = 0;
     private final Runnable ticker = new Runnable() {
         @Override
         public void run() {
             if (!running) return;
+
+            // Ensure background worker threads (GuestBootWorker, render, audio) are pinned to perf cores
+            if (perfBindCount < 10) {
+                PerformanceCores.bindToPerformanceCores();
+                perfBindCount++;
+            }
 
             // Compute dynamic frame rate every second
             long now = SystemClock.elapsedRealtime();

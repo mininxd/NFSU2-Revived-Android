@@ -43,10 +43,30 @@ impl CpuCluster {
 
         for id in 0..total_cores {
             let freq_path = format!("/sys/devices/system/cpu/cpu{}/cpufreq/cpuinfo_max_freq", id);
-            let freq = fs::read_to_string(&freq_path)
+            let scaling_path = format!("/sys/devices/system/cpu/cpu{}/cpufreq/scaling_max_freq", id);
+            let capacity_path = format!("/sys/devices/system/cpu/cpu{}/cpu_capacity", id);
+
+            let mut freq = fs::read_to_string(&freq_path)
                 .ok()
                 .and_then(|s| s.trim().parse::<u64>().ok())
                 .unwrap_or(0);
+
+            if freq == 0 {
+                freq = fs::read_to_string(&scaling_path)
+                    .ok()
+                    .and_then(|s| s.trim().parse::<u64>().ok())
+                    .unwrap_or(0);
+            }
+
+            // ARM cpu_capacity (EAS): big cores ~1024, little cores ~300-500
+            if freq == 0 {
+                if let Some(cap) = fs::read_to_string(&capacity_path)
+                    .ok()
+                    .and_then(|s| s.trim().parse::<u64>().ok())
+                {
+                    freq = cap * 1000;
+                }
+            }
 
             if freq > highest_freq {
                 highest_freq = freq;
@@ -112,11 +132,11 @@ impl CpuCluster {
         num_cpus_fallback()
     }
 
-    /// Binds the calling thread or process to the performance cores.
+    /// Binds the calling thread, process, and all worker threads to the performance cores.
     pub fn apply_affinity(&self) -> Result<(), i32> {
         let mask = self.perf_cores_mask;
         unsafe {
-            // Linux sched_setaffinity: 0 = calling thread, getpid() = entire process
+            // Linux sched_setaffinity: 0 = calling thread, getpid() = main thread
             let mask_val = mask as c_long;
             let _ = libc::syscall(
                 libc::SYS_sched_setaffinity,
@@ -130,6 +150,21 @@ impl CpuCluster {
                 std::mem::size_of::<c_long>(),
                 &mask_val as *const c_long,
             );
+
+            // Bind every existing thread in /proc/self/task (GuestBootWorker, audio, render, etc.)
+            if let Ok(entries) = fs::read_dir("/proc/self/task") {
+                for entry in entries.flatten() {
+                    if let Ok(tid) = entry.file_name().to_string_lossy().parse::<i32>() {
+                        let _ = libc::syscall(
+                            libc::SYS_sched_setaffinity,
+                            tid as c_int,
+                            std::mem::size_of::<c_long>(),
+                            &mask_val as *const c_long,
+                        );
+                    }
+                }
+            }
+
             if ret == 0 {
                 Ok(())
             } else {

@@ -310,7 +310,6 @@ static int32_t onInput(android_app*,AInputEvent* event){
 }
 extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeKey(JNIEnv*,jclass,jint scan,jboolean down){
     setGuestKey(unsigned(scan),down==JNI_TRUE);
-    __android_log_print(ANDROID_LOG_INFO,"NFSU2","Android touch DIK=%02x down=%d",unsigned(scan),int(down));
 }
 extern "C" JNIEXPORT jboolean JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeDrivingControls(JNIEnv*,jclass){return guestDrivingControls()?JNI_TRUE:JNI_FALSE;}
 extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativePointer(JNIEnv*,jclass,jfloat x,jfloat y,jint phase){

@@ -21,6 +21,7 @@
 #include <arpa/inet.h>
 #include <dlfcn.h>
 #include <sched.h>
+#include <dirent.h>
 #include <jni.h>
 
 ptrdiff_t *g_p_mem_base = NULL;
@@ -1059,6 +1060,23 @@ int nfs_bind_to_perf_cores(void) {
         char path[128];
         snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq", i);
         FILE *f = fopen(path, "r");
+        if (!f) {
+            snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_max_freq", i);
+            f = fopen(path, "r");
+        }
+        if (!f) {
+            snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpu_capacity", i);
+            f = fopen(path, "r");
+            if (f) {
+                long cap = 0;
+                if (fscanf(f, "%ld", &cap) == 1 && cap > 0) {
+                    freqs[i] = cap * 1000;
+                    if (freqs[i] > highest_freq) highest_freq = freqs[i];
+                }
+                fclose(f);
+                continue;
+            }
+        }
         if (f) {
             long freq = 0;
             if (fscanf(f, "%ld", &freq) == 1 && freq > 0) {
@@ -1093,6 +1111,19 @@ int nfs_bind_to_perf_cores(void) {
 
     sched_setaffinity(getpid(), sizeof(cpu_set_t), &cpuset);
     int ret = sched_setaffinity(0, sizeof(cpu_set_t), &cpuset);
+
+    // Apply performance core affinity to all worker threads of the process
+    DIR *d = opendir("/proc/self/task");
+    if (d) {
+        struct dirent *de;
+        while ((de = readdir(d)) != NULL) {
+            int tid = atoi(de->d_name);
+            if (tid > 0) {
+                sched_setaffinity(tid, sizeof(cpu_set_t), &cpuset);
+            }
+        }
+        closedir(d);
+    }
     __android_log_print(ANDROID_LOG_INFO, "NFSU2-PerfCores", "Bound process and threads to %d performance cores (ret=%d)", count, ret);
     return ret;
 }

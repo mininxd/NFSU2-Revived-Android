@@ -72,6 +72,23 @@ public final class PerformanceCores {
 
         for (int i = 0; i < totalCores; i++) {
             File f = new File("/sys/devices/system/cpu/cpu" + i + "/cpufreq/cpuinfo_max_freq");
+            if (!f.isFile()) {
+                f = new File("/sys/devices/system/cpu/cpu" + i + "/cpufreq/scaling_max_freq");
+            }
+            if (!f.isFile()) {
+                File capFile = new File("/sys/devices/system/cpu/cpu" + i + "/cpu_capacity");
+                if (capFile.isFile()) {
+                    try (BufferedReader reader = new BufferedReader(new FileReader(capFile))) {
+                        String line = reader.readLine();
+                        if (line != null) {
+                            long cap = Long.parseLong(line.trim());
+                            freqs[i] = cap * 1000;
+                            if (freqs[i] > highestFreq) highestFreq = freqs[i];
+                        }
+                    } catch (Exception ignored) {}
+                    continue;
+                }
+            }
             if (f.isFile()) {
                 try (BufferedReader reader = new BufferedReader(new FileReader(f))) {
                     String line = reader.readLine();
