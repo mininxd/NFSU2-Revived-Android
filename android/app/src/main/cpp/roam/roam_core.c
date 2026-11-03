@@ -57,6 +57,7 @@ float rc_sqrtf(float x){ return x > 0.f ? _mm_cvtss_f32(_mm_sqrt_ss(_mm_set_ss(x
 float rc_sqrtf(float x){ return x > 0.f ? __builtin_sqrtf(x) : 0.f; }
 #endif
 
+#ifndef ROAM_CORE_RUST
 /* CRC-32 (IEEE 802.3 / zlib polynomial, reflected), bitwise: no table */
 uint32_t rc_crc32(const uint8_t *p, uint32_t n){
     uint32_t c = 0xFFFFFFFFu;
@@ -156,6 +157,7 @@ void rc_name_clean(char *dst, const char *src, uint32_t srclen){
     dst[o] = 0;
     if (!o || name_blocked(dst)) memcpy(dst, "Player", 7);
 }
+#endif
 const char *rc_status_name(int st){
     static const char *n[RC_ST__N] = { "menus", "loading", "free roam", "event", "shop", "paused" };
     return (st >= 0 && st < RC_ST__N) ? n[st] : "?";
@@ -180,6 +182,7 @@ static void q_norm(float *q){
     float k = 1.f / rc_sqrtf(n);
     for (int i = 0; i < 4; i++) q[i] *= k;
 }
+#ifndef ROAM_CORE_RUST
 float rc_expneg(float x){
     if (!(x > 0)) return 1.f;
     if (x > 30.f) return 0.f;
@@ -226,6 +229,7 @@ void rc_q2m(const float *q, float *f, float *l, float *u){
     l[0] = 2*(x*y - z*w);     l[1] = 1 - 2*(x*x + z*z); l[2] = 2*(y*z + x*w);
     u[0] = 2*(x*z + y*w);     u[1] = 2*(y*z - x*w);     u[2] = 1 - 2*(x*x + y*y);
 }
+#endif
 static void q_mul(const float *a, const float *b, float *o){   /* o = a * b */
     float x = a[3]*b[0] + a[0]*b[3] + a[1]*b[2] - a[2]*b[1];
     float y = a[3]*b[1] - a[0]*b[2] + a[1]*b[3] + a[2]*b[0];
@@ -251,6 +255,11 @@ static void q_integrate(const float *q0, const float *w, float dt, float *o){
     for (int i = 0; i < 4; i++) o[i] = q[i];
 }
 
+int rc_name_blocked(const char *name) {
+    return name_blocked(name);
+}
+
+#ifndef ROAM_CORE_RUST
 /* ---- states on the wire ------------------------------------------------------ */
 static int16_t q16(float f, float scale){ int32_t v = f_round(f * scale); return (int16_t)(v > 32767 ? 32767 : v < -32767 ? -32767 : v); }
 static void put_state(rc_w *w, const rc_state *s){
@@ -684,8 +693,10 @@ int rc_decode(const uint8_t *buf, int len, rc_msg *m){
     if (r.n != r.len) return RC_E_TRAIL;
     return RC_OK;
 }
+#endif /* !ROAM_CORE_RUST */
 
 /* ---- car-look record --------------------------------------------------------------- */
+#ifndef ROAM_CORE_RUST
 #define RC_CFGREC_VER 1
 int rc_carcfg_encode(const rc_carcfg *c, uint8_t *out, int cap){
     rc_w w; rc_w_init(&w, out, (uint32_t)(cap < RC_CFG_MAX ? cap : RC_CFG_MAX));
@@ -737,6 +748,7 @@ int rc_carcfg_decode(const uint8_t *p, int len, rc_carcfg *c){
     if (r.n != r.len) return RC_E_TRAIL;
     return RC_OK;
 }
+#endif
 
 /* ---- interpolation ------------------------------------------------------------------ */
 void rc_interp_reset(rc_interp *ip){ memset(ip, 0, sizeof *ip); ip->err_q[3] = 1; ip->prev_q[3] = 1; }
