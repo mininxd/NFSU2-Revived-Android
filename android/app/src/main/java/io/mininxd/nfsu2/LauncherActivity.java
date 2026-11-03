@@ -666,7 +666,13 @@ public final class LauncherActivity extends Activity {
     private void probeDriver(boolean thenPlay) {
         playAfterProbe = thenPlay;
         play.setEnabled(false);
-        startActivityForResult(new Intent(this, GpuProbeActivity.class), REQUEST_DRIVER_PROBE);
+        try {
+            startActivityForResult(new Intent(this, GpuProbeActivity.class), REQUEST_DRIVER_PROBE);
+        } catch (Exception error) {
+            play.setEnabled(true);
+            playAfterProbe = false;
+            message("Vulkan Driver Test", "Could not start driver test: " + error.getMessage());
+        }
     }
 
     private void showDriverReport(String report) {
