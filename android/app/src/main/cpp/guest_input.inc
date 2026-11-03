@@ -38,20 +38,21 @@ std::array<uint8_t,16> directInputGuid(uint32_t data1){
 }
 const std::array<uint8_t,16> padGuid={0x20,0x50,0x41,0x44,0x00,0x00,0x00,0x00,0x00,0x00,0x41,0x4e,0x44,0x52,0x4f,0x49};
 // guidProduct of a HID device: PID<<16|VID, then "PIDVID".
-const std::array<uint8_t,16> padProductGuid={0x5e,0x04,0x8e,0x02,0,0,0,0,0,0,0x50,0x49,0x44,0x56,0x49,0x44};
+// Logitech Dual Action VID 0x046d, PID 0xc216 (matches SPEED2.EXE built-in profile at 0x7fe7f8)
+const std::array<uint8_t,16> padProductGuid={0x6d,0x04,0x16,0xc2,0,0,0,0,0,0,0x50,0x49,0x44,0x56,0x49,0x44};
 struct PadObject {uint32_t guidData1,offset,type,flags;const char* name;};
 // Offsets are those of c_dfDIJoystick / DIJOYSTATE.
 const PadObject padObjects[]={
     {0xa36d02e0u,0,0x0002u|(0u<<8),0x100u,"X Axis"},{0xa36d02e1u,4,0x0002u|(1u<<8),0x100u,"Y Axis"},
-    {0xa36d02e2u,8,0x0002u|(2u<<8),0x100u,"Z Axis"},{0xa36d02f4u,12,0x0002u|(3u<<8),0x100u,"X Rotation"},
-    {0xa36d02f5u,16,0x0002u|(4u<<8),0x100u,"Y Rotation"},{0xa36d02e3u,20,0x0002u|(5u<<8),0x100u,"Z Rotation"},
-    {0xa36d02f2u,32,0x0010u|(0u<<8),0,"Hat Switch"},
-    {0xa36d02f0u,48,0x0004u|(0u<<8),0,"Button 0"},{0xa36d02f0u,49,0x0004u|(1u<<8),0,"Button 1"},
-    {0xa36d02f0u,50,0x0004u|(2u<<8),0,"Button 2"},{0xa36d02f0u,51,0x0004u|(3u<<8),0,"Button 3"},
-    {0xa36d02f0u,52,0x0004u|(4u<<8),0,"Button 4"},{0xa36d02f0u,53,0x0004u|(5u<<8),0,"Button 5"},
-    {0xa36d02f0u,54,0x0004u|(6u<<8),0,"Button 6"},{0xa36d02f0u,55,0x0004u|(7u<<8),0,"Button 7"},
-    {0xa36d02f0u,56,0x0004u|(8u<<8),0,"Button 8"},{0xa36d02f0u,57,0x0004u|(9u<<8),0,"Button 9"},
-    {0xa36d02f0u,58,0x0004u|(10u<<8),0,"Button 10"},{0xa36d02f0u,59,0x0004u|(11u<<8),0,"Button 11"},
+    {0xa36d02e2u,8,0x0002u|(2u<<8),0x100u,"LT"},{0xa36d02f4u,12,0x0002u|(3u<<8),0x100u,"X Rotation"},
+    {0xa36d02f5u,16,0x0002u|(4u<<8),0x100u,"Y Rotation"},{0xa36d02e3u,20,0x0002u|(5u<<8),0x100u,"RT"},
+    {0xa36d02f2u,32,0x0010u|(0u<<8),0,"D-pad"},
+    {0xa36d02f0u,48,0x0004u|(0u<<8),0,"A"},{0xa36d02f0u,49,0x0004u|(1u<<8),0,"B"},
+    {0xa36d02f0u,50,0x0004u|(2u<<8),0,"X"},{0xa36d02f0u,51,0x0004u|(3u<<8),0,"Y"},
+    {0xa36d02f0u,52,0x0004u|(4u<<8),0,"LB"},{0xa36d02f0u,53,0x0004u|(5u<<8),0,"RB"},
+    {0xa36d02f0u,54,0x0004u|(6u<<8),0,"Back"},{0xa36d02f0u,55,0x0004u|(7u<<8),0,"Start"},
+    {0xa36d02f0u,56,0x0004u|(8u<<8),0,"LS"},{0xa36d02f0u,57,0x0004u|(9u<<8),0,"RS"},
+    {0xa36d02f0u,58,0x0004u|(10u<<8),0,"LT"},{0xa36d02f0u,59,0x0004u|(11u<<8),0,"RT"},
     {0xa36d02f0u,60,0x0004u|(12u<<8),0,"Button 12"},{0xa36d02f0u,61,0x0004u|(13u<<8),0,"Button 13"},
     {0xa36d02f0u,62,0x0004u|(14u<<8),0,"Button 14"},{0xa36d02f0u,63,0x0004u|(15u<<8),0,"Button 15"},
 };
@@ -141,7 +142,7 @@ bool joystickMethod(InputObject& object,uint32_t self,uint32_t method){
             if(how==1){  // DIPH_BYOFFSET: offset in the installed data format
                 for(auto& item:object.format)if(item.offset==id&&((item.type>>8)&0xffff)==((padObjects[i].type>>8)&0xffff)&&
                     ((item.type&padObjects[i].type&0x1f)))return int(i);
-            }else if(how==2&&((id&0xffff1f)==(padObjects[i].type&0xffff1f)))return int(i);
+            }else if(how==2&&(((padObjects[i].type>>8)&0xffff)==((id>>8)&0xffff))&&(padObjects[i].type&id&0x1f))return int(i);
         }return -1;};
     auto fillObject=[&](uint32_t output,const PadObject& entry){
         uint32_t bytes=read32(output);std::memset(ptr(output+4,bytes-4),0,bytes-4);
