@@ -39,7 +39,7 @@ public final class GpuProbeActivity extends Activity {
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
         TextView status = new TextView(this);
-        status.setText("Checking Vulkan driver…");
+        status.setText("Checking GPU & Vulkan driver…");
         status.setTextColor(0xFFFFFFFF); status.setTextSize(18);
         status.setGravity(android.view.Gravity.CENTER); status.setBackgroundColor(0xFF0B0F14);
         setContentView(status);
@@ -92,12 +92,15 @@ public final class GpuProbeActivity extends Activity {
             String verStr = major + "." + minor + "." + patch;
 
             String gpuName = Build.HARDWARE != null && !Build.HARDWARE.isEmpty() ? Build.HARDWARE : "System GPU";
+            if (Build.VERSION.SDK_INT >= 31 && Build.SOC_MODEL != null && !Build.SOC_MODEL.isEmpty()) {
+                gpuName = Build.SOC_MODEL + " (" + gpuName + ")";
+            }
             obj.put("gpu", gpuName);
             obj.put("vulkan", verStr);
             obj.put("vendorId", 0);
             obj.put("requestedDriver", "system");
-            obj.put("driverName", "System Vulkan");
-            obj.put("driverInfo", "Vulkan Level " + level);
+            obj.put("driverName", "System Vulkan (" + Build.MANUFACTURER + ")");
+            obj.put("driverInfo", "Hardware Level " + level);
             obj.put("logicalDeviceResult", 0);
             obj.put("driverLoadFailed", false);
             obj.put("bcTextures", true);

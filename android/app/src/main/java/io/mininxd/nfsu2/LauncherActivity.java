@@ -421,7 +421,7 @@ public final class LauncherActivity extends Activity {
         // Custom drivers (libadrenotools) exist only in the 64-bit build.
         if (android.os.Process.is64Bit())
             optionsList.addView(optionRow("Vulkan Driver", driver == null ? "System default" : driver.name, this::chooseDriver));
-        optionsList.addView(optionRow("Test driver", "GPU and Vulkan features", () -> probeDriver(false)));
+        optionsList.addView(optionRow("Check driver", "GPU, graphics API & driver info", () -> probeDriver(false)));
         optionsList.addView(optionRow("Language", languageLabel(), this::chooseLanguage));
         for (GameOptions.Option option : GameOptions.ALL)
             optionsList.addView(optionRow(option.title, option.label(GameOptions.get(this, option.key)), () -> chooseOption(option)));
@@ -671,7 +671,7 @@ public final class LauncherActivity extends Activity {
         } catch (Exception error) {
             play.setEnabled(true);
             playAfterProbe = false;
-            message("Vulkan Driver Test", "Could not start driver test: " + error.getMessage());
+            message("Driver Check", "Could not check driver: " + error.getMessage());
         }
     }
 
@@ -685,20 +685,44 @@ public final class LauncherActivity extends Activity {
             // probe checks may still run the game (issue #1107), so offer it.
             boolean wantedToPlay = playAfterProbe && !failed;
             playAfterProbe = false;
-            String text = failed ? "Could not use driver: " + gpu.optString("probeError", "error initializing Vulkan.")
-                    : "GPU: " + gpu.optString("gpu") + "\nVulkan: " + gpu.optString("vulkan")
-                      + "\nDriver: " + gpu.optString("driverName", "—") + " " + gpu.optString("driverInfo", "")
-                      + "\nBC Textures: " + (gpu.optBoolean("bcTextures") ? "on GPU" : "converted on CPU")
-                      + (gpu.optString("vertexFormatsMissing").isEmpty() ? ""
-                              : "\nUnsupported vertex types: " + gpu.optString("vertexFormatsMissing"))
-                      + "\n" + (gpu.optBoolean("compatible") ? "Compatible with the game."
-                              : "Missing features: " + gpu.optJSONArray("missing"));
+
+            StringBuilder text = new StringBuilder();
+            if (failed) {
+                text.append("Could not use driver: ").append(gpu.optString("probeError", "error initializing Vulkan."));
+            } else {
+                text.append("Graphics API:\n• Direct3D 9 via DXVK (Vulkan ").append(gpu.optString("vulkan", "1.1+")).append(")\n\n");
+                text.append("GPU Renderer:\n• ").append(gpu.optString("gpu", "Unknown GPU")).append("\n\n");
+
+                String driver = gpu.optString("driverName", "—").trim();
+                String driverInfo = gpu.optString("driverInfo", "").trim();
+                text.append("Driver:\n• ").append(driver);
+                if (!driverInfo.isEmpty() && !driverInfo.equalsIgnoreCase(driver)) {
+                    text.append(" (").append(driverInfo).append(")");
+                }
+                text.append("\n\n");
+
+                GpuDrivers.Driver selected = GpuDrivers.selected(this);
+                String selectedLabel = selected == null ? "System default" : selected.name;
+                text.append("Active Driver Profile:\n• ").append(selectedLabel).append("\n\n");
+
+                text.append("Features & Compatibility:\n");
+                text.append("• BC Textures: ").append(gpu.optBoolean("bcTextures") ? "Hardware (GPU)" : "CPU emulated").append("\n");
+                String missingVert = gpu.optString("vertexFormatsMissing");
+                if (!missingVert.isEmpty()) {
+                    text.append("• Unsupported vertex types: ").append(missingVert).append("\n");
+                }
+                text.append("• Status: ").append(gpu.optBoolean("compatible") ? "Compatible with NFSU2 Revived"
+                        : "Missing features: " + gpu.optJSONArray("missing"));
+            }
+
             new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                    .setTitle("Vulkan Driver Test").setMessage(text).setPositiveButton("OK", null)
+                    .setTitle("Driver Check")
+                    .setMessage(text.toString())
+                    .setPositiveButton("OK", null)
                     .setNeutralButton("Use system driver", (dialog, which) -> { GpuDrivers.select(this, ""); refreshOptions(); })
                     .setNegativeButton(wantedToPlay ? "Play anyway" : null, wantedToPlay ? (dialog, which) -> launch() : null)
                     .show();
-        } catch (Exception error) { message("Vulkan Driver Test", "Invalid diagnostic: " + error.getMessage()); }
+        } catch (Exception error) { message("Driver Check", "Invalid diagnostic: " + error.getMessage()); }
     }
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
@@ -714,7 +738,7 @@ public final class LauncherActivity extends Activity {
                     GpuDrivers.Driver driver = GpuDrivers.importZip(this, zip);
                     main.post(() -> {
                         GpuDrivers.select(this, driver.id); refresh();
-                        status.setText("Driver imported: " + driver.name + ". Use Test driver to verify.");
+                        status.setText("Driver imported: " + driver.name + ". Use Check driver to verify.");
                     });
                 } catch (Exception error) {
                     main.post(() -> { refresh(); message("Vulkan Driver", "Could not import driver: " + error.getMessage()); });

@@ -460,8 +460,8 @@ public final class GameActivity extends NativeActivity {
                     .replace("Arranque guest detenido:", "Guest boot halted:")
                     .replace("Entrada guest terminada:", "Guest entry finished:")
                     .replace("La GPU no pudo crear el dispositivo grafico", "The GPU could not create the graphics device")
-                    .replace("Usa \"Probar driver\" en el launcher para ver que le falta.", "Use \"Test driver\" in the launcher to see what is missing.")
-                    .replace("Usa \"Probar driver\"", "Use \"Test driver\"")
+                    .replace("Usa \"Probar driver\" en el launcher para ver que le falta.", "Use \"Check driver\" in the launcher to see what is missing.")
+                    .replace("Usa \"Probar driver\"", "Use \"Check driver\"")
                     .replace("para ver que le falta", "to see what is missing");
         }
         final String text = message;

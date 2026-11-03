@@ -104,6 +104,20 @@ std::string probe(const char* hooks, const char* temp, const char* directory, co
             query(gpu, &properties);
         }
     }
+    if (!driver.driverName[0]) {
+        switch (props.vendorID) {
+            case 0x5143: snprintf(driver.driverName, sizeof(driver.driverName), "Qualcomm Adreno"); break;
+            case 0x13B5: snprintf(driver.driverName, sizeof(driver.driverName), "ARM Mali"); break;
+            case 0x10DE: snprintf(driver.driverName, sizeof(driver.driverName), "NVIDIA"); break;
+            case 0x1010: snprintf(driver.driverName, sizeof(driver.driverName), "Imagination PowerVR"); break;
+            case 0x8086: snprintf(driver.driverName, sizeof(driver.driverName), "Intel"); break;
+            case 0x1002: snprintf(driver.driverName, sizeof(driver.driverName), "AMD"); break;
+            default: snprintf(driver.driverName, sizeof(driver.driverName), "Vulkan Driver (0x%04x)", props.vendorID); break;
+        }
+        if (!driver.driverInfo[0]) {
+            snprintf(driver.driverInfo, sizeof(driver.driverInfo), "Version 0x%x", props.driverVersion);
+        }
+    }
 
     // Capabilities alone do not prove an imported driver can create a device.
     VkResult deviceResult = VK_ERROR_INITIALIZATION_FAILED;
