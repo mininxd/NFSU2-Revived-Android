@@ -107,10 +107,14 @@ final class RacingControlsView extends View {
     private Bitmap nitroBitmap;
     private Bitmap statusBitmap;
     private Bitmap driftBitmap;
+    private Bitmap liftBitmap;
+    private Bitmap bounceBitmap;
     private final Paint bitmapPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
     private final RectF nitroDestRect = new RectF();
     private final RectF statusDestRect = new RectF();
     private final RectF driftDestRect = new RectF();
+    private final RectF liftDestRect = new RectF();
+    private final RectF bounceDestRect = new RectF();
     private final PorterDuffColorFilter filterIdle = new PorterDuffColorFilter(COLOR_TEXT, PorterDuff.Mode.SRC_IN);
     private final PorterDuffColorFilter filterActive = new PorterDuffColorFilter(COLOR_LIME, PorterDuff.Mode.SRC_IN);
     private boolean driftActive = false;
@@ -187,6 +191,30 @@ final class RacingControlsView extends View {
             if (driftBitmap == null) {
                 java.io.InputStream is = getContext().getAssets().open("drift.png");
                 driftBitmap = BitmapFactory.decodeStream(is);
+                is.close();
+            }
+        } catch (Throwable ignored) {}
+
+        try {
+            int resId = getResources().getIdentifier("lift", "drawable", getContext().getPackageName());
+            if (resId != 0) {
+                liftBitmap = BitmapFactory.decodeResource(getResources(), resId);
+            }
+            if (liftBitmap == null) {
+                java.io.InputStream is = getContext().getAssets().open("lift.png");
+                liftBitmap = BitmapFactory.decodeStream(is);
+                is.close();
+            }
+        } catch (Throwable ignored) {}
+
+        try {
+            int resId = getResources().getIdentifier("bounce", "drawable", getContext().getPackageName());
+            if (resId != 0) {
+                bounceBitmap = BitmapFactory.decodeResource(getResources(), resId);
+            }
+            if (bounceBitmap == null) {
+                java.io.InputStream is = getContext().getAssets().open("bounce.png");
+                bounceBitmap = BitmapFactory.decodeStream(is);
                 is.close();
             }
         } catch (Throwable ignored) {}
@@ -509,13 +537,29 @@ final class RacingControlsView extends View {
                 }
                 break;
             case "lift":
-                glyph(canvas, "LIFT", cx, cy, 12f, on);
-                chevron(canvas, cx, cy - s * 0.65f, s * 0.48f, true);
+                if (liftBitmap != null) {
+                    bitmapPaint.setColorFilter(on ? filterActive : filterIdle);
+                    float bw = r * 1.3f;
+                    float bh = bw * ((float) liftBitmap.getHeight() / (float) liftBitmap.getWidth());
+                    liftDestRect.set(cx - bw / 2f, cy - bh / 2f, cx + bw / 2f, cy + bh / 2f);
+                    canvas.drawBitmap(liftBitmap, null, liftDestRect, bitmapPaint);
+                } else {
+                    glyph(canvas, "LIFT", cx, cy, 12f, on);
+                    chevron(canvas, cx, cy - s * 0.65f, s * 0.48f, true);
+                }
                 break;
             case "bounce":
-                glyph(canvas, "BOUNCE", cx, cy, 9f, on);
-                chevron(canvas, cx, cy - s * 0.65f, s * 0.42f, true);
-                chevron(canvas, cx, cy - s * 0.38f, s * 0.42f, true);
+                if (bounceBitmap != null) {
+                    bitmapPaint.setColorFilter(on ? filterActive : filterIdle);
+                    float bw = r * 1.3f;
+                    float bh = bw * ((float) bounceBitmap.getHeight() / (float) bounceBitmap.getWidth());
+                    bounceDestRect.set(cx - bw / 2f, cy - bh / 2f, cx + bw / 2f, cy + bh / 2f);
+                    canvas.drawBitmap(bounceBitmap, null, bounceDestRect, bitmapPaint);
+                } else {
+                    glyph(canvas, "BOUNCE", cx, cy, 9f, on);
+                    chevron(canvas, cx, cy - s * 0.65f, s * 0.42f, true);
+                    chevron(canvas, cx, cy - s * 0.38f, s * 0.42f, true);
+                }
                 break;
             case "hb":
                 text.setTextSize(12f);

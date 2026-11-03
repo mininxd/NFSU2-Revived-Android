@@ -132,6 +132,29 @@ rh_file *rh_fopen(const char *path);
 int      rh_fprintf(rh_file *f, const char *fmt, ...);
 void     rh_fflush(rh_file *f);
 
+/* Showoff and drift stubs */
+#ifndef rh_no_profile
+#define rh_no_profile(name) (!strcasecmp((name), "No Profile"))
+#endif
+#ifndef rh_showoff_mine
+#define rh_showoff_mine() ((uint8_t)0)
+#endif
+#ifndef rh_showoff_car
+#define rh_showoff_car(c, k, car, open) ((void)(c), (void)(k), (void)(car), (void)(open))
+#endif
+#ifndef rh_drift_tuning
+#define rh_drift_tuning(out) ((void)(out), 0)
+#define ROAM_HOST_DRIFT 0
+#define rh_drift_want() 0
+#define rh_drift_begin() ((void)0)
+#define rh_drift_go(c) ((void)(c))
+#define rh_drift_score(b, p) (*(b) = 0, *(p) = 0)
+#define rh_drift_x() 0u
+#define rh_drift_end() ((void)0)
+#endif
+
+void look_eye(float *e, float *f);
+
 #ifdef __cplusplus
 }
 #endif

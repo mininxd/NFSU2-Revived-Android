@@ -219,6 +219,23 @@ uint32_t roam_plat_crews(uint32_t crews[RC_CREW_MAX], uint32_t rgb[RC_CREW_MAX])
 }
 
 int roam_plat_test_mode(void) { return 0; }
+int roam_plat_friend(const char *json) { (void)json; return 0; }
+int roam_plat_battle(const char *json) { (void)json; return 0; }
+int roam_plat_flying(const char *json) { (void)json; return 0; }
+uint32_t roam_plat_room(char name[64]) { (void)name; return 0; }
+uint32_t roam_plat_name(char out[33]) { (void)out; return 0; }
+
+void look_eye(float *e, float *f) {
+    if (g_p_mem_base && *g_p_mem_base) {
+        uint32_t pl = MR32(0x008709a0u);
+        uint32_t mover = pl ? MR32(pl + 0x238u) : 0;
+        uint32_t cam = mover ? MR32(mover + 0x40u) : 0;
+        if (cam && rh_committed(cam)) {
+            if (e) memcpy(e, GPTR(cam + 0x40u), 12);
+            if (f) memcpy(f, GPTR(cam + 0x50u), 12);
+        }
+    }
+}
 
 const char *roam_ip_str(uint32_t ip, char *b) {
     snprintf(b, 16, "%u.%u.%u.%u", ip >> 24, (ip >> 16) & 255u, (ip >> 8) & 255u, ip & 255u);
@@ -835,6 +852,76 @@ static void pace_frame(void) {
      * Avoid blocking nanosleep here which double-waits and starves guest background threads. */
 }
 
+static float g_look_yaw = 0.f;
+static float g_stick_x = 0.f;
+static float g_stick_y = 0.f;
+static uint32_t g_turned_cam = 0;
+static uint8_t g_keep_cam[0x70];
+static uint8_t g_made_cam[0x70];
+static int g_cam_turned = 0;
+
+static void look_turn_xy(float *p, int pt, float ox, float oy, float yaw) {
+    float c = cosf(yaw), s = sinf(yaw);
+    float px = pt ? ox : 0.f, py = pt ? oy : 0.f;
+    float x = p[0] - px, y = p[1] - py;
+    p[0] = px + x * c + y * s;
+    p[1] = py - x * s + y * c;
+}
+
+static void look_turn_matrix(uint32_t cam, float ox, float oy, float yaw) {
+    float c = cosf(yaw), s = -sinf(yaw);
+    float *M = (float *)GPTR(cam);
+    float tx = ox - (ox * c + oy * s), ty = oy - (-ox * s + oy * c);
+    float r0[4], r1[4];
+    for (int k = 0; k < 4; k++) {
+        r0[k] = c * M[k] - s * M[4 + k];
+        r1[k] = s * M[k] + c * M[4 + k];
+    }
+    for (int k = 0; k < 4; k++) {
+        M[12 + k] += tx * M[k] + ty * M[4 + k];
+        M[k] = r0[k]; M[4 + k] = r1[k];
+    }
+}
+
+static void look_camera_frame_tick(void) {
+    if (g_cam_turned && g_turned_cam && rh_committed(g_turned_cam)) {
+        if (!memcmp(GPTR(g_turned_cam), g_made_cam, sizeof(g_made_cam))) {
+            memcpy(GPTR(g_turned_cam), g_keep_cam, sizeof(g_keep_cam));
+        }
+        g_cam_turned = 0;
+    }
+
+    float r = hypotf(g_stick_x, g_stick_y);
+    float target_yaw = 0.f;
+    if (r > 0.25f && g_qc_open < 0) {
+        float k = fminf(1.f, (r - 0.25f) / 0.60f);
+        target_yaw = atan2f(g_stick_x, -g_stick_y) * k;
+    }
+    g_look_yaw += (target_yaw - g_look_yaw) * 0.25f;
+    if (fabsf(g_look_yaw) < 0.001f && fabsf(target_yaw) < 0.001f) g_look_yaw = 0.f;
+
+    if (fabsf(g_look_yaw) > 0.005f && g_p_mem_base && *g_p_mem_base) {
+        uint32_t pl = MR32(0x008709a0u); // G_PLAYER1
+        if (pl && rh_committed(pl)) {
+            uint32_t mover = MR32(pl + 0x238u);
+            uint32_t cam = mover ? MR32(mover + 0x40u) : 0;
+            uint32_t car = MR32(pl + 4u);
+            if (cam && car && rh_committed(cam) && rh_committed(car)) {
+                float *car_pos = (float *)GPTR(car + 0x60u);
+                float ox = car_pos[0], oy = car_pos[1];
+                memcpy(g_keep_cam, GPTR(cam), sizeof(g_keep_cam));
+                look_turn_matrix(cam, ox, oy, g_look_yaw);
+                look_turn_xy((float *)GPTR(cam + 0x40u), 1, ox, oy, g_look_yaw);
+                look_turn_xy((float *)GPTR(cam + 0x50u), 0, ox, oy, g_look_yaw);
+                look_turn_xy((float *)GPTR(cam + 0x60u), 1, ox, oy, g_look_yaw);
+                memcpy(g_made_cam, GPTR(cam), sizeof(g_made_cam));
+                g_turned_cam = cam;
+                g_cam_turned = 1;
+            }
+        }
+    }
+}
+
 __attribute__((visibility("default"))) void nfs_roam_frame_tick(void) {
     if (!roam_android_init_symbols()) return;
     pace_frame();
@@ -847,11 +934,14 @@ __attribute__((visibility("default"))) void nfs_roam_frame_tick(void) {
     hiddenraces_frame_tick();
     framerate_pacing_fix();
     menusize_frame_tick();
+    look_camera_frame_tick();
     roam_game_frame(NULL);
 }
 
-/* Gamepad Right Stick Quick Chat Input */
+/* Gamepad Right Stick Quick Chat Input & Camera Look */
 void roam_stick_input(float x, float y) {
+    g_stick_x = x;
+    g_stick_y = y;
     float r = sqrtf(x * x + y * y);
     if (r < 0.35f) {
         g_qc_armed = 1;

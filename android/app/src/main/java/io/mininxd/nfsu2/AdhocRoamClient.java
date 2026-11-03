@@ -144,6 +144,7 @@ public final class AdhocRoamClient {
 
     public static void handleRightStick(float x, float y) {
         QuickChatManager.handleRightStick(x, y);
+        nativeRoamStick(x, y);
     }
 
     public static void showQuickChatDialog(Context context) {

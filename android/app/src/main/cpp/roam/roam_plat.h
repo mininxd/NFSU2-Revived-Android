@@ -58,7 +58,9 @@ void     roam_plat_notice(const char *name, const char *what);
  * the session lock held */
 int      roam_plat_lobby(const char *json);
 /* solid cars as the player switched them while the game runs (the page's
- * menu, web): 1 on, 0 off, -1 not switched (NFSU2_ROAM_COLLIDE holds) */
+ * menu, web): 1 on, 0 off, 2 off and the game's traffic and tuners pass
+ * through too (Ghost mode: Everything), -1 not switched (NFSU2_ROAM_COLLIDE
+ * holds) */
 int      roam_plat_solid(void);
 /* quick chat (roam_game.c say_*): whether this platform has it (the page's
  * picker and lines: web; elsewhere the HELLO does not offer it), the phrase
@@ -68,6 +70,21 @@ int      roam_plat_solid(void);
 int      roam_plat_quickchat(void);
 int      roam_plat_say_pick(void);
 int      roam_plat_said(const char *json);
+/* front bumpers (roam_game.c bump_*): the player's car and a friend's touched
+ * nose to nose for 3 s, or parted after that, as a JSON object for the page,
+ * which offers to add that player as a friend (1 sent, 0 this platform has
+ * no page, -1 the ring is full).  With the session lock held */
+int      roam_plat_friend(const char *json);
+/* a drift battle's scoreboard for the page (roam_game.c db_panel), as a JSON
+ * object, "{}" for none (1 sent, 0 this platform has no page, -1 the ring is
+ * full).  With the session lock held */
+int      roam_plat_battle(const char *json);
+/* the player's car flew in free roam for minutes (roam_game.c fly_frame), as
+ * a JSON object for the page, which takes the player off the switch with its
+ * message, as an operator's kick does, and tells the server (1 sent, 0 this
+ * platform has no page or the page is not on the switch now, -1 the ring is
+ * full).  With the session lock held */
+int      roam_plat_flying(const char *json);
 /* where the names of the players who said something lately are this frame:
  * ids[i] at xys[3i], xys[3i + 1] (parts of the picture from its top left
  * corner) with the name's scale xys[3i + 2]; n = 0: none.  The page's lines
@@ -79,6 +96,15 @@ void     roam_plat_say_marks(const uint32_t *ids, const float *xys, int n);
  * number that changes with each change (0: not changed, NFSU2_ROAM_CREW and
  * NFSU2_ROAM_CREW_RGB hold) */
 uint32_t roam_plat_crews(uint32_t crews[RC_CREW_MAX], uint32_t rgb[RC_CREW_MAX]);
+/* the room as the player changed it while the game runs (an invite link on the
+ * page, web): its name into name (UTF-8 ending in a 0 byte; "" for no room),
+ * and a number that changes with each change (0: not changed, NFSU2_ROAM_ROOM
+ * holds) */
+uint32_t roam_plat_room(char name[64]);
+/* the name the player picked while the game runs, after the operator took the
+ * old one away (web): into out (ending in a 0 byte), and a number that changes
+ * with each one (0: none, NFSU2_ROAM_NAME holds) */
+uint32_t roam_plat_name(char out[33]);
 const char *roam_ip_str(uint32_t ip, char *buf);   /* buf >= 16 */
 
 #endif

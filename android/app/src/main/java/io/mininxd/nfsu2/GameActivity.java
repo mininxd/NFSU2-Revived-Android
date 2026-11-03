@@ -607,8 +607,10 @@ public final class GameActivity extends NativeActivity {
                 && event.getAction() == android.view.MotionEvent.ACTION_MOVE) {
             float z = event.getAxisValue(android.view.MotionEvent.AXIS_Z);
             float rz = event.getAxisValue(android.view.MotionEvent.AXIS_RZ);
-            if (Math.abs(z) > 0.35f || Math.abs(rz) > 0.35f) {
+            if (Math.abs(z) > 0.15f || Math.abs(rz) > 0.15f) {
                 AdhocRoamClient.handleRightStick(z, rz);
+            } else {
+                AdhocRoamClient.handleRightStick(0f, 0f);
             }
         }
         return super.onGenericMotionEvent(event);
