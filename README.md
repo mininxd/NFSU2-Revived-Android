@@ -82,27 +82,53 @@ Prepare a clean PC installation of **Need for Speed: Underground 2** (US v1.2 re
 
 ## Architecture Overview
 
-```
-                          ┌────────────────────────┐
-                          │   SPEED2.EXE (x86)     │
-                          └───────────┬────────────┘
-                                      │
-                         [ pcrecomp disasm32 ]
-                                      │
-                         [ lift32 (+ simd32) ]
-                                      │
-                          ┌───────────▼────────────┐
-                          │  27,742 C Functions    │
-                          │   (~8.9M lines C99)    │
-                          └─────┬────────────┬─────┘
-                                │            │
-           ┌────────────────────┘            └────────────────────┐
-           ▼                                                      ▼
- ┌──────────────────────┐                               ┌──────────────────────┐
- │     Windows Host     │                               │    Android ARM64     │
- │  MSVC x86 Toolchain  │                               │   Android NDK / C++  │
- │  Direct3D 9 / Win32  │                               │   DXVK Native/Vulkan │
- └──────────────────────┘                               └──────────────────────┘
+```mermaid
+flowchart TD
+    subgraph INPUT["Original Executable"]
+        EXE["SPEED2.EXE (x86-32 PE)"]
+    end
+
+    subgraph RECOMP["Static Binary Recompilation Pipeline"]
+        DISASM["Disassembly & Block Analysis (pcrecomp disasm32)"]
+        LIFT["Instruction Lifting (lift32 + simd32)"]
+        CORE["Portable C99 Core Engine (27,742 Functions / ~8.9M LOC)"]
+        
+        EXE --> DISASM
+        DISASM --> LIFT
+        LIFT --> CORE
+    end
+
+    subgraph PLATFORMS["Target Platforms"]
+        subgraph WINDOWS["Windows Host (x86)"]
+            WIN_HOST["Native MSVC Host Runtime (Win32 / D3D9 / DSound)"]
+        end
+
+        subgraph ANDROID["Android Runtime (ARM64)"]
+            direction TB
+            subgraph SUBSYSTEMS["Native Subsystems"]
+                DXVK["DXVK Native (Direct3D 9 to Vulkan 1.1 / 1.3)"]
+                AAUDIO["AAudio Low-Latency Audio Backend"]
+                ROAM["libnfsu2_roam.so (Prometheus Adhoc Free Roam)"]
+                PERF["libperf_cores.so (Rust EAS Core Pinning)"]
+            end
+
+            subgraph CONTROLS["Input & Controls"]
+                ACTION_SYNC["In-Memory Action Reflection (0x86e89c)"]
+                TOUCH["RacingControlsView (Custom HUD & Tilt Steering)"]
+                PAD["Physical Gamepad Bridge (Normalized Z-Axis)"]
+                ACTION_SYNC --> TOUCH
+                ACTION_SYNC --> PAD
+            end
+
+            APP["Android App Launcher & NativeActivity (Java / NDK)"]
+            
+            SUBSYSTEMS --> APP
+            CONTROLS --> APP
+        end
+    end
+
+    CORE --> WINDOWS
+    CORE --> SUBSYSTEMS
 ```
 
 The pipeline lifts disassembled 32-bit x86 instructions into platform-independent C code. System calls and platform libraries (Direct3D 9, DirectSound, DirectInput, Win32 API) are bound to native host bridges:
