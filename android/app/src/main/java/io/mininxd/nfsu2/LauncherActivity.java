@@ -433,6 +433,7 @@ public final class LauncherActivity extends Activity {
         optionsList.addView(optionRow("Crew Name", GameOptions.roamCrew(this).isEmpty() ? "None" : GameOptions.roamCrew(this), this::chooseRoamCrew));
         optionsList.addView(optionRow("Export Network Log", "Save NFSU2-network.log", this::exportNetworkLog));
         optionsList.addView(optionRow("Export Game Log", "Save NFSU2-game.log", this::exportGameLog));
+        optionsList.addView(optionRow("Reset All Game Settings", "Restore graphics, controls & profile defaults", this::confirmResetAllSettings));
         optionsList.addView(optionRow("Check for updates",
                 checkingUpdates ? "Checking GitHub…" : "Version " + ReleaseUpdates.installed(this), () -> checkUpdates(true)));
         optionsList.addView(optionRow("Report an issue", "Report on GitHub / Save ZIP", () -> showReportDialog(null)));
@@ -851,6 +852,51 @@ public final class LauncherActivity extends Activity {
                     Toast.makeText(this, "Game log cleared", Toast.LENGTH_SHORT).show();
                 })
                 .show();
+    }
+
+    private void confirmResetAllSettings() {
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Reset All Game Settings")
+                .setMessage("This will reset all graphics, controls, touch layouts, and player profiles back to default.\n\nAre you sure you want to proceed?")
+                .setPositiveButton("Reset", (dialog, which) -> resetAllGameSettings())
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void resetAllGameSettings() {
+        GameOptions.prefs(this).edit().clear().apply();
+        getSharedPreferences("touch_layouts_v2", MODE_PRIVATE).edit().clear().apply();
+        getSharedPreferences("touch_layouts_v1", MODE_PRIVATE).edit().clear().apply();
+        getSharedPreferences("nfsu2_adhoc", MODE_PRIVATE).edit().clear().apply();
+
+        File root = gameRoot();
+        File reg = new File(root, "android_registry.dat");
+        if (reg.exists()) reg.delete();
+
+        File appDataDir = new File(root, "AppData/Local/NFS Underground 2");
+        if (appDataDir.isDirectory()) deleteRecursive(appDataDir);
+        File appDataDirLower = new File(root, "appdata/local/nfs underground 2");
+        if (appDataDirLower.isDirectory()) deleteRecursive(appDataDirLower);
+
+        GameOptions.syncWidescreenIni(this);
+        GameOptions.syncWidescreenHudDat(this, false);
+
+        refresh();
+        refreshOptions();
+        Toast.makeText(this, "All game settings and profiles have been reset", Toast.LENGTH_SHORT).show();
+    }
+
+    private static void deleteRecursive(File fileOrDir) {
+        if (fileOrDir == null || !fileOrDir.exists()) return;
+        if (fileOrDir.isDirectory()) {
+            File[] children = fileOrDir.listFiles();
+            if (children != null) {
+                for (File child : children) {
+                    deleteRecursive(child);
+                }
+            }
+        }
+        fileOrDir.delete();
     }
 
     private void openUrl(Uri uri) {
