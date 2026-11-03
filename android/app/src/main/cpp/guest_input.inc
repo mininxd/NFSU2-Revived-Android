@@ -353,7 +353,20 @@ void inputDispatch(){
         case 5:{if(inputGuidEquals(arg(1),padGuid)){ret(0,2);return;}
             ret(inputGuidEquals(arg(1),keyboardGuid)||inputGuidEquals(arg(1),mouseGuid)?0:0x80070002,2);return;}
         case 7:ret(arg(2)==0x800?0:diInvalid,3);return;
-        case 9:ret(0,6);return; // DirectInput EnumDevicesBySemantics: return DI_OK without registering keyboard action device so Controls opens Joypad directly
+        case 9:{uint32_t format=arg(2),callback=arg(3),context=arg(4),flags=arg(5);
+            if(!validActionFormat(format)||!callback||(flags&~0x7110u)){ret(diInvalid,6);return;}
+            if(flags&(0x100u|0x2000u|0x4000u)){ret(0,6);return;} // No force-feedback, secondary or non-gaming HID devices.
+            NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Enumerate action devices: %u actions callback=%08x",read32(format+12),callback);
+            uint32_t instance=allocate(580);
+            try{for(uint32_t kind:{2u,3u}){
+                auto mapped=kind==2?buildKeyboardActions(format):0;uint32_t device=createInputObject(kind);
+                // The semantic enumerator hands over a usable system device;
+                // this guest does not call SetCooperativeLevel on that keyboard.
+                inputObjects.at(device).cooperative=10;inputDeviceInstance(instance,kind,580);
+                uint32_t proceed;try{proceed=callGuest(callback,{instance,device,0x20u|(mapped?1u:0u),kind==2?1u:0u,context});}catch(...){releaseInputObject(device);throw;}
+                releaseInputObject(device);if(!proceed)break;
+            }}catch(...){heaps->free(GuestHeaps::process,instance);throw;}
+            heaps->free(GuestHeaps::process,instance);ret(0,6);return;}
         default:throw GuestStop("DirectInput interface method pending: "+std::to_string(method));
         }
     }
