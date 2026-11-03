@@ -1128,6 +1128,80 @@ int nfs_bind_to_perf_cores(void) {
     return ret;
 }
 
+/* JNI Bindings for io.mininxd.nfsu2.net.RoamNativeBridge / GameActivity key mapping query */
+static const jint DEFAULT_ACTION_KEYS[11] = {
+    0xc8, /* 0: Gas (Action 1) */
+    0xd0, /* 1: Brake (Action 2) */
+    0xcb, /* 2: Steer Left (Action 3) */
+    0xcd, /* 3: Steer Right (Action 4) */
+    0x39, /* 4: Handbrake (Action 5) */
+    0x38, /* 5: Nitro (Action 6) */
+    0x2a, /* 6: Shift Up (Action 7) */
+    0x1d, /* 7: Shift Down (Action 8) */
+    0x30, /* 8: Look Back (Action 9) */
+    0x2e, /* 9: Camera (Action 10) */
+    0x13  /* 10: Reset Car (Action 14) */
+};
+
+static jintArray get_action_keys_array(JNIEnv *env) {
+    jint keys[11];
+    memcpy(keys, DEFAULT_ACTION_KEYS, sizeof(keys));
+
+    if (roam_android_init_symbols() && g_p_mem_base && *g_p_mem_base) {
+        uint32_t table_va = MR32(0x86e89cu);
+        uint32_t count = MR32(0x86f354u);
+        if (table_va != 0 && count > 0 && count < 256) {
+            uint8_t filled[11] = {0};
+            for (uint32_t i = 0; i < count; i++) {
+                uint32_t entry_va = table_va + i * 40u;
+                uint32_t action = MR32(entry_va);
+                uint32_t raw_key = MR32(entry_va + 0x20u);
+                uint32_t scancode = ((raw_key >> 8) & 0xffu) ? ((raw_key >> 8) & 0xffu) : (raw_key & 0xffu);
+                if (scancode == 0) continue;
+
+                int idx = -1;
+                switch (action) {
+                    case 1:  idx = 0; break; /* Gas */
+                    case 2:  idx = 1; break; /* Brake */
+                    case 3:  idx = 2; break; /* Steer Left */
+                    case 4:  idx = 3; break; /* Steer Right */
+                    case 5:  idx = 4; break; /* Handbrake */
+                    case 6:  idx = 5; break; /* Nitro */
+                    case 7:  idx = 6; break; /* Shift Up */
+                    case 8:  idx = 7; break; /* Shift Down */
+                    case 9:  idx = 8; break; /* Look Back */
+                    case 10: idx = 9; break; /* Camera */
+                    case 14: idx = 10; break; /* Reset Car */
+                    default: break;
+                }
+
+                if (idx >= 0 && !filled[idx]) {
+                    keys[idx] = (jint)scancode;
+                    filled[idx] = 1;
+                }
+            }
+        }
+    }
+
+    jintArray result = (*env)->NewIntArray(env, 11);
+    if (result) {
+        (*env)->SetIntArrayRegion(env, result, 0, 11, keys);
+    }
+    return result;
+}
+
+JNIEXPORT jintArray JNICALL Java_io_mininxd_nfsu2_net_RoamNativeBridge_nativeGetActionKeys(
+        JNIEnv *env, jclass clazz) {
+    (void)clazz;
+    return get_action_keys_array(env);
+}
+
+JNIEXPORT jintArray JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeGetActionKeys(
+        JNIEnv *env, jclass clazz) {
+    (void)clazz;
+    return get_action_keys_array(env);
+}
+
 /* JNI Bindings for io.mininxd.nfsu2.PerformanceCores */
 JNIEXPORT jint JNICALL Java_io_mininxd_nfsu2_PerformanceCores_nativeBindToPerformanceCores(
         JNIEnv *env, jclass clazz) {

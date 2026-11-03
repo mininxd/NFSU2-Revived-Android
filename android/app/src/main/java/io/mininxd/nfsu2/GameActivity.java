@@ -62,12 +62,15 @@ public final class GameActivity extends NativeActivity {
             setTiltKeys(turn<-(tiltLeft?.5f:.8f),turn>(tiltRight?.5f:.8f));
         }
     };
+    private int keyLeft = 0xcb;
+    private int keyRight = 0xcd;
+
     private void sendCombinedKey(int scan) {
-        boolean held=touchKeys[scan]||(scan==0xcb&&tiltLeft)||(scan==0xcd&&tiltRight);
+        boolean held=touchKeys[scan]||(scan==keyLeft&&tiltLeft)||(scan==keyRight&&tiltRight);
         if(sentKeys[scan]!=held) {sentKeys[scan]=held;nativeKey(scan,held);}
     }
     private void setTouchKey(int scan,boolean down) {touchKeys[scan]=down;sendCombinedKey(scan);}
-    private void setTiltKeys(boolean left,boolean right) {tiltLeft=left;tiltRight=right;sendCombinedKey(0xcb);sendCombinedKey(0xcd);}
+    private void setTiltKeys(boolean left,boolean right) {tiltLeft=left;tiltRight=right;sendCombinedKey(keyLeft);sendCombinedKey(keyRight);}
     private void updateTiltSensor() {
         if(tiltSensors==null)return;tiltSensors.unregisterListener(tiltListener);setTiltKeys(false,false);
         if(foreground&&tiltEnabled&&tiltSensor!=null) {
@@ -140,6 +143,16 @@ public final class GameActivity extends NativeActivity {
             touchControls.setGameMode(nativeDrivingControls());
             // Playing on with the pad after a touch revealed the controls hides them again.
             if(nativeGamepadUsed())touchControls.gamepadUsed();
+            if (io.mininxd.nfsu2.net.RoamNativeBridge.isLoaded()) {
+                try {
+                    int[] actionKeys = io.mininxd.nfsu2.net.RoamNativeBridge.nativeGetActionKeys();
+                    if (actionKeys != null && actionKeys.length >= 11) {
+                        keyLeft = actionKeys[2];
+                        keyRight = actionKeys[3];
+                        touchControls.updateActionKeys(actionKeys);
+                    }
+                } catch (Throwable ignored) {}
+            }
             touchControls.postDelayed(this,250);
         }
     };

@@ -115,10 +115,23 @@ final class RacingControlsView extends View {
     private final PorterDuffColorFilter filterActive = new PorterDuffColorFilter(COLOR_LIME, PorterDuff.Mode.SRC_IN);
     private boolean driftActive = false;
 
+    private int keyGas = 0xc8;
+    private int keyBrake = 0xd0;
+    private int keyLeft = 0xcb;
+    private int keyRight = 0xcd;
+    private int keyHandbrake = 0x39;
+    private int keyNitro = 0x38;
+    private int keyShiftUp = 0x2a;
+    private int keyShiftDown = 0x1d;
+    private int keyLookBack = 0x30;
+    private int keyCamera = 0x2e;
+    private int keyReset = 0x13;
+
     private static final class Control {
         final RectF area;
         final String icon;
-        final int scan, shape;
+        int scan;
+        final int shape;
         final RectF original;
         String id;
         int held;
@@ -262,6 +275,53 @@ final class RacingControlsView extends View {
         releaseAll();
     }
 
+    void updateActionKeys(int[] newKeys) {
+        if (newKeys == null || newKeys.length < 11) return;
+        boolean changed = (keyGas != newKeys[0] ||
+                           keyBrake != newKeys[1] ||
+                           keyLeft != newKeys[2] ||
+                           keyRight != newKeys[3] ||
+                           keyHandbrake != newKeys[4] ||
+                           keyNitro != newKeys[5] ||
+                           keyShiftUp != newKeys[6] ||
+                           keyShiftDown != newKeys[7] ||
+                           keyLookBack != newKeys[8] ||
+                           keyCamera != newKeys[9] ||
+                           keyReset != newKeys[10]);
+        if (!changed) return;
+
+        keyGas = newKeys[0];
+        keyBrake = newKeys[1];
+        keyLeft = newKeys[2];
+        keyRight = newKeys[3];
+        keyHandbrake = newKeys[4];
+        keyNitro = newKeys[5];
+        keyShiftUp = newKeys[6];
+        keyShiftDown = newKeys[7];
+        keyLookBack = newKeys[8];
+        keyCamera = newKeys[9];
+        keyReset = newKeys[10];
+
+        if (racing) {
+            for (Control c : controls) {
+                if (c == null) continue;
+                switch (c.icon) {
+                    case "gas": c.scan = keyGas; break;
+                    case "brake": c.scan = keyBrake; break;
+                    case "left": c.scan = keyLeft; break;
+                    case "right": c.scan = keyRight; break;
+                    case "hb": c.scan = keyHandbrake; break;
+                    case "nitro": c.scan = keyNitro; break;
+                    case "shiftUp": c.scan = keyShiftUp; break;
+                    case "shiftDown": c.scan = keyShiftDown; break;
+                    case "look": c.scan = keyLookBack; break;
+                    case "camera": c.scan = keyCamera; break;
+                    case "reset": c.scan = keyReset; break;
+                }
+            }
+        }
+    }
+
     private void layoutControls() {
         releaseAll();
         controls.clear();
@@ -280,9 +340,9 @@ final class RacingControlsView extends View {
         if (racing) {
             // Top row small buttons (44dp circular)
             add(16, 16, 44, "pause", 0x01);     // Esc: Pause
-            add(68, 16, 44, "camera", 0x2e);    // C: Camera
-            add(120, 16, 44, "look", 0x30);     // B: Look back
-            add(172, 16, 44, "reset", 0x13);    // R: Reset
+            add(68, 16, 44, "camera", keyCamera);
+            add(120, 16, 44, "look", keyLookBack);
+            add(172, 16, 44, "reset", keyReset);
             add(224, 16, 44, "map", 0x32);      // M: World Map
             add(276, 16, 44, "msgs", 0x0f);     // Tab: Messages
             add(328, 16, 44, "drift", 0x2d);    // X: Drift mode
@@ -294,27 +354,27 @@ final class RacingControlsView extends View {
             add(20, bottom - 148, 96, 40, PILL, "start", 0x1c);
 
             // Manual gear shift buttons
-            add(20, bottom - 200, 76, 44, ROUND, "shiftDown", 0x1d); // Left Ctrl
-            add(104, bottom - 200, 76, 44, ROUND, "shiftUp", 0x2a);   // Left Shift
+            add(20, bottom - 200, 76, 44, ROUND, "shiftDown", keyShiftDown);
+            add(104, bottom - 200, 76, 44, ROUND, "shiftUp", keyShiftUp);
 
             if (style.equals("stick")) {
                 // Thumbstick steering
                 add(24, bottom - 144, 140, 140, WHEEL, "stick", STICK);
             } else {
                 // Classic buttons steering (◀ ▶)
-                add(18, bottom - 88, 84, 84, DPAD, "left", 0xcb);
-                add(110, bottom - 88, 84, 84, DPAD, "right", 0xcd);
+                add(18, bottom - 88, 84, 84, DPAD, "left", keyLeft);
+                add(110, bottom - 88, 84, 84, DPAD, "right", keyRight);
             }
 
             // Right side: Pedals and Boost (exact nfsu2-web layout)
-            // Gas pedal (ArrowUp: 0xc8)
-            add(w - 96, bottom - 160, 84, 156, PEDAL, "gas", 0xc8);
-            // Brake pedal (ArrowDown: 0xd0)
-            add(w - 188, bottom - 112, 84, 108, PEDAL, "brake", 0xd0);
-            // Nitrous button (Left Alt: 0x38) - above gas
-            add(w - 86, bottom - 232, 64, 64, ROUND, "nitro", 0x38);
-            // Handbrake button (Space: 0x39) - beside brake
-            add(w - 180, bottom - 182, 58, 58, ROUND, "hb", 0x39);
+            // Gas pedal
+            add(w - 96, bottom - 160, 84, 156, PEDAL, "gas", keyGas);
+            // Brake pedal
+            add(w - 188, bottom - 112, 84, 108, PEDAL, "brake", keyBrake);
+            // Nitrous button - above gas
+            add(w - 86, bottom - 232, 64, 64, ROUND, "nitro", keyNitro);
+            // Handbrake button - beside brake
+            add(w - 180, bottom - 182, 58, 58, ROUND, "hb", keyHandbrake);
         } else {
             // Menu mode: D-pad on left, Back/OK pills on right, Keyboard center
             float pad = 52, cx = 24 + pad * 1.5f, cy = bottom - pad * 1.5f;
@@ -912,9 +972,9 @@ final class RacingControlsView extends View {
             if (c.scan == 0x31) {
                 AdhocRoamClient.setHorn(true);
             }
-            // Nitro (0x38 / Alt) holds Gas (0xc8 / Up) as well, matching web touch controls!
-            if (c.scan == 0x38) {
-                keys.set(0xc8, true);
+            // Nitro holds Gas as well, matching web touch controls!
+            if (c.scan == keyNitro) {
+                keys.set(keyGas, true);
             }
         }
         performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
@@ -927,29 +987,29 @@ final class RacingControlsView extends View {
                 if (c.scan == 0x31) {
                     AdhocRoamClient.setHorn(false);
                 }
-                if (c.scan == 0x38) {
+                if (c.scan == keyNitro) {
                     // Release Gas unless another finger is holding it directly
                     boolean gasHeld = false;
                     for (Control other : fingers.values()) {
-                        if (other != null && other.scan == 0xc8 && other.held > 0) {
+                        if (other != null && other.scan == keyGas && other.held > 0) {
                             gasHeld = true;
                             break;
                         }
                     }
-                    if (!gasHeld) keys.set(0xc8, false);
+                    if (!gasHeld) keys.set(keyGas, false);
                 }
             } else if (c.scan == STICK) {
                 c.steering = 0;
-                keys.set(0xcb, false);
-                keys.set(0xcd, false);
+                keys.set(keyLeft, false);
+                keys.set(keyRight, false);
             }
         }
     }
 
     private void steer(Control c, float x) {
         c.steering = Math.max(-1f, Math.min(1f, (x / scale - c.area.centerX()) / (c.area.width() / 2f)));
-        keys.set(0xcb, c.steering < -0.18f);
-        keys.set(0xcd, c.steering > 0.18f);
+        keys.set(keyLeft, c.steering < -0.18f);
+        keys.set(keyRight, c.steering > 0.18f);
     }
 
     void setPointer(Pointer pointer) {

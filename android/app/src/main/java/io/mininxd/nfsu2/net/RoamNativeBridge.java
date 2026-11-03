@@ -41,6 +41,7 @@ public final class RoamNativeBridge {
     public static native void nativeRoamStick(float x, float y);
     public static native void nativeRoamHorn(boolean held);
     public static native void nativeSetFrameLimit(int fps);
+    public static native int[] nativeGetActionKeys();
 
     /**
      * Called from C roam_android.c when the engine wants to transmit a packet.
