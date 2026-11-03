@@ -54,7 +54,7 @@ public final class LauncherActivity extends Activity {
     private static final int COLOR_WARN = 0xFFFFD36E;
     /** {label, guest language name, LANGUAGES/<file>.bin}. */
     private static final String[][] LANGUAGES = {
-        {"English", "English UK", "English"}, {"Español", "Spanish", "Spanish"},
+        {"English", "English UK", "English"},
         {"Français", "French", "French"}, {"Deutsch", "German", "German"},
         {"Italiano", "Italian", "Italian"}, {"Nederlands", "Dutch", "Dutch"},
         {"Svenska", "Swedish", "Swedish"}, {"Dansk", "Danish", "Danish"},
