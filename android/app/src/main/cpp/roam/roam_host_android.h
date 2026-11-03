@@ -18,6 +18,7 @@
 #include <time.h>
 #include <dlfcn.h>
 #include <android/log.h>
+#include "splitscreen_mem.h"
 
 #ifdef __cplusplus
 extern "C" {
