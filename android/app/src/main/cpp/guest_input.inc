@@ -38,8 +38,7 @@ std::array<uint8_t,16> directInputGuid(uint32_t data1){
 }
 const std::array<uint8_t,16> padGuid={0x20,0x50,0x41,0x44,0x00,0x00,0x00,0x00,0x00,0x00,0x41,0x4e,0x44,0x52,0x4f,0x49};
 // guidProduct of a HID device: PID<<16|VID, then "PIDVID".
-// Logitech Dual Action VID 0x046d, PID 0xc216 (matches SPEED2.EXE built-in profile at 0x7fe7f8)
-const std::array<uint8_t,16> padProductGuid={0x6d,0x04,0x16,0xc2,0,0,0,0,0,0,0x50,0x49,0x44,0x56,0x49,0x44};
+const std::array<uint8_t,16> padProductGuid={0x5e,0x04,0x8e,0x02,0,0,0,0,0,0,0x50,0x49,0x44,0x56,0x49,0x44};
 struct PadObject {uint32_t guidData1,offset,type,flags;const char* name;};
 // Offsets are those of c_dfDIJoystick / DIJOYSTATE.
 const PadObject padObjects[]={
@@ -142,7 +141,7 @@ bool joystickMethod(InputObject& object,uint32_t self,uint32_t method){
             if(how==1){  // DIPH_BYOFFSET: offset in the installed data format
                 for(auto& item:object.format)if(item.offset==id&&((item.type>>8)&0xffff)==((padObjects[i].type>>8)&0xffff)&&
                     ((item.type&padObjects[i].type&0x1f)))return int(i);
-            }else if(how==2&&(((padObjects[i].type>>8)&0xffff)==((id>>8)&0xffff))&&(padObjects[i].type&id&0x1f))return int(i);
+            }else if(how==2&&((id&0xffff1f)==(padObjects[i].type&0xffff1f)))return int(i);
         }return -1;};
     auto fillObject=[&](uint32_t output,const PadObject& entry){
         uint32_t bytes=read32(output);std::memset(ptr(output+4,bytes-4),0,bytes-4);
