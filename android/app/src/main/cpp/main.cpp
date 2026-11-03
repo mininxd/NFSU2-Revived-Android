@@ -252,8 +252,8 @@ static bool acceptedGamepad(const AInputEvent* event){
 static void setPadKey(unsigned scan,bool down){setGuestKey(scan,down);}
 static void publishPad(){
     auto state=gamepad.padState();
-    // Z (axes[2]) maps to LT and Rz (axes[5]) maps to RT as independent triggers.
-    const float axes[6]={state.leftX,state.leftY,state.leftTrigger,state.rightX,state.rightY,state.rightTrigger};
+    // Z: LT pushes it one way and RT the other, as DirectInput shows an Xbox pad (Z-Axis).
+    const float axes[6]={state.leftX,state.leftY,state.leftTrigger-state.rightTrigger,state.rightX,state.rightY,0.f};
     setGuestPad(axes,state.buttons,state.hatX,state.hatY);
 }
 static void onCommand(android_app* app, int32_t command) {
