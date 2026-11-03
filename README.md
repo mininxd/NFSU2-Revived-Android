@@ -1,7 +1,5 @@
 <div align="center">
 
-<img src="docs/images/logo.png" alt="Need for Speed: Underground 2 Revived" width="520"/>
-
 # Need for Speed Underground 2 — Revived (Android)
 
 ### Static Recompilation of SPEED2.EXE into Native C (x86 & ARM64)
