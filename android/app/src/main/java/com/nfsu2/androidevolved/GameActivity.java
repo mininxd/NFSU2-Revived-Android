@@ -24,5 +24,8 @@ public final class GameActivity {
     public static native void nativeMinimapTop(boolean top);
     public static native void nativeBackBuffers(int count);
     public static native void nativeCpuTextures(boolean enabled);
+    public static native void nativeRegion(int region);
+    public static native void nativeTachometerPosition(int position);
+    public static native void nativeGamepadLayout(boolean console);
     public static native void nativeGpuDriver(String hooks, String temp, String directory, String library);
 }

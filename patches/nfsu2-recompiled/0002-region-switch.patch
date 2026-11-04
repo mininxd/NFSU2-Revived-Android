@@ -1,0 +1,84 @@
+diff --git a/android/app/src/main/cpp/guest_runtime.cpp b/android/app/src/main/cpp/guest_runtime.cpp
+index c363563..5e91284 100644
+--- a/android/app/src/main/cpp/guest_runtime.cpp
++++ b/android/app/src/main/cpp/guest_runtime.cpp
+@@ -164,6 +164,7 @@ constexpr uint32_t timerTestAddress=0x7b000010u;
+ bool generatedTestActive=false;unsigned generatedTestCalls=0;
+ constexpr uint32_t generatedTestTarget=0x7b000020u;
+ uint32_t read32(uint32_t va);
++void write32(uint32_t va,uint32_t v);
+ // Stall diagnostics: where each guest thread last handed the machine over and
+ // what it was waiting for, dumped when the game stops presenting frames.
+ struct GuestThreadTrace {
+@@ -227,6 +228,22 @@ void yieldGuestMachine(unsigned milliseconds=0,std::chrono::steady_clock::time_p
+ thread_local bool renderThread=false;
+ // Render-thread slice handovers and the time spent getting the machine back.
+ uint64_t renderYields=0;std::chrono::nanoseconds renderWait{};
++// Game SKU (0x864F24): 0 = North America (SLUS), 1 = PAL Europe (SLES). The game
++// never writes it and the documented SPEED2.EXE leaves it 0, so it always loads
++// GLOBAL\GLOBALTEXTURESNA.BIN and US-only content. -1 leaves the game's value.
++constexpr uint32_t guestSkuAddress=0x00864F24u;
++std::atomic<int> forcedGuestRegion{-1};
++void applyGuestRegion(){
++#if defined(NFSU2_EXE_F4BB0D99)
++    return;  // the address belongs to the documented SPEED2.EXE build
++#endif
++    int forced=forcedGuestRegion.load(std::memory_order_relaxed);if(forced<0)return;
++    uint32_t current=read32(guestSkuAddress);if(current==uint32_t(forced))return;
++    static bool logged=false;
++    if(!logged){logged=true;NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Game region (SKU) %u -> %d",current,forced);}
++    else NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","Game region was changed by the game to %u; forcing %d again",current,forced);
++    write32(guestSkuAddress,uint32_t(forced));
++}
+ void checkGuestProgress() {
+     while(guestPaused.load()&&!stopRequested.load())yieldGuestMachine(20);
+     if(stopRequested.load())throw GuestStop("Guest execution cancelled");
+@@ -343,7 +360,7 @@ void d3dDispatch(){
+     static std::array<std::chrono::nanoseconds,4096> methodTime{};
+     if(timed){auto spent=std::chrono::steady_clock::now()-bridgeStart;bridgeTime+=token==0x7e002110u?spent:spent*64;presentTime+=token==0x7e002110u?spent:std::chrono::nanoseconds{};
+         methodTime[((token-0x7e000000u)/16u)&4095u]+=token==0x7e002110u?spent:spent*64;}
+-    if(token==0x7e002110u){nfs_widescreen_apply_frame_rate();lastPresentMs=steadyMs();startStallWatch();}
++    if(token==0x7e002110u){nfs_widescreen_apply_frame_rate();applyGuestRegion();lastPresentMs=steadyMs();startStallWatch();}
+     if(token==0x7e002110u&&result==0){
+         static FramePacer pacer;
+         auto now=std::chrono::steady_clock::now();
+@@ -887,6 +904,7 @@ std::string connectGuestRuntime(const char* executable) {
+         }
+         // Restore a clean CPU state before executing the real CRT entry.
+         fresh.load();
++        applyGuestRegion();  // before the game reads it (GLOBAL textures, ads, product codes)
+         NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Entering actual lifted CRT entry %08x",entry);
+         uint32_t result=callGuest(entry,{});
+         joinGuestThreads(guard);machineLease=nullptr;shutdownGuestSound();
+@@ -938,6 +956,7 @@ void setGuestResolution(unsigned width,unsigned height){
+ #endif
+     NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Selected render resolution %ux%u",width,height);
+ }
++void setGuestRegion(int region){forcedGuestRegion=region<0||region>1?-1:region;}
+ void setGuestFrameLimit(unsigned framesPerSecond){
+     frameLimit=(framesPerSecond>=30&&framesPerSecond<=240)?framesPerSecond:0;
+     // The game paces itself to 1/60 s; let it run at the cap (uncapped: the 120 Hz display).
+diff --git a/android/app/src/main/cpp/guest_runtime.h b/android/app/src/main/cpp/guest_runtime.h
+index d44cf85..e82c40b 100644
+--- a/android/app/src/main/cpp/guest_runtime.h
++++ b/android/app/src/main/cpp/guest_runtime.h
+@@ -26,3 +26,5 @@ void typeGuestText(const std::vector<uint32_t>& characters);
+ void setGuestLanguage(const char* language);
+ void setGuestResolution(unsigned width,unsigned height);
+ void setGuestFrameLimit(unsigned framesPerSecond);
++// Launcher option, before the guest boots: -1 keeps the game's region, 0 North America, 1 Europe.
++void setGuestRegion(int region);
+diff --git a/android/app/src/main/cpp/main.cpp b/android/app/src/main/cpp/main.cpp
+index 08a2e03..5610d1d 100644
+--- a/android/app/src/main/cpp/main.cpp
++++ b/android/app/src/main/cpp/main.cpp
+@@ -350,6 +350,9 @@ static bool compatCpuTextures=false;static unsigned compatBackBuffers=2;
+ extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeBackBuffers(JNIEnv*,jclass,jint count){
+     compatBackBuffers=unsigned(count);setD3D9Compatibility(compatCpuTextures,compatBackBuffers);
+ }
++extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeRegion(JNIEnv*,jclass,jint region){
++    setGuestRegion(int(region));
++}
+ extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeCpuTextures(JNIEnv*,jclass,jboolean enabled){
+     compatCpuTextures=enabled==JNI_TRUE;setD3D9Compatibility(compatCpuTextures,compatBackBuffers);
+ }

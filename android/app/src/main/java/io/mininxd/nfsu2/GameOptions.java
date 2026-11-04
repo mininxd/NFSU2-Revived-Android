@@ -28,7 +28,7 @@ public final class GameOptions {
             STARTUP_MOVIES = "intro", CUTSCENE_BORDERS = "cutscene_borders",
             ROAM_CARS_LIMIT = "roam_max_cars", ROAM_CREW = "roam_crew",
             GRAPHICS_BACKEND = "graphics_backend", DRAW_DISTANCE = "draw_distance",
-            TRACKSIDE_CROWDS = "trackside_crowds";
+            TRACKSIDE_CROWDS = "trackside_crowds", REGION = "region", TACHOMETER = "tachometer", PAD_LAYOUT = "pad_layout";
 
     static final Option[] ALL = {
             new Option(GRAPHICS_BACKEND, "Graphics API", "auto",
@@ -58,6 +58,15 @@ public final class GameOptions {
             new Option(LATENCY, "CPU/GPU Sync", "2",
                     new String[] {"2", "1"},
                     new String[] {"Performance · CPU and GPU in parallel", "Low latency · lower FPS"}),
+            new Option(PAD_LAYOUT, "Gamepad Layout", "port",
+                    new String[] {"port", "console"},
+                    new String[] {"Port · original mapping", "Console · PS2-style (X accept, O back, R3 camera)"}),
+            new Option(TACHOMETER, "Tachometer", "bottom",
+                    new String[] {"bottom", "raised", "middle"},
+                    new String[] {"Bottom right (original)", "Raised · above the pedals", "Middle · mid-screen"}),
+            new Option(REGION, "Region", "auto",
+                    new String[] {"auto", "eu", "na"},
+                    new String[] {"Game default (North America)", "Europe · EU cars (GLOBALTEXTURESROW.BIN)", "North America"}),
             new Option(TEXTURES, "Compressed Textures", "auto",
                     new String[] {"auto", "cpu"},
                     new String[] {"Automatic · GPU if supported", "Convert on CPU · compatibility"}),
@@ -75,6 +84,18 @@ public final class GameOptions {
         if (key == null) return null;
         for (Option o : ALL) if (o.key.equals(key)) return o;
         return null;
+    }
+
+    /** Tachometer for nativeTachometerPosition: 0 original, 1 raised, 2 mid-screen. */
+    static int tachometerPosition(Context context) {
+        String position = get(context, TACHOMETER);
+        return "middle".equals(position) ? 2 : "raised".equals(position) ? 1 : 0;
+    }
+
+    /** Game SKU for nativeRegion: -1 game default, 0 North America, 1 Europe. */
+    static int regionCode(Context context) {
+        String region = get(context, REGION);
+        return "eu".equals(region) ? 1 : "na".equals(region) ? 0 : -1;
     }
 
     static String get(Context context, String key) {
