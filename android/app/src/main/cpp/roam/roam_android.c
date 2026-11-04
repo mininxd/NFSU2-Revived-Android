@@ -780,7 +780,7 @@ static void framerate_pacing_fix(void) {
         nfs_rust_apply_engine_pacing((uint8_t *)(*g_p_mem_base), real_elapsed);
         return;
     }
-#endif
+#else
     if (!rh_mem_committed(0x007875bcu, 4) || !rh_mem_committed(0x00865558u, 4)) return;
     /* 0x007875BC is the game's simulation time step base (60 Hz).
      * Must be locked strictly to 1/60s so internal clocks (A_WTF, particles)
@@ -816,7 +816,7 @@ static void framerate_pacing_fix(void) {
         MR32(0x00870cc4u) = 1;
     }
 
-    /* Trackside Crowd Suppression (0x00870cd0 = g_CrowdEnable) via pure Rust:
+    /* Trackside Crowd Suppression (0x00870cd0 = g_CrowdEnable):
      * Suppress 3D spectator models and alpha-tested fence crowds around stadium corners
      * to prevent vertex transform and alpha test fillrate drops on mobile GPUs. */
     static int s_crowd_env_checked = 0;
@@ -824,29 +824,18 @@ static void framerate_pacing_fix(void) {
         s_crowd_env_checked = 1;
         const char *env_crowd = getenv("NFSU2_CROWD");
         int allow_crowd = (env_crowd && (strcmp(env_crowd, "1") == 0 || strcasecmp(env_crowd, "on") == 0));
-#ifdef ROAM_CORE_RUST
-        nfs_rust_set_crowd_suppression(!allow_crowd);
-#endif
-    }
-#ifdef ROAM_CORE_RUST
-    if (g_p_mem_base && *g_p_mem_base) {
-        nfs_rust_apply_crowd_suppression((uint8_t *)(*g_p_mem_base));
-    }
-#else
-    if (rh_mem_committed(0x00870cd0u, 4)) {
+        if (!allow_crowd) {
+            MR32(0x00870cd0u) = 0;
+        }
+    } else if (rh_mem_committed(0x00870cd0u, 4)) {
         const char *env_crowd = getenv("NFSU2_CROWD");
         int allow_crowd = (env_crowd && (strcmp(env_crowd, "1") == 0 || strcasecmp(env_crowd, "on") == 0));
         if (!allow_crowd) {
             MR32(0x00870cd0u) = 0;
         }
     }
-#endif
 
-    /* Prevent slow motion during racing: track real wall-clock elapsed time.
-     * Note: G_WORLDDT (0x865154) is zeroed at the end of each frame by SPEED2.EXE (0x57A17D),
-     * but A_REALDT (0x865198) preserves the measured delta. If the game's internal delta
-     * fell behind real elapsed time (e.g. 30 FPS or frame drops), scale physics dt
-     * to real elapsed time. */
+    /* Prevent slow motion during racing: track real wall-clock elapsed time. */
     static int64_t s_last_tick_us = 0;
     int64_t now_us = roam_plat_now_us();
     if (s_last_tick_us > 0) {
@@ -867,6 +856,7 @@ static void framerate_pacing_fix(void) {
         }
     }
     s_last_tick_us = now_us;
+#endif
 }
 
 static volatile uint32_t s_target_fps = 0;
