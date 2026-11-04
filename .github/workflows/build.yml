@@ -21,6 +21,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          submodules: recursive
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -104,21 +105,10 @@ jobs:
             -o android/app/src/main/jniLibs/arm64-v8a/libnfsu2_roam.so
           ls -lh android/app/src/main/jniLibs/arm64-v8a/libnfsu2_roam.so
 
-          echo "Building libnfsu2_diagnostics.so..."
-          CLANGXX_BIN="${CLANG_BIN}++"
-          if [ ! -x "$CLANGXX_BIN" ]; then
-            CLANGXX_BIN=$(find "$ANDROID_HOME/ndk" "$ANDROID_NDK_ROOT" /usr/local/lib/android/sdk/ndk -name "aarch64-linux-android*-clang++" 2>/dev/null | grep -E "android(26|27|28|29|30|31|32|33|34|35)-clang\+\+" | sort -V | head -n 1)
-          fi
-          if [ -z "$CLANGXX_BIN" ]; then
-            CLANGXX_BIN="$CLANG_BIN"
-          fi
-          $CLANGXX_BIN -std=c++17 -O2 -shared -fPIC -Wall -Wextra -Wno-missing-field-initializers \
-            -Iandroid/app/src/main/cpp \
-            android/app/src/main/cpp/gpu_probe.cpp \
-            android/app/src/main/cpp/vulkan_driver.cpp \
-            -llog -ldl \
-            -o android/app/src/main/jniLibs/arm64-v8a/libnfsu2_diagnostics.so || true
-          ls -lh android/app/src/main/jniLibs/arm64-v8a/libnfsu2_diagnostics.so || true
+          echo "Building AdrenoTools Hook Libraries and Diagnostics..."
+          chmod +x scripts/build_adrenotools_hooks.sh
+          CLANG_BIN="$CLANG_BIN" ./scripts/build_adrenotools_hooks.sh
+          ls -lh android/app/src/main/jniLibs/arm64-v8a/lib*.so
 
       - name: Configure Gamefiles Direct Link from Secret (if set)
         env:

@@ -1369,6 +1369,40 @@ JNIEXPORT jstring JNICALL Java_io_mininxd_nfsu2_PerformanceCores_nativeGetSummar
     return (*env)->NewStringUTF(env, buf);
 }
 
+JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeDrawDistance(
+        JNIEnv *env, jclass clazz, jfloat distance) {
+    (void)env; (void)clazz;
+    typedef void (*fn_set_dd)(float);
+    static fn_set_dd s_set_dd = NULL;
+    static int s_resolved = 0;
+    if (!s_resolved) {
+        s_resolved = 1;
+        s_set_dd = (fn_set_dd)dlsym(RTLD_DEFAULT, "nfs_widescreen_set_draw_distance");
+    }
+    if (s_set_dd) {
+        s_set_dd((float)distance);
+    }
+}
+
+JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeDrawDistance(
+        JNIEnv *env, jclass clazz, jfloat distance) {
+    Java_com_nfsu2_androidevolved_GameActivity_nativeDrawDistance(env, clazz, distance);
+}
+
+JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeGpuDriver(
+        JNIEnv *env, jclass clazz, jstring hooks, jstring temp, jstring directory, jstring library) {
+    typedef void (*fn_gpu_driver)(JNIEnv*, jclass, jstring, jstring, jstring, jstring);
+    static fn_gpu_driver s_gpu_driver = NULL;
+    static int s_resolved = 0;
+    if (!s_resolved) {
+        s_resolved = 1;
+        s_gpu_driver = (fn_gpu_driver)dlsym(RTLD_DEFAULT, "Java_com_nfsu2_androidevolved_GameActivity_nativeGpuDriver");
+    }
+    if (s_gpu_driver) {
+        s_gpu_driver(env, clazz, hooks, temp, directory, library);
+    }
+}
+
 #ifdef __cplusplus
 }
 #endif

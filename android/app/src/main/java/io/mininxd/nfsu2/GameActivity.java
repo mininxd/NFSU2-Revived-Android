@@ -194,7 +194,13 @@ public final class GameActivity extends NativeActivity {
     private static void nativeMinimapTop(boolean top) { com.nfsu2.androidevolved.GameActivity.nativeMinimapTop(top); }
     private static void nativeBackBuffers(int count) { com.nfsu2.androidevolved.GameActivity.nativeBackBuffers(count); }
     private static void nativeCpuTextures(boolean enabled) { com.nfsu2.androidevolved.GameActivity.nativeCpuTextures(enabled); }
-    private static void nativeGpuDriver(String hooks, String temp, String directory, String library) { com.nfsu2.androidevolved.GameActivity.nativeGpuDriver(hooks, temp, directory, library); }
+    private static void nativeGpuDriver(String hooks, String temp, String directory, String library) {
+        try {
+            com.nfsu2.androidevolved.GameActivity.nativeGpuDriver(hooks, temp, directory, library);
+        } catch (Throwable t) {
+            android.util.Log.w("GameActivity", "nativeGpuDriver: " + t.getMessage());
+        }
+    }
     private void showFrameLimitOptions() {
         GameOptions.Option option=GameOptions.find(GameOptions.FPS);
         String saved=GameOptions.get(this,GameOptions.FPS);int selected=0;
