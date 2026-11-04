@@ -30,6 +30,49 @@ uint32_t  *g_p_eax = NULL;
 uint32_t  *g_p_ecx = NULL;
 uint32_t  *g_p_edx = NULL;
 recomp_func_t (*g_p_recomp_lookup)(uint32_t va) = NULL;
+int (*g_p_guest_is_readable)(uint32_t va, uint32_t bytes) = NULL;
+
+static int s_probe_pipe[2] = { -1, -1 };
+static pthread_mutex_t s_probe_mu = PTHREAD_MUTEX_INITIALIZER;
+
+static inline int probe_mem_readable(const void *ptr, size_t n) {
+    if (!ptr) return 0;
+    pthread_mutex_lock(&s_probe_mu);
+    if (s_probe_pipe[0] < 0) {
+        if (pipe2(s_probe_pipe, O_CLOEXEC | O_NONBLOCK) != 0) {
+            pthread_mutex_unlock(&s_probe_mu);
+            return 1;
+        }
+    }
+    const uint8_t *p = (const uint8_t *)ptr;
+    char dummy;
+    ssize_t r1 = write(s_probe_pipe[1], p, 1);
+    if (r1 != 1) {
+        pthread_mutex_unlock(&s_probe_mu);
+        return 0;
+    }
+    (void)read(s_probe_pipe[0], &dummy, 1);
+
+    if (n > 1) {
+        ssize_t r2 = write(s_probe_pipe[1], p + n - 1, 1);
+        if (r2 != 1) {
+            pthread_mutex_unlock(&s_probe_mu);
+            return 0;
+        }
+        (void)read(s_probe_pipe[0], &dummy, 1);
+    }
+    pthread_mutex_unlock(&s_probe_mu);
+    return 1;
+}
+
+int roam_android_mem_readable(uint32_t a, uint32_t n) {
+    if (!g_p_mem_base || !*g_p_mem_base || !g_p_esp || *g_p_esp == 0) return 0;
+    if (a < 0x00010000u || (uint64_t)a + n < 0x00010000u || (uint64_t)a + n > 0x100000000ULL) return 0;
+    if (g_p_guest_is_readable) {
+        return g_p_guest_is_readable(a, n);
+    }
+    return probe_mem_readable(GPTR(a), n);
+}
 
 int nfs_bind_to_perf_cores(void);
 
@@ -50,7 +93,7 @@ static int g_carpool_patched = 0;
 /* Online Mode Lobby Patch: removes '*' from "*pcnfs05.ea.com" at 0x7FBDBCu
  * so DirtySock connects via plain TCP on port 20920 instead of SSL 2.0 on 20921 */
 static void roam_android_patch_online(void) {
-    if (g_online_patched || !g_p_mem_base || !*g_p_mem_base) return;
+    if (g_online_patched || !g_p_esp || !*g_p_esp || !rh_mem_committed(0x7FBDBCu, 16)) return;
     uint8_t *p = GPTR(0x7FBDBCu);
     if (memcmp(p, "*pcnfs05.ea.com", 15) == 0) {
         memcpy(p, "pcnfs05.ea.com\0", 15);
@@ -60,7 +103,7 @@ static void roam_android_patch_online(void) {
 }
 
 static inline void roam_android_patch_carpool(void) {
-    if (!g_carpool_patched && g_p_mem_base && *g_p_mem_base) {
+    if (!g_carpool_patched && g_p_esp && *g_p_esp && rh_mem_committed(G_CARPOOL_KB, 4)) {
         if (MR32(G_CARPOOL_KB) < CARPOOL_KB) {
             MR32(G_CARPOOL_KB) = CARPOOL_KB;
             g_carpool_patched = 1;
@@ -69,7 +112,7 @@ static inline void roam_android_patch_carpool(void) {
 }
 
 int roam_android_init_symbols(void) {
-    if (__builtin_expect(g_p_mem_base && g_p_recomp_lookup && g_p_esp && *g_p_mem_base != 0, 1)) {
+    if (__builtin_expect(g_p_mem_base && g_p_recomp_lookup && g_p_esp && *g_p_mem_base != 0 && *g_p_esp != 0, 1)) {
         if (!g_carpool_patched) roam_android_patch_carpool();
         if (!g_online_patched) roam_android_patch_online();
         return 1;
@@ -85,8 +128,9 @@ int roam_android_init_symbols(void) {
     if (!g_p_eax) g_p_eax = (uint32_t *)dlsym(h, "g_eax");
     if (!g_p_ecx) g_p_ecx = (uint32_t *)dlsym(h, "g_ecx");
     if (!g_p_edx) g_p_edx = (uint32_t *)dlsym(h, "g_edx");
+    if (!g_p_guest_is_readable) g_p_guest_is_readable = (int (*)(uint32_t, uint32_t))dlsym(h, "guest_is_readable");
 
-    if (g_p_mem_base && *g_p_mem_base != 0 && g_p_recomp_lookup && g_p_esp) {
+    if (g_p_mem_base && *g_p_mem_base != 0 && g_p_recomp_lookup && g_p_esp && *g_p_esp != 0) {
         if (!g_carpool_patched) roam_android_patch_carpool();
         if (!g_online_patched) roam_android_patch_online();
         return 1;
@@ -226,11 +270,12 @@ uint32_t roam_plat_room(char name[64]) { (void)name; return 0; }
 uint32_t roam_plat_name(char out[33]) { (void)out; return 0; }
 
 void look_eye(float *e, float *f) {
-    if (g_p_mem_base && *g_p_mem_base) {
+    if (g_p_mem_base && *g_p_mem_base && g_p_esp && *g_p_esp) {
+        if (!rh_mem_committed(0x008709a0u, 4)) return;
         uint32_t pl = MR32(0x008709a0u);
-        uint32_t mover = pl ? MR32(pl + 0x238u) : 0;
-        uint32_t cam = mover ? MR32(mover + 0x40u) : 0;
-        if (cam && rh_committed(cam)) {
+        uint32_t mover = (pl && rh_mem_committed(pl + 0x238u, 4)) ? MR32(pl + 0x238u) : 0;
+        uint32_t cam = (mover && rh_mem_committed(mover + 0x40u, 4)) ? MR32(mover + 0x40u) : 0;
+        if (cam && rh_mem_committed(cam + 0x40u, 32)) {
             if (e) memcpy(e, GPTR(cam + 0x40u), 12);
             if (f) memcpy(f, GPTR(cam + 0x50u), 12);
         }
@@ -509,10 +554,6 @@ __attribute__((weak)) void dispatch_patch(uint32_t a, void (*f)(CPU *)) {
 static int g_hidden_on = -1;
 static uint32_t g_hidden_done = 0;
 
-static inline int rh_mem_committed(uint32_t a, uint32_t n) {
-    return g_p_mem_base && *g_p_mem_base && a >= 0x00010000u && (a + n) >= 0x00010000u;
-}
-
 static void hiddenraces_frame_tick(void) {
     if (__builtin_expect(g_hidden_done != 0, 1)) return;
     if (g_hidden_on < 0) {
@@ -718,11 +759,11 @@ static float ms_scale_now(void) {
 static void menusize_frame_tick(void) {
     /* Optimization for offline racing: when in the world / racing (G_FLOW == 6),
      * 2D menu bars and dialogs are not active. Skip traversing UI elements. */
-    if (rh_mem_committed(0x008654a4u, 4) && MR32(0x008654a4u) == 6u) return;
+    if (!rh_mem_committed(0x008654a4u, 4) || MR32(0x008654a4u) == 6u) return;
 
     if (!rh_mem_committed(0x008384c4u, 4)) return;
     uint32_t fe = MR32(0x008384c4u);
-    if (!fe || !rh_mem_committed(fe + 12, 4)) return;
+    if (!fe || !rh_mem_committed(fe + 8u, 4)) return;
     uint32_t mg = MR32(fe + 8u);
     if (!mg || !rh_mem_committed(mg, 0x100u)) return;
 
@@ -884,7 +925,8 @@ static void look_turn_matrix(uint32_t cam, float ox, float oy, float yaw) {
 }
 
 static void look_camera_frame_tick(void) {
-    if (g_cam_turned && g_turned_cam && rh_committed(g_turned_cam)) {
+    if (!g_p_esp || !*g_p_esp || !g_p_mem_base || !*g_p_mem_base) return;
+    if (g_cam_turned && g_turned_cam && rh_mem_committed(g_turned_cam, sizeof(g_made_cam))) {
         if (!memcmp(GPTR(g_turned_cam), g_made_cam, sizeof(g_made_cam))) {
             memcpy(GPTR(g_turned_cam), g_keep_cam, sizeof(g_keep_cam));
         }
@@ -901,12 +943,13 @@ static void look_camera_frame_tick(void) {
     if (fabsf(g_look_yaw) < 0.001f && fabsf(target_yaw) < 0.001f) g_look_yaw = 0.f;
 
     if (fabsf(g_look_yaw) > 0.005f && g_p_mem_base && *g_p_mem_base) {
+        if (!rh_mem_committed(0x008709a0u, 4)) return;
         uint32_t pl = MR32(0x008709a0u); // G_PLAYER1
-        if (pl && rh_committed(pl)) {
+        if (pl && rh_mem_committed(pl + 0x238u, 4) && rh_mem_committed(pl + 4u, 4)) {
             uint32_t mover = MR32(pl + 0x238u);
-            uint32_t cam = mover ? MR32(mover + 0x40u) : 0;
+            uint32_t cam = (mover && rh_mem_committed(mover + 0x40u, 4)) ? MR32(mover + 0x40u) : 0;
             uint32_t car = MR32(pl + 4u);
-            if (cam && car && rh_committed(cam) && rh_committed(car)) {
+            if (cam && car && rh_mem_committed(cam, sizeof(g_keep_cam)) && rh_mem_committed(car + 0x60u, 16)) {
                 float *car_pos = (float *)GPTR(car + 0x60u);
                 float ox = car_pos[0], oy = car_pos[1];
                 memcpy(g_keep_cam, GPTR(cam), sizeof(g_keep_cam));
@@ -923,7 +966,7 @@ static void look_camera_frame_tick(void) {
 }
 
 __attribute__((visibility("default"))) void nfs_roam_frame_tick(void) {
-    if (!roam_android_init_symbols()) return;
+    if (!roam_android_init_symbols() || !g_p_esp || !*g_p_esp) return;
     pace_frame();
     static int s_perf_bound = 0;
     if (!s_perf_bound || (g_frame_count % 300) == 0) {
@@ -1237,37 +1280,39 @@ static jintArray get_action_keys_array(JNIEnv *env) {
     jint keys[11];
     memcpy(keys, DEFAULT_ACTION_KEYS, sizeof(keys));
 
-    if (roam_android_init_symbols() && g_p_mem_base && *g_p_mem_base) {
-        uint32_t table_va = MR32(0x86e89cu);
-        uint32_t count = MR32(0x86f354u);
-        if (table_va != 0 && count > 0 && count < 256) {
-            uint8_t filled[11] = {0};
-            for (uint32_t i = 0; i < count; i++) {
-                uint32_t entry_va = table_va + i * 40u;
-                uint32_t action = MR32(entry_va);
-                uint32_t raw_key = MR32(entry_va + 0x20u);
-                uint32_t scancode = ((raw_key >> 8) & 0xffu) ? ((raw_key >> 8) & 0xffu) : (raw_key & 0xffu);
-                if (scancode == 0) continue;
+    if (roam_android_init_symbols() && g_p_mem_base && *g_p_mem_base && g_p_esp && *g_p_esp) {
+        if (rh_mem_committed(0x86e89cu, 4) && rh_mem_committed(0x86f354u, 4)) {
+            uint32_t table_va = MR32(0x86e89cu);
+            uint32_t count = MR32(0x86f354u);
+            if (table_va != 0 && count > 0 && count < 256 && rh_mem_committed(table_va, count * 40u)) {
+                uint8_t filled[11] = {0};
+                for (uint32_t i = 0; i < count; i++) {
+                    uint32_t entry_va = table_va + i * 40u;
+                    uint32_t action = MR32(entry_va);
+                    uint32_t raw_key = MR32(entry_va + 0x20u);
+                    uint32_t scancode = ((raw_key >> 8) & 0xffu) ? ((raw_key >> 8) & 0xffu) : (raw_key & 0xffu);
+                    if (scancode == 0) continue;
 
-                int idx = -1;
-                switch (action) {
-                    case 1:  idx = 0; break; /* Gas */
-                    case 2:  idx = 1; break; /* Brake */
-                    case 3:  idx = 2; break; /* Steer Left */
-                    case 4:  idx = 3; break; /* Steer Right */
-                    case 5:  idx = 4; break; /* Handbrake */
-                    case 6:  idx = 5; break; /* Nitro */
-                    case 7:  idx = 6; break; /* Shift Up */
-                    case 8:  idx = 7; break; /* Shift Down */
-                    case 9:  idx = 8; break; /* Look Back */
-                    case 10: idx = 9; break; /* Camera */
-                    case 14: idx = 10; break; /* Reset Car */
-                    default: break;
-                }
+                    int idx = -1;
+                    switch (action) {
+                        case 1:  idx = 0; break; /* Gas */
+                        case 2:  idx = 1; break; /* Brake */
+                        case 3:  idx = 2; break; /* Steer Left */
+                        case 4:  idx = 3; break; /* Steer Right */
+                        case 5:  idx = 4; break; /* Handbrake */
+                        case 6:  idx = 5; break; /* Nitro */
+                        case 7:  idx = 6; break; /* Shift Up */
+                        case 8:  idx = 7; break; /* Shift Down */
+                        case 9:  idx = 8; break; /* Look Back */
+                        case 10: idx = 9; break; /* Camera */
+                        case 14: idx = 10; break; /* Reset Car */
+                        default: break;
+                    }
 
-                if (idx >= 0 && !filled[idx]) {
-                    keys[idx] = (jint)scancode;
-                    filled[idx] = 1;
+                    if (idx >= 0 && !filled[idx]) {
+                        keys[idx] = (jint)scancode;
+                        filled[idx] = 1;
+                    }
                 }
             }
         }

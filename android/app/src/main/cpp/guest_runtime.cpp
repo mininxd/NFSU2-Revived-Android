@@ -925,6 +925,10 @@ extern "C" int nfs_android_resolution(){
     return 1;
 }
 
+extern "C" int guest_is_readable(uint32_t va, uint32_t bytes) {
+    return (memory && memory->readable(va, bytes)) ? 1 : 0;
+}
+
 std::string connectGuestRuntime(const char* executable) {
     std::unique_lock<MachineMutex> guard(machine);machineLease=&guard;
     if (memory) return "Guest runtime already initialized";
@@ -955,6 +959,14 @@ std::string connectGuestRuntime(const char* executable) {
             if (p && std::memcmp(p, "*pcnfs05.ea.com", 15) == 0) {
                 std::memcpy(p, "pcnfs05.ea.com\0", 16);
                 NFS_RUNTIME_LOG(ANDROID_LOG_INFO, "NFSU2", "Patched 0x7FBDBC: removed '*' from *pcnfs05.ea.com for plain TCP lobby");
+            }
+        }
+        // Expand CarPool budget to 48MB (0x007fa9d4u in SPEED2.EXE v1.2) to prevent memory allocation halts
+        if (memory->writable(0x007fa9d4u, 4)) {
+            uint32_t* pCarpool = static_cast<uint32_t*>(ptr(0x007fa9d4u, 4));
+            if (pCarpool && *pCarpool < 48000) {
+                *pCarpool = 48000;
+                NFS_RUNTIME_LOG(ANDROID_LOG_INFO, "NFSU2", "Patched carpool KB at 0x007fa9d4 to %u", *pCarpool);
             }
         }
         if(guestWidescreen){

@@ -16,6 +16,8 @@
 #include <strings.h>
 #include <stdio.h>
 #include <time.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <dlfcn.h>
 #include <android/log.h>
 #include "splitscreen_mem.h"
@@ -34,8 +36,10 @@ extern uint32_t  *g_p_ecx;
 extern uint32_t  *g_p_edx;
 typedef void (*recomp_func_t)(void);
 extern recomp_func_t (*g_p_recomp_lookup)(uint32_t va);
+extern int (*g_p_guest_is_readable)(uint32_t va, uint32_t bytes);
 
 int roam_android_init_symbols(void);
+int roam_android_mem_readable(uint32_t a, uint32_t n);
 
 #define GPTR(a) ((uint8_t *)((*g_p_mem_base) + (uint32_t)(a)))
 #define MR8(a)   (*(uint8_t  *)GPTR(a))
@@ -44,11 +48,15 @@ int roam_android_init_symbols(void);
 #define MRF32(a) (*(float    *)GPTR(a))
 
 static inline int rh_committed(uint32_t a) {
-    return g_p_mem_base != NULL && *g_p_mem_base != 0 && a >= 0x00010000u;
+    return roam_android_mem_readable(a, 1);
+}
+
+static inline int rh_mem_committed(uint32_t a, uint32_t n) {
+    return roam_android_mem_readable(a, n);
 }
 
 static inline uint32_t roam_android_call(uint32_t fn, uint32_t ecx, uint32_t edx, int n, const uint32_t *args) {
-    if (!roam_android_init_symbols() || !g_p_mem_base || !*g_p_mem_base || !g_p_recomp_lookup || !g_p_esp) return 0;
+    if (!roam_android_init_symbols() || !g_p_mem_base || !*g_p_mem_base || !g_p_recomp_lookup || !g_p_esp || *g_p_esp == 0) return 0;
     recomp_func_t target = g_p_recomp_lookup(fn);
     if (!target) return 0;
 

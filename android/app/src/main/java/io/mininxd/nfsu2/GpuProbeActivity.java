@@ -123,7 +123,7 @@ public final class GpuProbeActivity extends Activity {
     @Override protected void onDestroy() {
         super.onDestroy();
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            Process.killProcess(Process.myPid());
+            System.exit(0);
         }, 300);
     }
 }
