@@ -15,6 +15,10 @@ patches against that repository's `main` (`fb2a359`), to be applied in order:
 | `0003-live-minimap-speedometer.patch` | `nativeSpeedometerOffset(float dx, float dy)` (free speedometer position in 480-line HUD units), and minimap/speedometer offsets applied live (FE geometry cache dropped with `0x0050C7E0`; the radar map element that BlipsHook rewrites in place is tracked and corrected). |
 | `0004-console-gamepad-layout.patch` | `nativeGamepadLayout(boolean)`: PS2-style layout (X accept, Circle back, R3 camera, Start without double press, world map / SMS / dialog buttons). |
 
+`prebuilt/lib_arm64.tar.gz` in this branch is that build: upstream `fb2a359`
+with the four patches applied (built with the upstream Android project,
+NDK 28.2.13676358).
+
 The same changes are proposed upstream in
 [codepdbh/nfsu2-recompiled#2359](https://github.com/codepdbh/nfsu2-recompiled/pull/2359).
 Once that is merged, rebuilding `prebuilt/` from upstream `main` is enough and
