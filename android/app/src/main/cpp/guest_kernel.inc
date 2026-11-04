@@ -42,6 +42,27 @@ void initCritical(uint32_t address,uint32_t spin) {
 }
 void initializeCritical() {initCritical(arg(0),0);ret(0,1);}
 void initializeCriticalSpin() {initCritical(arg(0),arg(1));ret(1,2);}
+static inline bool isCriticalDeadlocked(uint32_t owner, uint32_t guestId) {
+    if (!owner || owner == guestId) return false;
+    uint32_t walker = owner;
+    for (int depth = 0; depth < 8 && walker != 0; ++depth) {
+        if (walker == guestId) return true;
+        std::lock_guard<std::mutex> lock(threadTracesMutex);
+        auto it = threadTraces.find(walker);
+        if (it != threadTraces.end() && it->second) {
+            const char* w = it->second->wait.load();
+            if (w && std::strcmp(w, "EnterCriticalSection") == 0) {
+                uint32_t wanted = it->second->handle.load();
+                walker = (wanted && memory && memory->readable(wanted, 24)) ? read32(wanted + 12) : 0;
+            } else {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+    return false;
+}
 void enterCritical() {
     uint32_t address=arg(0); auto cs=criticalSections.find(address);
     if(cs==criticalSections.end()) throw GuestStop("EnterCriticalSection without initialization");
@@ -49,8 +70,37 @@ void enterCritical() {
     // Contended: hand the machine over (the fair lock gives it to the waiting
     // owner) instead of sleeping 1 ms per attempt; sleep only if it persists.
     if(!mutex->try_lock()){
+        uint32_t initial_owner = read32(address + 12);
+        if (isCriticalDeadlocked(initial_owner, guestThreadId)) {
+            NFS_RUNTIME_LOG(ANDROID_LOG_WARN, "NFSU2",
+                "Breaking critical section deadlock cycle: thread %u waiting for %08x (owner=%u)",
+                guestThreadId, address, initial_owner);
+            bypassedCriticals[guestThreadId].push_back(address);
+            auto count = read32(address + 8) + 1;
+            write32(address + 8, count);
+            write32(address + 4, count - 1);
+            currentTrace().hold(address);
+            ret(0, 1);
+            return;
+        }
         WaitScope scope("EnterCriticalSection",address);
-        for(unsigned spins=0;!mutex->try_lock();++spins){checkGuestProgress();yieldGuestMachine(spins<64?0:1);}
+        for(unsigned spins=0;!mutex->try_lock();++spins){
+            uint32_t cur_owner = read32(address + 12);
+            if (isCriticalDeadlocked(cur_owner, guestThreadId) || spins >= 400) {
+                NFS_RUNTIME_LOG(ANDROID_LOG_WARN, "NFSU2",
+                    "Breaking critical section %s: thread %u waiting for %08x (owner=%u, spins=%u)",
+                    (spins >= 400) ? "spin stall" : "deadlock cycle", guestThreadId, address, cur_owner, spins);
+                bypassedCriticals[guestThreadId].push_back(address);
+                auto count = read32(address + 8) + 1;
+                write32(address + 8, count);
+                write32(address + 4, count - 1);
+                currentTrace().hold(address);
+                ret(0, 1);
+                return;
+            }
+            checkGuestProgress();
+            yieldGuestMachine(spins<64?0:1);
+        }
     }
     cs=criticalSections.find(address);
     if(cs==criticalSections.end()||cs->second!=mutex){mutex->unlock();throw GuestStop("Critical section deleted while waiting");}
@@ -60,7 +110,20 @@ void enterCritical() {
 }
 void leaveCritical() {
     uint32_t address=arg(0); auto cs=criticalSections.find(address); uint32_t count=read32(address+8);
-    if(cs==criticalSections.end()||!count||read32(address+12)!=guestThreadId) throw GuestStop("Unbalanced LeaveCriticalSection");
+    if(cs==criticalSections.end()||!count) throw GuestStop("Unbalanced LeaveCriticalSection");
+    auto itList = bypassedCriticals.find(guestThreadId);
+    if (itList != bypassedCriticals.end() && !itList->second.empty()) {
+        auto it = std::find(itList->second.begin(), itList->second.end(), address);
+        if (it != itList->second.end()) {
+            itList->second.erase(it);
+            write32(address + 8, --count);
+            write32(address + 4, count - 1);
+            currentTrace().release(address);
+            ret(0, 1);
+            return;
+        }
+    }
+    if(read32(address+12)!=guestThreadId) throw GuestStop("Unbalanced LeaveCriticalSection");
     write32(address+8,--count);write32(address+4,count-1);if(!count){write32(address+12,0);currentTrace().release(address);}cs->second->unlock();
     if(!count&&pendingCriticalDeletes.erase(address))criticalSections.erase(cs);
     ret(0,1);

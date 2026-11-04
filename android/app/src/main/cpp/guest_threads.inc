@@ -74,6 +74,7 @@ void* guestThreadEntry(void* context){
     }catch(const std::exception& error){thread.exitCode=1;guestThreadFault=error.what();}
     heaps->free(GuestHeaps::process,thread.stack);heaps->free(GuestHeaps::process,thread.tib);
     for(auto& value:mutexHandles)if(value.second->owner==thread.id){value.second->owner=0;value.second->depth=0;value.second->abandoned=true;}
+    bypassedCriticals.erase(thread.id);
     forgetThreadTrace();thread.done=true;machineLease=nullptr;return nullptr;
 }
 void reapGuestThreads(){

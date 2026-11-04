@@ -183,6 +183,7 @@ GuestThreadTrace& currentTrace(){
     return *threadTrace;
 }
 void forgetThreadTrace(){std::lock_guard<std::mutex> lock(threadTracesMutex);threadTraces.erase(guestThreadId);threadTrace.reset();}
+std::map<uint32_t,std::vector<uint32_t>> bypassedCriticals;
 struct WaitScope {
     WaitScope(const char* what,uint32_t handle){auto& trace=currentTrace();trace.wait=what;trace.handle=handle;}
     ~WaitScope(){currentTrace().wait=nullptr;}

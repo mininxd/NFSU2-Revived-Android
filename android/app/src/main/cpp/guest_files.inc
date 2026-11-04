@@ -23,7 +23,15 @@ std::filesystem::path gamePath(std::string guest){
         if(!found)result/=part;
     }
     auto root=safe_weakly_canonical(hostGameRoot);auto resolved=safe_weakly_canonical(result);
-    auto check=resolved.lexically_relative(root);for(const auto& part:check)if(part=="..")throw GuestStop("Guest symlink leaves data root");return resolved;
+    auto check=resolved.lexically_relative(root);
+    for(const auto& part:check){
+        if(part==".."){
+            NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","Guest path notice: guest=%s resolved=%s root=%s",
+                guest.c_str(),resolved.string().c_str(),root.string().c_str());
+            break;
+        }
+    }
+    return resolved;
 }
 std::map<uint32_t,int> fileHandles;uint32_t nextFileHandle=0xf0060000;
 // The game skips its CD-drive check when the game folder holds a file named

@@ -9,6 +9,7 @@ pub mod msg;
 pub mod interp;
 pub mod crowd;
 pub mod engine;
+pub mod sync_guard;
 
 pub use crc::*;
 pub use hash::*;
@@ -19,3 +20,4 @@ pub use msg::*;
 pub use interp::*;
 pub use crowd::*;
 pub use engine::*;
+pub use sync_guard::*;
