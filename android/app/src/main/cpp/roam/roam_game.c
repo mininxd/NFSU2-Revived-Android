@@ -1029,7 +1029,7 @@ static void events_read(CPU *c, int64_t host){
         g_pass.ev_first = first; g_pass.ev_end = end; g_pass.nev = g_pass.evall = 0; g_pass.ev_at = 0; g_pass.ev_next = 0;
         g_pass.ev_ns = g_pass.ev_ns_max = 0; g_pass.ev_frames = 0;
     }
-    if (!g_gmem) return;
+    if (!g_gmem || !ok(g_gmem, 0x40) || !ok(G_CAREER, 0x100)) return;
     if (!g_pass.ev_at){
         if (host < g_pass.ev_next || !first || first >= end) return;
         g_pass.ev_at = first; g_pass.ev_nb = g_pass.ev_seen = 0;
@@ -4928,6 +4928,7 @@ static void spot_of(CPU *c, uint32_t e, uint32_t stage, MpSpot *sp){
      * this trigger, of any stage (0x527780), else a cover shoot or another
      * event.  Where it enters one, Enter is the game's: Solo or Multiplayer
      * for its race, or no spot (not a LAN race, not a race) */
+    if (!g_gmem || !ok(g_gmem, 0x40) || !ok(G_CAREER, 0x100)) return;
     uint32_t out = g_gmem + EV_SCR, a[2] = { out, e };
     rh_call(c, FN_MARKER_WHAT, G_CAREER, 0, 2, a);
     uint32_t game = MR32(out + 4u);

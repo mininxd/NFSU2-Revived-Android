@@ -19,6 +19,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <dlfcn.h>
+#include <stdatomic.h>
 #include <android/log.h>
 #include "splitscreen_mem.h"
 
@@ -60,6 +61,9 @@ static inline uint32_t roam_android_call(uint32_t fn, uint32_t ecx, uint32_t edx
     recomp_func_t target = g_p_recomp_lookup(fn);
     if (!target) return 0;
 
+    static _Atomic int s_roam_calling = 0;
+    if (atomic_exchange(&s_roam_calling, 1) != 0) return 0;
+
     uint32_t saved_esp = *g_p_esp;
     uint32_t saved_ecx = *g_p_ecx;
     uint32_t saved_edx = *g_p_edx;
@@ -81,6 +85,8 @@ static inline uint32_t roam_android_call(uint32_t fn, uint32_t ecx, uint32_t edx
     *g_p_esp = saved_esp;
     *g_p_ecx = saved_ecx;
     *g_p_edx = saved_edx;
+
+    atomic_store(&s_roam_calling, 0);
 
     return result;
 }

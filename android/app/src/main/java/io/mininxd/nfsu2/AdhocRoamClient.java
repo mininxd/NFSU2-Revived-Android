@@ -353,8 +353,6 @@ public final class AdhocRoamClient {
                 postofficeClient.start(serverHost, roomName, playerName, localMac);
             }
         }, "BackendSelector").start();
-
-        startRoamTickThread();
     }
 
     public synchronized void stop() {
@@ -398,21 +396,7 @@ public final class AdhocRoamClient {
     }
 
     private void startRoamTickThread() {
-        if (!RoamNativeBridge.isLoaded()) return;
-        roamTickThread = new Thread(() -> {
-            while (running.get()) {
-                try {
-                    nativeRoamTick();
-                    Thread.sleep(16);
-                } catch (InterruptedException e) {
-                    break;
-                } catch (Throwable t) {
-                    try { Thread.sleep(50); } catch (Exception ignored) { break; }
-                }
-            }
-        }, "RoamTickWorker");
-        roamTickThread.setDaemon(true);
-        roamTickThread.start();
+        // Native roam companion is ticked synchronously per-frame in guest_runtime.cpp at Direct3D9 Present.
     }
 
     public boolean isDisplayLogsEnabled() {

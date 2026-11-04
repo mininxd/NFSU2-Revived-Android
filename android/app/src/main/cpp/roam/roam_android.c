@@ -108,9 +108,6 @@ static inline void roam_android_patch_carpool(void) {
             MR32(G_CARPOOL_KB) = CARPOOL_KB;
             g_carpool_patched = 1;
         }
-        if (rh_mem_committed(0x005d7b07u, 1) && MR8(0x005d7b07u) == 0x14) {
-            MR8(0x005d7b07u) = 0x80;
-        }
     }
 }
 
@@ -937,8 +934,10 @@ static void look_camera_frame_tick(void) {
     }
 }
 
+static _Atomic int s_tick_in_progress = 0;
 __attribute__((visibility("default"))) void nfs_roam_frame_tick(void) {
     if (!roam_android_init_symbols() || !g_p_esp || !*g_p_esp) return;
+    if (atomic_exchange(&s_tick_in_progress, 1) != 0) return;
     pace_frame();
     static int s_perf_bound = 0;
     if (!s_perf_bound || (g_frame_count % 300) == 0) {
@@ -950,6 +949,7 @@ __attribute__((visibility("default"))) void nfs_roam_frame_tick(void) {
     framerate_pacing_fix();
     look_camera_frame_tick();
     roam_game_frame(NULL);
+    atomic_store(&s_tick_in_progress, 0);
 }
 
 /* Gamepad Right Stick Quick Chat Input & Camera Look */
@@ -1050,7 +1050,12 @@ static void roam_do_receive(JNIEnv *env, jint srcIp, jint srcPort, jbyteArray jD
 }
 
 static void roam_do_tick(void) {
-    nfs_roam_frame_tick();
+    /* Background Java threads (e.g. RoamTickWorker, GameCompanionTicker) must not
+     * invoke nfs_roam_frame_tick() directly because it executes guest x86 functions
+     * and mutates guest stack/registers (g_esp, g_eax, g_ecx), causing fatal
+     * race conditions and SIGSEGV when running concurrently with the guest game thread.
+     * nfs_roam_frame_tick() is already invoked synchronously on every frame render
+     * in guest_runtime.cpp at Direct3D9 Present (token 0x7e002110u). */
 }
 
 static void roam_do_say(jint phrase) {
