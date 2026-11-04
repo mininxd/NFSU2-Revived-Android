@@ -109,15 +109,18 @@ final class RacingControlsView extends View {
     private Bitmap driftBitmap;
     private Bitmap liftBitmap;
     private Bitmap bounceBitmap;
+    private Bitmap resetBitmap;
     private final Paint bitmapPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
     private final RectF nitroDestRect = new RectF();
     private final RectF statusDestRect = new RectF();
     private final RectF driftDestRect = new RectF();
     private final RectF liftDestRect = new RectF();
     private final RectF bounceDestRect = new RectF();
+    private final RectF resetDestRect = new RectF();
     private final PorterDuffColorFilter filterIdle = new PorterDuffColorFilter(COLOR_TEXT, PorterDuff.Mode.SRC_IN);
     private final PorterDuffColorFilter filterActive = new PorterDuffColorFilter(COLOR_LIME, PorterDuff.Mode.SRC_IN);
     private boolean driftActive = false;
+    private boolean controlsHidden = false;
 
     private int keyGas = 0xc8;
     private int keyBrake = 0xd0;
@@ -218,6 +221,20 @@ final class RacingControlsView extends View {
                 is.close();
             }
         } catch (Throwable ignored) {}
+
+        try {
+            int resId = getResources().getIdentifier("reset", "drawable", getContext().getPackageName());
+            if (resId != 0) {
+                resetBitmap = BitmapFactory.decodeResource(getResources(), resId);
+            }
+            if (resetBitmap == null) {
+                java.io.InputStream is = getContext().getAssets().open("reset.png");
+                resetBitmap = BitmapFactory.decodeStream(is);
+                is.close();
+            }
+        } catch (Throwable ignored) {}
+
+        controlsHidden = layouts.getBoolean("controls_hidden", false);
 
         setContentDescription("Game controls");
         setHapticFeedbackEnabled(true);
@@ -430,6 +447,7 @@ final class RacingControlsView extends View {
         if (editing) canvas.drawColor(0x77000000);
 
         for (Control c : controls) {
+            if (controlsHidden && !editing && c.scan != EDIT) continue;
             drawControl(canvas, c);
         }
 
@@ -441,6 +459,11 @@ final class RacingControlsView extends View {
             drawToolbarButton(canvas, new RectF(cx - 45, 18, cx + 50, 58), "SAVE", 0xE018301C, 0xAA88E060, COLOR_LIME);
             drawToolbarButton(canvas, new RectF(cx + 60, 18, cx + 150, 58), "CANCEL", 0xE0182028, 0x44FFFFFF, COLOR_TEXT);
             drawToolbarButton(canvas, new RectF(cx + 160, 18, cx + 250, 58), "EXIT", 0xE036181C, 0xAAFF6B6B, 0xFFFF7B7B);
+            if (controlsHidden) {
+                drawToolbarButton(canvas, new RectF(cx - 205, 68, cx - 75, 106), "SHOW BUTTON", 0xE018301C, 0xAA88E060, COLOR_LIME);
+            } else {
+                drawToolbarButton(canvas, new RectF(cx - 205, 68, cx - 75, 106), "HIDE BUTTON", 0xE0282018, 0xAAFFB74D, 0xFFFFB74D);
+            }
             drawToolbarButton(canvas, new RectF(cx - 65, 68, cx + 65, 106), "OPTIONS", 0xE0162534, 0xAA5AC8FA, 0xFF5AC8FA);
         }
         canvas.restore();
@@ -613,12 +636,20 @@ final class RacingControlsView extends View {
                 canvas.drawPath(path, line);
                 break;
             case "reset":
-                canvas.drawArc(cx - s * 0.75f, cy - s * 0.75f, cx + s * 0.75f, cy + s * 0.75f, -60, 290, false, line);
-                path.reset();
-                path.moveTo(cx + s * 0.2f, cy - s * 0.95f);
-                path.lineTo(cx + s * 0.55f, cy - s * 0.62f);
-                path.lineTo(cx + s * 0.08f, cy - s * 0.42f);
-                canvas.drawPath(path, line);
+                if (resetBitmap != null) {
+                    bitmapPaint.setColorFilter(on ? filterActive : filterIdle);
+                    float bw = r * 1.3f;
+                    float bh = bw * ((float) resetBitmap.getHeight() / (float) resetBitmap.getWidth());
+                    resetDestRect.set(cx - bw / 2f, cy - bh / 2f, cx + bw / 2f, cy + bh / 2f);
+                    canvas.drawBitmap(resetBitmap, null, resetDestRect, bitmapPaint);
+                } else {
+                    canvas.drawArc(cx - s * 0.75f, cy - s * 0.75f, cx + s * 0.75f, cy + s * 0.75f, -60, 290, false, line);
+                    path.reset();
+                    path.moveTo(cx + s * 0.2f, cy - s * 0.95f);
+                    path.lineTo(cx + s * 0.55f, cy - s * 0.62f);
+                    path.lineTo(cx + s * 0.08f, cy - s * 0.42f);
+                    canvas.drawPath(path, line);
+                }
                 break;
             case "map":
                 path.reset();
@@ -760,11 +791,24 @@ final class RacingControlsView extends View {
         save.apply();
     }
 
+    private void toggleControlsVisibility() {
+        controlsHidden = !controlsHidden;
+        layouts.edit().putBoolean("controls_hidden", controlsHidden).apply();
+        setEditing(false);
+        layoutControls();
+        invalidate();
+        Toast.makeText(getContext(), controlsHidden ? "Touch buttons hidden. Tap Settings at top right to restore." : "Touch buttons visible.", Toast.LENGTH_SHORT).show();
+    }
+
     private boolean editTouch(MotionEvent e) {
         int action = e.getActionMasked(), index = e.getActionIndex();
         float x = e.getX(index) / scale, y = e.getY(index) / scale, w = getWidth() / scale;
         if (action == MotionEvent.ACTION_DOWN) {
             float cx = w / 2f;
+            if (x >= cx - 205 && x <= cx - 75 && y >= 66 && y <= 108) {
+                toggleControlsVisibility();
+                return true;
+            }
             if (x >= cx - 65 && x <= cx + 65 && y >= 66 && y <= 108) {
                 showOptions();
                 return true;
@@ -861,6 +905,7 @@ final class RacingControlsView extends View {
                         "Steering: Buttons / Thumb stick",
                         "Tilt steering",
                         "FPS limit",
+                        controlsHidden ? "Show Touch Buttons" : "Hide Touch Buttons",
                         "Save layout preset",
                         "Load layout preset",
                         "Exit to Launcher"
@@ -869,9 +914,10 @@ final class RacingControlsView extends View {
                     else if (which == 1) chooseStyle();
                     else if (which == 2) configureTilt.run();
                     else if (which == 3) configureFrameLimit.run();
-                    else if (which == 4) saveNamedLayout();
-                    else if (which == 5) loadNamedLayout();
-                    else if (which == 6) confirmExitToLauncher();
+                    else if (which == 4) toggleControlsVisibility();
+                    else if (which == 5) saveNamedLayout();
+                    else if (which == 6) loadNamedLayout();
+                    else if (which == 7) confirmExitToLauncher();
                 })
                 .setPositiveButton("Close", null)
                 .setNegativeButton("Exit to Launcher", (dialog, which) -> confirmExitToLauncher())
@@ -1101,6 +1147,34 @@ final class RacingControlsView extends View {
     public boolean onTouchEvent(MotionEvent e) {
         if (editing) return editTouch(e);
         int action = e.getActionMasked(), index = e.getActionIndex(), id = e.getPointerId(index);
+
+        if (controlsHidden) {
+            if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_POINTER_DOWN) {
+                Control c = hit(e.getX(index), e.getY(index));
+                if (c != null && c.scan == EDIT) {
+                    releaseAll();
+                    setEditing(true);
+                    selected = null;
+                    invalidate();
+                    return true;
+                }
+            }
+            if (!racing) {
+                if (action == MotionEvent.ACTION_DOWN && pointerId < 0) {
+                    pointerId = id;
+                    pointerTouch(e.getX(index), e.getY(index), 0);
+                    return true;
+                } else if (action == MotionEvent.ACTION_MOVE && id == pointerId) {
+                    pointerTouch(e.getX(index), e.getY(index), 1);
+                    return true;
+                } else if ((action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP) && id == pointerId) {
+                    pointerId = -1;
+                    pointerTouch(e.getX(index), e.getY(index), 2);
+                    return true;
+                }
+            }
+            return true;
+        }
 
         if (hiddenByGamepad) {
             if (action == MotionEvent.ACTION_DOWN) {

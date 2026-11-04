@@ -39,6 +39,10 @@ pub struct D3D9ShadowState {
     pub ib: u32,
     pub ib_epoch: u64,
     pub ib_valid: bool,
+    pub stream_freq: [u32; 4],
+    pub stream_freq_valid: [bool; 4],
+    pub light_enabled: [bool; 8],
+    pub light_valid: [bool; 8],
     pub epoch: u64,
 }
 
@@ -73,6 +77,10 @@ impl D3D9ShadowState {
             ib: 0,
             ib_epoch: 0,
             ib_valid: false,
+            stream_freq: [1; 4],
+            stream_freq_valid: [false; 4],
+            light_enabled: [false; 8],
+            light_valid: [false; 8],
             epoch: 0,
         }
     }
@@ -88,6 +96,8 @@ impl D3D9ShadowState {
         self.ps_valid = false;
         self.stream_valid = [false; 4];
         self.ib_valid = false;
+        self.stream_freq_valid = [false; 4];
+        self.light_valid = [false; 8];
     }
 
     pub fn notify_retired(&mut self) {
@@ -228,6 +238,34 @@ impl D3D9ShadowState {
                     self.stream_stride[stream] = stride;
                     self.stream_epoch[stream] = self.epoch;
                     self.stream_valid[stream] = true;
+                }
+                false
+            }
+            // LightEnable(Index, Enable)
+            77 => {
+                *out_count = 3;
+                let light_idx = args[1] as usize;
+                let enable = args[2] != 0;
+                if light_idx < 8 {
+                    if self.light_valid[light_idx] && self.light_enabled[light_idx] == enable {
+                        return true;
+                    }
+                    self.light_enabled[light_idx] = enable;
+                    self.light_valid[light_idx] = true;
+                }
+                false
+            }
+            // SetStreamSourceFreq(Stream, Setting)
+            102 => {
+                *out_count = 3;
+                let stream = args[1] as usize;
+                let setting = args[2];
+                if stream < 4 {
+                    if self.stream_freq_valid[stream] && self.stream_freq[stream] == setting {
+                        return true;
+                    }
+                    self.stream_freq[stream] = setting;
+                    self.stream_freq_valid[stream] = true;
                 }
                 false
             }

@@ -82,6 +82,7 @@ extern void nfs_rust_set_crowd_suppression(int enable);
 extern uint32_t nfs_rust_filter_crowd_setting(uint32_t val);
 extern int nfs_rust_apply_crowd_suppression(uint8_t *mem_base);
 extern uint32_t nfs_rust_crowd_suppressed_frames(void);
+extern int nfs_rust_apply_engine_pacing(uint8_t *mem_base, float real_elapsed);
 #endif
 
 #define G_CARPOOL_KB 0x007fa9d4u
@@ -763,6 +764,23 @@ static void menusize_frame_tick(void) {
 }
 
 static void framerate_pacing_fix(void) {
+#ifdef ROAM_CORE_RUST
+    static int s_crowd_env_checked = 0;
+    if (!s_crowd_env_checked) {
+        s_crowd_env_checked = 1;
+        const char *env_crowd = getenv("NFSU2_CROWD");
+        int allow_crowd = (env_crowd && (strcmp(env_crowd, "1") == 0 || strcasecmp(env_crowd, "on") == 0));
+        nfs_rust_set_crowd_suppression(!allow_crowd);
+    }
+    if (g_p_mem_base && *g_p_mem_base) {
+        static int64_t s_last_tick_us = 0;
+        int64_t now_us = roam_plat_now_us();
+        float real_elapsed = (s_last_tick_us > 0) ? (float)(now_us - s_last_tick_us) / 1000000.0f : 0.016666668f;
+        s_last_tick_us = now_us;
+        nfs_rust_apply_engine_pacing((uint8_t *)(*g_p_mem_base), real_elapsed);
+        return;
+    }
+#endif
     if (!rh_mem_committed(0x007875bcu, 4) || !rh_mem_committed(0x00865558u, 4)) return;
     /* 0x007875BC is the game's simulation time step base (60 Hz).
      * Must be locked strictly to 1/60s so internal clocks (A_WTF, particles)

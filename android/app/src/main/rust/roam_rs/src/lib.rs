@@ -8,6 +8,7 @@ pub mod carcfg;
 pub mod msg;
 pub mod interp;
 pub mod crowd;
+pub mod engine;
 
 pub use crc::*;
 pub use hash::*;
@@ -17,3 +18,4 @@ pub use carcfg::*;
 pub use msg::*;
 pub use interp::*;
 pub use crowd::*;
+pub use engine::*;
