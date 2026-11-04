@@ -178,7 +178,7 @@ index 445ccb7..560b9ff 100644
 +    }
  };
 diff --git a/android/app/src/main/cpp/guest_runtime.cpp b/android/app/src/main/cpp/guest_runtime.cpp
-index 3a2de6a..e79f51c 100644
+index 83d0f16..4cf4796 100644
 --- a/android/app/src/main/cpp/guest_runtime.cpp
 +++ b/android/app/src/main/cpp/guest_runtime.cpp
 @@ -59,6 +59,7 @@ uint32_t g_icall_trace_idx, g_icall_count;
@@ -259,7 +259,7 @@ index e82c40b..7eb36df 100644
 +int guestMenuScreen();
 +void requestGuestButton1();
 diff --git a/android/app/src/main/cpp/main.cpp b/android/app/src/main/cpp/main.cpp
-index 3f5be01..b8d8bd5 100644
+index eb0bacc..9a15953 100644
 --- a/android/app/src/main/cpp/main.cpp
 +++ b/android/app/src/main/cpp/main.cpp
 @@ -282,12 +282,16 @@ static int32_t onInput(android_app*,AInputEvent* event){
