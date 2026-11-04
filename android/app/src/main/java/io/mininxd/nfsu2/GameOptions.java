@@ -62,8 +62,8 @@ public final class GameOptions {
                     new String[] {"port", "console"},
                     new String[] {"Port · original mapping", "Console · PS2-style (X accept, O back, R3 camera)"}),
             new Option(SPEEDOMETER, "Speedometer Position", "bottom",
-                    new String[] {"bottom", "raised", "middle"},
-                    new String[] {"Bottom Right (original)", "Raised", "Middle"}),
+                    new String[] {"bottom", "raised", "middle", "brake"},
+                    new String[] {"Bottom Right (original)", "Raised · right side, mid height", "Middle · bottom center", "Beside Brake · left of the pedals"}),
             new Option(REGION, "Region", "auto",
                     new String[] {"auto", "eu", "na"},
                     new String[] {"Game default (North America)", "Europe · EU cars (GLOBALTEXTURESROW.BIN)", "North America"}),
@@ -86,10 +86,10 @@ public final class GameOptions {
         return null;
     }
 
-    /** Vertical speedometer offset for nativeSpeedometerOffset, in 480-line HUD units (negative = up). */
-    static float speedometerOffsetY(Context context) {
+    /** Speedometer for nativeSpeedometerPosition: 0 bottom right (original), 1 raised, 2 bottom center, 3 beside the brake pedal. */
+    static int speedometerPosition(Context context) {
         String position = get(context, SPEEDOMETER);
-        return "middle".equals(position) ? -180f : "raised".equals(position) ? -70f : 0f;
+        return "brake".equals(position) ? 3 : "middle".equals(position) ? 2 : "raised".equals(position) ? 1 : 0;
     }
 
     /** Game SKU for nativeRegion: -1 game default, 0 North America, 1 Europe. */

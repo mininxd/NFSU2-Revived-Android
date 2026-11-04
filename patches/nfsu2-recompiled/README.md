@@ -12,7 +12,7 @@ patches against that repository's `main` (`fb2a359`), to be applied in order:
 |---|---|
 | `0001-localized-movies-and-speech.patch` | With a non-English language, `MOVIES/<name>.vp6` and `sdat.viv` open `<name>_sp.vp6` / `sdat_sp.viv` (`_fr`, `_gr`, `_it`, ...) when present, as on European discs. |
 | `0002-region-switch.patch` | `nativeRegion(int)`: forces the game SKU at `0x864F24` (0 North America, 1 Europe) so a PAL copy loads `GLOBALTEXTURESROW.BIN` and the European cars. |
-| `0003-live-minimap-speedometer.patch` | `nativeSpeedometerOffset(float dx, float dy)` (speedometer offset in 480-line HUD units; the launcher uses Bottom Right 0, Raised -70, Middle -180), and minimap/speedometer offsets applied live (FE geometry cache dropped with `0x0050C7E0`; the radar map element that BlipsHook rewrites in place is tracked and corrected). |
+| `0003-live-minimap-speedometer.patch` | `nativeSpeedometerPosition(int)` (0 bottom right, 1 raised: right side at mid height, 2 middle: bottom center at any aspect ratio, 3 beside the touch brake pedal), and minimap/speedometer offsets applied live (FE geometry cache dropped with `0x0050C7E0`; the radar map element that BlipsHook rewrites in place is tracked and corrected). |
 | `0004-console-gamepad-layout.patch` | `nativeGamepadLayout(boolean)`: PS2-style layout (X accept, Circle back, R3 camera, Start without double press, world map / SMS / dialog buttons), with the pad buttons named Cross, Circle, Square, Triangle, L1, R1, Select, Start, L3, R3 instead of Button 0..9. Keyboard and mouse names are English unless the game language is Spanish. |
 
 `prebuilt/lib_arm64.tar.gz` in this branch is that build: upstream `fb2a359`

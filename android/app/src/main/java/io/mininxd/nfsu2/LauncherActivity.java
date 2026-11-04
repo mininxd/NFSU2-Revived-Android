@@ -921,7 +921,7 @@ public final class LauncherActivity extends Activity {
                 .putExtra("backBuffers", Integer.parseInt(GameOptions.get(this, GameOptions.LATENCY)))
                 .putExtra("cpuTextures", GameOptions.get(this, GameOptions.TEXTURES).equals("cpu"))
                 .putExtra("region", GameOptions.regionCode(this))
-                .putExtra("speedometerY", GameOptions.speedometerOffsetY(this))
+                .putExtra("speedometer", GameOptions.speedometerPosition(this))
                 .putExtra("consolePad", GameOptions.get(this, GameOptions.PAD_LAYOUT).equals("console"))
                 .putExtra("onlineServer", GameOptions.onlineServer(this))
                 .putExtra("driverLoader", loader)

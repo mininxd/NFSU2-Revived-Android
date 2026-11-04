@@ -197,20 +197,20 @@ public final class GameActivity extends NativeActivity {
         try { com.nfsu2.androidevolved.GameActivity.nativeGamepadLayout(console); }
         catch (UnsatisfiedLinkError missing) { android.util.Log.w("NFSU2", "Gamepad layout option needs a newer libnfsu2_android.so"); }
     }
-    private static void nativeSpeedometerOffset(float dx, float dy) {
-        try { com.nfsu2.androidevolved.GameActivity.nativeSpeedometerOffset(dx, dy); }
+    private static void nativeSpeedometerPosition(int position) {
+        try { com.nfsu2.androidevolved.GameActivity.nativeSpeedometerPosition(position); }
         catch (UnsatisfiedLinkError missing) { android.util.Log.w("NFSU2", "Speedometer position needs a newer libnfsu2_android.so"); }
     }
     // The minimap and speedometer moves make room for the touch controls. Both
     // follow them live: original places while a gamepad hides them, the
     // launcher's when a touch shows them (the game rebuilds its HUD).
     private boolean minimapTop;
-    private float speedometerY;
+    private int speedometerPosition;
     private Boolean hudForGamepad;
     private void updateHudForGamepad(boolean gamepad) {
         if (hudForGamepad != null && hudForGamepad == gamepad) return;
         hudForGamepad = gamepad;
-        nativeSpeedometerOffset(0f, gamepad ? 0f : speedometerY);
+        nativeSpeedometerPosition(gamepad ? 0 : speedometerPosition);
         nativeMinimapTop(minimapTop && !gamepad);
     }
     private static void nativeBackBuffers(int count) { com.nfsu2.androidevolved.GameActivity.nativeBackBuffers(count); }
@@ -375,7 +375,7 @@ public final class GameActivity extends NativeActivity {
             nativeOnlineServer(configuredServer);
         }
         minimapTop = launch.getBooleanExtra("minimapTop", GameOptions.get(this, GameOptions.MINIMAP).equals("top"));
-        speedometerY = launch.getFloatExtra("speedometerY", GameOptions.speedometerOffsetY(this));
+        speedometerPosition = launch.getIntExtra("speedometer", GameOptions.speedometerPosition(this));
         updateHudForGamepad(false);
         nativeGamepadLayout(launch.getBooleanExtra("consolePad", GameOptions.get(this, GameOptions.PAD_LAYOUT).equals("console")));
         nativeBackBuffers(launch.getIntExtra("backBuffers", Integer.parseInt(GameOptions.get(this, GameOptions.LATENCY))));

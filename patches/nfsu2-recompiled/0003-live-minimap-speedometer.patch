@@ -43,31 +43,32 @@ index 5e91284..83d0f16 100644
  void setGuestFrameLimit(unsigned framesPerSecond){
      frameLimit=(framesPerSecond>=30&&framesPerSecond<=240)?framesPerSecond:0;
 diff --git a/android/app/src/main/cpp/main.cpp b/android/app/src/main/cpp/main.cpp
-index 5610d1d..eb0bacc 100644
+index 5610d1d..c761b37 100644
 --- a/android/app/src/main/cpp/main.cpp
 +++ b/android/app/src/main/cpp/main.cpp
 @@ -345,6 +345,10 @@ extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nat
  extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeOnlineServer(JNIEnv* env,jclass,jstring host){
      const char* text=env->GetStringUTFChars(host,nullptr);setGuestOnlineServer(text?text:"");env->ReleaseStringUTFChars(host,text);
  }
-+// Launcher speedometer offset in 480-line HUD units (negative x = left, negative y = up; 0,0 original).
-+extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeSpeedometerOffset(JNIEnv*,jclass,jfloat dx,jfloat dy){
-+    nfs_widescreen_set_speedometer_offset(float(dx),float(dy));
++// Launcher speedometer position: 0 original (bottom right), 1 raised, 2 bottom centre, 3 beside the brake pedal.
++extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeSpeedometerPosition(JNIEnv*,jclass,jint position){
++    nfs_widescreen_set_speedometer_position(int(position));
 +}
  extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeMinimapTop(JNIEnv*,jclass,jboolean top){nfs_widescreen_set_minimap_offset(top==JNI_TRUE?-230.0f:0.0f);}
  static bool compatCpuTextures=false;static unsigned compatBackBuffers=2;
  extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeBackBuffers(JNIEnv*,jclass,jint count){
 diff --git a/src/runtime/nfs_widescreen.h b/src/runtime/nfs_widescreen.h
-index 54ab9d0..8399105 100644
+index 54ab9d0..99023db 100644
 --- a/src/runtime/nfs_widescreen.h
 +++ b/src/runtime/nfs_widescreen.h
-@@ -13,6 +13,12 @@ void nfs_widescreen_set_resolution(unsigned width, unsigned height);
+@@ -13,6 +13,13 @@ void nfs_widescreen_set_resolution(unsigned width, unsigned height);
  int nfs_widescreen_hud_entries(void);
  /* Vertical offset (480-line HUD units, negative = up) added to the minimap. */
  void nfs_widescreen_set_minimap_offset(float dy);
-+/* Offset (same units; negative x = left, negative y = up) added to the
-+ * speedometer (rev counter, speed and nitrous gauges). */
-+void nfs_widescreen_set_speedometer_offset(float dx, float dy);
++/* Speedometer (rev counter, speed and nitrous gauges): 0 original (bottom
++ * right), 1 raised (right side, mid height), 2 bottom centre, 3 beside the
++ * touch brake pedal (bottom right, moved left). */
++void nfs_widescreen_set_speedometer_position(int position);
 +/* 1 once after a minimap/speedometer offset changed: the caller has the game
 + * rebuild its HUD geometry (on the game thread, between frames). */
 +int nfs_widescreen_take_relayout(void);
@@ -75,21 +76,25 @@ index 54ab9d0..8399105 100644
   * frame time; 0 keeps the original. apply() re-asserts it once per frame,
   * since the game re-sets 1/60 on mode changes. */
 diff --git a/src/runtime/widescreen.c b/src/runtime/widescreen.c
-index 61d6b9c..bf6919e 100644
+index 61d6b9c..5fa1e30 100644
 --- a/src/runtime/widescreen.c
 +++ b/src/runtime/widescreen.c
-@@ -34,6 +34,10 @@ static const int s_disable_cutscene_borders = 1;
+@@ -34,6 +34,14 @@ static const int s_disable_cutscene_borders = 1;
  /* Extra vertical move of the minimap (mobile layout: top-left instead of
   * bottom-left, clear of the thumbs). 0 keeps the mod's position. */
  static float s_minimap_dy = 0.0f;
-+/* Extra move of the speedometer cluster (launcher option; negative x = left,
-+ * negative y = up): on phones it sits under the right thumb. 0 keeps the
-+ * mod's position. */
-+static float s_speedometer_dx = 0.0f, s_speedometer_dy = 0.0f;
++/* Speedometer cluster position (launcher option): 0 the mod's place (bottom
++ * right), 1 raised to mid height on the right, 2 bottom centre, 3 bottom right
++ * moved left beside the touch brake pedal. On phones the original place sits
++ * under the right thumb. */
++static int s_speedometer_position = 0;
++#define SPEEDOMETER_RAISED_DY (-180.0f)  /* 480-line HUD units, up */
++#define SPEEDOMETER_CENTRE_X 205.0f      /* 4:3 x of the dial centre (HUD x 0 = screen centre) */
++#define SPEEDOMETER_BRAKE_DX (-220.0f)   /* left of the pedals, still anchored to the right edge */
  /* Game frame time for FPSLimit (0 = the game's own 1/60 s). */
  static float s_frame_time = 0.0f;
  /* FOV multipliers chosen per view at 0x5C7F64 and applied at its three
-@@ -63,8 +67,19 @@ static int is_minimap(const hud_entry* e) {
+@@ -63,9 +71,21 @@ static int is_minimap(const hud_entry* e) {
      return (x == -223 && (y == 70 || y == 71 || y == 142 || y == 143)) || (x == -143 && y == 196);
  }
  
@@ -108,15 +113,23 @@ index 61d6b9c..bf6919e 100644
 +/* Returns 2 for a minimap entry, 1 for another known entry, 0 otherwise. */
 +static int widescreen_hud(float* x, float* y) {
      const float base_offset = (480.0f * (16.0f / 9.0f) - 640.0f) / 2.0f;
++    const float x0 = *x;
      int ix = (int)floorf(*x), iy = (int)floorf(*y);
      for (unsigned i = 0; i < s_hud_count; i++) {
-@@ -73,9 +88,11 @@ static void widescreen_hud(float* x, float* y) {
+         const hud_entry* e = &s_hud[i];
+@@ -73,9 +93,17 @@ static void widescreen_hud(float* x, float* y) {
          if (e->offset_x >= 0.0f) *x += s_hud_offset + (e->offset_x - base_offset);
          else *x -= s_hud_offset - (e->offset_x + base_offset);
          *y += e->offset_y;
 -        if (is_minimap(e)) *y += s_minimap_dy;
 -        return;
-+        if (is_speedometer(e)) { *x += s_speedometer_dx; *y += s_speedometer_dy; }
++        if (is_speedometer(e)) {
++            if (s_speedometer_position == 1) *y += SPEEDOMETER_RAISED_DY;
++            /* Centred: the 4:3 layout moved left by the dial's x, without the
++             * right-edge widescreen anchoring, so it is centred at any aspect. */
++            else if (s_speedometer_position == 2) *x = x0 - SPEEDOMETER_CENTRE_X;
++            else if (s_speedometer_position == 3) *x += SPEEDOMETER_BRAKE_DX;
++        }
 +        if (is_minimap(e)) { *y += s_minimap_dy; return 2; }
 +        return 1;
      }
@@ -124,7 +137,7 @@ index 61d6b9c..bf6919e 100644
  }
  
  static void adjust_mem_pair(uint32_t vx, uint32_t vy) {
-@@ -84,6 +101,42 @@ static void adjust_mem_pair(uint32_t vx, uint32_t vy) {
+@@ -84,6 +112,42 @@ static void adjust_mem_pair(uint32_t vx, uint32_t vy) {
      wrf(vx, x); wrf(vy, y);
  }
  
@@ -167,7 +180,7 @@ index 61d6b9c..bf6919e 100644
  /* Hook sites, in config/hooks*.txt order. The lifted code comes from one
   * SPEED2.EXE build, chosen at lift and compile time with NFSU2_EXE_BUILD:
   * the documented build (default, README "Tested Game Build") or f4bb0d99
-@@ -129,7 +182,15 @@ void nfs_widescreen_set_resolution(unsigned width, unsigned height) {
+@@ -129,7 +193,16 @@ void nfs_widescreen_set_resolution(unsigned width, unsigned height) {
  
  int nfs_widescreen_hud_entries(void) { return (int)s_hud_count; }
  
@@ -177,14 +190,15 @@ index 61d6b9c..bf6919e 100644
 + * nfs_widescreen_take_relayout). Set from the Android UI thread. */
 +static volatile int s_relayout;
 +void nfs_widescreen_set_minimap_offset(float dy) { if (dy != s_minimap_dy) { s_minimap_dy = dy; s_relayout = 1; } }
-+void nfs_widescreen_set_speedometer_offset(float dx, float dy) {
-+    if (dx != s_speedometer_dx || dy != s_speedometer_dy) { s_speedometer_dx = dx; s_speedometer_dy = dy; s_relayout = 1; }
++void nfs_widescreen_set_speedometer_position(int position) {
++    if (position < 0 || position > 3) position = 0;
++    if (position != s_speedometer_position) { s_speedometer_position = position; s_relayout = 1; }
 +}
 +int nfs_widescreen_take_relayout(void) { int pending = s_relayout; s_relayout = 0; return pending; }
  
  /* FPSLimit (the mod's Misc.ixx): the game paces its main loop with a fixed
   * frame time of 1/60 s. SetFrameRate (0x576CB0) stores 1/fps in 0x865558 and
-@@ -188,7 +249,7 @@ void recomp_hook(uint32_t va) {
+@@ -188,7 +261,7 @@ void recomp_hook(uint32_t va) {
      /* HudHook: the element position just stored from ecx/edx. */
      case HUD_HOOK: adjust_mem_pair(g_esp + 0x60, g_esp + 0x64); break;
      /* BlipsHook: radar blips, before `mov [edx], ecx`. */

@@ -350,7 +350,7 @@ index e82c40b..14372e7 100644
 +void setGuestPadButtonNames(bool playStation);
 +void requestGuestButton1();
 diff --git a/android/app/src/main/cpp/main.cpp b/android/app/src/main/cpp/main.cpp
-index eb0bacc..6f60dcc 100644
+index c761b37..3b5abad 100644
 --- a/android/app/src/main/cpp/main.cpp
 +++ b/android/app/src/main/cpp/main.cpp
 @@ -282,12 +282,16 @@ static int32_t onInput(android_app*,AInputEvent* event){
