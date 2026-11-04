@@ -28,7 +28,7 @@ public final class GameOptions {
             STARTUP_MOVIES = "intro", CUTSCENE_BORDERS = "cutscene_borders",
             ROAM_CARS_LIMIT = "roam_max_cars", ROAM_CREW = "roam_crew",
             GRAPHICS_BACKEND = "graphics_backend", DRAW_DISTANCE = "draw_distance",
-            TRACKSIDE_CROWDS = "trackside_crowds", REGION = "region", SPEEDOMETER_X = "speedometer_x", SPEEDOMETER_Y = "speedometer_y", PAD_LAYOUT = "pad_layout";
+            TRACKSIDE_CROWDS = "trackside_crowds", REGION = "region", SPEEDOMETER = "speedometer", PAD_LAYOUT = "pad_layout";
 
     static final Option[] ALL = {
             new Option(GRAPHICS_BACKEND, "Graphics API", "auto",
@@ -61,10 +61,9 @@ public final class GameOptions {
             new Option(PAD_LAYOUT, "Gamepad Layout", "port",
                     new String[] {"port", "console"},
                     new String[] {"Port · original mapping", "Console · PS2-style (X accept, O back, R3 camera)"}),
-            new Option(SPEEDOMETER_X, "Speedometer Horizontal Position", "0",
-                    offsetValues(0, -720, 20), offsetLabels(0, -720, 20, "Original (right edge)", "left")),
-            new Option(SPEEDOMETER_Y, "Speedometer Vertical Position", "0",
-                    offsetValues(0, -400, 20), offsetLabels(0, -400, 20, "Original (bottom)", "up")),
+            new Option(SPEEDOMETER, "Speedometer Position", "bottom",
+                    new String[] {"bottom", "raised", "middle"},
+                    new String[] {"Bottom Right (original)", "Raised", "Middle"}),
             new Option(REGION, "Region", "auto",
                     new String[] {"auto", "eu", "na"},
                     new String[] {"Game default (North America)", "Europe · EU cars (GLOBALTEXTURESROW.BIN)", "North America"}),
@@ -87,24 +86,10 @@ public final class GameOptions {
         return null;
     }
 
-    /** Offsets from..to (inclusive, negative step direction) in 480-line HUD units. */
-    private static String[] offsetValues(int from, int to, int step) {
-        String[] values = new String[(from - to) / step + 1];
-        for (int i = 0; i < values.length; i++) values[i] = String.valueOf(from - i * step);
-        return values;
-    }
-
-    private static String[] offsetLabels(int from, int to, int step, String original, String direction) {
-        String[] labels = new String[(from - to) / step + 1];
-        for (int i = 0; i < labels.length; i++)
-            labels[i] = i == 0 ? original : "Move " + direction + " " + (i * step);
-        return labels;
-    }
-
-    /** Speedometer offset for nativeSpeedometerOffset (negative x = left, negative y = up). */
-    static float speedometerOffset(Context context, String key) {
-        try { return Float.parseFloat(get(context, key)); }
-        catch (NumberFormatException invalid) { return 0f; }
+    /** Vertical speedometer offset for nativeSpeedometerOffset, in 480-line HUD units (negative = up). */
+    static float speedometerOffsetY(Context context) {
+        String position = get(context, SPEEDOMETER);
+        return "middle".equals(position) ? -180f : "raised".equals(position) ? -70f : 0f;
     }
 
     /** Game SKU for nativeRegion: -1 game default, 0 North America, 1 Europe. */

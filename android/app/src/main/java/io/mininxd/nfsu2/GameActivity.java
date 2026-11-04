@@ -205,12 +205,12 @@ public final class GameActivity extends NativeActivity {
     // follow them live: original places while a gamepad hides them, the
     // launcher's when a touch shows them (the game rebuilds its HUD).
     private boolean minimapTop;
-    private float speedometerX, speedometerY;
+    private float speedometerY;
     private Boolean hudForGamepad;
     private void updateHudForGamepad(boolean gamepad) {
         if (hudForGamepad != null && hudForGamepad == gamepad) return;
         hudForGamepad = gamepad;
-        if (gamepad) nativeSpeedometerOffset(0f, 0f); else nativeSpeedometerOffset(speedometerX, speedometerY);
+        nativeSpeedometerOffset(0f, gamepad ? 0f : speedometerY);
         nativeMinimapTop(minimapTop && !gamepad);
     }
     private static void nativeBackBuffers(int count) { com.nfsu2.androidevolved.GameActivity.nativeBackBuffers(count); }
@@ -375,8 +375,7 @@ public final class GameActivity extends NativeActivity {
             nativeOnlineServer(configuredServer);
         }
         minimapTop = launch.getBooleanExtra("minimapTop", GameOptions.get(this, GameOptions.MINIMAP).equals("top"));
-        speedometerX = launch.getFloatExtra("speedometerX", GameOptions.speedometerOffset(this, GameOptions.SPEEDOMETER_X));
-        speedometerY = launch.getFloatExtra("speedometerY", GameOptions.speedometerOffset(this, GameOptions.SPEEDOMETER_Y));
+        speedometerY = launch.getFloatExtra("speedometerY", GameOptions.speedometerOffsetY(this));
         updateHudForGamepad(false);
         nativeGamepadLayout(launch.getBooleanExtra("consolePad", GameOptions.get(this, GameOptions.PAD_LAYOUT).equals("console")));
         nativeBackBuffers(launch.getIntExtra("backBuffers", Integer.parseInt(GameOptions.get(this, GameOptions.LATENCY))));

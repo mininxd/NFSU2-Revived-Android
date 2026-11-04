@@ -1,7 +1,7 @@
 # Native patches for `prebuilt/lib_arm64.tar.gz`
 
-The launcher options **Region**, **Speedometer Horizontal/Vertical Position** and
-**Gamepad Layout**, and the
+The launcher options **Region**, **Speedometer Position** and **Gamepad Layout**,
+and the
 localized movies/speech, need native code that the current
 `libnfsu2_android.so` in `prebuilt/` does not have. That library is built from
 [codepdbh/nfsu2-recompiled](https://github.com/codepdbh/nfsu2-recompiled)
@@ -12,8 +12,8 @@ patches against that repository's `main` (`fb2a359`), to be applied in order:
 |---|---|
 | `0001-localized-movies-and-speech.patch` | With a non-English language, `MOVIES/<name>.vp6` and `sdat.viv` open `<name>_sp.vp6` / `sdat_sp.viv` (`_fr`, `_gr`, `_it`, ...) when present, as on European discs. |
 | `0002-region-switch.patch` | `nativeRegion(int)`: forces the game SKU at `0x864F24` (0 North America, 1 Europe) so a PAL copy loads `GLOBALTEXTURESROW.BIN` and the European cars. |
-| `0003-live-minimap-speedometer.patch` | `nativeSpeedometerOffset(float dx, float dy)` (free speedometer position in 480-line HUD units), and minimap/speedometer offsets applied live (FE geometry cache dropped with `0x0050C7E0`; the radar map element that BlipsHook rewrites in place is tracked and corrected). |
-| `0004-console-gamepad-layout.patch` | `nativeGamepadLayout(boolean)`: PS2-style layout (X accept, Circle back, R3 camera, Start without double press, world map / SMS / dialog buttons). |
+| `0003-live-minimap-speedometer.patch` | `nativeSpeedometerOffset(float dx, float dy)` (speedometer offset in 480-line HUD units; the launcher uses Bottom Right 0, Raised -70, Middle -180), and minimap/speedometer offsets applied live (FE geometry cache dropped with `0x0050C7E0`; the radar map element that BlipsHook rewrites in place is tracked and corrected). |
+| `0004-console-gamepad-layout.patch` | `nativeGamepadLayout(boolean)`: PS2-style layout (X accept, Circle back, R3 camera, Start without double press, world map / SMS / dialog buttons), with the pad buttons named Cross, Circle, Square, Triangle, L1, R1, Select, Start, L3, R3 instead of Button 0..9. Keyboard and mouse names are English unless the game language is Spanish. |
 
 `prebuilt/lib_arm64.tar.gz` in this branch is that build: upstream `fb2a359`
 with the four patches applied (built with the upstream Android project,
