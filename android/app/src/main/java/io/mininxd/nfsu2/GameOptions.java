@@ -81,7 +81,7 @@ public final class GameOptions {
         Option o = find(key);
         if (o == null) {
             if (TOUCH_SIZE.equals(key)) return prefs(context).getString(key, "auto");
-            if (MENU_BUTTON_SIZE.equals(key)) return prefs(context).getString(key, "auto");
+            if (MENU_BUTTON_SIZE.equals(key)) return prefs(context).getString(key, "100");
             return prefs(context).getString(key, "off");
         }
         String value = prefs(context).getString(key, o.defaultValue);
@@ -443,12 +443,11 @@ public final class GameOptions {
             if (!iniFile.isFile()) return;
 
             String menuSize = get(context, MENU_BUTTON_SIZE);
-            String feScale = "2.00";
-            if ("100".equals(menuSize)) feScale = "1.00";
-            else if ("125".equals(menuSize)) feScale = "1.25";
+            String feScale = "1.00";
+            if ("125".equals(menuSize)) feScale = "1.25";
             else if ("150".equals(menuSize)) feScale = "1.50";
             else if ("175".equals(menuSize)) feScale = "1.75";
-            else if ("200".equals(menuSize) || "auto".equals(menuSize)) feScale = "2.00";
+            else if ("200".equals(menuSize)) feScale = "2.00";
 
             String aspect = "Auto";
             String skipIntro = "0";

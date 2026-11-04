@@ -108,6 +108,9 @@ static inline void roam_android_patch_carpool(void) {
             MR32(G_CARPOOL_KB) = CARPOOL_KB;
             g_carpool_patched = 1;
         }
+        if (rh_mem_committed(0x005d7b07u, 1) && MR8(0x005d7b07u) == 0x14) {
+            MR8(0x005d7b07u) = 0x80;
+        }
     }
 }
 
@@ -757,40 +760,9 @@ static float ms_scale_now(void) {
 }
 
 static void menusize_frame_tick(void) {
-    /* Optimization for offline racing: when in the world / racing (G_FLOW == 6),
-     * 2D menu bars and dialogs are not active. Skip traversing UI elements. */
-    if (!rh_mem_committed(0x008654a4u, 4) || MR32(0x008654a4u) == 6u) return;
-
-    if (!rh_mem_committed(0x008384c4u, 4)) return;
-    uint32_t fe = MR32(0x008384c4u);
-    if (!fe || !rh_mem_committed(fe + 8u, 4)) return;
-    uint32_t mg = MR32(fe + 8u);
-    if (!mg || !rh_mem_committed(mg, 0x100u)) return;
-
-    float s = ms_scale_now();
-    if (s == 1.0f && !g_nkept) return;
-
-    if (fabsf(s - g_last_menu_scale) > 0.01f) {
-        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Roam", "[menusize] active menu button scale: %.0f%%", (double)(s * 100.0f));
-        g_last_menu_scale = s;
-    }
-
-    for (uint32_t head = 0xe4u; head <= 0xf4u; head += 0x10u) {
-        uint32_t pkg = MR32(mg + head);
-        for (int k = 0; pkg && k < 64 && rh_mem_committed(pkg, 0x50u); k++) {
-            uint32_t name_ptr = MR32(pkg + 0x0cu);
-            if (name_ptr && rh_mem_committed(name_ptr, 16)) {
-                const char *nm = (const char *)GPTR(name_ptr);
-                if (nm && *nm) {
-                    if (strcasestr(nm, "Help_Bar") || strcasestr(nm, "HelpBar") || strcasestr(nm, "Dialog") || strcasestr(nm, "Popup")) {
-                        ms_apply_bar(pkg, s);
-                    }
-                    ms_apply_arrows(pkg, s);
-                }
-            }
-            pkg = MR32(pkg + 0x04u);
-        }
-    }
+    /* 200% button sizing and per-frame UI mutation disabled to prevent
+     * flickering and EventHandlerSlotPool exhaustion. */
+    return;
 }
 
 static void framerate_pacing_fix(void) {
@@ -976,7 +948,6 @@ __attribute__((visibility("default"))) void nfs_roam_frame_tick(void) {
     g_frame_count++;
     hiddenraces_frame_tick();
     framerate_pacing_fix();
-    menusize_frame_tick();
     look_camera_frame_tick();
     roam_game_frame(NULL);
 }

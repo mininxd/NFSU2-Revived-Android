@@ -969,6 +969,14 @@ std::string connectGuestRuntime(const char* executable) {
                 NFS_RUNTIME_LOG(ANDROID_LOG_INFO, "NFSU2", "Patched carpool KB at 0x007fa9d4 to %u", *pCarpool);
             }
         }
+        // Expand EventHandlerSlotPool capacity at 0x005d7b07 from 20 to 128 to prevent overflow
+        if (memory->writable(0x005d7b07u, 1)) {
+            uint8_t* pSlot = static_cast<uint8_t*>(ptr(0x005d7b07u, 1));
+            if (pSlot && *pSlot == 0x14) {
+                *pSlot = 0x80;
+                NFS_RUNTIME_LOG(ANDROID_LOG_INFO, "NFSU2", "Patched EventHandlerSlotPool capacity at 0x005d7b07 to 128");
+            }
+        }
         if(guestWidescreen){
             nfs_widescreen_init(hostGameRoot.c_str());
             nfs_widescreen_set_hud_safe_area(guestHudSafeArea ? 1 : 0);

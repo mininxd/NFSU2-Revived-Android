@@ -1,5 +1,7 @@
 package io.mininxd.nfsu2.net;
 
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.util.Base64;
 import android.util.Log;
 
@@ -47,12 +49,17 @@ public final class VirtualSwitchClient {
         void onDatagramReceived(int srcVip, int sport, byte[] payload);
     }
 
+    private static String sLastToken = "";
+    private static String sLastVipStr = "";
+
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicBoolean connected = new AtomicBoolean(false);
+    private volatile boolean wasResumed = false;
     private Thread wsThread;
     private Socket wsSocket;
     private OutputStream wsOut;
 
+    private Context context;
     private volatile int myVirtualIp = 0;
     private String serverHost;
     private String playerName;
@@ -60,6 +67,15 @@ public final class VirtualSwitchClient {
     private LocalOnlineBridge onlineBridge;
 
     public VirtualSwitchClient() {}
+
+    public void setContext(Context context) {
+        this.context = context != null ? context.getApplicationContext() : null;
+        if (this.context != null) {
+            SharedPreferences prefs = this.context.getSharedPreferences("nfsu2_switch", Context.MODE_PRIVATE);
+            if (sLastToken.isEmpty()) sLastToken = prefs.getString("switch_token", "");
+            if (sLastVipStr.isEmpty()) sLastVipStr = prefs.getString("switch_vip_str", "");
+        }
+    }
 
     public void setListener(SwitchListener listener) {
         this.listener = listener;
@@ -165,17 +181,20 @@ public final class VirtualSwitchClient {
                         }
 
                         // RFC 6455 Handshake
+                        boolean isResume = (sLastToken != null && !sLastToken.isEmpty());
+                        wasResumed = isResume;
                         String secKey = Base64.encodeToString(UUID.randomUUID().toString().substring(0, 16).getBytes(StandardCharsets.US_ASCII), Base64.NO_WRAP);
                         String origin = (curSsl ? "https://" : "http://") + host + (curPort == 80 || curPort == 443 ? "" : (":" + curPort));
                         String hostHeader = host + (curPort == 80 || curPort == 443 ? "" : (":" + curPort));
-                        String handshake = "GET /lan HTTP/1.1\r\n" +
+                        String path = isResume ? "/lan?resume" : "/lan";
+                        String handshake = "GET " + path + " HTTP/1.1\r\n" +
                                 "Host: " + hostHeader + "\r\n" +
                                 "Upgrade: websocket\r\n" +
                                 "Connection: Upgrade\r\n" +
                                 "Sec-WebSocket-Key: " + secKey + "\r\n" +
                                 "Sec-WebSocket-Version: 13\r\n" +
                                 "Origin: " + origin + "\r\n\r\n";
-                        NetLog.step(TAG, "Sending WebSocket Upgrade GET /lan (Host=" + hostHeader + ", Origin=" + origin + ")");
+                        NetLog.step(TAG, "Sending WebSocket Upgrade GET " + path + " (Host=" + hostHeader + ", Origin=" + origin + ")");
                         rawOut.write(handshake.getBytes(StandardCharsets.US_ASCII));
                         rawOut.flush();
 
@@ -201,6 +220,21 @@ public final class VirtualSwitchClient {
                         NetLog.success(TAG, "WebSocket upgrade accepted (101 Switching Protocols) on " + host + ":" + curPort);
                         connectedEver = true;
                         long lastPingTime = System.currentTimeMillis();
+
+                        if (isResume) {
+                            JSONObject hello = new JSONObject();
+                            hello.put("t", "hello");
+                            hello.put("name", playerName != null ? playerName : "Racer");
+                            hello.put("bundle", 0);
+                            hello.put("deltas", 1);
+                            hello.put("lan", 0);
+                            if (sLastVipStr != null && !sLastVipStr.isEmpty()) {
+                                hello.put("vip", sLastVipStr);
+                            }
+                            hello.put("token", sLastToken);
+                            NetLog.step(TAG, "Sending resume hello to switch: vip=" + sLastVipStr + ", token=" + sLastToken + ", name=" + playerName);
+                            sendWsFrame(1, hello.toString().getBytes(StandardCharsets.UTF_8));
+                        }
 
                         // Receive loop
                         while (running.get()) {
@@ -295,19 +329,38 @@ public final class VirtualSwitchClient {
             if ("welcome".equals(type)) {
                 myVirtualIp = obj.optInt("vip", 0);
                 String vipStr = obj.optString("vipStr", "");
+                String token = obj.optString("token", "");
+                if (token != null && !token.isEmpty()) sLastToken = token;
+                if (vipStr != null && !vipStr.isEmpty()) sLastVipStr = vipStr;
+                if (context != null) {
+                    try {
+                        context.getSharedPreferences("nfsu2_switch", Context.MODE_PRIVATE).edit()
+                                .putString("switch_token", sLastToken)
+                                .putString("switch_vip_str", sLastVipStr)
+                                .apply();
+                    } catch (Exception ignored) {}
+                }
                 Log.i(TAG, "Switch welcome: VIP=" + vipStr + " (" + myVirtualIp + ")");
                 NetLog.success(TAG, "Switch welcome: VIP=" + vipStr + " (" + myVirtualIp + "), token=" + obj.optString("token", "none"));
                 connected.set(true);
 
-                // Send hello packet with lan=0, bundle=0 for immediate Free Roam datagrams
-                JSONObject hello = new JSONObject();
-                hello.put("t", "hello");
-                hello.put("name", playerName != null ? playerName : "Racer");
-                hello.put("bundle", 0);
-                hello.put("deltas", 1);
-                hello.put("lan", 0);
-                NetLog.step(TAG, "Sending hello to switch: bundle=0, lan=0, name=" + playerName);
-                sendWsFrame(1, hello.toString().getBytes(StandardCharsets.UTF_8));
+                if (!wasResumed) {
+                    // Send hello packet with lan=0, bundle=0 for immediate Free Roam datagrams
+                    JSONObject hello = new JSONObject();
+                    hello.put("t", "hello");
+                    hello.put("name", playerName != null ? playerName : "Racer");
+                    hello.put("bundle", 0);
+                    hello.put("deltas", 1);
+                    hello.put("lan", 0);
+                    if (sLastToken != null && !sLastToken.isEmpty()) {
+                        hello.put("token", sLastToken);
+                    }
+                    if (sLastVipStr != null && !sLastVipStr.isEmpty()) {
+                        hello.put("vip", sLastVipStr);
+                    }
+                    NetLog.step(TAG, "Sending hello to switch: bundle=0, lan=0, name=" + playerName);
+                    sendWsFrame(1, hello.toString().getBytes(StandardCharsets.UTF_8));
+                }
 
                 if (listener != null) listener.onConnected(myVirtualIp);
             } else if ("ping".equals(type)) {

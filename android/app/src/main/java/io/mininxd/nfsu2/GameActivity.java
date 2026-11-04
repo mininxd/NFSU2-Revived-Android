@@ -261,8 +261,7 @@ public final class GameActivity extends NativeActivity {
         float distVal = 450.0f;
         try {
             String menuScale = GameOptions.get(this, GameOptions.MENU_BUTTON_SIZE);
-            if ("auto".equals(menuScale)) android.system.Os.setenv("NFSU2_MENU_SCALE", "1.5", true);
-            else if ("100".equals(menuScale)) android.system.Os.setenv("NFSU2_MENU_SCALE", "1.0", true);
+            if ("auto".equals(menuScale) || "100".equals(menuScale)) android.system.Os.setenv("NFSU2_MENU_SCALE", "1.0", true);
             else if ("125".equals(menuScale)) android.system.Os.setenv("NFSU2_MENU_SCALE", "1.25", true);
             else if ("150".equals(menuScale)) android.system.Os.setenv("NFSU2_MENU_SCALE", "1.5", true);
             else if ("175".equals(menuScale)) android.system.Os.setenv("NFSU2_MENU_SCALE", "1.75", true);

@@ -1,8 +1,10 @@
 std::string guestWorkingDirectory="C:\\nfsu2";
 static inline std::filesystem::path safe_weakly_canonical(const std::filesystem::path& p) {
-    std::error_code ec;
-    auto res = std::filesystem::weakly_canonical(p, ec);
-    if (!ec && !res.empty()) return res;
+    try {
+        std::error_code ec;
+        auto res = std::filesystem::weakly_canonical(p, ec);
+        if (!ec && !res.empty()) return res;
+    } catch (...) {}
     return p.lexically_normal();
 }
 void logicalDrives(){ret(4,0);}
