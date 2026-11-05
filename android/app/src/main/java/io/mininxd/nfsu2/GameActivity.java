@@ -364,16 +364,20 @@ public final class GameActivity extends NativeActivity {
         }
         nativeLanguage(language);
         nativeFrameLimit(launch.getIntExtra("frameCap", Integer.parseInt(GameOptions.get(this, GameOptions.FPS))));
-        nativeWidescreen(launch.getBooleanExtra("widescreen", GameOptions.get(this, GameOptions.WIDESCREEN).equals("on")));
+        nativeWidescreen(launch.getIntExtra("widescreenMode", GameOptions.widescreenMode(this)) == 0);
         nativeDrawDistance(distVal);
         String server = launch.getStringExtra("onlineServer");
         String configuredServer = GameOptions.validServer(server) ? server : GameOptions.onlineServer(this);
-        // If connecting to a modern WebSocket switch server (nfsu2-web), route through LocalOnlineBridge
-        if (io.mininxd.nfsu2.net.ServerApiClient.isWsHost(configuredServer)) {
+        boolean useLocalBridge = io.mininxd.nfsu2.net.EahubClassicOnline.shouldUseLocalBridge(configuredServer);
+        if (useLocalBridge) {
+            // Modern nfsu2-web server: tunnel DirtySock through LocalOnlineBridge WebSocket
             nativeOnlineServer("127.0.0.1");
         } else {
+            // Classic server (eahub.eu or custom): gethostbyname in guest_network.inc
+            // redirects all *.ea.com DNS lookups to this host directly over plain TCP.
             nativeOnlineServer(configuredServer);
         }
+        io.mininxd.nfsu2.net.EahubClassicOnline.logStartup(this, configuredServer, !useLocalBridge);
         minimapTop = launch.getBooleanExtra("minimapTop", GameOptions.get(this, GameOptions.MINIMAP).equals("top"));
         speedometerPosition = launch.getIntExtra("speedometer", GameOptions.speedometerPosition(this));
         updateHudForGamepad(false);
@@ -409,7 +413,7 @@ public final class GameActivity extends NativeActivity {
         if (cheats == null) cheats = GameOptions.getActiveCheatCodes(this);
         if (!cheats.isEmpty()) applyCheatCodes(cheats);
 
-        boolean isWs = io.mininxd.nfsu2.net.ServerApiClient.isWsHost(configuredServer);
+        boolean isWs = useLocalBridge;  // only WS-based servers need Adhoc via LocalOnlineBridge
         boolean roamEnabled = launch.getBooleanExtra("roamEnabled", GameOptions.isRoamEnabled(this));
         if (roamEnabled || isWs) {
             String roamServer = launch.getStringExtra("roamServer");

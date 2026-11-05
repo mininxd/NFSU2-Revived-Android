@@ -39,37 +39,25 @@ public final class GameOptions {
                     new String[] {"25%", "30%", "35%", "40%", "45%", "50%", "55%", "60%", "65%", "70%", "75%", "80%", "85%", "90%", "95%", "100%", "125%", "150%", "200%"}),
             new Option(DRAW_DISTANCE, "Draw Distance", "balanced",
                     new String[] {"balanced", "performance", "extended", "original"},
-                    new String[] {"Balanced · 450m (Smooth FPS)", "Performance · 320m (High FPS)", "Extended · 650m", "Original · Unlimited"}),
+                    new String[] {"Balanced · 450m", "Performance · 320m", "Extended · 650m", "Original · Unlimited"}),
             new Option(FPS, "FPS Limit", "30",
                     new String[] {"30", "60", "90", "120", "0"},
                     new String[] {"30 FPS", "60 FPS", "90 FPS", "120 FPS", "Uncapped"}),
             new Option(DISPLAY_LOGS, "Display Logs", "off",
                     new String[] {"off", "compact", "full"},
                     new String[] {"Off", "Compact", "Full"}),
-            new Option(WIDESCREEN, "Widescreen", "on",
-                    new String[] {"on", "off"},
-                    new String[] {"Corrected HUD and camera", "Original 4:3 stretched"}),
+            new Option(WIDESCREEN, "Screen Size", "on",
+                    new String[] {"on", "off", "stretched"},
+                    new String[] {"Widescreen (screen size)", "4:3 · original ratio", "4:3 Stretched · full screen"}),
             new Option(MINIMAP, "Minimap", "top",
                     new String[] {"top", "bottom"},
                     new String[] {"Top left", "Bottom left (original)"}),
-            new Option(ROAM_CARS_LIMIT, "Players' Cars Shown", "24",
-                    new String[] {"16", "20", "24", "28", "32"},
-                    new String[] {"16 cars · Low memory", "20 cars", "24 cars · Default", "28 cars", "32 cars · Max"}),
-            new Option(LATENCY, "CPU/GPU Sync", "2",
-                    new String[] {"2", "1"},
-                    new String[] {"Performance · CPU and GPU in parallel", "Low latency · lower FPS"}),
             new Option(PAD_LAYOUT, "Gamepad Layout", "port",
                     new String[] {"port", "console"},
                     new String[] {"Port · original mapping", "Console · PS2-style (X accept, O back, R3 camera)"}),
             new Option(SPEEDOMETER, "Speedometer Position", "bottom",
                     new String[] {"bottom", "raised", "middle", "brake"},
                     new String[] {"Bottom Right (original)", "Raised · right side, mid height", "Middle · bottom center", "Beside Brake · left of the pedals"}),
-            new Option(REGION, "Region", "auto",
-                    new String[] {"auto", "eu", "na"},
-                    new String[] {"Game default (North America)", "Europe · EU cars (GLOBALTEXTURESROW.BIN)", "North America"}),
-            new Option(TEXTURES, "Compressed Textures", "auto",
-                    new String[] {"auto", "cpu"},
-                    new String[] {"Automatic · GPU if supported", "Convert on CPU · compatibility"}),
     };
 
     private static final String PREFS = "nfsu2_game";
@@ -92,10 +80,50 @@ public final class GameOptions {
         return "brake".equals(position) ? 3 : "middle".equals(position) ? 2 : "raised".equals(position) ? 1 : 0;
     }
 
-    /** Game SKU for nativeRegion: -1 game default, 0 North America, 1 Europe. */
+    /**
+     * Screen size mode for nativeWidescreenMode:
+     *   0 = widescreen (screen fills display, aspect-corrected HUD)
+     *   1 = 4:3 original (black bars on sides)
+     *   2 = 4:3 stretched (fills screen, geometry squished)
+     */
+    static int widescreenMode(Context context) {
+        String val = get(context, WIDESCREEN);
+        if ("off".equals(val))       return 1;  // 4:3 original
+        if ("stretched".equals(val)) return 2;  // 4:3 stretched
+        return 0;                               // "on" = widescreen (default)
+    }
+
+    /** Game SKU for nativeRegion: -1 game default, 0 North America, 1 Europe.
+     *  When set to "auto", detects the region by checking for GLOBALTEXTURESROW.BIN
+     *  (EU-only asset) in the game directory. Falls back to -1 (NA default) if absent. */
     static int regionCode(Context context) {
         String region = get(context, REGION);
-        return "eu".equals(region) ? 1 : "na".equals(region) ? 0 : -1;
+        if ("eu".equals(region)) return 1;
+        if ("na".equals(region)) return 0;
+        // "auto": probe the game folder for the EU-exclusive texture row file
+        return detectRegionFromFiles(context);
+    }
+
+    /**
+     * Auto-detects region by checking for GLOBALTEXTURESROW.BIN, which only ships
+     * with the European SKU. Returns 1 (EU) if found, -1 (game default / NA) otherwise.
+     */
+    static int detectRegionFromFiles(Context context) {
+        try {
+            String[] candidates = {
+                LauncherActivity.gameRoot() + "/GLOBALTEXTURESROW.BIN",
+                android.os.Environment.getExternalStorageDirectory() + "/nfsu2/GLOBALTEXTURESROW.BIN",
+                android.os.Environment.getExternalStorageDirectory() + "/NFSU2/GLOBALTEXTURESROW.BIN",
+            };
+            for (String path : candidates) {
+                if (new java.io.File(path).isFile()) {
+                    android.util.Log.i("NFSU2", "Region auto-detect: found GLOBALTEXTURESROW.BIN → EU (1)");
+                    return 1;
+                }
+            }
+        } catch (Throwable ignored) {}
+        android.util.Log.d("NFSU2", "Region auto-detect: GLOBALTEXTURESROW.BIN not found → game default (-1)");
+        return -1;
     }
 
     static String get(Context context, String key) {
@@ -115,6 +143,18 @@ public final class GameOptions {
     }
 
     static final String ONLINE_SERVER = "online_server", DEFAULT_ONLINE_SERVER = "eahub.eu";
+
+    /**
+     * Returns true if the configured server is eahub.eu or adhoc.eahub.eu —
+     * the classic EA Nation / Adhoc Hub running original DirtySock TCP protocol.
+     * Classic servers must NOT go through LocalOnlineBridge (WebSocket path).
+     */
+    public static boolean isEahubClassic(String server) {
+        if (server == null) return false;
+        String s = server.trim().toLowerCase(java.util.Locale.US);
+        return s.equals("eahub.eu") || s.equals("adhoc.eahub.eu")
+                || s.endsWith(".eahub.eu");
+    }
 
     /** Free Roam Multiplayer options (Prometheus Adhoc over adhoc.eahub.eu). */
     static final String ROAM_ENABLED = "roam_enabled", ROAM_SERVER = "roam_server",
@@ -150,9 +190,11 @@ public final class GameOptions {
 
     public static String roamServer(Context context) {
         String server = onlineServer(context);
+        // For eahub classic, the adhoc/roam service lives on adhoc.eahub.eu
         if (DEFAULT_ONLINE_SERVER.equalsIgnoreCase(server) || "eahub.eu".equalsIgnoreCase(server)) {
             return DEFAULT_ROAM_SERVER;
         }
+        // For custom servers, use the same host (they host both online and roam)
         return server;
     }
 
