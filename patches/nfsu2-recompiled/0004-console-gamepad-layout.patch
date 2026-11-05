@@ -1,0 +1,385 @@
+diff --git a/android/app/src/main/cpp/gamepad_input.h b/android/app/src/main/cpp/gamepad_input.h
+index 445ccb7..560b9ff 100644
+--- a/android/app/src/main/cpp/gamepad_input.h
++++ b/android/app/src/main/cpp/gamepad_input.h
+@@ -34,7 +34,12 @@ public:
+             return false;
+         }
+         if(action!=AKEY_EVENT_ACTION_DOWN&&action!=AKEY_EVENT_ACTION_UP)return true;
+-        buttons_[button]=action==AKEY_EVENT_ACTION_DOWN;
++        bool down=action==AKEY_EVENT_ACTION_DOWN;
++        if(down&&!buttons_[button]){
++            pressedDriving_[button]=driving;pressedScreen_[button]=screen_;
++            if(console_&&!driving&&((screen_==MapScreen&&button==A)||(screen_==MailboxScreen&&button==X)))button1Request_=true;
++        }
++        buttons_[button]=down;
+         apply(driving,setKey);return true;
+     }
+     template<class SetKey>
+@@ -42,7 +47,13 @@ public:
+         if(!(AInputEvent_getSource(event)&AINPUT_SOURCE_CLASS_JOYSTICK))return false;
+         auto axis=[&](int32_t which){return AMotionEvent_getAxisValue(event,which,0);};
+         stickX_=axis(AMOTION_EVENT_AXIS_X);stickY_=axis(AMOTION_EVENT_AXIS_Y);
+-        hatX_=axis(AMOTION_EVENT_AXIS_HAT_X);hatY_=axis(AMOTION_EVENT_AXIS_HAT_Y);
++        float hatX=axis(AMOTION_EVENT_AXIS_HAT_X),hatY=axis(AMOTION_EVENT_AXIS_HAT_Y);
++        // A D-pad reported as a hat: remember the mode each direction was pressed in.
++        if(hatX<-.5f&&!(hatX_<-.5f))hatDriving_[0]=driving;
++        if(hatX>.5f&&!(hatX_>.5f))hatDriving_[1]=driving;
++        if(hatY<-.5f&&!(hatY_<-.5f))hatDriving_[2]=driving;
++        if(hatY>.5f&&!(hatY_>.5f))hatDriving_[3]=driving;
++        hatX_=hatX;hatY_=hatY;
+         // Android's standard right stick is Z/RZ.
+         rightX_=axis(AMOTION_EVENT_AXIS_Z);rightY_=axis(AMOTION_EVENT_AXIS_RZ);
+         // Pads report triggers as LTRIGGER/RTRIGGER, BRAKE/GAS or both.
+@@ -58,11 +69,26 @@ public:
+     }
+     // false while the game reads the pad as a DirectInput joystick.
+     void setKeyEmulation(bool emulate){emulate_=emulate;}
++    // Launcher "Controles del mando": the port's layout, or the console versions'
++    // one, where every function has a button (map, SMS, career stats, engage).
++    void setConsoleLayout(bool console){console_=console;}
++    // Menu screen the game shows (console layout): the world map and an SMS
++    // message give some buttons another meaning, as on the consoles.
++    // MenuScreen also covers any confirmation dialog shown over the others.
++    enum Screen : int {MenuScreen=0,MapScreen=1,SmsMessageScreen=2,MailboxScreen=3};
++    void setScreen(int screen){screen_=screen;}
++    // A button meaning PAD_BUTTON1 was pressed: Cross on the world map (set the
++    // GPS) or Square in the SMS mailbox (delete the message). No PC key sends
++    // that message, so the caller queues it to the screen itself.
++    bool takeButton1Request(){bool request=button1Request_;button1Request_=false;return request;}
+     GuestPadState padState()const{
+         GuestPadState state;
+         state.leftX=stickX_;state.leftY=stickY_;state.rightX=rightX_;state.rightY=rightY_;
+         state.leftTrigger=std::fmax(leftTrigger_,buttons_[L2]?1.f:0.f);
+         state.rightTrigger=std::fmax(rightTrigger_,buttons_[R2]?1.f:0.f);
++        // Console layout: the game's joystick keeps only the sticks and triggers
++        // (analog steering and throttle); every button reaches it as a key instead.
++        if(console_)return state;
+         static constexpr Button order[]={A,B,X,Y,L1,R1,Select,Start,ThumbL,ThumbR};
+         for(unsigned i=0;i<10;++i)if(buttons_[order[i]])state.buttons|=1u<<i;
+         state.hatX=buttons_[Left]||hatX_<-.5f?-1:buttons_[Right]||hatX_>.5f?1:0;
+@@ -77,7 +103,16 @@ private:
+     std::array<bool,ButtonCount> buttons_{};
+     float stickX_=0,stickY_=0,rightX_=0,rightY_=0,hatX_=0,hatY_=0,leftTrigger_=0,rightTrigger_=0;
+     std::array<bool,256> sent_{};
+-    bool driving_=false,emulate_=true,sentEmulation_=true;
++    bool driving_=false,emulate_=true,sentEmulation_=true,console_=false;
++    // Whether each button (and hat direction: left, right, up, down) was pressed
++    // while driving. A button held across a switch between driving and menus keeps
++    // its first meaning until released: Start pauses (Esc), the pause menu opens
++    // with Start still held, and that must not become the menu's Enter (which
++    // closed the menu again at once).
++    std::array<bool,ButtonCount> pressedDriving_{};
++    std::array<bool,4> hatDriving_{};
++    std::array<int,ButtonCount> pressedScreen_{};
++    int screen_=MenuScreen;bool button1Request_=false;
+ 
+     static int buttonFor(int32_t code){
+         switch(code){
+@@ -105,6 +140,7 @@ private:
+         auto past=[&](float value,unsigned scan){return value>(sent_[scan]?.25f:.4f);};
+         bool left=buttons_[Left]||hatX_<-.5f||past(-stickX_,0xcb),right=buttons_[Right]||hatX_>.5f||past(stickX_,0xcd);
+         bool up=buttons_[Up]||hatY_<-.5f,down=buttons_[Down]||hatY_>.5f;
++        if(console_){applyConsole(driving,want,left,right,up,down,past);commit(driving,want,setKey);return;}
+         want[0xcb]=left;want[0xcd]=right;
+         if(driving){
+             // Xbox-style racing: RT gas, LT brake/reverse, A handbrake, B nitrous,
+@@ -113,14 +149,89 @@ private:
+             want[0xd0]=down||buttons_[L2]||past(leftTrigger_,0xd0);
+             want[0x39]=buttons_[A];want[0x38]=buttons_[B];want[0x2e]=buttons_[X];want[0x30]=buttons_[Y];
+             want[0x2a]=buttons_[R1];want[0x1d]=buttons_[L1];
+-            want[0x01]=buttons_[Start]||buttons_[Select];
++            // Start/Select keep the meaning of the mode they were pressed in (see pressedDriving_).
++            want[0x01]=(buttons_[Start]&&pressedDriving_[Start])||(buttons_[Select]&&pressedDriving_[Select]);
++            want[0x1c]=buttons_[Start]&&!pressedDriving_[Start];
+         }else{
+             want[0xc8]=up||past(-stickY_,0xc8);want[0xd0]=down||past(stickY_,0xd0);
+-            want[0x1c]=buttons_[A]||buttons_[Start];want[0x01]=buttons_[B]||buttons_[Select];
++            want[0x1c]=buttons_[A]||(buttons_[Start]&&!pressedDriving_[Start]);
++            want[0x01]=buttons_[B]||(buttons_[Select]&&!pressedDriving_[Select])||(buttons_[Start]&&pressedDriving_[Start]);
+             want[0x39]=buttons_[X];want[0x2a]=buttons_[Y];
+         }
+-        driving_=driving;sentEmulation_=emulate_;
+         if(!emulate_)want.fill(false);
++        commit(driving,want,setKey);
++    }
++    template<class SetKey> void commit(bool driving,const std::array<bool,256>& want,SetKey& setKey){
++        driving_=driving;sentEmulation_=emulate_;
+         for(unsigned scan=0;scan<256;++scan)if(want[scan]!=sent_[scan]){sent_[scan]=want[scan];setKey(scan,want[scan]);}
+     }
++    // Console layout (the console manuals' scheme: D-pad for the career screens),
++    // sent as the PC game's own keyboard actions (its DIACTION table at 0x7FCAC0).
++    // Steering and pedals go through the joystick axes while the game reads the
++    // pad; only when it does not are they sent as keys too.
++    template<class Past> void applyConsole(bool driving,std::array<bool,256>& want,bool,bool,bool,bool,Past& past){
++        // Held in a given mode: a button pressed while driving (or in menus).
++        auto held=[&](Button b,bool inDriving){return buttons_[b]&&pressedDriving_[b]==inDriving;};
++        auto dpad=[&](Button b,bool inDriving){
++            if(held(b,inDriving))return true;
++            switch(b){
++            case Left:return hatX_<-.5f&&hatDriving_[0]==inDriving;
++            case Right:return hatX_>.5f&&hatDriving_[1]==inDriving;
++            case Up:return hatY_<-.5f&&hatDriving_[2]==inDriving;
++            case Down:return hatY_>.5f&&hatDriving_[3]==inDriving;
++            default:return false;
++            }
++        };
++        bool sticksAsKeys=emulate_;
++        // Buttons pressed while driving: the game's driving actions.
++        want[0x39]|=held(A,true);                        // Cross: handbrake
++        want[0x38]|=held(X,true);                        // Square: nitrous
++        want[0x2a]|=held(Y,true);                        // Triangle: shift up
++        want[0x1d]|=held(B,true);                        // Circle: shift down
++        want[0x2e]|=held(R1,true)||held(ThumbR,true);    // R1 / R3: camera
++        want[0x30]|=held(L1,true);                       // L1: look back
++        want[0x01]|=held(Start,true);                    // Start: pause
++        want[0x13]|=held(Select,true);                   // Select: reset the car
++        want[0x1c]|=dpad(Up,true);                       // D-pad up: enter shop / challenge
++        want[0x14]|=dpad(Down,true);                     // D-pad down: career stats (Legend)
++        want[0x32]|=dpad(Left,true);                     // D-pad left: world map
++        want[0x0f]|=dpad(Right,true);                    // D-pad right: SMS messages
++        want[0xc8]|=held(R2,true);want[0xd0]|=held(L2,true);  // digital triggers
++        // Buttons pressed in menus: the game's menu actions (Enter = PAD_ACCEPT,
++        // Esc = PAD_BACK). On the world map and in an SMS message, as on consoles:
++        //  - map (0x004E08E0): Circle closes it (back), Square hides/shows the
++        //    selected item (accept on it, 0x004B0EF0), Cross sets the GPS
++        //    (PAD_BUTTON1, sent through takeButton1Request);
++        //  - SMS message (0x00497B00): Cross returns to the mailbox (back),
++        //    Circle closes the message and returns to the game (accept);
++        //  - SMS mailbox (0x004CCC10): Cross opens, Circle closes, Square asks to
++        //    delete the message (PAD_BUTTON1, 0x004CCE5C).
++        // Confirmation dialogs over them count as MenuScreen: Cross confirms,
++        // Circle cancels, as in every other menu.
++        auto heldOn=[&](Button b,int screen){return held(b,false)&&pressedScreen_[b]==screen;};
++        bool usual=false;  // the button keeps its usual menu meaning
++        for(int screen:{MenuScreen,MailboxScreen})usual=usual||heldOn(A,screen);
++        want[0x1c]|=usual||heldOn(B,SmsMessageScreen)||heldOn(X,MapScreen)||held(Start,false);
++        want[0x01]|=heldOn(B,MenuScreen)||heldOn(B,MapScreen)||heldOn(B,MailboxScreen)||heldOn(A,SmsMessageScreen)||held(Select,false);
++        want[0x33]|=heldOn(X,MenuScreen)||heldOn(X,SmsMessageScreen);want[0x34]|=held(Y,false);  // Menu buttons 2 and 3
++        want[0x1a]|=held(L1,false);want[0x1b]|=held(R1,false); // Menu L1 / R1
++        want[0xc7]|=held(R2,false);want[0xcf]|=held(L2,false); // Map zoom in / out
++        want[0xcb]|=dpad(Left,false);want[0xcd]|=dpad(Right,false);
++        want[0xc8]|=dpad(Up,false);want[0xd0]|=dpad(Down,false);
++        // Sticks and analog triggers follow the current mode. While the game reads
++        // the joystick it already gets them as axes: keys only when it does not.
++        if(driving){
++            want[0x30]|=past(rightY_,0x30);              // right stick down: look back
++            if(sticksAsKeys){
++                want[0xcb]|=past(-stickX_,0xcb);want[0xcd]|=past(stickX_,0xcd);
++                want[0xc8]|=past(rightTrigger_,0xc8);want[0xd0]|=past(leftTrigger_,0xd0);
++            }
++        }else{
++            want[0xc7]|=past(rightTrigger_,0xc7);want[0xcf]|=past(leftTrigger_,0xcf);
++            if(sticksAsKeys){
++                want[0xcb]|=past(-stickX_,0xcb);want[0xcd]|=past(stickX_,0xcd);
++                want[0xc8]|=past(-stickY_,0xc8);want[0xd0]|=past(stickY_,0xd0);
++            }
++        }
++    }
+ };
+diff --git a/android/app/src/main/cpp/guest_input.inc b/android/app/src/main/cpp/guest_input.inc
+index 5da071b..01f9215 100644
+--- a/android/app/src/main/cpp/guest_input.inc
++++ b/android/app/src/main/cpp/guest_input.inc
+@@ -31,6 +31,9 @@ struct InputObject {
+ // stick, Rz centred; buttons A B X Y LB RB Back Start LS RS; one POV hat.
+ struct InputPad {float axis[6]{};uint32_t buttons=0;int hatX=0,hatY=0;};
+ InputPad inputPad;bool inputPadConnected=false;
++// Console gamepad layout: the pad's buttons are named as on a PlayStation pad
++// (the game shows these names on its controls screen and in button prompts).
++std::atomic<bool> padPlayStationNames{false};
+ std::atomic<int> inputPadAcquired{0};
+ std::array<uint8_t,16> directInputGuid(uint32_t data1){
+     std::array<uint8_t,16> guid={0,0,0,0,0xf3,0xc9,0xcf,0x11,0xbf,0xc7,0x44,0x45,0x53,0x54,0,0};
+@@ -144,7 +147,11 @@ bool joystickMethod(InputObject& object,uint32_t self,uint32_t method){
+         uint32_t bytes=read32(output);std::memset(ptr(output+4,bytes-4),0,bytes-4);
+         auto guid=directInputGuid(entry.guidData1);std::memcpy(ptr(output+4,16),guid.data(),16);
+         write32(output+20,entry.offset);write32(output+24,entry.type);write32(output+28,entry.flags);
+-        std::memcpy(ptr(output+32,std::strlen(entry.name)+1),entry.name,std::strlen(entry.name)+1);
++        // Buttons 0..9 are A, B, X, Y, L1, R1, Select, Start, L3, R3 (gamepad_input.h).
++        static const char* const playStation[]={"Cross","Circle","Square","Triangle","L1","R1","Select","Start","L3","R3"};
++        const char* name=entry.name;uint32_t button=(entry.type>>8)&0xffff;
++        if((entry.type&0x04u)&&button<std::size(playStation)&&padPlayStationNames.load(std::memory_order_relaxed))name=playStation[button];
++        std::memcpy(ptr(output+32,std::strlen(name)+1),name,std::strlen(name)+1);
+     };
+     switch(method){
+     case 3:{uint32_t output=arg(1);if(!output||read32(output)!=44){ret(diInvalid,2);return true;}
+@@ -254,21 +261,28 @@ bool joystickMethod(InputObject& object,uint32_t self,uint32_t method){
+     default:return false;
+     }
+ }
+-// Key names for GetObjectInfo (the controls screen shows them next to each action).
++// Key names for GetObjectInfo (the controls screen shows them next to each action):
++// Spanish when the game runs in Spanish, English otherwise, as a localized Windows does.
++bool spanishKeyNames(){return lower(guestLanguage).rfind("spanish",0)==0;}
+ std::string keyboardKeyName(uint32_t dik){
+-    static const char* const row[]={nullptr,"Esc","1","2","3","4","5","6","7","8","9","0","-","=","Retroceso","Tab",
+-        "Q","W","E","R","T","Y","U","I","O","P","[","]","Intro","Ctrl izq.","A","S","D","F","G","H","J","K","L",";","'","`",
+-        "Mayus izq.","\\","Z","X","C","V","B","N","M",",",".","/","Mayus der.","* (num)","Alt izq.","Espacio","Bloq Mayus",
+-        "F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","Bloq Num","Bloq Despl","7 (num)","8 (num)","9 (num)","- (num)",
++    const bool es=spanishKeyNames();
++    static const char* const common[]={nullptr,"Esc","1","2","3","4","5","6","7","8","9","0","-","=",nullptr,"Tab",
++        "Q","W","E","R","T","Y","U","I","O","P","[","]",nullptr,nullptr,"A","S","D","F","G","H","J","K","L",";","'","`",
++        nullptr,"\\","Z","X","C","V","B","N","M",",",".","/",nullptr,"* (num)",nullptr,nullptr,nullptr,
++        "F1","F2","F3","F4","F5","F6","F7","F8","F9","F10",nullptr,nullptr,"7 (num)","8 (num)","9 (num)","- (num)",
+         "4 (num)","5 (num)","6 (num)","+ (num)","1 (num)","2 (num)","3 (num)","0 (num)",". (num)"};
+-    if(dik<sizeof row/sizeof row[0]&&row[dik])return row[dik];
+-    switch(dik){
+-    case 0x57:return "F11";case 0x58:return "F12";case 0x9c:return "Intro (num)";case 0x9d:return "Ctrl der.";
+-    case 0xb5:return "/ (num)";case 0xb8:return "Alt der.";case 0xc5:return "Pausa";case 0xc7:return "Inicio";
+-    case 0xc8:return "Arriba";case 0xc9:return "Re Pag";case 0xcb:return "Izquierda";case 0xcd:return "Derecha";
+-    case 0xcf:return "Fin";case 0xd0:return "Abajo";case 0xd1:return "Av Pag";case 0xd2:return "Insert";case 0xd3:return "Supr";
+-    }
+-    char text[16];std::snprintf(text,sizeof text,"Tecla %02X",dik);return text;
++    struct Named{uint32_t dik;const char* en;const char* es;};
++    static const Named named[]={
++        {0x0e,"Backspace","Retroceso"},{0x1c,"Enter","Intro"},{0x1d,"Left Ctrl","Ctrl izq."},{0x2a,"Left Shift","Mayus izq."},
++        {0x36,"Right Shift","Mayus der."},{0x38,"Left Alt","Alt izq."},{0x39,"Space","Espacio"},{0x3a,"Caps Lock","Bloq Mayus"},
++        {0x45,"Num Lock","Bloq Num"},{0x46,"Scroll Lock","Bloq Despl"},{0x57,"F11","F11"},{0x58,"F12","F12"},
++        {0x9c,"Enter (num)","Intro (num)"},{0x9d,"Right Ctrl","Ctrl der."},{0xb5,"/ (num)","/ (num)"},{0xb8,"Right Alt","Alt der."},
++        {0xc5,"Pause","Pausa"},{0xc7,"Home","Inicio"},{0xc8,"Up","Arriba"},{0xc9,"Page Up","Re Pag"},{0xcb,"Left","Izquierda"},
++        {0xcd,"Right","Derecha"},{0xcf,"End","Fin"},{0xd0,"Down","Abajo"},{0xd1,"Page Down","Av Pag"},{0xd2,"Insert","Insert"},
++        {0xd3,"Delete","Supr"}};
++    if(dik<std::size(common)&&common[dik])return common[dik];
++    for(const auto& key:named)if(key.dik==dik)return es?key.es:key.en;
++    char text[16];std::snprintf(text,sizeof text,es?"Tecla %02X":"Key %02X",dik);return text;
+ }
+ // IDirectInputDevice8::GetObjectInfo(DIDEVICEOBJECTINSTANCEA*, dwObj, dwHow) for the
+ // keyboard (objects are DIK codes, c_dfDIKeyboard offsets) and the mouse (DIMOUSESTATE2).
+@@ -283,11 +297,15 @@ void keyboardMouseObjectInfo(uint32_t kind){
+         if(how==2&&!(objectId&0x0c)){ret(0x80070002,4);return;}
+         name=keyboardKeyName(offset);type=0x0cu|(offset<<8);guidData1=0x55728220u;guidData2=0xd33c;  // GUID_Key
+     }else{
+-        static const char* const axes[]={"Eje X","Eje Y","Rueda"};
++        const bool es=spanishKeyNames();
++        static const char* const axesEs[]={"Eje X","Eje Y","Rueda"};
++        static const char* const axesEn[]={"X Axis","Y Axis","Wheel"};
++        const char* const* axes=es?axesEs:axesEn;
++        const std::string buttonName=es?"Boton ":"Button ";
+         if(how==1&&offset<12&&offset%4==0){name=axes[offset/4];type=(offset==8?0x02u:0x01u)|((offset/4)<<8);guidData1=0xa36d02e0u+offset/4;}
+-        else if(how==1&&offset>=12&&offset<20){name="Boton "+std::to_string(offset-12);type=0x04u|((offset-12)<<8);guidData1=0xa36d02f0u;}
++        else if(how==1&&offset>=12&&offset<20){name=buttonName+std::to_string(offset-12);type=0x04u|((offset-12)<<8);guidData1=0xa36d02f0u;}
+         else if(how==2&&(objectId&3)&&offset<3){name=axes[offset];type=objectId&0xffff03u;guidData1=0xa36d02e0u+offset;offset*=4;}
+-        else if(how==2&&(objectId&0x0c)&&offset<8){name="Boton "+std::to_string(offset);type=objectId&0xffff0cu;guidData1=0xa36d02f0u;offset+=12;}
++        else if(how==2&&(objectId&0x0c)&&offset<8){name=buttonName+std::to_string(offset);type=objectId&0xffff0cu;guidData1=0xa36d02f0u;offset+=12;}
+         else{ret(0x80070002,4);return;}
+     }
+     uint32_t bytes=read32(output);std::memset(ptr(output+4,bytes-4),0,bytes-4);
+diff --git a/android/app/src/main/cpp/guest_runtime.cpp b/android/app/src/main/cpp/guest_runtime.cpp
+index 83d0f16..518f524 100644
+--- a/android/app/src/main/cpp/guest_runtime.cpp
++++ b/android/app/src/main/cpp/guest_runtime.cpp
+@@ -59,6 +59,7 @@ uint32_t g_icall_trace_idx, g_icall_count;
+ 
+ // Defined after the anonymous namespace; called from d3dDispatch after Present.
+ void refreshGuestHud();
++void updateGuestMenuScreen();
+ namespace {
+ std::atomic<uint32_t> displayWidth{1280},displayHeight{720};
+ std::atomic<uint32_t> renderWidth{0},renderHeight{0};
+@@ -363,7 +364,7 @@ void d3dDispatch(){
+     if(timed){auto spent=std::chrono::steady_clock::now()-bridgeStart;bridgeTime+=token==0x7e002110u?spent:spent*64;presentTime+=token==0x7e002110u?spent:std::chrono::nanoseconds{};
+         methodTime[((token-0x7e000000u)/16u)&4095u]+=token==0x7e002110u?spent:spent*64;}
+     if(token==0x7e002110u){nfs_widescreen_apply_frame_rate();applyGuestRegion();lastPresentMs=steadyMs();startStallWatch();}
+-    if(token==0x7e002110u)refreshGuestHud();
++    if(token==0x7e002110u){refreshGuestHud();updateGuestMenuScreen();}
+     if(token==0x7e002110u&&result==0){
+         static FramePacer pacer;
+         auto now=std::chrono::steady_clock::now();
+@@ -975,6 +976,46 @@ void refreshGuestHud(){
+     g_ecx=ecx;
+ #endif
+ }
++// Menu screens for the console gamepad layout (documented SPEED2.EXE only).
++// The FE engine is [[0x008384C4]+8]; 0x00519E50 (this = engine+0xDC, args
++// package name and first open package; ret 8) finds an open package, as
++// 0x0052CF60 (IsPackageOpen) does. 0x0051CDC0(message, object, target, package)
++// queues an interface message, as the pad code at 0x0054D4B0 does for its
++// buttons (target 0xFFFFFFFD: the package's screen).
++std::atomic<int> menuScreen{0};
++std::atomic<bool> button1Requested{false};
++int guestMenuScreen(){return menuScreen.load(std::memory_order_relaxed);}
++void requestGuestButton1(){button1Requested=true;}
++uint32_t openGuestPackage(uint32_t name){
++    uint32_t root=read32(0x008384C4u);if(!root)return 0;
++    uint32_t engine=read32(root+8);if(!engine)return 0;
++    uint32_t list=engine+0xDC,first=read32(list+8);if(!first)return 0;
++    uint32_t ecx=g_ecx;g_ecx=list;uint32_t package;
++    try{package=callGuest(0x00519E50u,{name,first});}catch(...){g_ecx=ecx;throw;}
++    g_ecx=ecx;return package;
++}
++void updateGuestMenuScreen(){
++#if !defined(NFSU2_EXE_F4BB0D99)
++    if(guestDrivingControls()){menuScreen=0;button1Requested=false;return;}
++    // Confirmation dialogs (GPS, delete message, ...) shown over the screens below.
++    static constexpr uint32_t dialogs[]={
++        0x0078FD7Cu,0x00790038u,0x0078F2F8u,0x0078FA24u,0x00790D74u,  // GenericDialog[_LARGE/_MED/_SMALL/_Small].fng
++        0x00799E74u,0x00799E54u,0x00799E34u,0x00799E14u,              // GenericDialog_Animate_*.fng, _ThreeButton.fng
++        0x00799DF8u,0x00799DDCu,0x00795484u,                          // IG_GenericDialog_LARGE/_MED/_SMALL.fng
++        0x00795000u,0x007A6470u,0x00799DB0u};                         // UI_InGameDialog, MU_UG_InGameDialogBox, GenericerDialog
++    for(uint32_t dialog:dialogs)if(openGuestPackage(dialog)){menuScreen=0;button1Requested=false;return;}
++    constexpr uint32_t worldMap=0x00799EA4u,smsMessage=0x0078F7C8u,mailbox=0x0078F7E4u;
++    // "UI_InGame_WorldMap.fng", "UI_EngageMessageDialog.fng", "UI_SMS_Mailbox.fng"
++    uint32_t package=0;int screen=0;
++    if((package=openGuestPackage(worldMap)))screen=1;
++    else if((package=openGuestPackage(smsMessage)))screen=2;
++    else if((package=openGuestPackage(mailbox)))screen=3;
++    menuScreen=screen;
++    if(button1Requested.exchange(false)&&package&&(screen==1||screen==3))
++        callGuest(0x0051CDC0u,{0xC519BFC0u/*PAD_BUTTON1*/,0u,0xFFFFFFFDu,package},16);
++#endif
++}
++void setGuestPadButtonNames(bool playStation){padPlayStationNames=playStation;}
+ void setGuestRegion(int region){forcedGuestRegion=region<0||region>1?-1:region;}
+ void setGuestFrameLimit(unsigned framesPerSecond){
+     frameLimit=(framesPerSecond>=30&&framesPerSecond<=240)?framesPerSecond:0;
+diff --git a/android/app/src/main/cpp/guest_runtime.h b/android/app/src/main/cpp/guest_runtime.h
+index e82c40b..14372e7 100644
+--- a/android/app/src/main/cpp/guest_runtime.h
++++ b/android/app/src/main/cpp/guest_runtime.h
+@@ -28,3 +28,11 @@ void setGuestResolution(unsigned width,unsigned height);
+ void setGuestFrameLimit(unsigned framesPerSecond);
+ // Launcher option, before the guest boots: -1 keeps the game's region, 0 North America, 1 Europe.
+ void setGuestRegion(int region);
++// Console gamepad layout: which menu screen the game shows (0 other or a dialog
++// on top, 1 in-game world map, 2 SMS message, 3 SMS mailbox), refreshed every
++// frame; and a request to send PAD_BUTTON1 to that screen on the next frame
++// (map: set the GPS; mailbox: delete the message).
++int guestMenuScreen();
++// Console gamepad layout: name the pad buttons Cross, Circle, Square, Triangle, L1, ...
++void setGuestPadButtonNames(bool playStation);
++void requestGuestButton1();
+diff --git a/android/app/src/main/cpp/main.cpp b/android/app/src/main/cpp/main.cpp
+index c761b37..3b5abad 100644
+--- a/android/app/src/main/cpp/main.cpp
++++ b/android/app/src/main/cpp/main.cpp
+@@ -282,12 +282,16 @@ static int32_t onInput(android_app*,AInputEvent* event){
+     gamepad.setKeyEmulation(!guestGamepadInUse());
+     if(type==AINPUT_EVENT_TYPE_MOTION){
+         if(!acceptedGamepad(event))return 0;
++        gamepad.setScreen(guestMenuScreen());
+         bool handled=gamepad.motion(event,guestDrivingControls(),setPadKey);if(handled){notePadUse(event);publishPad();}return handled?1:0;
+     }
+     if(type!=AINPUT_EVENT_TYPE_KEY)return 0;
+     // Any key of an accepted pad, whatever source it reports (pads in keyboard
+     // mode send KEYBOARD); keys it does not map fall through to the table below.
+-    if(acceptedGamepad(event)&&gamepad.key(event,guestDrivingControls(),setPadKey)){notePadUse(event);publishPad();return 1;}
++    gamepad.setScreen(guestMenuScreen());
++    if(acceptedGamepad(event)&&gamepad.key(event,guestDrivingControls(),setPadKey)){
++        if(gamepad.takeButton1Request())requestGuestButton1();
++        notePadUse(event);publishPad();return 1;}
+     int32_t key=AKeyEvent_getKeyCode(event);unsigned scan=0;
+     switch(key){
+     case AKEYCODE_DPAD_UP:scan=0xc8;break;case AKEYCODE_DPAD_DOWN:scan=0xd0;break;
+@@ -331,6 +335,11 @@ extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nat
+ }
+ extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeResolution(JNIEnv*,jclass,jint width,jint height){setGuestResolution(unsigned(width),unsigned(height));}
+ extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeFrameLimit(JNIEnv*,jclass,jint cap){setGuestFrameLimit(unsigned(cap));}
++// Launcher gamepad layout: false = the port's layout, true = console layout.
++extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeGamepadLayout(JNIEnv*,jclass,jboolean console){
++    gamepad.setConsoleLayout(console==JNI_TRUE);
++    setGuestPadButtonNames(console==JNI_TRUE);
++}
+ extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeGamepadConnected(JNIEnv*,jclass,jboolean connected){setGuestPadConnected(connected==JNI_TRUE);}
+ extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeGamepadDevices(JNIEnv* env,jclass,jintArray ids){
+     std::vector<int32_t> devices;

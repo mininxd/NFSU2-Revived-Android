@@ -306,8 +306,14 @@ final class RacingControlsView extends View {
         return racing && !editing && !hiddenByGamepad;
     }
 
+    /** The touch controls are out of the way because a physical gamepad is in use. */
+    boolean hiddenByGamepad() {
+        return hiddenByGamepad;
+    }
+
     void gamepadUsed() {
-        if (!gamepadConnected || hiddenByGamepad || editing) return;
+        // Fingers on the controls keep them: whatever is touched is in use.
+        if (!gamepadConnected || hiddenByGamepad || editing || !fingers.isEmpty()) return;
         releaseAll();
         hiddenByGamepad = true;
         invalidate();
@@ -1176,12 +1182,11 @@ final class RacingControlsView extends View {
             return true;
         }
 
+        // A touch brings the controls back and is handled at once, not only shown.
         if (hiddenByGamepad) {
-            if (action == MotionEvent.ACTION_DOWN) {
-                hiddenByGamepad = false;
-                invalidate();
-            }
-            return true;
+            if (action != MotionEvent.ACTION_DOWN) return true;
+            hiddenByGamepad = false;
+            invalidate();
         }
 
         if (action == MotionEvent.ACTION_CANCEL) {

@@ -143,6 +143,7 @@ public final class GameActivity extends NativeActivity {
             touchControls.setGameMode(nativeDrivingControls());
             // Playing on with the pad after a touch revealed the controls hides them again.
             if(nativeGamepadUsed())touchControls.gamepadUsed();
+            updateHudForGamepad(touchControls.hiddenByGamepad());
             if (io.mininxd.nfsu2.net.RoamNativeBridge.isLoaded()) {
                 try {
                     int[] actionKeys = io.mininxd.nfsu2.net.RoamNativeBridge.nativeGetActionKeys();
@@ -192,8 +193,33 @@ public final class GameActivity extends NativeActivity {
     private static void nativeGamepadConnected(boolean connected) { com.nfsu2.androidevolved.GameActivity.nativeGamepadConnected(connected); }
     private static void nativeGamepadDevices(int[] ids) { com.nfsu2.androidevolved.GameActivity.nativeGamepadDevices(ids); }
     private static void nativeMinimapTop(boolean top) { com.nfsu2.androidevolved.GameActivity.nativeMinimapTop(top); }
+    private static void nativeGamepadLayout(boolean console) {
+        try { com.nfsu2.androidevolved.GameActivity.nativeGamepadLayout(console); }
+        catch (UnsatisfiedLinkError missing) { android.util.Log.w("NFSU2", "Gamepad layout option needs a newer libnfsu2_android.so"); }
+    }
+    private static void nativeSpeedometerPosition(int position) {
+        try { com.nfsu2.androidevolved.GameActivity.nativeSpeedometerPosition(position); }
+        catch (UnsatisfiedLinkError missing) { android.util.Log.w("NFSU2", "Speedometer position needs a newer libnfsu2_android.so"); }
+    }
+    // The minimap and speedometer moves make room for the touch controls. Both
+    // follow them live: original places while a gamepad hides them, the
+    // launcher's when a touch shows them (the game rebuilds its HUD).
+    private boolean minimapTop;
+    private int speedometerPosition;
+    private Boolean hudForGamepad;
+    private void updateHudForGamepad(boolean gamepad) {
+        if (hudForGamepad != null && hudForGamepad == gamepad) return;
+        hudForGamepad = gamepad;
+        nativeSpeedometerPosition(gamepad ? 0 : speedometerPosition);
+        nativeMinimapTop(minimapTop && !gamepad);
+    }
     private static void nativeBackBuffers(int count) { com.nfsu2.androidevolved.GameActivity.nativeBackBuffers(count); }
     private static void nativeCpuTextures(boolean enabled) { com.nfsu2.androidevolved.GameActivity.nativeCpuTextures(enabled); }
+    // Older libnfsu2_android.so builds have no region switch: keep the game's region.
+    private static void nativeRegion(int region) {
+        try { com.nfsu2.androidevolved.GameActivity.nativeRegion(region); }
+        catch (UnsatisfiedLinkError missing) { android.util.Log.w("NFSU2", "Region option needs a newer libnfsu2_android.so"); }
+    }
     private static void nativeGpuDriver(String hooks, String temp, String directory, String library) {
         try {
             com.nfsu2.androidevolved.GameActivity.nativeGpuDriver(hooks, temp, directory, library);
@@ -348,9 +374,13 @@ public final class GameActivity extends NativeActivity {
         } else {
             nativeOnlineServer(configuredServer);
         }
-        nativeMinimapTop(launch.getBooleanExtra("minimapTop", GameOptions.get(this, GameOptions.MINIMAP).equals("top")));
+        minimapTop = launch.getBooleanExtra("minimapTop", GameOptions.get(this, GameOptions.MINIMAP).equals("top"));
+        speedometerPosition = launch.getIntExtra("speedometer", GameOptions.speedometerPosition(this));
+        updateHudForGamepad(false);
+        nativeGamepadLayout(launch.getBooleanExtra("consolePad", GameOptions.get(this, GameOptions.PAD_LAYOUT).equals("console")));
         nativeBackBuffers(launch.getIntExtra("backBuffers", Integer.parseInt(GameOptions.get(this, GameOptions.LATENCY))));
         nativeCpuTextures(launch.getBooleanExtra("cpuTextures", GameOptions.get(this, GameOptions.TEXTURES).equals("cpu")));
+        nativeRegion(launch.getIntExtra("region", GameOptions.regionCode(this)));
         String[] loader = launch.getStringArrayExtra("driverLoader");
         if (loader == null || loader.length != 4) loader = GpuDrivers.loaderArguments(this);
         nativeGpuDriver(loader[0], loader[1], loader[2], loader[3]);
