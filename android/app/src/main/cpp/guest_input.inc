@@ -31,6 +31,7 @@ struct InputObject {
 // stick, Rz centred; buttons A B X Y LB RB Back Start LS RS; one POV hat.
 struct InputPad {float axis[6]{};uint32_t buttons=0;int hatX=0,hatY=0;};
 InputPad inputPad;bool inputPadConnected=false;
+std::atomic<bool> padPlayStationNames{false};
 std::atomic<int> inputPadAcquired{0};
 std::array<uint8_t,16> directInputGuid(uint32_t data1){
     std::array<uint8_t,16> guid={0,0,0,0,0xf3,0xc9,0xcf,0x11,0xbf,0xc7,0x44,0x45,0x53,0x54,0,0};
@@ -147,7 +148,13 @@ bool joystickMethod(InputObject& object,uint32_t self,uint32_t method){
         uint32_t bytes=read32(output);std::memset(ptr(output+4,bytes-4),0,bytes-4);
         auto guid=directInputGuid(entry.guidData1);std::memcpy(ptr(output+4,16),guid.data(),16);
         write32(output+20,entry.offset);write32(output+24,entry.type);write32(output+28,entry.flags);
-        std::memcpy(ptr(output+32,std::strlen(entry.name)+1),entry.name,std::strlen(entry.name)+1);
+        const char* name=entry.name;
+        if(padPlayStationNames.load()){
+            static const char* const playStation[]={"Cross","Circle","Square","Triangle","L1","R1","Select","Start","L3","R3"};
+            unsigned button=(entry.type>>8)&0xffff;
+            if((entry.type&0x04u)&&button<std::size(playStation))name=playStation[button];
+        }
+        std::memcpy(ptr(output+32,std::strlen(name)+1),name,std::strlen(name)+1);
     };
     switch(method){
     case 3:{uint32_t output=arg(1);if(!output||read32(output)!=44){ret(diInvalid,2);return true;}
@@ -340,7 +347,7 @@ void inputDispatch(){
             NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","DirectInput EnumDevices type=%u flags=%x gamepad=1",type,flags);
             uint32_t instance=allocate(580);
             try{for(uint32_t device:{2u,3u,4u}){
-                if(device==4&&(flags&0x100u))continue;  // no force feedback
+                if(device==4&&(flags&0x100u)&&!inputPadConnected)continue;
                 uint32_t deviceType=device==2?0x13:device==3?0x12:0x15;
                 uint32_t deviceClass=device==2?3:device==3?2:4;
                 if(type!=0&&(type!=1||device==4)&&type!=deviceClass&&(type&0xff)!=deviceType)continue;
@@ -358,7 +365,8 @@ void inputDispatch(){
             if(flags&(0x100u|0x2000u|0x4000u)){ret(0,6);return;} // No force-feedback, secondary or non-gaming HID devices.
             NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Enumerate action devices: %u actions callback=%08x",read32(format+12),callback);
             uint32_t instance=allocate(580);
-            try{for(uint32_t kind:{2u,3u}){
+            try{for(uint32_t kind:{2u,3u,4u}){
+                if(kind==4&&!inputPadConnected)continue;
                 auto mapped=kind==2?buildKeyboardActions(format):0;uint32_t device=createInputObject(kind);
                 // The semantic enumerator hands over a usable system device;
                 // this guest does not call SetCooperativeLevel on that keyboard.
@@ -450,6 +458,7 @@ void inputDispatch(){
     case 27:ret(0x80004001,5);return; // EnumEffectsInFile
     case 28:ret(0x80004001,5);return; // WriteEffectToFile
     case 29:{if(!validActionFormat(arg(1))||(arg(3)!=0&&arg(3)!=1&&arg(3)!=2&&arg(3)!=4)){ret(diInvalid,4);return;}
+        if(kind==4){NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Gamepad BuildActionMap: controller page visible");ret(0,4);return;}
         if(kind!=2){ret(0x80004001,4);return;}auto mapped=buildKeyboardActions(arg(1));
         NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Keyboard BuildActionMap mapped %u actions",mapped);ret(0,4);return;}
     case 30:{uint32_t format=arg(1);if(object.acquired){ret(0x800700aa,4);return;}

@@ -387,7 +387,7 @@ public final class GameActivity extends NativeActivity {
         minimapTop = launch.getBooleanExtra("minimapTop", GameOptions.get(this, GameOptions.MINIMAP).equals("top"));
         speedometerPosition = launch.getIntExtra("speedometer", GameOptions.speedometerPosition(this));
         updateHudForGamepad(false);
-        nativeGamepadLayout(launch.getBooleanExtra("consolePad", GameOptions.get(this, GameOptions.PAD_LAYOUT).equals("console")));
+        nativeGamepadLayout(launch.getBooleanExtra("consolePad", GameOptions.isConsolePad(this)));
         nativeBackBuffers(launch.getIntExtra("backBuffers", 2));
         nativeCpuTextures(launch.getBooleanExtra("cpuTextures", false));
         nativeRegion(launch.getIntExtra("region", GameOptions.regionCode(this)));

@@ -31,7 +31,7 @@ index 445ccb7..560b9ff 100644
          // Android's standard right stick is Z/RZ.
          rightX_=axis(AMOTION_EVENT_AXIS_Z);rightY_=axis(AMOTION_EVENT_AXIS_RZ);
          // Pads report triggers as LTRIGGER/RTRIGGER, BRAKE/GAS or both.
-@@ -58,11 +69,26 @@ public:
+@@ -58,11 +69,23 @@ public:
      }
      // false while the game reads the pad as a DirectInput joystick.
      void setKeyEmulation(bool emulate){emulate_=emulate;}
@@ -52,13 +52,10 @@ index 445ccb7..560b9ff 100644
          state.leftX=stickX_;state.leftY=stickY_;state.rightX=rightX_;state.rightY=rightY_;
          state.leftTrigger=std::fmax(leftTrigger_,buttons_[L2]?1.f:0.f);
          state.rightTrigger=std::fmax(rightTrigger_,buttons_[R2]?1.f:0.f);
-+        // Console layout: the game's joystick keeps only the sticks and triggers
-+        // (analog steering and throttle); every button reaches it as a key instead.
-+        if(console_)return state;
          static constexpr Button order[]={A,B,X,Y,L1,R1,Select,Start,ThumbL,ThumbR};
          for(unsigned i=0;i<10;++i)if(buttons_[order[i]])state.buttons|=1u<<i;
          state.hatX=buttons_[Left]||hatX_<-.5f?-1:buttons_[Right]||hatX_>.5f?1:0;
-@@ -77,7 +103,16 @@ private:
+@@ -77,7 +100,16 @@ private:
      std::array<bool,ButtonCount> buttons_{};
      float stickX_=0,stickY_=0,rightX_=0,rightY_=0,hatX_=0,hatY_=0,leftTrigger_=0,rightTrigger_=0;
      std::array<bool,256> sent_{};
@@ -76,7 +73,7 @@ index 445ccb7..560b9ff 100644
  
      static int buttonFor(int32_t code){
          switch(code){
-@@ -105,6 +140,7 @@ private:
+@@ -105,6 +137,7 @@ private:
          auto past=[&](float value,unsigned scan){return value>(sent_[scan]?.25f:.4f);};
          bool left=buttons_[Left]||hatX_<-.5f||past(-stickX_,0xcb),right=buttons_[Right]||hatX_>.5f||past(stickX_,0xcd);
          bool up=buttons_[Up]||hatY_<-.5f,down=buttons_[Down]||hatY_>.5f;
@@ -84,7 +81,7 @@ index 445ccb7..560b9ff 100644
          want[0xcb]=left;want[0xcd]=right;
          if(driving){
              // Xbox-style racing: RT gas, LT brake/reverse, A handbrake, B nitrous,
-@@ -113,14 +149,89 @@ private:
+@@ -113,14 +146,89 @@ private:
              want[0xd0]=down||buttons_[L2]||past(leftTrigger_,0xd0);
              want[0x39]=buttons_[A];want[0x38]=buttons_[B];want[0x2e]=buttons_[X];want[0x30]=buttons_[Y];
              want[0x2a]=buttons_[R1];want[0x1d]=buttons_[L1];

@@ -54,7 +54,7 @@ public final class GameOptions {
                     new String[] {"Top left", "Bottom left (original)"}),
             new Option(PAD_LAYOUT, "Gamepad Layout", "port",
                     new String[] {"port", "console"},
-                    new String[] {"Port · original mapping", "Console · PS2-style (X accept, O back, R3 camera)"}),
+                    new String[] {"Default Xbox", "PS2 style"}),
             new Option(SPEEDOMETER, "Speedometer Position", "bottom",
                     new String[] {"bottom", "raised", "middle", "brake"},
                     new String[] {"Bottom Right (original)", "Raised · right side, mid height", "Middle · bottom center", "Beside Brake · left of the pedals"}),
@@ -134,8 +134,17 @@ public final class GameOptions {
             return prefs(context).getString(key, "off");
         }
         String value = prefs(context).getString(key, o.defaultValue);
+        if (PAD_LAYOUT.equals(key)) {
+            if ("ps2".equals(value)) value = "console";
+            else if ("default".equals(value) || "xbox".equals(value)) value = "port";
+        }
         for (String allowed : o.values) if (allowed.equals(value)) return value;
         return o.defaultValue;
+    }
+
+    /** True when Gamepad Layout is PS2 style. Native consolePad extra. */
+    static boolean isConsolePad(Context context) {
+        return "console".equals(get(context, PAD_LAYOUT));
     }
 
     static void set(Context context, String key, String value) {

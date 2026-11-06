@@ -58,11 +58,15 @@ public:
     }
     // false while the game reads the pad as a DirectInput joystick.
     void setKeyEmulation(bool emulate){emulate_=emulate;}
+    // Launcher Gamepad Layout: false = Default Xbox, true = PS2 style.
+    void setConsoleLayout(bool console){console_=console;}
     GuestPadState padState()const{
         GuestPadState state;
         state.leftX=stickX_;state.leftY=stickY_;state.rightX=rightX_;state.rightY=rightY_;
         state.leftTrigger=std::fmax(leftTrigger_,buttons_[L2]?1.f:0.f);
         state.rightTrigger=std::fmax(rightTrigger_,buttons_[R2]?1.f:0.f);
+        // Buttons always go to DirectInput so the in-game controller page can
+        // list them and remap them in both Xbox and PS2 layouts.
         static constexpr Button order[]={A,B,X,Y,L1,R1,Select,Start,ThumbL,ThumbR,L2,R2};
         for(unsigned i=0;i<12;++i)if(buttons_[order[i]])state.buttons|=1u<<i;
         if(state.leftTrigger>=0.5f)state.buttons|=1u<<10;
@@ -79,7 +83,7 @@ private:
     std::array<bool,ButtonCount> buttons_{};
     float stickX_=0,stickY_=0,rightX_=0,rightY_=0,hatX_=0,hatY_=0,leftTrigger_=0,rightTrigger_=0;
     std::array<bool,256> sent_{};
-    bool driving_=false,emulate_=true,sentEmulation_=true;
+    bool driving_=false,emulate_=true,sentEmulation_=true,console_=false;
 
     static int buttonFor(int32_t code){
         switch(code){
@@ -101,12 +105,46 @@ private:
         default:return -1;
         }
     }
+    template<class SetKey> void commit(bool driving,std::array<bool,256>& want,SetKey& setKey){
+        driving_=driving;sentEmulation_=emulate_;
+        if(!emulate_)want.fill(false);
+        for(unsigned scan=0;scan<256;++scan)if(want[scan]!=sent_[scan]){sent_[scan]=want[scan];setKey(scan,want[scan]);}
+    }
+    template<class Past> void applyConsole(bool driving,std::array<bool,256>& want,Past& past){
+        bool left=buttons_[Left]||hatX_<-.5f,right=buttons_[Right]||hatX_>.5f;
+        bool up=buttons_[Up]||hatY_<-.5f,down=buttons_[Down]||hatY_>.5f;
+        if(driving){
+            want[0xcb]=past(-stickX_,0xcb)||left;
+            want[0xcd]=past(stickX_,0xcd)||right;
+            want[0xc8]=buttons_[R2]||past(rightTrigger_,0xc8);
+            want[0xd0]=buttons_[L2]||past(leftTrigger_,0xd0);
+            want[0x39]=buttons_[A];                       // Cross: handbrake
+            want[0x38]=buttons_[X];                       // Square: nitrous
+            want[0x2a]=buttons_[Y];                       // Triangle: shift up
+            want[0x1d]=buttons_[B];                       // Circle: shift down
+            want[0x2e]=buttons_[R1]||buttons_[ThumbR];    // R1 / R3: camera
+            want[0x30]=buttons_[L1];                      // L1: look back
+            want[0x01]=buttons_[Start];                   // Start: pause
+            want[0x13]=buttons_[Select];                  // Select: reset
+            want[0x1c]=up;                                // D-pad up: engage
+            want[0x14]=down;                              // D-pad down: career stats
+            want[0x32]=left;                              // D-pad left: map
+            want[0x0f]=right;                             // D-pad right: SMS
+        }else{
+            want[0xcb]=left||past(-stickX_,0xcb);want[0xcd]=right||past(stickX_,0xcd);
+            want[0xc8]=up||past(-stickY_,0xc8);want[0xd0]=down||past(stickY_,0xd0);
+            want[0x1c]=buttons_[A]||buttons_[Start];      // Cross / Start: accept
+            want[0x01]=buttons_[B]||buttons_[Select];     // Circle / Select: back
+            want[0x39]=buttons_[X];want[0x2a]=buttons_[Y];
+        }
+    }
     template<class SetKey> void apply(bool driving,SetKey& setKey){
         std::array<bool,256> want{};
         // Hysteresis keeps a stick resting near the threshold from chattering.
         auto past=[&](float value,unsigned scan){return value>(sent_[scan]?.25f:.4f);};
         bool hatLeft=buttons_[Left]||hatX_<-.5f,hatRight=buttons_[Right]||hatX_>.5f;
         bool hatUp=buttons_[Up]||hatY_<-.5f,hatDown=buttons_[Down]||hatY_>.5f;
+        if(console_){applyConsole(driving,want,past);commit(driving,want,setKey);return;}
         if(driving){
             // Xbox-style racing: RT gas, LT brake/reverse, A handbrake, B nitrous,
             // X camera, Y look back, RB/LB shift up/down, Start pause.
@@ -128,8 +166,6 @@ private:
             want[0x1c]=buttons_[A]||buttons_[Start];want[0x01]=buttons_[B]||buttons_[Select];
             want[0x39]=buttons_[X];want[0x2a]=buttons_[Y];
         }
-        driving_=driving;sentEmulation_=emulate_;
-        if(!emulate_)want.fill(false);
-        for(unsigned scan=0;scan<256;++scan)if(want[scan]!=sent_[scan]){sent_[scan]=want[scan];setKey(scan,want[scan]);}
+        commit(driving,want,setKey);
     }
 };

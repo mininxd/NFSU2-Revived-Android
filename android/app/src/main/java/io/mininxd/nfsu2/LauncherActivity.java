@@ -922,7 +922,7 @@ public final class LauncherActivity extends Activity {
                 .putExtra("cpuTextures", false)    // default GPU textures (hidden option)
                 .putExtra("region", GameOptions.regionCode(this))
                 .putExtra("speedometer", GameOptions.speedometerPosition(this))
-                .putExtra("consolePad", GameOptions.get(this, GameOptions.PAD_LAYOUT).equals("console"))
+                .putExtra("consolePad", GameOptions.isConsolePad(this))
                 .putExtra("onlineServer", GameOptions.onlineServer(this))
                 .putExtra("driverLoader", loader)
                 .putExtra("graphicsBackend", GameOptions.getEffectiveGraphicsBackend(this))

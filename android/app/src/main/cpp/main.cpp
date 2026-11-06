@@ -335,7 +335,14 @@ extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nat
 extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeResolution(JNIEnv*,jclass,jint width,jint height){setGuestResolution(unsigned(width),unsigned(height));}
 extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeFrameLimit(JNIEnv*,jclass,jint cap){setGuestFrameLimit(unsigned(cap));}
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeFrameLimit(JNIEnv*,jclass,jint cap){setGuestFrameLimit(unsigned(cap));}
+extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeGamepadLayout(JNIEnv*,jclass,jboolean console){
+    gamepad.setConsoleLayout(console==JNI_TRUE);setGuestPadButtonNames(console==JNI_TRUE);
+}
+extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeGamepadLayout(JNIEnv*,jclass,jboolean console){
+    gamepad.setConsoleLayout(console==JNI_TRUE);setGuestPadButtonNames(console==JNI_TRUE);
+}
 extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeGamepadConnected(JNIEnv*,jclass,jboolean connected){setGuestPadConnected(connected==JNI_TRUE);}
+extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeGamepadConnected(JNIEnv*,jclass,jboolean connected){setGuestPadConnected(connected==JNI_TRUE);}
 extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeGamepadDevices(JNIEnv* env,jclass,jintArray ids){
     std::vector<int32_t> devices;
     if(ids){jsize count=env->GetArrayLength(ids);devices.resize(size_t(count));if(count)env->GetIntArrayRegion(ids,0,count,devices.data());}
@@ -343,6 +350,9 @@ extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeGamep
     if(devices!=gamepadDevices)__android_log_print(ANDROID_LOG_INFO,"NFS","Accepted gamepads: %zu device(s)",devices.size());
     if(devices.size()<gamepadDevices.size())gamepadsRemoved=true;
     gamepadDevices=std::move(devices);
+}
+extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeGamepadDevices(JNIEnv* env,jclass cls,jintArray ids){
+    Java_io_mininxd_nfsu2_GameActivity_nativeGamepadDevices(env,cls,ids);
 }
 extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeWidescreen(JNIEnv*,jclass,jboolean enabled){setGuestWidescreen(enabled==JNI_TRUE);}
 extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeScreenMode(JNIEnv*,jclass,jint mode){setGuestScreenMode(int(mode));}
