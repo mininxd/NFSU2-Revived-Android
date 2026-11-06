@@ -244,6 +244,10 @@ public final class NetLog {
 
     public static byte[] getLogBytes(Context ctx) {
         File file = getPrimaryLogFile(ctx);
+        if (file == null || !file.exists() || file.length() == 0) {
+            File sdcard = new File(new File(Environment.getExternalStorageDirectory(), "NFSU2"), "net_log.txt");
+            if (sdcard.exists() && sdcard.length() > 0) file = sdcard;
+        }
         if (file != null && file.exists()) {
             try (FileInputStream in = new FileInputStream(file)) {
                 byte[] data = new byte[(int) file.length()];

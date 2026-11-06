@@ -27,8 +27,8 @@ import java.util.zip.ZipOutputStream;
  * Crash detection and tester reports (after the MW port). Reports contain this app's own log, the
  * device and the launcher options; never game files or saves. Nothing is uploaded automatically.
  * GitHub cannot take an attachment through the new-issue link, so the issue body carries a compact
- * technical summary of the game log, and the full ZIP is saved to Download/NFSU2 for the player to
- * attach.
+ * technical summary, and the full ZIP (including game_log.txt and network_log.txt) is saved to
+ * Download/NFSU2 and /sdcard/NFSU2. A crash autosaves that ZIP when the launcher comes back.
  */
 final class Diagnostics {
     static final String ISSUES = "https://github.com/mininxd/NFSU2-Revived-Android/issues/new";
@@ -90,8 +90,8 @@ final class Diagnostics {
             info.append("language=").append(GameOptions.language(context)).append('\n');
             add(zip, "report.txt", info.toString().getBytes(StandardCharsets.UTF_8));
             add(zip, "logcat.txt", logcat(0));
-            add(zip, "NFSU2-network.log", io.mininxd.nfsu2.net.NetLog.getLogBytes(context));
-            add(zip, "NFSU2-game.log", GameLog.getLogBytes(context));
+            add(zip, "network_log.txt", io.mininxd.nfsu2.net.NetLog.getLogBytes(context));
+            add(zip, "game_log.txt", GameLog.getLogBytes(context));
             ActivityManager manager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
             if (Build.VERSION.SDK_INT >= 30 && manager != null) addExitInfo(zip, manager, context);
         } catch (Exception error) {

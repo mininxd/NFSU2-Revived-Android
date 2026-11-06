@@ -3,8 +3,6 @@ package io.mininxd.nfsu2;
 import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.content.ClipData;
-import android.content.ClipboardManager;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -27,13 +25,11 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
-import android.widget.Toast;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import io.mininxd.nfsu2.net.NetLog;
 
 /**
  * Launcher in the style of the MW and Carbon ports: game files and PLAY on the left, options on the
@@ -69,6 +65,7 @@ public final class LauncherActivity extends Activity {
     private TextView status;
     private Button play, access, downloadFiles;
     private boolean playAfterProbe, checkingUpdates, resumed;
+    private String updateLaterTag;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
 
@@ -122,12 +119,7 @@ public final class LauncherActivity extends Activity {
         String crash = Diagnostics.unreportedCrash(this);
         if (crash != null) {
             Diagnostics.acknowledgeCrashes(this);
-            new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                    .setTitle("The game crashed")
-                    .setMessage(crash + ".\n\nYou can report this issue on GitHub or save the diagnostic ZIP file to your device.")
-                    .setPositiveButton("Report on GitHub", (dialog, which) -> prepareReport(crash))
-                    .setNeutralButton("Save Diagnostic ZIP", (dialog, which) -> saveDiagnosticZip(crash))
-                    .setNegativeButton("Not now", null).show();
+            autosaveDiagnostic(crash);
         }
     }
 
@@ -431,11 +423,9 @@ public final class LauncherActivity extends Activity {
         optionsList.addView(optionRow("Online Server", serverStatusSummary(), this::chooseOnlineServer));
         optionsList.addView(optionRow("Room Name", GameOptions.roamRoom(this).isEmpty() ? "Default (Public)" : GameOptions.roamRoom(this), this::chooseRoamRoom));
         optionsList.addView(optionRow("Crew Name", GameOptions.roamCrew(this).isEmpty() ? "None" : GameOptions.roamCrew(this), this::chooseRoamCrew));
-        optionsList.addView(optionRow("Export Network Log", "Save NFSU2-network.log", this::exportNetworkLog));
-        optionsList.addView(optionRow("Export Game Log", "Save NFSU2-game.log", this::exportGameLog));
         optionsList.addView(optionRow("Check for updates",
                 checkingUpdates ? "Checking GitHub…" : "Version " + ReleaseUpdates.installed(this), () -> checkUpdates(true)));
-        optionsList.addView(optionRow("Report an issue", "Report on GitHub / Save ZIP", () -> showReportDialog(null)));
+        optionsList.addView(optionRow("Report an issue", "GitHub issue / diagnostic ZIP", () -> showReportDialog(null)));
     }
 
     private String serverStatusSummary() {
@@ -764,14 +754,53 @@ public final class LauncherActivity extends Activity {
                 return;
             }
             android.content.SharedPreferences updates = ReleaseUpdates.prefs(this);
-            if (!manual && result.tag.equals(updates.getString("notified_tag", ""))) return;
-            updates.edit().putString("notified_tag", result.tag).apply();
+            if (!manual) {
+                if (result.tag.equals(updates.getString("skip_update_tag", ""))) return;
+                if (result.tag.equals(updateLaterTag)) return;
+            }
             new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
                     .setTitle("New version available: " + result.tag)
                     .setMessage("You can download it from GitHub or keep playing with this version. Install the APK over "
                             + "the current one to preserve your saves and settings.")
                     .setPositiveButton("Update", (dialog, which) -> openUrl(Uri.parse(result.url)))
-                    .setNegativeButton("Later", null).show();
+                    .setNeutralButton("Don't show again", (dialog, which) ->
+                            updates.edit().putString("skip_update_tag", result.tag).apply())
+                    .setNegativeButton("Later", (dialog, which) -> updateLaterTag = result.tag)
+                    .show();
+        });
+    }
+
+    /** Crash return to the launcher: write the ZIP without waiting for a tap. */
+    private void autosaveDiagnostic(String crash) {
+        status.setText("Saving diagnostic ZIP…");
+        worker.execute(() -> {
+            try {
+                File report = Diagnostics.createReport(this);
+                String location = Diagnostics.saveToDownloads(this, report);
+                String sdcardLoc = Diagnostics.saveToSdcard(report);
+                Uri issue = Diagnostics.issueUri(this, crash, location);
+                main.post(() -> {
+                    refresh();
+                    String msg = crash + ".\n\nDiagnostic ZIP saved to:\n• " + location;
+                    if (sdcardLoc != null) msg += "\n• " + sdcardLoc;
+                    new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                            .setTitle("The game crashed")
+                            .setMessage(msg)
+                            .setPositiveButton("Report on GitHub", (dialog, which) -> openUrl(issue))
+                            .setNegativeButton("OK", null)
+                            .show();
+                });
+            } catch (Exception error) {
+                main.post(() -> {
+                    refresh();
+                    new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                            .setTitle("The game crashed")
+                            .setMessage(crash + ".\n\nCould not save the diagnostic ZIP: " + error.getMessage())
+                            .setPositiveButton("Report on GitHub", (dialog, which) -> prepareReport(crash))
+                            .setNegativeButton("OK", null)
+                            .show();
+                });
+            }
         });
     }
 
@@ -837,49 +866,6 @@ public final class LauncherActivity extends Activity {
                 .setPositiveButton("Report on GitHub", (dialog, which) -> prepareReport(crash))
                 .setNeutralButton("Save Diagnostic ZIP", (dialog, which) -> saveDiagnosticZip(crash))
                 .setNegativeButton("Cancel", null)
-                .show();
-    }
-
-    private void exportNetworkLog() {
-        String loc = NetLog.exportLogToDownloads(this);
-        String full = NetLog.getFullLogText(this);
-        ClipboardManager cb = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-        if (cb != null && full != null && !full.trim().isEmpty()) {
-            cb.setPrimaryClip(ClipData.newPlainText("NFSU2 Network Log", full));
-        }
-
-        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle("Export Network Log")
-                .setMessage("Log exported to:\n• " + (loc != null ? loc : "Downloads/NFSU2/NFSU2-network.log")
-                        + "\n• /sdcard/NFSU2/NFSU2-network.log"
-                        + "\n\n(Full log content was also copied to your clipboard).")
-                .setPositiveButton("OK", null)
-                .setNeutralButton("Clear Log", (d, w) -> {
-                    NetLog.clear(this);
-                    Toast.makeText(this, "Network log cleared", Toast.LENGTH_SHORT).show();
-                })
-                .show();
-    }
-
-    private void exportGameLog() {
-        String loc = GameLog.exportLogToDownloads(this);
-        String full = GameLog.getFullLogText(this);
-        ClipboardManager cb = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-        if (cb != null && full != null && !full.trim().isEmpty()) {
-            cb.setPrimaryClip(ClipData.newPlainText("NFSU2 Game Log", full));
-        }
-
-        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle("Export Game & Halt Log")
-                .setMessage("Log exported to:\n• " + (loc != null ? loc : "Downloads/NFSU2/NFSU2-game.log")
-                        + "\n• /sdcard/NFSU2/game_log.txt"
-                        + "\n• /sdcard/NFSU2/halt_log.txt"
-                        + "\n\n(Full log content was also copied to your clipboard).")
-                .setPositiveButton("OK", null)
-                .setNeutralButton("Clear Log", (d, w) -> {
-                    GameLog.clear(this);
-                    Toast.makeText(this, "Game log cleared", Toast.LENGTH_SHORT).show();
-                })
                 .show();
     }
 
