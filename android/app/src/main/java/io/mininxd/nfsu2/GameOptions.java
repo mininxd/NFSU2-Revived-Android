@@ -46,9 +46,9 @@ public final class GameOptions {
             new Option(DISPLAY_LOGS, "Display Logs", "off",
                     new String[] {"off", "compact", "full"},
                     new String[] {"Off", "Compact", "Full"}),
-            new Option(WIDESCREEN, "Screen Size", "on",
-                    new String[] {"on", "off", "stretched"},
-                    new String[] {"Widescreen (screen size)", "4:3 · original ratio", "4:3 Stretched · full screen"}),
+            new Option(WIDESCREEN, "Screen Size", "hud",
+                    new String[] {"hud", "on", "off"},
+                    new String[] {"Corrected HUD", "Widescreen", "4:3"}),
             new Option(MINIMAP, "Minimap", "top",
                     new String[] {"top", "bottom"},
                     new String[] {"Top left", "Bottom left (original)"}),
@@ -81,16 +81,34 @@ public final class GameOptions {
     }
 
     /**
-     * Screen size mode for nativeWidescreenMode:
-     *   0 = widescreen (screen fills display, aspect-corrected HUD)
-     *   1 = 4:3 original (black bars on sides)
-     *   2 = 4:3 stretched (fills screen, geometry squished)
+     * 0 Widescreen (patch HUD at the edges), 1 = 4:3 (no patch, not stretched),
+     * 2 = Corrected HUD (wide 3D, patch HUD kept in a 4:3 centre).
      */
     static int widescreenMode(Context context) {
         String val = get(context, WIDESCREEN);
-        if ("off".equals(val))       return 1;  // 4:3 original
-        if ("stretched".equals(val)) return 2;  // 4:3 stretched
-        return 0;                               // "on" = widescreen (default)
+        if ("off".equals(val)) return 1;
+        if ("on".equals(val)) return 0;
+        return 2;
+    }
+
+    /** Corrected HUD and Widescreen both need NFSUnderground2.WidescreenFix.dat. */
+    static boolean usesWidescreenPatch(Context context) {
+        return !"off".equals(get(context, WIDESCREEN));
+    }
+
+    /** Put back a .dat parked by an older Corrected HUD build. */
+    static void applyWidescreenPatchFile(Context context) {
+        java.io.File scripts = new java.io.File(LauncherActivity.gameRoot(), "scripts");
+        java.io.File dat = new java.io.File(scripts, "NFSUnderground2.WidescreenFix.dat");
+        java.io.File held = new java.io.File(scripts, "NFSUnderground2.WidescreenFix.dat.hold");
+        try {
+            if (held.isFile()) {
+                if (dat.isFile()) dat.delete();
+                held.renameTo(dat);
+            }
+        } catch (Throwable t) {
+            android.util.Log.w("NFSU2", "WidescreenFix.dat: " + t.getMessage());
+        }
     }
 
     /** Game SKU for nativeRegion: -1 game default, 0 North America, 1 Europe.
@@ -138,6 +156,7 @@ public final class GameOptions {
             if ("ps2".equals(value)) value = "console";
             else if ("default".equals(value) || "xbox".equals(value)) value = "port";
         }
+        if (WIDESCREEN.equals(key) && "stretched".equals(value)) value = "hud";
         for (String allowed : o.values) if (allowed.equals(value)) return value;
         return o.defaultValue;
     }

@@ -125,7 +125,8 @@ static const uint32_t k_sites[SITE_COUNT] = {
 #define HUD_SCALE_X 0x0079AC10u
 #endif
 void nfs_widescreen_set_screen_mode(int mode) {
-    /* 0 = widescreen (fill display), 1 = 4:3 original (bars), 2 = 4:3 stretched */
+    /* 0 = Widescreen (fill + .dat HUD at the edges), 1 = 4:3 (patch off),
+     * 2 = Corrected HUD (wide 3D, HUD from the .dat kept in a 4:3 centre). */
     s_screen_mode = (mode >= 0 && mode <= 2) ? mode : 0;
     if (s_width > 0.0f && s_height > 0.0f) {
         nfs_widescreen_set_resolution((unsigned)s_width, (unsigned)s_height);
@@ -150,23 +151,18 @@ void nfs_widescreen_set_resolution(unsigned width, unsigned height) {
     float hud_scale_x;
     if (!s_enabled || !width || !height) return;
     s_width = (float)width; s_height = (float)height;
+    s_aspect = s_width / s_height;
+    float hud_w = s_width, hud_aspect = s_aspect;
     if (s_screen_mode == 2) {
-        /* 4:3 stretched: render fills the full screen but all geometry
-         * (HUD anchors, FOV, mirrors) is computed as if aspect = 4:3.
-         * The result is the original layout stretched to fill the display. */
-        s_aspect = 4.0f / 3.0f;
-    } else {
-        s_aspect = s_width / s_height;
-    }
-    hud_scale_x = (1.0f / s_width * (s_height / 480.0f)) * 2.0f;
-    s_hud_pos_x = 640.0f / (640.0f * hud_scale_x);
-    /* HudAspectRatioConstraint = Auto: -CalculateWidescreenOffset(W, H, 640, 480).
-     * On tall/wide displays (20:9, 21:9), clamp HUD offset to 16:9 safe zone so
-     * minimap and gauges don't clip into camera hole-punches, notches, or corners. */
-    float hud_aspect = s_aspect;
-    if (s_hud_safe_area && hud_aspect > (16.0f / 9.0f)) {
+        /* Corrected HUD: world/FOV stay widescreen; HUD uses the .dat in a
+         * 4:3 box so it sits in the centre and is not stretched. */
+        hud_aspect = 4.0f / 3.0f;
+        hud_w = s_height * (4.0f / 3.0f);
+    } else if (s_hud_safe_area && hud_aspect > (16.0f / 9.0f)) {
         hud_aspect = 16.0f / 9.0f;
     }
+    hud_scale_x = (1.0f / hud_w * (s_height / 480.0f)) * 2.0f;
+    s_hud_pos_x = 640.0f / (640.0f * hud_scale_x);
     s_hud_offset = -((640.0f / 2.0f) - (480.0f / 2.0f) * hud_aspect);
     wrf(HUD_SCALE_X, hud_scale_x);              /* fld [fHudScaleX] */
     wrf(0x00797D50u, s_hud_pos_x);              /* fsub [fHudPosX] */
