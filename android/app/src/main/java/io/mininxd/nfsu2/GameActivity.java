@@ -197,9 +197,15 @@ public final class GameActivity extends NativeActivity {
     private static void nativeGamepadConnected(boolean connected) { com.nfsu2.androidevolved.GameActivity.nativeGamepadConnected(connected); }
     private static void nativeGamepadDevices(int[] ids) { com.nfsu2.androidevolved.GameActivity.nativeGamepadDevices(ids); }
     private static void nativeMinimapTop(boolean top) { com.nfsu2.androidevolved.GameActivity.nativeMinimapTop(top); }
-    private static void nativeGamepadLayout(boolean console) {
-        try { com.nfsu2.androidevolved.GameActivity.nativeGamepadLayout(console); }
-        catch (UnsatisfiedLinkError missing) { android.util.Log.w("NFSU2", "Gamepad layout option needs a newer libnfsu2_android.so"); }
+    private static void nativeGamepadLayout(boolean playstationNames) {
+        try {
+            com.nfsu2.androidevolved.GameActivity.nativeGamepadLayout(playstationNames);
+            android.util.Log.i("NFSU2", playstationNames
+                    ? "Gamepad labels: PS2 Cross Circle Square Triangle L1 L2 L3"
+                    : "Gamepad labels: Xbox A B X Y LB RB");
+        } catch (UnsatisfiedLinkError missing) {
+            android.util.Log.w("NFSU2", "Gamepad layout option needs a newer libnfsu2_android.so");
+        }
     }
     private static void nativeSpeedometerPosition(int position) {
         try { com.nfsu2.androidevolved.GameActivity.nativeSpeedometerPosition(position); }

@@ -187,15 +187,18 @@ index 5da071b..01f9215 100644
  std::atomic<int> inputPadAcquired{0};
  std::array<uint8_t,16> directInputGuid(uint32_t data1){
      std::array<uint8_t,16> guid={0,0,0,0,0xf3,0xc9,0xcf,0x11,0xbf,0xc7,0x44,0x45,0x53,0x54,0,0};
-@@ -144,7 +147,11 @@ bool joystickMethod(InputObject& object,uint32_t self,uint32_t method){
+@@ -144,7 +147,14 @@ bool joystickMethod(InputObject& object,uint32_t self,uint32_t method){
          uint32_t bytes=read32(output);std::memset(ptr(output+4,bytes-4),0,bytes-4);
          auto guid=directInputGuid(entry.guidData1);std::memcpy(ptr(output+4,16),guid.data(),16);
          write32(output+20,entry.offset);write32(output+24,entry.type);write32(output+28,entry.flags);
 -        std::memcpy(ptr(output+32,std::strlen(entry.name)+1),entry.name,std::strlen(entry.name)+1);
 +        static const char* const xbox[]={"A","B","X","Y","LB","RB","Back","Start","LS","RS","L2","R2"};
 +        static const char* const playStation[]={"Cross","Circle","Square","Triangle","L1","R1","Select","Start","L3","R3","L2","R2"};
-+        const char* name=entry.name;uint32_t button=(entry.type>>8)&0xffff;
-+        if((entry.type&0x04u)&&button<std::size(xbox))name=padPlayStationNames.load(std::memory_order_relaxed)?playStation[button]:xbox[button];
++        static const char* const playStationAxes[]={"Left Stick X","Left Stick Y","L2 / R2","Right Stick X","Right Stick Y","Right Stick Z"};
++        const char* name=entry.name;uint32_t index=(entry.type>>8)&0xffff;
++        if((entry.type&0x04u)&&index<std::size(xbox))name=padPlayStationNames.load(std::memory_order_relaxed)?playStation[index]:xbox[index];
++        else if(padPlayStationNames.load(std::memory_order_relaxed)&&(entry.type&0x02u)&&index<std::size(playStationAxes))name=playStationAxes[index];
++        else if(padPlayStationNames.load(std::memory_order_relaxed)&&(entry.type&0x10u))name="D-Pad";
 +        std::memcpy(ptr(output+32,std::strlen(name)+1),name,std::strlen(name)+1);
      };
      switch(method){
