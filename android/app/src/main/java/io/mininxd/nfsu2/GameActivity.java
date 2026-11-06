@@ -178,6 +178,10 @@ public final class GameActivity extends NativeActivity {
         } catch (Throwable ignored) {}
     }
     private static void nativeWidescreen(boolean enabled) { com.nfsu2.androidevolved.GameActivity.nativeWidescreen(enabled); }
+    private static void nativeScreenMode(int mode) {
+        try { com.nfsu2.androidevolved.GameActivity.nativeScreenMode(mode); }
+        catch (Throwable t) { android.util.Log.w("GameActivity", "nativeScreenMode: " + t.getMessage()); }
+    }
     private static void nativeDrawDistance(float distance) {
         try {
             com.nfsu2.androidevolved.GameActivity.nativeDrawDistance(distance);
@@ -364,7 +368,9 @@ public final class GameActivity extends NativeActivity {
         }
         nativeLanguage(language);
         nativeFrameLimit(launch.getIntExtra("frameCap", Integer.parseInt(GameOptions.get(this, GameOptions.FPS))));
-        nativeWidescreen(launch.getIntExtra("widescreenMode", GameOptions.widescreenMode(this)) == 0);
+        int screenMode = launch.getIntExtra("widescreenMode", GameOptions.widescreenMode(this));
+        nativeWidescreen(screenMode != 1);  // mode 1 (4:3 original) disables widescreen entirely
+        nativeScreenMode(screenMode);       // 0=widescreen, 1=4:3 bars, 2=4:3 stretched
         nativeDrawDistance(distVal);
         String server = launch.getStringExtra("onlineServer");
         String configuredServer = GameOptions.validServer(server) ? server : GameOptions.onlineServer(this);

@@ -17,6 +17,7 @@ public final class GameActivity {
     public static native void nativeResolution(int width, int height);
     public static native void nativeFrameLimit(int cap);
     public static native void nativeWidescreen(boolean enabled);
+    public static native void nativeScreenMode(int mode);
     public static native void nativeDrawDistance(float distance);
     public static native void nativeOnlineServer(String host);
     public static native void nativeGamepadConnected(boolean connected);

@@ -27,6 +27,8 @@ static hud_entry s_hud[256];
 static unsigned s_hud_count;
 static int s_enabled;
 static float s_aspect = 4.0f / 3.0f;
+/* Screen mode: 0 = widescreen, 1 = 4:3 original (bars), 2 = 4:3 stretched */
+static int s_screen_mode = 0;
 static float s_hud_pos_x = 320.0f;      /* the mod's fHudPosX */
 static float s_hud_offset = 0.0f;       /* fWidescreenHudOffset */
 static float s_width = 640.0f, s_height = 480.0f;
@@ -122,6 +124,14 @@ static const uint32_t k_sites[SITE_COUNT] = {
 #else
 #define HUD_SCALE_X 0x0079AC10u
 #endif
+void nfs_widescreen_set_screen_mode(int mode) {
+    /* 0 = widescreen (fill display), 1 = 4:3 original (bars), 2 = 4:3 stretched */
+    s_screen_mode = (mode >= 0 && mode <= 2) ? mode : 0;
+    if (s_width > 0.0f && s_height > 0.0f) {
+        nfs_widescreen_set_resolution((unsigned)s_width, (unsigned)s_height);
+    }
+}
+
 void nfs_widescreen_init(const char* game_root) {
     char path[1024];
     snprintf(path, sizeof path, "%s/scripts/NFSUnderground2.WidescreenFix.dat", game_root);
@@ -140,7 +150,14 @@ void nfs_widescreen_set_resolution(unsigned width, unsigned height) {
     float hud_scale_x;
     if (!s_enabled || !width || !height) return;
     s_width = (float)width; s_height = (float)height;
-    s_aspect = s_width / s_height;
+    if (s_screen_mode == 2) {
+        /* 4:3 stretched: render fills the full screen but all geometry
+         * (HUD anchors, FOV, mirrors) is computed as if aspect = 4:3.
+         * The result is the original layout stretched to fill the display. */
+        s_aspect = 4.0f / 3.0f;
+    } else {
+        s_aspect = s_width / s_height;
+    }
     hud_scale_x = (1.0f / s_width * (s_height / 480.0f)) * 2.0f;
     s_hud_pos_x = 640.0f / (640.0f * hud_scale_x);
     /* HudAspectRatioConstraint = Auto: -CalculateWidescreenOffset(W, H, 640, 480).

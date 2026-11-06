@@ -157,6 +157,7 @@ uint32_t lastImport{};
 std::string hostGameRoot;
 std::string guestLanguage="English UK";
 bool guestWidescreen=true;
+int guestScreenMode=0;  /* 0=widescreen, 1=4:3 original, 2=4:3 stretched */
 bool guestHudSafeArea=false;
 std::atomic<bool> stopRequested{false};
 std::atomic<bool> guestPaused{false};
@@ -980,8 +981,9 @@ std::string connectGuestRuntime(const char* executable) {
         }
         if(guestWidescreen){
             nfs_widescreen_init(hostGameRoot.c_str());
+            nfs_widescreen_set_screen_mode(guestScreenMode);
             nfs_widescreen_set_hud_safe_area(guestHudSafeArea ? 1 : 0);
-            NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Widescreen: %d HUD offsets from scripts/NFSUnderground2.WidescreenFix.dat (safeArea=%d)",nfs_widescreen_hud_entries(),int(guestHudSafeArea));
+            NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Widescreen: %d HUD offsets from scripts/NFSUnderground2.WidescreenFix.dat (safeArea=%d, screenMode=%d)",nfs_widescreen_hud_entries(),int(guestHudSafeArea),guestScreenMode);
         }else NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Widescreen disabled: original 4:3 geometry");
         if(renderWidth.load()&&renderHeight.load())configureAndroidResolutionModes();
         memory->commit(stackBase,stackSize); memory->commit(tib,0x1000);
@@ -1094,6 +1096,7 @@ void setGuestOnlineServer(const std::string& host){
     }
 }
 void setGuestWidescreen(bool enabled){std::lock_guard<MachineMutex> lock(machine);if(!memory)guestWidescreen=enabled;}
+void setGuestScreenMode(int mode){std::lock_guard<MachineMutex> lock(machine);guestScreenMode=mode;if(!memory)guestWidescreen=(mode!=1);if(memory)nfs_widescreen_set_screen_mode(mode);}
 void setGuestHudSafeArea(bool enabled){std::lock_guard<MachineMutex> lock(machine);guestHudSafeArea=enabled;if(memory)nfs_widescreen_set_hud_safe_area(enabled?1:0);}
 void setGuestLanguage(const char* language){
     std::lock_guard<MachineMutex> lock(machine);if(memory)return;

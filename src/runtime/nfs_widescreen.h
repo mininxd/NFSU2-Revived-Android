@@ -7,6 +7,10 @@ extern "C" {
 
 /* Enable the fix; reads <game_root>/scripts/NFSUnderground2.WidescreenFix.dat. */
 void nfs_widescreen_init(const char* game_root);
+/* Screen size mode: 0 = widescreen (default), 1 = 4:3 original (black bars),
+ * 2 = 4:3 stretched (fills screen, geometry locked to 4:3 aspect).
+ * Call before nfs_widescreen_set_resolution. */
+void nfs_widescreen_set_screen_mode(int mode);
 /* The game's render size; call before its HUD draws and on every change. */
 void nfs_widescreen_set_resolution(unsigned width, unsigned height);
 /* HUD offset entries loaded from the .dat (0: elements keep 4:3 anchors). */

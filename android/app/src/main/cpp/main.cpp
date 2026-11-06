@@ -345,6 +345,7 @@ extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeGamep
     gamepadDevices=std::move(devices);
 }
 extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeWidescreen(JNIEnv*,jclass,jboolean enabled){setGuestWidescreen(enabled==JNI_TRUE);}
+extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeScreenMode(JNIEnv*,jclass,jint mode){setGuestScreenMode(int(mode));}
 extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeDrawDistance(JNIEnv*,jclass,jfloat distance){
     nfs_widescreen_set_draw_distance(float(distance));
 }
