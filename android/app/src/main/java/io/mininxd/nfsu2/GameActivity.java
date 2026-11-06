@@ -319,7 +319,7 @@ public final class GameActivity extends NativeActivity {
             android.system.Os.setenv("NFSU2_INTRO", "original", true);
             android.system.Os.setenv("NFSU2_CUTSCENE_BORDERS", "full", true);
 
-            String roamMaxCars = GameOptions.get(this, GameOptions.ROAM_CARS_LIMIT);
+            String roamMaxCars = "4"; // default (hidden option)
             android.system.Os.setenv("NFSU2_ROAM_MAX_CARS", roamMaxCars, true);
 
             String crew = launch.getStringExtra("roamCrew");
@@ -388,8 +388,8 @@ public final class GameActivity extends NativeActivity {
         speedometerPosition = launch.getIntExtra("speedometer", GameOptions.speedometerPosition(this));
         updateHudForGamepad(false);
         nativeGamepadLayout(launch.getBooleanExtra("consolePad", GameOptions.get(this, GameOptions.PAD_LAYOUT).equals("console")));
-        nativeBackBuffers(launch.getIntExtra("backBuffers", Integer.parseInt(GameOptions.get(this, GameOptions.LATENCY))));
-        nativeCpuTextures(launch.getBooleanExtra("cpuTextures", GameOptions.get(this, GameOptions.TEXTURES).equals("cpu")));
+        nativeBackBuffers(launch.getIntExtra("backBuffers", 2));
+        nativeCpuTextures(launch.getBooleanExtra("cpuTextures", false));
         nativeRegion(launch.getIntExtra("region", GameOptions.regionCode(this)));
         String[] loader = launch.getStringArrayExtra("driverLoader");
         if (loader == null || loader.length != 4) loader = GpuDrivers.loaderArguments(this);
