@@ -142,7 +142,7 @@ public final class GameOptions {
         return o.defaultValue;
     }
 
-    /** True when Gamepad Layout is PS2 style. Native consolePad extra. */
+    /** True when Gamepad Layout shows PS2 names (Cross/Circle/Square/Triangle). Mapping is unchanged. */
     static boolean isConsolePad(Context context) {
         return "console".equals(get(context, PAD_LAYOUT));
     }

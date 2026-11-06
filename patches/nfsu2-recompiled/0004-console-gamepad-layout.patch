@@ -178,23 +178,21 @@ diff --git a/android/app/src/main/cpp/guest_input.inc b/android/app/src/main/cpp
 index 5da071b..01f9215 100644
 --- a/android/app/src/main/cpp/guest_input.inc
 +++ b/android/app/src/main/cpp/guest_input.inc
-@@ -31,6 +31,9 @@ struct InputObject {
+@@ -31,6 +31,8 @@ struct InputObject {
  // stick, Rz centred; buttons A B X Y LB RB Back Start LS RS; one POV hat.
  struct InputPad {float axis[6]{};uint32_t buttons=0;int hatX=0,hatY=0;};
  InputPad inputPad;bool inputPadConnected=false;
-+// Console gamepad layout: the pad's buttons are named as on a PlayStation pad
-+// (the game shows these names on its controls screen and in button prompts).
++// PAD_LAYOUT: Xbox vs PS2 names on the controls screen. Mapping is unchanged.
 +std::atomic<bool> padPlayStationNames{false};
  std::atomic<int> inputPadAcquired{0};
  std::array<uint8_t,16> directInputGuid(uint32_t data1){
      std::array<uint8_t,16> guid={0,0,0,0,0xf3,0xc9,0xcf,0x11,0xbf,0xc7,0x44,0x45,0x53,0x54,0,0};
-@@ -144,7 +147,11 @@ bool joystickMethod(InputObject& object,uint32_t self,uint32_t method){
+@@ -144,7 +147,10 @@ bool joystickMethod(InputObject& object,uint32_t self,uint32_t method){
          uint32_t bytes=read32(output);std::memset(ptr(output+4,bytes-4),0,bytes-4);
          auto guid=directInputGuid(entry.guidData1);std::memcpy(ptr(output+4,16),guid.data(),16);
          write32(output+20,entry.offset);write32(output+24,entry.type);write32(output+28,entry.flags);
 -        std::memcpy(ptr(output+32,std::strlen(entry.name)+1),entry.name,std::strlen(entry.name)+1);
-+        // Buttons 0..9 are A, B, X, Y, L1, R1, Select, Start, L3, R3 (gamepad_input.h).
-+        static const char* const playStation[]={"Cross","Circle","Square","Triangle","L1","R1","Select","Start","L3","R3"};
++        static const char* const playStation[]={"Cross","Circle","Square","Triangle","L1","R1","Select","Start","L3","R3","L2","R2"};
 +        const char* name=entry.name;uint32_t button=(entry.type>>8)&0xffff;
 +        if((entry.type&0x04u)&&button<std::size(playStation)&&padPlayStationNames.load(std::memory_order_relaxed))name=playStation[button];
 +        std::memcpy(ptr(output+32,std::strlen(name)+1),name,std::strlen(name)+1);
@@ -368,14 +366,13 @@ index c761b37..3b5abad 100644
      int32_t key=AKeyEvent_getKeyCode(event);unsigned scan=0;
      switch(key){
      case AKEYCODE_DPAD_UP:scan=0xc8;break;case AKEYCODE_DPAD_DOWN:scan=0xd0;break;
-@@ -331,6 +335,11 @@ extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nat
+@@ -331,6 +335,10 @@ extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nat
  }
  extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeResolution(JNIEnv*,jclass,jint width,jint height){setGuestResolution(unsigned(width),unsigned(height));}
  extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeFrameLimit(JNIEnv*,jclass,jint cap){setGuestFrameLimit(unsigned(cap));}
-+// Launcher gamepad layout: false = the port's layout, true = console layout.
-+extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeGamepadLayout(JNIEnv*,jclass,jboolean console){
-+    gamepad.setConsoleLayout(console==JNI_TRUE);
-+    setGuestPadButtonNames(console==JNI_TRUE);
++// PAD_LAYOUT: Xbox vs PS2 button names on the controls screen. Mapping is unchanged.
++extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeGamepadLayout(JNIEnv*,jclass,jboolean playstationNames){
++    setGuestPadButtonNames(playstationNames==JNI_TRUE);
 +}
  extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeGamepadConnected(JNIEnv*,jclass,jboolean connected){setGuestPadConnected(connected==JNI_TRUE);}
  extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeGamepadDevices(JNIEnv* env,jclass,jintArray ids){

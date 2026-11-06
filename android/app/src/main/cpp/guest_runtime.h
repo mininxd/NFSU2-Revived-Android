@@ -16,7 +16,7 @@ void setGuestPad(const float axes[6],uint32_t buttons,int hatX,int hatY);
 void setGuestPadConnected(bool connected);
 // True while the game has the joystick acquired (then the pad stops emulating keys).
 bool guestGamepadInUse();
-// PS2 layout: pad buttons named Cross, Circle, Square, Triangle, L1, ...
+// PAD_LAYOUT display names only: Xbox A/B/X/Y or PS2 Cross/Circle/Square/Triangle.
 void setGuestPadButtonNames(bool playStation);
 // Launcher option; only before the guest boots.
 void setGuestWidescreen(bool enabled);
