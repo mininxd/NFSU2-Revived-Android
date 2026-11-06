@@ -29,9 +29,9 @@ struct InputObject {
 // The Android gamepad as a DirectInput joystick (kind 4), laid out like an Xbox
 // pad under DirectInput: X/Y left stick, Z triggers (LT up, RT down), Rx/Ry right
 // stick, Rz centred; buttons A B X Y LB RB Back Start LS RS; one POV hat.
-// PAD_LAYOUT only swaps Xbox vs PS2 names; bits and mapping stay this order.
 struct InputPad {float axis[6]{};uint32_t buttons=0;int hatX=0,hatY=0;};
 InputPad inputPad;bool inputPadConnected=false;
+// PAD_LAYOUT: Xbox uses padObjects names; PS2 style only overlays the face/shoulder labels.
 std::atomic<bool> padPlayStationNames{false};
 std::atomic<int> inputPadAcquired{0};
 std::array<uint8_t,16> directInputGuid(uint32_t data1){
@@ -41,21 +41,21 @@ std::array<uint8_t,16> directInputGuid(uint32_t data1){
 const std::array<uint8_t,16> padGuid={0x20,0x50,0x41,0x44,0x00,0x00,0x00,0x00,0x00,0x00,0x41,0x4e,0x44,0x52,0x4f,0x49};
 // guidProduct of a HID device: PID<<16|VID, then "PIDVID".
 const std::array<uint8_t,16> padProductGuid={0x5e,0x04,0x8e,0x02,0,0,0,0,0,0,0x50,0x49,0x44,0x56,0x49,0x44};
-struct PadObject {uint32_t guidData1,offset,type,flags;const char* xbox;const char* playstation;};
+struct PadObject {uint32_t guidData1,offset,type,flags;const char* name;};
 // Offsets are those of c_dfDIJoystick / DIJOYSTATE.
 const PadObject padObjects[]={
-    {0xa36d02e0u,0,0x0002u|(0u<<8),0x100u,"X Axis","X Axis"},{0xa36d02e1u,4,0x0002u|(1u<<8),0x100u,"Y Axis","Y Axis"},
-    {0xa36d02e2u,8,0x0002u|(2u<<8),0x100u,"Z-Axis","Z-Axis"},{0xa36d02f4u,12,0x0002u|(3u<<8),0x100u,"X Rotation","X Rotation"},
-    {0xa36d02f5u,16,0x0002u|(4u<<8),0x100u,"Y Rotation","Y Rotation"},{0xa36d02e3u,20,0x0002u|(5u<<8),0x100u,"Z Rotation","Z Rotation"},
-    {0xa36d02f2u,32,0x0010u|(0u<<8),0,"D-pad","D-pad"},
-    {0xa36d02f0u,48,0x0004u|(0u<<8),0,"A","Cross"},{0xa36d02f0u,49,0x0004u|(1u<<8),0,"B","Circle"},
-    {0xa36d02f0u,50,0x0004u|(2u<<8),0,"X","Square"},{0xa36d02f0u,51,0x0004u|(3u<<8),0,"Y","Triangle"},
-    {0xa36d02f0u,52,0x0004u|(4u<<8),0,"LB","L1"},{0xa36d02f0u,53,0x0004u|(5u<<8),0,"RB","R1"},
-    {0xa36d02f0u,54,0x0004u|(6u<<8),0,"Back","Select"},{0xa36d02f0u,55,0x0004u|(7u<<8),0,"Start","Start"},
-    {0xa36d02f0u,56,0x0004u|(8u<<8),0,"LS","L3"},{0xa36d02f0u,57,0x0004u|(9u<<8),0,"RS","R3"},
-    {0xa36d02f0u,58,0x0004u|(10u<<8),0,"Button 10","L2"},{0xa36d02f0u,59,0x0004u|(11u<<8),0,"Button 11","R2"},
-    {0xa36d02f0u,60,0x0004u|(12u<<8),0,"Button 12","Button 12"},{0xa36d02f0u,61,0x0004u|(13u<<8),0,"Button 13","Button 13"},
-    {0xa36d02f0u,62,0x0004u|(14u<<8),0,"Button 14","Button 14"},{0xa36d02f0u,63,0x0004u|(15u<<8),0,"Button 15","Button 15"},
+    {0xa36d02e0u,0,0x0002u|(0u<<8),0x100u,"X Axis"},{0xa36d02e1u,4,0x0002u|(1u<<8),0x100u,"Y Axis"},
+    {0xa36d02e2u,8,0x0002u|(2u<<8),0x100u,"Z-Axis"},{0xa36d02f4u,12,0x0002u|(3u<<8),0x100u,"X Rotation"},
+    {0xa36d02f5u,16,0x0002u|(4u<<8),0x100u,"Y Rotation"},{0xa36d02e3u,20,0x0002u|(5u<<8),0x100u,"Z Rotation"},
+    {0xa36d02f2u,32,0x0010u|(0u<<8),0,"D-pad"},
+    {0xa36d02f0u,48,0x0004u|(0u<<8),0,"A"},{0xa36d02f0u,49,0x0004u|(1u<<8),0,"B"},
+    {0xa36d02f0u,50,0x0004u|(2u<<8),0,"X"},{0xa36d02f0u,51,0x0004u|(3u<<8),0,"Y"},
+    {0xa36d02f0u,52,0x0004u|(4u<<8),0,"LB"},{0xa36d02f0u,53,0x0004u|(5u<<8),0,"RB"},
+    {0xa36d02f0u,54,0x0004u|(6u<<8),0,"Back"},{0xa36d02f0u,55,0x0004u|(7u<<8),0,"Start"},
+    {0xa36d02f0u,56,0x0004u|(8u<<8),0,"LS"},{0xa36d02f0u,57,0x0004u|(9u<<8),0,"RS"},
+    {0xa36d02f0u,58,0x0004u|(10u<<8),0,"Button 10"},{0xa36d02f0u,59,0x0004u|(11u<<8),0,"Button 11"},
+    {0xa36d02f0u,60,0x0004u|(12u<<8),0,"Button 12"},{0xa36d02f0u,61,0x0004u|(13u<<8),0,"Button 13"},
+    {0xa36d02f0u,62,0x0004u|(14u<<8),0,"Button 14"},{0xa36d02f0u,63,0x0004u|(15u<<8),0,"Button 15"},
 };
 // The value DirectInput would report for a resolved format item (type: class
 // in the low byte, our object index in bits 8..23, 0xffff = not on this pad).
@@ -149,7 +149,12 @@ bool joystickMethod(InputObject& object,uint32_t self,uint32_t method){
         uint32_t bytes=read32(output);std::memset(ptr(output+4,bytes-4),0,bytes-4);
         auto guid=directInputGuid(entry.guidData1);std::memcpy(ptr(output+4,16),guid.data(),16);
         write32(output+20,entry.offset);write32(output+24,entry.type);write32(output+28,entry.flags);
-        const char* name=padPlayStationNames.load()?entry.playstation:entry.xbox;
+        const char* name=entry.name;
+        if(padPlayStationNames.load()){
+            static const char* const playStation[]={"Cross","Circle","Square","Triangle","L1","R1","Select","Start","L3","R3","L2","R2"};
+            unsigned button=(entry.type>>8)&0xffff;
+            if((entry.type&0x04u)&&button<std::size(playStation))name=playStation[button];
+        }
         std::memcpy(ptr(output+32,std::strlen(name)+1),name,std::strlen(name)+1);
     };
     switch(method){
@@ -343,7 +348,7 @@ void inputDispatch(){
             NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","DirectInput EnumDevices type=%u flags=%x gamepad=1",type,flags);
             uint32_t instance=allocate(580);
             try{for(uint32_t device:{2u,3u,4u}){
-                if(device==4&&(flags&0x100u)&&!inputPadConnected)continue;
+                if(device==4&&(flags&0x100u))continue;  // no force feedback
                 uint32_t deviceType=device==2?0x13:device==3?0x12:0x15;
                 uint32_t deviceClass=device==2?3:device==3?2:4;
                 if(type!=0&&(type!=1||device==4)&&type!=deviceClass&&(type&0xff)!=deviceType)continue;
@@ -361,8 +366,7 @@ void inputDispatch(){
             if(flags&(0x100u|0x2000u|0x4000u)){ret(0,6);return;} // No force-feedback, secondary or non-gaming HID devices.
             NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Enumerate action devices: %u actions callback=%08x",read32(format+12),callback);
             uint32_t instance=allocate(580);
-            try{for(uint32_t kind:{2u,3u,4u}){
-                if(kind==4&&!inputPadConnected)continue;
+            try{for(uint32_t kind:{2u,3u}){
                 auto mapped=kind==2?buildKeyboardActions(format):0;uint32_t device=createInputObject(kind);
                 // The semantic enumerator hands over a usable system device;
                 // this guest does not call SetCooperativeLevel on that keyboard.
@@ -454,7 +458,6 @@ void inputDispatch(){
     case 27:ret(0x80004001,5);return; // EnumEffectsInFile
     case 28:ret(0x80004001,5);return; // WriteEffectToFile
     case 29:{if(!validActionFormat(arg(1))||(arg(3)!=0&&arg(3)!=1&&arg(3)!=2&&arg(3)!=4)){ret(diInvalid,4);return;}
-        if(kind==4){NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Gamepad BuildActionMap: controller page visible");ret(0,4);return;}
         if(kind!=2){ret(0x80004001,4);return;}auto mapped=buildKeyboardActions(arg(1));
         NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Keyboard BuildActionMap mapped %u actions",mapped);ret(0,4);return;}
     case 30:{uint32_t format=arg(1);if(object.acquired){ret(0x800700aa,4);return;}

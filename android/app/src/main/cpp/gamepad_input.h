@@ -63,7 +63,6 @@ public:
         state.leftX=stickX_;state.leftY=stickY_;state.rightX=rightX_;state.rightY=rightY_;
         state.leftTrigger=std::fmax(leftTrigger_,buttons_[L2]?1.f:0.f);
         state.rightTrigger=std::fmax(rightTrigger_,buttons_[R2]?1.f:0.f);
-        // Buttons always go to DirectInput so the in-game controller page can list them.
         static constexpr Button order[]={A,B,X,Y,L1,R1,Select,Start,ThumbL,ThumbR,L2,R2};
         for(unsigned i=0;i<12;++i)if(buttons_[order[i]])state.buttons|=1u<<i;
         if(state.leftTrigger>=0.5f)state.buttons|=1u<<10;
@@ -102,11 +101,6 @@ private:
         default:return -1;
         }
     }
-    template<class SetKey> void commit(bool driving,std::array<bool,256>& want,SetKey& setKey){
-        driving_=driving;sentEmulation_=emulate_;
-        if(!emulate_)want.fill(false);
-        for(unsigned scan=0;scan<256;++scan)if(want[scan]!=sent_[scan]){sent_[scan]=want[scan];setKey(scan,want[scan]);}
-    }
     template<class SetKey> void apply(bool driving,SetKey& setKey){
         std::array<bool,256> want{};
         // Hysteresis keeps a stick resting near the threshold from chattering.
@@ -114,7 +108,7 @@ private:
         bool hatLeft=buttons_[Left]||hatX_<-.5f,hatRight=buttons_[Right]||hatX_>.5f;
         bool hatUp=buttons_[Up]||hatY_<-.5f,hatDown=buttons_[Down]||hatY_>.5f;
         if(driving){
-            // Racing keys: RT gas, LT brake/reverse, A handbrake, B nitrous,
+            // Xbox-style racing: RT gas, LT brake/reverse, A handbrake, B nitrous,
             // X camera, Y look back, RB/LB shift up/down, Start pause.
             want[0xcb]=past(-stickX_,0xcb)||hatLeft;
             want[0xcd]=past(stickX_,0xcd)||hatRight;
@@ -134,6 +128,8 @@ private:
             want[0x1c]=buttons_[A]||buttons_[Start];want[0x01]=buttons_[B]||buttons_[Select];
             want[0x39]=buttons_[X];want[0x2a]=buttons_[Y];
         }
-        commit(driving,want,setKey);
+        driving_=driving;sentEmulation_=emulate_;
+        if(!emulate_)want.fill(false);
+        for(unsigned scan=0;scan<256;++scan)if(want[scan]!=sent_[scan]){sent_[scan]=want[scan];setKey(scan,want[scan]);}
     }
 };
