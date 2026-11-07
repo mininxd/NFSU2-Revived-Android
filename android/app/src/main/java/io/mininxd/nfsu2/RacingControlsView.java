@@ -5,6 +5,9 @@ import android.content.SharedPreferences;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.SeekBar;
+import android.widget.TextView;
 import android.widget.Toast;
 import org.json.JSONObject;
 import android.graphics.Bitmap;
@@ -75,6 +78,7 @@ final class RacingControlsView extends View {
     private float dragX, dragY;
     private float dragStartX, dragStartY;
     private boolean hasMovedControl = false;
+    private float controlOpacity = 1.0f;
 
     public interface OnEditingChangeListener {
         void onEditingChanged(boolean editing);
@@ -235,6 +239,10 @@ final class RacingControlsView extends View {
         } catch (Throwable ignored) {}
 
         controlsHidden = layouts.getBoolean("controls_hidden", false);
+        controlOpacity = layouts.getFloat("control_opacity", 1.0f);
+        if (controlOpacity < 0.10f || controlOpacity > 1.0f) {
+            controlOpacity = Math.max(0.10f, Math.min(1.0f, controlOpacity));
+        }
 
         setContentDescription("Game controls");
         setHapticFeedbackEnabled(true);
@@ -378,6 +386,10 @@ final class RacingControlsView extends View {
         controls.clear();
         selected = null;
         dragPointer = -1;
+        controlOpacity = layouts.getFloat("control_opacity", 1.0f);
+        if (controlOpacity < 0.10f || controlOpacity > 1.0f) {
+            controlOpacity = Math.max(0.10f, Math.min(1.0f, controlOpacity));
+        }
         if (getWidth() == 0 || getHeight() == 0) return;
 
         scale = Math.min(getResources().getDisplayMetrics().density, getWidth() / 820f);
@@ -471,6 +483,7 @@ final class RacingControlsView extends View {
                 drawToolbarButton(canvas, new RectF(cx - 205, 68, cx - 75, 106), "HIDE BUTTON", 0xE0282018, 0xAAFFB74D, 0xFFFFB74D);
             }
             drawToolbarButton(canvas, new RectF(cx - 65, 68, cx + 65, 106), "OPTIONS", 0xE0162534, 0xAA5AC8FA, 0xFF5AC8FA);
+            drawToolbarButton(canvas, new RectF(cx + 75, 68, cx + 205, 106), "OPACITY (" + Math.round(controlOpacity * 100) + "%)", 0xE0162534, 0xAA5AC8FA, 0xFF5AC8FA);
         }
         canvas.restore();
     }
@@ -480,40 +493,49 @@ final class RacingControlsView extends View {
         float cx = c.area.centerX(), cy = c.area.centerY();
         float r = Math.min(c.area.width(), c.area.height()) / 2f;
 
-        // Background
-        fill.setColor(on ? COLOR_BG_PRESSED : COLOR_BG);
-        line.setColor(picked ? 0xFFFFD18A : on ? COLOR_STROKE_PRESSED : COLOR_STROKE);
-        line.setStrokeWidth(Math.max(1.5f, 2.0f));
+        float op = (c.scan == EDIT) ? Math.max(0.40f, controlOpacity) : controlOpacity;
+        float effectiveOpacity = on ? Math.min(1.0f, op * 1.4f + 0.15f) : op;
+        int alpha = editing ? 255 : Math.max(20, Math.min(255, Math.round(255f * effectiveOpacity)));
+        int layer = canvas.saveLayerAlpha(c.area.left - 8f, c.area.top - 8f, c.area.right + 8f, c.area.bottom + 8f, alpha);
 
-        if (c.shape == WHEEL) {
-            // Thumbstick base & knob
-            canvas.drawCircle(cx, cy, r, fill);
-            canvas.drawCircle(cx, cy, r - 1f, line);
-            float knobR = r * 0.42f;
-            float kx = cx + c.steering * (r - knobR);
-            fill.setColor(on ? 0xD0182414 : 0x88000000);
-            canvas.drawCircle(kx, cy, knobR, fill);
-            line.setColor(on ? COLOR_LIME : 0x88FFFFFF);
-            canvas.drawCircle(kx, cy, knobR, line);
-            return;
+        try {
+            // Background
+            fill.setColor(on ? COLOR_BG_PRESSED : COLOR_BG);
+            line.setColor(picked ? 0xFFFFD18A : on ? COLOR_STROKE_PRESSED : COLOR_STROKE);
+            line.setStrokeWidth(Math.max(1.5f, 2.0f));
+
+            if (c.shape == WHEEL) {
+                // Thumbstick base & knob
+                canvas.drawCircle(cx, cy, r, fill);
+                canvas.drawCircle(cx, cy, r - 1f, line);
+                float knobR = r * 0.42f;
+                float kx = cx + c.steering * (r - knobR);
+                fill.setColor(on ? 0xD0182414 : 0x88000000);
+                canvas.drawCircle(kx, cy, knobR, fill);
+                line.setColor(on ? COLOR_LIME : 0x88FFFFFF);
+                canvas.drawCircle(kx, cy, knobR, line);
+                return;
+            }
+
+            float corner = 18f;
+            if (c.shape == PEDAL) corner = 22f;
+            else if (c.shape == PILL) corner = c.area.height() / 2f;
+            else if (c.shape == DPAD) corner = 14f;
+            else if (c.shape == ROUND) corner = r;
+
+            canvas.drawRoundRect(c.area, corner, corner, fill);
+            canvas.drawRoundRect(c.area, corner, corner, line);
+
+            // Foreground content (Text or SVG icon)
+            int ink = on ? COLOR_LIME : COLOR_TEXT;
+            line.setColor(ink);
+            fill.setColor(ink);
+            text.setColor(ink);
+
+            drawIcon(canvas, c, cx, cy, r, on);
+        } finally {
+            canvas.restoreToCount(layer);
         }
-
-        float corner = 18f;
-        if (c.shape == PEDAL) corner = 22f;
-        else if (c.shape == PILL) corner = c.area.height() / 2f;
-        else if (c.shape == DPAD) corner = 14f;
-        else if (c.shape == ROUND) corner = r;
-
-        canvas.drawRoundRect(c.area, corner, corner, fill);
-        canvas.drawRoundRect(c.area, corner, corner, line);
-
-        // Foreground content (Text or SVG icon)
-        int ink = on ? COLOR_LIME : COLOR_TEXT;
-        line.setColor(ink);
-        fill.setColor(ink);
-        text.setColor(ink);
-
-        drawIcon(canvas, c, cx, cy, r, on);
     }
 
     private void drawIcon(Canvas canvas, Control c, float cx, float cy, float r, boolean on) {
@@ -794,6 +816,7 @@ final class RacingControlsView extends View {
                 .putFloat(c.id + ".y", c.area.centerY() / (getHeight() / scale))
                 .putFloat(c.id + ".size", c.area.width() / (c.original.width() * mult));
         }
+        save.putFloat("control_opacity", controlOpacity);
         save.apply();
     }
 
@@ -817,6 +840,10 @@ final class RacingControlsView extends View {
             }
             if (x >= cx - 65 && x <= cx + 65 && y >= 66 && y <= 108) {
                 showOptions();
+                return true;
+            }
+            if (x >= cx + 75 && x <= cx + 205 && y >= 66 && y <= 108) {
+                chooseButtonOpacity();
                 return true;
             }
             if (y >= 16 && y <= 60) {
@@ -901,6 +928,69 @@ final class RacingControlsView extends View {
                 }).setNegativeButton("Cancel", null).show();
     }
 
+    private void chooseButtonOpacity() {
+        Context ctx = getContext();
+        float originalOpacity = controlOpacity;
+        int currentPct = Math.max(10, Math.min(100, Math.round(originalOpacity * 100)));
+
+        LinearLayout container = new LinearLayout(ctx);
+        container.setOrientation(LinearLayout.VERTICAL);
+        int padH = Math.round(24 * ctx.getResources().getDisplayMetrics().density);
+        int padV = Math.round(16 * ctx.getResources().getDisplayMetrics().density);
+        container.setPadding(padH, padV, padH, padV);
+
+        TextView label = new TextView(ctx);
+        label.setText("Opacity: " + currentPct + "%");
+        label.setTextSize(16);
+        label.setTextColor(Color.WHITE);
+        label.setPadding(0, 0, 0, Math.round(12 * ctx.getResources().getDisplayMetrics().density));
+        container.addView(label);
+
+        SeekBar seekBar = new SeekBar(ctx);
+        seekBar.setMax(90); // 10% to 100%
+        seekBar.setProgress(currentPct - 10);
+        seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar sb, int progress, boolean fromUser) {
+                int pct = progress + 10;
+                label.setText("Opacity: " + pct + "%");
+                controlOpacity = pct / 100.0f;
+                invalidate();
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar sb) {}
+
+            @Override
+            public void onStopTrackingTouch(SeekBar sb) {}
+        });
+        container.addView(seekBar);
+
+        new AlertDialog.Builder(ctx, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Touch Button Opacity")
+                .setView(container)
+                .setPositiveButton("Apply", (d, w) -> {
+                    layouts.edit().putFloat("control_opacity", controlOpacity).apply();
+                    hasMovedControl = true;
+                    invalidate();
+                })
+                .setNeutralButton("Reset (100%)", (d, w) -> {
+                    controlOpacity = 1.0f;
+                    layouts.edit().putFloat("control_opacity", 1.0f).apply();
+                    hasMovedControl = true;
+                    invalidate();
+                })
+                .setNegativeButton("Cancel", (d, w) -> {
+                    controlOpacity = originalOpacity;
+                    invalidate();
+                })
+                .setOnCancelListener(d -> {
+                    controlOpacity = originalOpacity;
+                    invalidate();
+                })
+                .show();
+    }
+
     private void showOptions() {
         String currentSize = layouts.getString("control_size", "auto");
         String sizeLabel = currentSize.equals("auto") ? "Auto" : currentSize + "%";
@@ -908,6 +998,7 @@ final class RacingControlsView extends View {
         new AlertDialog.Builder(ctx, android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle("Control Options")
                 .setItems(new String[]{
                         "Touch Button Size (" + sizeLabel + ")",
+                        "Touch Button Opacity (" + Math.round(controlOpacity * 100) + "%)",
                         "Steering: Buttons / Thumb stick",
                         "Tilt steering",
                         "FPS limit",
@@ -917,13 +1008,14 @@ final class RacingControlsView extends View {
                         "Exit to Launcher"
                 }, (dialog, which) -> {
                     if (which == 0) chooseButtonSize();
-                    else if (which == 1) chooseStyle();
-                    else if (which == 2) configureTilt.run();
-                    else if (which == 3) configureFrameLimit.run();
-                    else if (which == 4) toggleControlsVisibility();
-                    else if (which == 5) saveNamedLayout();
-                    else if (which == 6) loadNamedLayout();
-                    else if (which == 7) confirmExitToLauncher();
+                    else if (which == 1) chooseButtonOpacity();
+                    else if (which == 2) chooseStyle();
+                    else if (which == 3) configureTilt.run();
+                    else if (which == 4) configureFrameLimit.run();
+                    else if (which == 5) toggleControlsVisibility();
+                    else if (which == 6) saveNamedLayout();
+                    else if (which == 7) loadNamedLayout();
+                    else if (which == 8) confirmExitToLauncher();
                 })
                 .setPositiveButton("Close", null)
                 .setNegativeButton("Exit to Launcher", (dialog, which) -> confirmExitToLauncher())
@@ -974,6 +1066,7 @@ final class RacingControlsView extends View {
             try {
                 JSONObject data = new JSONObject();
                 data.put("style", style);
+                data.put("opacity", (double) controlOpacity);
                 for (Control c : controls) {
                     JSONObject item = new JSONObject();
                     item.put("x", c.area.centerX() / (getWidth() / scale));
@@ -1007,11 +1100,15 @@ final class RacingControlsView extends View {
             try {
                 JSONObject data = new JSONObject(layouts.getString(prefix + names.get(which), "{}"));
                 style = data.optString("style", "classic");
-                SharedPreferences.Editor save = layouts.edit().putString("style", style);
+                if (data.has("opacity")) {
+                    controlOpacity = (float) data.optDouble("opacity", 1.0);
+                    controlOpacity = Math.max(0.10f, Math.min(1.0f, controlOpacity));
+                }
+                SharedPreferences.Editor save = layouts.edit().putString("style", style).putFloat("control_opacity", controlOpacity);
                 java.util.Iterator<String> ids = data.keys();
                 while (ids.hasNext()) {
                     String id = ids.next();
-                    if (id.equals("style")) continue;
+                    if (id.equals("style") || id.equals("opacity")) continue;
                     JSONObject item = data.getJSONObject(id);
                     save.putFloat(id + ".x", (float) item.getDouble("x"))
                         .putFloat(id + ".y", (float) item.getDouble("y"))

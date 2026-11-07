@@ -294,11 +294,25 @@ public final class GameActivity extends NativeActivity {
         getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         android.view.Display display=getWindowManager().getDefaultDisplay();
         android.view.Display.Mode current=display.getMode();float refresh=60;
-        for(android.view.Display.Mode mode:display.getSupportedModes())
-            if(mode.getPhysicalWidth()==current.getPhysicalWidth()&&mode.getPhysicalHeight()==current.getPhysicalHeight())
+        android.view.Display.Mode bestMode=null;
+        for(android.view.Display.Mode mode:display.getSupportedModes()) {
+            if(mode.getPhysicalWidth()==current.getPhysicalWidth()&&mode.getPhysicalHeight()==current.getPhysicalHeight()) {
                 refresh=Math.max(refresh,mode.getRefreshRate());
+                if(bestMode==null||mode.getRefreshRate()>bestMode.getRefreshRate()) {
+                    bestMode=mode;
+                }
+            }
+        }
         android.view.WindowManager.LayoutParams windowParams=getWindow().getAttributes();
         windowParams.preferredRefreshRate=Math.min(120,refresh);
+        if(Build.VERSION.SDK_INT>=23&&bestMode!=null) {
+            windowParams.preferredDisplayModeId=bestMode.getModeId();
+        }
+        if(Build.VERSION.SDK_INT>=30) {
+            windowParams.preferredMinDisplayRefreshRate=Math.min(60.0f,refresh);
+            windowParams.preferredMaxDisplayRefreshRate=Math.min(120.0f,refresh);
+        }
+        getWindow().setAttributes(windowParams);
         Intent launch = getIntent();
         float distVal = 450.0f;
         try {

@@ -78,6 +78,10 @@ Prepare a clean PC installation of **Need for Speed: Underground 2** (US v1.2 re
 2. Select your desired display resolution, FPS cap, and game language.
 3. Tap **Launch Game** to start racing.
 
+> [!TIP]
+> **Lag or Stutter on HyperOS / MIUI / ColorOS / One UI?**
+> If your game stutters in fullscreen but runs smoothly when the status bar is pulled down, read our [OS Lag & Refresh Rate Troubleshooting Guide](readme_os_lag.md) for quick device-specific fixes.
+
 ---
 
 ## Architecture Overview
@@ -231,6 +235,7 @@ scripts/run.sh
 Detailed deep-dives on the recompilation internals and platform backends:
 
 - [Android Runtime Architecture](docs/ANDROID_RUNTIME.md)
+- [OS Refresh Rate & Lag Optimization (HyperOS / MIUI / ColorOS)](readme_os_lag.md)
 - [Audio Pipeline & Frame Pacing](docs/AUDIO_FRAME_PACING.md)
 - [Threading & Synchronization](docs/THREADING.md)
 - [Direct3D 9 Usage & Translation](docs/D3D9_USAGE.md)
