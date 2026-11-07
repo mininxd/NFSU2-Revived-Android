@@ -49,6 +49,7 @@ NFSU2-diagnostico-*.zip
 NFSU2_espanol.apk
 gamehub.apk
 gamehub_extracted/
+third_party/proton/
 
 
 .env

@@ -1501,12 +1501,94 @@ JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeDrawDistance(
 /* ========================================================================= */
 typedef void* VkInstance_t;
 typedef void* VkDevice_t;
+typedef void* VkPhysicalDevice_t;
 typedef uint64_t VkPipelineCache_t;
 typedef uint64_t VkPipeline_t;
 typedef void (*PFN_vkVoidFunction_t)(void);
 typedef PFN_vkVoidFunction_t (*PFN_vkGetInstanceProcAddr_t)(VkInstance_t instance, const char* pName);
 typedef PFN_vkVoidFunction_t (*PFN_vkGetDeviceProcAddr_t)(VkDevice_t device, const char* pName);
 typedef int32_t VkResult_t;
+
+typedef struct {
+    uint32_t robustBufferAccess;
+    uint32_t fullDrawIndexUint32;
+    uint32_t imageCubeArray;
+    uint32_t independentBlend;
+    uint32_t geometryShader;
+    uint32_t tessellationShader;
+    uint32_t sampleRateShading;
+    uint32_t dualSrcBlend;
+    uint32_t logicOp;
+    uint32_t multiDrawIndirect;
+    uint32_t drawIndirectFirstInstance;
+    uint32_t depthClamp;
+    uint32_t depthBiasClamp;
+    uint32_t fillModeNonSolid;
+    uint32_t depthBounds;
+    uint32_t wideLines;
+    uint32_t largePoints;
+    uint32_t alphaToOne;
+    uint32_t multiViewport;
+    uint32_t samplerAnisotropy;
+    uint32_t textureCompressionETC2;
+    uint32_t textureCompressionASTC_LDR;
+    uint32_t textureCompressionBC;
+    uint32_t occlusionQueryPrecise;
+    uint32_t pipelineStatisticsQuery;
+    uint32_t vertexPipelineStoresAndAtomics;
+    uint32_t fragmentStoresAndAtomics;
+    uint32_t shaderTessellationAndGeometryPointSize;
+    uint32_t shaderImageGatherExtended;
+    uint32_t shaderStorageImageExtendedFormats;
+    uint32_t shaderStorageImageMultisample;
+    uint32_t shaderStorageImageReadWithoutFormat;
+    uint32_t shaderStorageImageWriteWithoutFormat;
+    uint32_t shaderUniformBufferArrayDynamicIndexing;
+    uint32_t shaderSampledImageArrayDynamicIndexing;
+    uint32_t shaderStorageBufferArrayDynamicIndexing;
+    uint32_t shaderStorageImageArrayDynamicIndexing;
+    uint32_t shaderClipDistance;
+    uint32_t shaderCullDistance;
+    uint32_t shaderFloat64;
+    uint32_t shaderInt64;
+    uint32_t shaderInt16;
+    uint32_t shaderResourceResidency;
+    uint32_t shaderResourceMinLod;
+    uint32_t sparseBinding;
+    uint32_t sparseResidencyBuffer;
+    uint32_t sparseResidencyImage2D;
+    uint32_t sparseResidencyImage3D;
+    uint32_t sparseResidency2Samples;
+    uint32_t sparseResidency4Samples;
+    uint32_t sparseResidency8Samples;
+    uint32_t sparseResidency16Samples;
+    uint32_t sparseResidencyAliased;
+    uint32_t variableMultisampleRate;
+    uint32_t inheritedQueries;
+} VkPhysicalDeviceFeatures_compat_t;
+
+typedef struct {
+    uint32_t sType;
+    const void* pNext;
+    uint32_t flags;
+    uint32_t queueCreateInfoCount;
+    const void* pQueueCreateInfos;
+    uint32_t enabledLayerCount;
+    const char* const* ppEnabledLayerNames;
+    uint32_t enabledExtensionCount;
+    const char* const* ppEnabledExtensionNames;
+    const VkPhysicalDeviceFeatures_compat_t* pEnabledFeatures;
+} VkDeviceCreateInfo_compat_t;
+
+typedef VkResult_t (*PFN_vkCreateDevice_t)(
+    VkPhysicalDevice_t physicalDevice,
+    const VkDeviceCreateInfo_compat_t* pCreateInfo,
+    const void* pAllocator,
+    VkDevice_t* pDevice);
+
+typedef void (*PFN_vkGetPhysicalDeviceFeatures_t)(
+    VkPhysicalDevice_t physicalDevice,
+    VkPhysicalDeviceFeatures_compat_t* pFeatures);
 
 typedef VkResult_t (*PFN_vkCreateGraphicsPipelines_t)(
     VkDevice_t device,
@@ -1518,7 +1600,51 @@ typedef VkResult_t (*PFN_vkCreateGraphicsPipelines_t)(
 
 static PFN_vkGetInstanceProcAddr_t s_real_vkGetInstanceProcAddr = NULL;
 static PFN_vkGetDeviceProcAddr_t s_real_vkGetDeviceProcAddr = NULL;
+static PFN_vkCreateDevice_t s_real_vkCreateDevice = NULL;
+static PFN_vkGetPhysicalDeviceFeatures_t s_real_vkGetPhysicalDeviceFeatures = NULL;
 static PFN_vkCreateGraphicsPipelines_t s_real_vkCreateGraphicsPipelines = NULL;
+
+static VkResult_t guarded_vkCreateDevice(
+    VkPhysicalDevice_t physicalDevice,
+    const VkDeviceCreateInfo_compat_t* pCreateInfo,
+    const void* pAllocator,
+    VkDevice_t* pDevice) {
+    if (!s_real_vkCreateDevice) return -3; /* VK_ERROR_INITIALIZATION_FAILED */
+    if (!pCreateInfo) return s_real_vkCreateDevice(physicalDevice, pCreateInfo, pAllocator, pDevice);
+
+    VkDeviceCreateInfo_compat_t safeInfo = *pCreateInfo;
+    VkPhysicalDeviceFeatures_compat_t safeFeatures;
+
+    if (pCreateInfo->pEnabledFeatures) {
+        memcpy(&safeFeatures, pCreateInfo->pEnabledFeatures, sizeof(safeFeatures));
+        VkPhysicalDeviceFeatures_compat_t supported;
+        memset(&supported, 0, sizeof(supported));
+
+        if (s_real_vkGetPhysicalDeviceFeatures) {
+            s_real_vkGetPhysicalDeviceFeatures(physicalDevice, &supported);
+        }
+
+        if (!supported.occlusionQueryPrecise && safeFeatures.occlusionQueryPrecise) {
+            __android_log_print(ANDROID_LOG_INFO, "NFSU2",
+                "PowerVR Guard: stripped unsupported occlusionQueryPrecise from vkCreateDevice (PowerVR / IMG BXM fix)");
+            safeFeatures.occlusionQueryPrecise = 0;
+        }
+        if (!supported.sampleRateShading && safeFeatures.sampleRateShading) {
+            __android_log_print(ANDROID_LOG_INFO, "NFSU2",
+                "PowerVR Guard: stripped unsupported sampleRateShading from vkCreateDevice");
+            safeFeatures.sampleRateShading = 0;
+        }
+        if (!supported.geometryShader && safeFeatures.geometryShader) {
+            safeFeatures.geometryShader = 0;
+        }
+        if (!supported.multiViewport && safeFeatures.multiViewport) {
+            safeFeatures.multiViewport = 0;
+        }
+        safeInfo.pEnabledFeatures = &safeFeatures;
+    }
+
+    return s_real_vkCreateDevice(physicalDevice, &safeInfo, pAllocator, pDevice);
+}
 
 static __thread sigjmp_buf s_powervr_pipeline_jmp_buf;
 static __thread volatile sig_atomic_t s_powervr_in_pipeline_create = 0;
@@ -1624,6 +1750,16 @@ static PFN_vkVoidFunction_t powervr_hook_vkGetDeviceProcAddr(VkDevice_t device, 
 
 static PFN_vkVoidFunction_t powervr_hook_vkGetInstanceProcAddr(VkInstance_t instance, const char *pName) {
     if (!pName) return NULL;
+    if (strcmp(pName, "vkCreateDevice") == 0) {
+        if (s_real_vkGetInstanceProcAddr) {
+            PFN_vkCreateDevice_t real_cd = (PFN_vkCreateDevice_t)s_real_vkGetInstanceProcAddr(instance, pName);
+            if (real_cd) s_real_vkCreateDevice = real_cd;
+        }
+        if (s_real_vkGetInstanceProcAddr && !s_real_vkGetPhysicalDeviceFeatures) {
+            s_real_vkGetPhysicalDeviceFeatures = (PFN_vkGetPhysicalDeviceFeatures_t)s_real_vkGetInstanceProcAddr(instance, "vkGetPhysicalDeviceFeatures");
+        }
+        return (PFN_vkVoidFunction_t)guarded_vkCreateDevice;
+    }
     if (strcmp(pName, "vkCreateGraphicsPipelines") == 0) {
         if (s_real_vkGetInstanceProcAddr) {
             PFN_vkCreateGraphicsPipelines_t real_fn = (PFN_vkCreateGraphicsPipelines_t)s_real_vkGetInstanceProcAddr(instance, pName);
@@ -1658,6 +1794,10 @@ static void install_powervr_fault_guard(void) {
     s_real_vkGetInstanceProcAddr = current;
     void *libvulkan = dlopen("libvulkan.so", RTLD_NOW | RTLD_LOCAL);
     if (libvulkan) {
+        PFN_vkCreateDevice_t sys_cd = (PFN_vkCreateDevice_t)dlsym(libvulkan, "vkCreateDevice");
+        if (sys_cd) s_real_vkCreateDevice = sys_cd;
+        PFN_vkGetPhysicalDeviceFeatures_t sys_gpf = (PFN_vkGetPhysicalDeviceFeatures_t)dlsym(libvulkan, "vkGetPhysicalDeviceFeatures");
+        if (sys_gpf) s_real_vkGetPhysicalDeviceFeatures = sys_gpf;
         PFN_vkCreateGraphicsPipelines_t sys_cgp = (PFN_vkCreateGraphicsPipelines_t)dlsym(libvulkan, "vkCreateGraphicsPipelines");
         if (sys_cgp) s_real_vkCreateGraphicsPipelines = sys_cgp;
         PFN_vkGetDeviceProcAddr_t sys_gdpa = (PFN_vkGetDeviceProcAddr_t)dlsym(libvulkan, "vkGetDeviceProcAddr");

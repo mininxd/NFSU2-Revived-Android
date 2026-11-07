@@ -77,14 +77,13 @@ std::string probe(const char* hooks, const char* temp, const char* directory, co
     require(props.apiVersion >= VK_API_VERSION_1_1, "Vulkan 1.1");
     require(hasExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME), "VK_KHR_swapchain");
     // Enabled unconditionally by the d3d9 device in this DXVK build (clip/cull distance,
-    // geometry shaders, sample-rate shading, depth clamp and non-solid fill are optional
+    // geometry shaders, sample-rate shading, occlusion queries, depth clamp and non-solid fill are optional
     // here: Mali/PowerVR drivers lack them).
     require(features.robustBufferAccess, "robustBufferAccess");
     require(features.fullDrawIndexUint32, "fullDrawIndexUint32");
     require(features.imageCubeArray, "imageCubeArray");
     require(features.independentBlend, "independentBlend");
     require(features.depthBiasClamp, "depthBiasClamp");
-    require(features.occlusionQueryPrecise, "occlusionQueryPrecise");
     require(features.shaderStorageImageWriteWithoutFormat, "shaderStorageImageWriteWithoutFormat");
 
     // DXT1/3/5 textures: on the GPU when BC is supported, otherwise decoded on the CPU (slower).
