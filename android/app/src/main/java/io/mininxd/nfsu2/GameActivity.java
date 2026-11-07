@@ -308,10 +308,12 @@ public final class GameActivity extends NativeActivity {
         if(Build.VERSION.SDK_INT>=23&&bestMode!=null) {
             windowParams.preferredDisplayModeId=bestMode.getModeId();
         }
-        if(Build.VERSION.SDK_INT>=30) {
-            windowParams.preferredMinDisplayRefreshRate=Math.min(60.0f,refresh);
-            windowParams.preferredMaxDisplayRefreshRate=Math.min(120.0f,refresh);
-        }
+        try {
+            java.lang.reflect.Field minField = windowParams.getClass().getField("preferredMinDisplayRefreshRate");
+            minField.setFloat(windowParams, Math.min(60.0f, refresh));
+            java.lang.reflect.Field maxField = windowParams.getClass().getField("preferredMaxDisplayRefreshRate");
+            maxField.setFloat(windowParams, Math.min(120.0f, refresh));
+        } catch (Throwable ignored) {}
         getWindow().setAttributes(windowParams);
         Intent launch = getIntent();
         float distVal = 450.0f;
