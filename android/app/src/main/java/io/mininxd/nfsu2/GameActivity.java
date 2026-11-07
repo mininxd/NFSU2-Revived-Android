@@ -365,8 +365,7 @@ public final class GameActivity extends NativeActivity {
         String displayLogs = launch.getStringExtra("displayLogs");
         if (displayLogs == null) displayLogs = GameOptions.get(this, GameOptions.DISPLAY_LOGS);
         GameOptions.applyWidescreenPatchFile(this);
-        if (GameOptions.usesWidescreenPatch(this))
-            GameOptions.syncWidescreenHudDat(this, !"off".equalsIgnoreCase(displayLogs));
+        GameOptions.syncWidescreenHudDat(this, !"off".equalsIgnoreCase(displayLogs));
         String language = launch.getStringExtra("language");
         if (language == null || "English".equalsIgnoreCase(language)) {
             language = GameOptions.language(this);
@@ -377,8 +376,8 @@ public final class GameActivity extends NativeActivity {
         nativeLanguage(language);
         nativeFrameLimit(launch.getIntExtra("frameCap", Integer.parseInt(GameOptions.get(this, GameOptions.FPS))));
         int screenMode = launch.getIntExtra("widescreenMode", GameOptions.widescreenMode(this));
-        nativeWidescreen(screenMode != 1);  // 4:3: no patch. HUD and Widescreen keep it.
-        nativeScreenMode(screenMode);       // 0=Widescreen, 1=4:3, 2=Corrected HUD
+        nativeWidescreen(true);             // always full screen, never stretched
+        nativeScreenMode(screenMode);       // 0=Widescreen HUD edges, 2=4:3 HUD centre
         nativeDrawDistance(distVal);
         String server = launch.getStringExtra("onlineServer");
         String configuredServer = GameOptions.validServer(server) ? server : GameOptions.onlineServer(this);

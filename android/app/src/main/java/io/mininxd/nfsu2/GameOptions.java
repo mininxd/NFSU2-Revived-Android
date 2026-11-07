@@ -46,9 +46,9 @@ public final class GameOptions {
             new Option(DISPLAY_LOGS, "Display Logs", "off",
                     new String[] {"off", "compact", "full"},
                     new String[] {"Off", "Compact", "Full"}),
-            new Option(WIDESCREEN, "Screen Size", "hud",
-                    new String[] {"hud", "on", "off"},
-                    new String[] {"Corrected HUD", "Widescreen", "4:3"}),
+            new Option(WIDESCREEN, "Corrected HUD", "off",
+                    new String[] {"on", "off"},
+                    new String[] {"Widescreen", "4:3"}),
             new Option(MINIMAP, "Minimap", "top",
                     new String[] {"top", "bottom"},
                     new String[] {"Top left", "Bottom left (original)"}),
@@ -81,19 +81,11 @@ public final class GameOptions {
     }
 
     /**
-     * 0 Widescreen (patch HUD at the edges), 1 = 4:3 (no patch, not stretched),
-     * 2 = Corrected HUD (wide 3D, patch HUD kept in a 4:3 centre).
+     * Display is always full-screen. This only places the .dat HUD:
+     * 0 = Widescreen (HUD at the edges), 2 = 4:3 (HUD centred, not stretched).
      */
     static int widescreenMode(Context context) {
-        String val = get(context, WIDESCREEN);
-        if ("off".equals(val)) return 1;
-        if ("on".equals(val)) return 0;
-        return 2;
-    }
-
-    /** Corrected HUD and Widescreen both need NFSUnderground2.WidescreenFix.dat. */
-    static boolean usesWidescreenPatch(Context context) {
-        return !"off".equals(get(context, WIDESCREEN));
+        return "on".equals(get(context, WIDESCREEN)) ? 0 : 2;
     }
 
     /** Put back a .dat parked by an older Corrected HUD build. */
@@ -156,7 +148,7 @@ public final class GameOptions {
             if ("ps2".equals(value)) value = "console";
             else if ("default".equals(value) || "xbox".equals(value)) value = "port";
         }
-        if (WIDESCREEN.equals(key) && "stretched".equals(value)) value = "hud";
+        if (WIDESCREEN.equals(key) && ("stretched".equals(value) || "hud".equals(value))) value = "off";
         for (String allowed : o.values) if (allowed.equals(value)) return value;
         return o.defaultValue;
     }

@@ -388,7 +388,7 @@ public final class LauncherActivity extends Activity {
         try {
             File targetDat = new File(scriptsDir, "NFSUnderground2.WidescreenFix.dat");
             File held = new File(scriptsDir, "NFSUnderground2.WidescreenFix.dat.hold");
-            // Corrected HUD parks the .dat as .hold; do not unpack a fresh copy over it.
+            // Older builds parked the .dat as .hold; do not unpack a fresh copy over it.
             if ((!targetDat.exists() || targetDat.length() == 0) && !held.isFile()) {
                 copyAssetFile("scripts/NFSUnderground2.WidescreenFix.dat", targetDat);
                 android.util.Log.i("NFSU2", "Installed widescreen data to " + targetDat.getAbsolutePath());
@@ -901,7 +901,7 @@ public final class LauncherActivity extends Activity {
         GameOptions.syncWidescreenIni(this);
         PerformanceCores.bindToPerformanceCores();
         boolean logsEnabled = !"off".equals(GameOptions.get(this, GameOptions.DISPLAY_LOGS));
-        if (GameOptions.usesWidescreenPatch(this)) GameOptions.syncWidescreenHudDat(this, logsEnabled);
+        GameOptions.syncWidescreenHudDat(this, logsEnabled);
         startActivity(new Intent(this, GameActivity.class)
                 .putExtra("language", GameOptions.language(this))
                 .putExtra("renderWidth", size[0]).putExtra("renderHeight", size[1])

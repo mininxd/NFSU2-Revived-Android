@@ -125,8 +125,8 @@ static const uint32_t k_sites[SITE_COUNT] = {
 #define HUD_SCALE_X 0x0079AC10u
 #endif
 void nfs_widescreen_set_screen_mode(int mode) {
-    /* 0 = Widescreen (fill + .dat HUD at the edges), 1 = 4:3 (patch off),
-     * 2 = Corrected HUD (wide 3D, HUD from the .dat kept in a 4:3 centre). */
+    /* 0 = Widescreen (.dat HUD at the edges), 2 = 4:3 (.dat HUD in a 4:3 centre).
+     * World stays full-screen; this only places the HUD. */
     s_screen_mode = (mode >= 0 && mode <= 2) ? mode : 0;
     if (s_width > 0.0f && s_height > 0.0f) {
         nfs_widescreen_set_resolution((unsigned)s_width, (unsigned)s_height);
@@ -154,8 +154,8 @@ void nfs_widescreen_set_resolution(unsigned width, unsigned height) {
     s_aspect = s_width / s_height;
     float hud_w = s_width, hud_aspect = s_aspect;
     if (s_screen_mode == 2) {
-        /* Corrected HUD: world/FOV stay widescreen; HUD uses the .dat in a
-         * 4:3 box so it sits in the centre and is not stretched. */
+        /* 4:3: world/FOV stay widescreen; HUD from the .dat sits in a 4:3
+         * centre box so it is not stretched to the edges. */
         hud_aspect = 4.0f / 3.0f;
         hud_w = s_height * (4.0f / 3.0f);
     } else if (s_hud_safe_area && hud_aspect > (16.0f / 9.0f)) {
