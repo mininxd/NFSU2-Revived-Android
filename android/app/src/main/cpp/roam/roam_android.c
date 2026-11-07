@@ -85,17 +85,24 @@ extern uint32_t nfs_rust_crowd_suppressed_frames(void);
 extern int nfs_rust_apply_engine_pacing(uint8_t *mem_base, float real_elapsed);
 #endif
 
-#define G_CARPOOL_KB 0x007fa9d4u
-#define CARPOOL_KB   48000
+#define G_CARPOOL_KB     0x007fa9d4u
+#define CARPOOL_KB       48000
+#define G_RIDE_SLOT_CAP  0x0061c744u
 
 static int g_carpool_patched = 0;
 
 static inline void roam_android_patch_carpool(void) {
-    if (!g_carpool_patched && g_p_esp && *g_p_esp && rh_mem_committed(G_CARPOOL_KB, 4)) {
-        if (MR32(G_CARPOOL_KB) < CARPOOL_KB) {
-            MR32(G_CARPOOL_KB) = CARPOOL_KB;
-            g_carpool_patched = 1;
+    if (!g_carpool_patched && g_p_esp && *g_p_esp && rh_mem_committed(G_CARPOOL_KB, 12)) {
+        for (int i = 0; i < 3; ++i) {
+            uint32_t addr = G_CARPOOL_KB + (uint32_t)i * 4u;
+            if (MR32(addr) < CARPOOL_KB) {
+                MR32(addr) = CARPOOL_KB;
+            }
         }
+        if (rh_mem_committed(G_RIDE_SLOT_CAP, 1) && MR8(G_RIDE_SLOT_CAP) == 0x16) {
+            MR8(G_RIDE_SLOT_CAP) = 0x7f; // expand CarLoadedRideInfoSlotPool from 22 to 127
+        }
+        g_carpool_patched = 1;
     }
 }
 
@@ -1040,7 +1047,13 @@ static void roam_do_receive(JNIEnv *env, jint srcIp, jint srcPort, jbyteArray jD
 }
 
 static void roam_do_tick(void) {
-    nfs_roam_frame_tick();
+    // Only tick the network protocol state here.
+    // Game frame operations (camera, roam_game_frame, hidden races, pacing, guest calls)
+    // MUST only run synchronously on the main game/render thread via Present in guest_runtime.cpp.
+    // Calling game frame logic from an asynchronous Java worker thread corrupts the guest stack and allocator.
+    roam_plat_lock();
+    if (g_s) rc_tick(g_s, roam_plat_now_us());
+    roam_plat_unlock();
 }
 
 static void roam_do_say(jint phrase) {

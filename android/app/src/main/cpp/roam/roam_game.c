@@ -3847,9 +3847,9 @@ static void aieng_update(CPU *c){
     int mute = 0;
     for (int k = 0; car && g_gmem && !mute && k < NSLOT; k++) mute = g_sl[k].st != SL_FREE && g_sl[k].car == car && g_sl[k].gin[0][0];
     g_aieng_calls++; g_aieng_muted += (uint32_t)mute;
-    if (mute){ keep = MR32(self + 0x58u); MR32(self + 0x58u) = g_gmem + ZERO_SCR; }
+    if (mute && g_gmem){ keep = MR32(self + 0x58u); MR32(self + 0x58u) = g_gmem + ZERO_SCR; }
     sub_004610f0(c);
-    if (mute) MR32(self + 0x58u) = keep;
+    if (mute && g_gmem) MR32(self + 0x58u) = keep;
 }
 #endif
 /* the game sounds this car's nitrous itself: its sound state (an AI
@@ -7483,10 +7483,15 @@ static void init_once(CPU *c){
     roam_plat_lock();
     for (int i = 0; i < np; i++) rc_add_peer(&g_s, pip[i], ppt[i], 1, roam_plat_now_us());
     roam_plat_unlock();
-    /* the free-roam car pool: room for friends' cars (read at the next track load) */
-    if (O.carpool_kb && rd32(G_CARPOOL_KB) && rd32(G_CARPOOL_KB) < (uint32_t)O.carpool_kb){
-        rlog("[roam] free-roam car memory pool %u -> %d KB\n", rd32(G_CARPOOL_KB), O.carpool_kb);
-        MR32(G_CARPOOL_KB) = (uint32_t)O.carpool_kb;
+    /* the car memory pools: room for custom rides and SUV models in career, race and garage */
+    if (O.carpool_kb){
+        for (int i = 0; i < 3; ++i) {
+            uint32_t addr = G_CARPOOL_KB + (uint32_t)i * 4u;
+            if (rd32(addr) && rd32(addr) < (uint32_t)O.carpool_kb){
+                rlog("[roam] car memory pool [%d] %u -> %d KB\n", i, rd32(addr), O.carpool_kb);
+                MR32(addr) = (uint32_t)O.carpool_kb;
+            }
+        }
     }
     const char *pl = rh_opt("NFSU2_ROAM_POSELOG");
     if (pl && *pl){ g_poselog = rh_fopen(pl); if (g_poselog) rh_fprintf(g_poselog, "kind,host_us,sync_us,id,x,y,z,speed,mode,err,fx,fy,fz,uz,rx,ry,rz\n"); }
@@ -9823,7 +9828,7 @@ static int g_pool_more;
 int roam_game_purge(CPU *c, uint32_t ret){
     static int fixed = -1;
     if (fixed < 0) fixed = rh_opt("NFSU2_TEST_CARPOOL_FIXED") ? 1 : 0;
-    if (!g_inited || !O.on || fixed) return 0;
+    if (!g_inited || fixed) return 0;
     switch (ret){                                  /* the load steps' memory checks (not Load's wait for a ride's place, 0x63AEBD) */
     case 0x0063a2bfu: case 0x0063a2ebu: case 0x0063a8d9u: case 0x0063a9cau: case 0x0063ab18u: case 0x0063ac8cu: case 0x0063ad9cu: break;
     default: return 0;

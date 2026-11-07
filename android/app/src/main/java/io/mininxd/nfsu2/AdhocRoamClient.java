@@ -403,7 +403,7 @@ public final class AdhocRoamClient {
             while (running.get()) {
                 try {
                     nativeRoamTick();
-                    Thread.sleep(16);
+                    Thread.sleep(50);
                 } catch (InterruptedException e) {
                     break;
                 } catch (Throwable t) {
