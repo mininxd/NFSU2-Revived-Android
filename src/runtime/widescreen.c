@@ -83,6 +83,10 @@ static int is_sms_or_nav(const hud_entry* e) {
 
 /* The mod's WidescreenHud(): move a known HUD element by its .dat offset. */
 static void widescreen_hud(float* x, float* y) {
+    if (s_screen_mode == 2) {
+        /* Mode 2 (4:3): world/FOV stay widescreen; HUD remains in 4:3 centre without being offset to edges. */
+        return;
+    }
     const float base_offset = (480.0f * (16.0f / 9.0f) - 640.0f) / 2.0f;
     int ix = (int)floorf(*x), iy = (int)floorf(*y);
     for (unsigned i = 0; i < s_hud_count; i++) {
@@ -152,16 +156,11 @@ void nfs_widescreen_set_resolution(unsigned width, unsigned height) {
     if (!s_enabled || !width || !height) return;
     s_width = (float)width; s_height = (float)height;
     s_aspect = s_width / s_height;
-    float hud_w = s_width, hud_aspect = s_aspect;
-    if (s_screen_mode == 2) {
-        /* 4:3: world/FOV stay widescreen; HUD from the .dat sits in a 4:3
-         * centre box so it is not stretched to the edges. */
-        hud_aspect = 4.0f / 3.0f;
-        hud_w = s_height * (4.0f / 3.0f);
-    } else if (s_hud_safe_area && hud_aspect > (16.0f / 9.0f)) {
+    float hud_aspect = s_aspect;
+    if (s_hud_safe_area && hud_aspect > (16.0f / 9.0f)) {
         hud_aspect = 16.0f / 9.0f;
     }
-    hud_scale_x = (1.0f / hud_w * (s_height / 480.0f)) * 2.0f;
+    hud_scale_x = (1.0f / s_width * (s_height / 480.0f)) * 2.0f;
     s_hud_pos_x = 640.0f / (640.0f * hud_scale_x);
     s_hud_offset = -((640.0f / 2.0f) - (480.0f / 2.0f) * hud_aspect);
     wrf(HUD_SCALE_X, hud_scale_x);              /* fld [fHudScaleX] */

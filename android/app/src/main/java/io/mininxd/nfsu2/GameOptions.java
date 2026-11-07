@@ -88,15 +88,37 @@ public final class GameOptions {
         return "on".equals(get(context, WIDESCREEN)) ? 0 : 2;
     }
 
-    /** Put back a .dat parked by an older Corrected HUD build. */
+    /** Returns true if Widescreen HUD (offsets to edges) is selected, false if 4:3 centered HUD. */
+    static boolean usesWidescreenPatch(Context context) {
+        return "on".equals(get(context, WIDESCREEN));
+    }
+
+    /**
+     * Applies the correct HUD layout file based on the Corrected HUD option.
+     * Widescreen: ensures scripts/NFSUnderground2.WidescreenFix.dat is present so elements are placed at display edges.
+     * 4:3: parks the .dat file as .hold so the game keeps full-screen 3D widescreen and aspect correction,
+     * but without .dat offsets the HUD stays centered in a 4:3 box.
+     */
     static void applyWidescreenPatchFile(Context context) {
         java.io.File scripts = new java.io.File(LauncherActivity.gameRoot(), "scripts");
+        if (!scripts.isDirectory()) scripts.mkdirs();
         java.io.File dat = new java.io.File(scripts, "NFSUnderground2.WidescreenFix.dat");
         java.io.File held = new java.io.File(scripts, "NFSUnderground2.WidescreenFix.dat.hold");
+        boolean widescreen = usesWidescreenPatch(context);
         try {
-            if (held.isFile()) {
-                if (dat.isFile()) dat.delete();
-                held.renameTo(dat);
+            if (widescreen) {
+                if (held.isFile()) {
+                    if (dat.isFile()) dat.delete();
+                    held.renameTo(dat);
+                }
+                if (!dat.isFile() || dat.length() == 0) {
+                    LauncherActivity.copyAssetFile(context, "scripts/NFSUnderground2.WidescreenFix.dat", dat);
+                }
+            } else {
+                if (dat.isFile()) {
+                    if (held.isFile()) held.delete();
+                    dat.renameTo(held);
+                }
             }
         } catch (Throwable t) {
             android.util.Log.w("NFSU2", "WidescreenFix.dat: " + t.getMessage());
@@ -585,8 +607,11 @@ public final class GameOptions {
      */
     static void syncWidescreenHudDat(Context context, boolean logsEnabled) {
         try {
-            java.io.File datFile = new java.io.File(android.os.Environment.getExternalStorageDirectory(),
-                    "nfsu2/scripts/NFSUnderground2.WidescreenFix.dat");
+            java.io.File scripts = new java.io.File(LauncherActivity.gameRoot(), "scripts");
+            java.io.File datFile = new java.io.File(scripts, "NFSUnderground2.WidescreenFix.dat");
+            if (!datFile.isFile()) {
+                datFile = new java.io.File(scripts, "NFSUnderground2.WidescreenFix.dat.hold");
+            }
             if (!datFile.isFile()) return;
 
             java.util.List<String> lines = new java.util.ArrayList<>();

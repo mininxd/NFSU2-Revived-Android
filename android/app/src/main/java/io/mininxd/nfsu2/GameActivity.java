@@ -365,7 +365,8 @@ public final class GameActivity extends NativeActivity {
         String displayLogs = launch.getStringExtra("displayLogs");
         if (displayLogs == null) displayLogs = GameOptions.get(this, GameOptions.DISPLAY_LOGS);
         GameOptions.applyWidescreenPatchFile(this);
-        GameOptions.syncWidescreenHudDat(this, !"off".equalsIgnoreCase(displayLogs));
+        if (GameOptions.usesWidescreenPatch(this))
+            GameOptions.syncWidescreenHudDat(this, !"off".equalsIgnoreCase(displayLogs));
         String language = launch.getStringExtra("language");
         if (language == null || "English".equalsIgnoreCase(language)) {
             language = GameOptions.language(this);

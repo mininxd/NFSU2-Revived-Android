@@ -388,18 +388,22 @@ public final class LauncherActivity extends Activity {
         try {
             File targetDat = new File(scriptsDir, "NFSUnderground2.WidescreenFix.dat");
             File held = new File(scriptsDir, "NFSUnderground2.WidescreenFix.dat.hold");
-            // Older builds parked the .dat as .hold; do not unpack a fresh copy over it.
             if ((!targetDat.exists() || targetDat.length() == 0) && !held.isFile()) {
-                copyAssetFile("scripts/NFSUnderground2.WidescreenFix.dat", targetDat);
-                android.util.Log.i("NFSU2", "Installed widescreen data to " + targetDat.getAbsolutePath());
+                if (GameOptions.usesWidescreenPatch(this)) {
+                    copyAssetFile(this, "scripts/NFSUnderground2.WidescreenFix.dat", targetDat);
+                    android.util.Log.i("NFSU2", "Installed widescreen data to " + targetDat.getAbsolutePath());
+                } else {
+                    copyAssetFile(this, "scripts/NFSUnderground2.WidescreenFix.dat", held);
+                    android.util.Log.i("NFSU2", "Installed widescreen data to " + held.getAbsolutePath());
+                }
             }
         } catch (Exception e) {
             android.util.Log.w("NFSU2", "Failed to copy widescreen data", e);
         }
     }
 
-    private void copyAssetFile(String assetPath, File destFile) throws Exception {
-        try (java.io.InputStream in = getAssets().open(assetPath);
+    public static void copyAssetFile(Context context, String assetPath, File destFile) throws Exception {
+        try (java.io.InputStream in = context.getAssets().open(assetPath);
              java.io.OutputStream out = new java.io.FileOutputStream(destFile)) {
             byte[] buf = new byte[32768];
             int read;
@@ -495,6 +499,9 @@ public final class LauncherActivity extends Activity {
                     }
                     if (GameOptions.MENU_BUTTON_SIZE.equals(option.key)) {
                         GameOptions.syncWidescreenIni(this);
+                    }
+                    if (GameOptions.WIDESCREEN.equals(option.key)) {
+                        GameOptions.applyWidescreenPatchFile(this);
                     }
                     dialog.dismiss(); refreshOptions();
                 }).setNegativeButton("Cancel", null).show();
@@ -901,7 +908,7 @@ public final class LauncherActivity extends Activity {
         GameOptions.syncWidescreenIni(this);
         PerformanceCores.bindToPerformanceCores();
         boolean logsEnabled = !"off".equals(GameOptions.get(this, GameOptions.DISPLAY_LOGS));
-        GameOptions.syncWidescreenHudDat(this, logsEnabled);
+        if (GameOptions.usesWidescreenPatch(this)) GameOptions.syncWidescreenHudDat(this, logsEnabled);
         startActivity(new Intent(this, GameActivity.class)
                 .putExtra("language", GameOptions.language(this))
                 .putExtra("renderWidth", size[0]).putExtra("renderHeight", size[1])
