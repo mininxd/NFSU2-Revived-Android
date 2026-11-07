@@ -6,7 +6,7 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
     <uses-feature android:name="android.hardware.vulkan.version" android:version="0x00401000" android:required="false" />
     <uses-feature android:glEsVersion="0x00030000" android:required="false" />
-    <application android:appCategory="game" android:allowAudioPlaybackCapture="true" android:requestLegacyExternalStorage="true" android:label="NFSU2 Revived" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:allowBackup="false" android:allowNativeHeapPointerTagging="false" android:memtagMode="off">
+    <application android:appCategory="game" android:isGame="true" android:hardwareAccelerated="true" android:largeHeap="true" android:allowAudioPlaybackCapture="true" android:requestLegacyExternalStorage="true" android:label="NFSU2 Revived" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:allowBackup="false" android:allowNativeHeapPointerTagging="false" android:memtagMode="off">
         <activity android:name=".GameActivity" android:exported="true" android:process=":game"
             android:configChanges="orientation|screenSize|keyboardHidden" android:screenOrientation="sensorLandscape">
             <meta-data android:name="android.app.lib_name" android:value="nfsu2_android" />

@@ -286,6 +286,7 @@ public final class GameActivity extends NativeActivity {
     @Override protected void onCreate(Bundle saved) {
         super.onCreate(saved);
         GameOptions.syncWidescreenIni(this);
+        GamePerformanceBooster.apply(this, getWindow());
         PerformanceCores.bindToPerformanceCores();
         GameLog.init(this);
         io.mininxd.nfsu2.net.NetLog.init(this);

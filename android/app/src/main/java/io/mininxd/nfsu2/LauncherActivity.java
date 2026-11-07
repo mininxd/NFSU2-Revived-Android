@@ -907,6 +907,7 @@ public final class LauncherActivity extends Activity {
         ensureScriptsInstalled(gameRoot());
         GameOptions.applyWidescreenPatchFile(this);
         GameOptions.syncWidescreenIni(this);
+        GamePerformanceBooster.apply(this, getWindow());
         PerformanceCores.bindToPerformanceCores();
         boolean logsEnabled = !"off".equals(GameOptions.get(this, GameOptions.DISPLAY_LOGS));
         if (GameOptions.usesWidescreenPatch(this)) GameOptions.syncWidescreenHudDat(this, logsEnabled);
