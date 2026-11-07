@@ -152,6 +152,8 @@ std::string probe(const char* hooks, const char* temp, const char* directory, co
         << ",\"logicalDeviceResult\":" << int(deviceResult)
         << ",\"driverLoadFailed\":" << (deviceResult == VK_SUCCESS ? "false" : "true")
         << ",\"bcTextures\":" << (bc ? "true" : "false")
+        << ",\"robustBufferAccess\":" << (features.robustBufferAccess ? "true" : "false")
+        << ",\"robustness2\":" << (hasExtension("VK_EXT_robustness2") ? "true" : "false")
         << ",\"vertexFormatsMissing\":" << json(unsupportedD3DVertexFormats(gpu, vkGetPhysicalDeviceFormatProperties))
         << ",\"compatible\":" << (missing.empty() ? "true" : "false") << ",\"missing\":[";
     for (size_t i = 0; i < missing.size(); ++i) out << (i ? "," : "") << json(missing[i]);

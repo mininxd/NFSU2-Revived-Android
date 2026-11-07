@@ -1640,7 +1640,35 @@ static VkResult_t guarded_vkCreateDevice(
         if (!supported.multiViewport && safeFeatures.multiViewport) {
             safeFeatures.multiViewport = 0;
         }
+        /* Ensure robustBufferAccess matches physical device capabilities for Adreno stability */
+        if (supported.robustBufferAccess) {
+            safeFeatures.robustBufferAccess = 1;
+        } else {
+            safeFeatures.robustBufferAccess = 0;
+        }
         safeInfo.pEnabledFeatures = &safeFeatures;
+    }
+
+    typedef struct {
+        uint32_t sType;
+        void* pNext;
+        uint32_t robustBufferAccess2;
+        uint32_t robustImageAccess2;
+        uint32_t nullDescriptor;
+    } VkPhysicalDeviceRobustness2FeaturesEXT_compat_t;
+
+    const void* cur_next = pCreateInfo->pNext;
+    while (cur_next) {
+        const uint32_t* header = (const uint32_t*)cur_next;
+        if (header[0] == 1000286000 /* VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT */) {
+            const VkPhysicalDeviceRobustness2FeaturesEXT_compat_t* rob2 =
+                (const VkPhysicalDeviceRobustness2FeaturesEXT_compat_t*)cur_next;
+            __android_log_print(ANDROID_LOG_INFO, "NFSU2",
+                "Adreno/Vulkan: VK_EXT_robustness2 active in vkCreateDevice (robustBufferAccess2=%u, robustImageAccess2=%u, nullDescriptor=%u)",
+                rob2->robustBufferAccess2, rob2->robustImageAccess2, rob2->nullDescriptor);
+            break;
+        }
+        cur_next = *((const void* const*)((const char*)cur_next + 8));
     }
 
     return s_real_vkCreateDevice(physicalDevice, &safeInfo, pAllocator, pDevice);
