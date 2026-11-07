@@ -157,7 +157,11 @@ public final class GameActivity extends NativeActivity {
             touchControls.postDelayed(this,250);
         }
     };
-    private static void nativeKey(int scan, boolean down) { com.nfsu2.androidevolved.GameActivity.nativeKey(scan, down); }
+    private static void nativeKey(int scan, boolean down) {
+        com.nfsu2.androidevolved.GameActivity.nativeKey(scan, down);
+        try { nativeKeyNav(scan, down); } catch (Throwable ignored) {}
+    }
+    private static native void nativeKeyNav(int scan, boolean down);
     private static boolean nativeDrivingControls() { return com.nfsu2.androidevolved.GameActivity.nativeDrivingControls(); }
     private static boolean nativeGamepadUsed() { return com.nfsu2.androidevolved.GameActivity.nativeGamepadUsed(); }
     private static void nativeTypeText(String value, boolean replace) { com.nfsu2.androidevolved.GameActivity.nativeTypeText(value, replace); }
@@ -375,8 +379,16 @@ public final class GameActivity extends NativeActivity {
         getWindow().setAttributes(windowParams);
         // Launcher options travel as extras; a direct start (adb, recents) falls back to the saved ones.
         DisplayMetrics metrics = new DisplayMetrics(); getWindowManager().getDefaultDisplay().getRealMetrics(metrics);
-        int[] size = GameOptions.renderSize(this, Math.max(metrics.widthPixels, metrics.heightPixels),
-                Math.min(metrics.widthPixels, metrics.heightPixels));
+        int dispW = Math.max(metrics.widthPixels, metrics.heightPixels);
+        int dispH = Math.min(metrics.widthPixels, metrics.heightPixels);
+        int[] size = GameOptions.renderSize(this, dispW, dispH);
+        String resPercent = launch.getStringExtra("resolutionPercent");
+        if (resPercent == null) resPercent = GameOptions.get(this, GameOptions.RESOLUTION);
+        try {
+            android.system.Os.setenv("NFSU2_DISPLAY_WIDTH", String.valueOf(dispW), true);
+            android.system.Os.setenv("NFSU2_DISPLAY_HEIGHT", String.valueOf(dispH), true);
+            android.system.Os.setenv("NFSU2_RES_PERCENT", resPercent, true);
+        } catch (Throwable ignored) {}
         nativeResolution(launch.getIntExtra("renderWidth", size[0]), launch.getIntExtra("renderHeight", size[1]));
         String displayLogs = launch.getStringExtra("displayLogs");
         if (displayLogs == null) displayLogs = GameOptions.get(this, GameOptions.DISPLAY_LOGS);

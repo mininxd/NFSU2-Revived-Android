@@ -328,7 +328,6 @@ public final class GameOptions {
     /** Render size for the selected resolution on a display of width × height (landscape). */
     static int[] renderSize(Context context, int width, int height) {
         String value = get(context, RESOLUTION);
-        if (value.equals("720")) return new int[] {1280, 720};
         float scale = Integer.parseInt(value) / 100f;
         return new int[] {Math.round(width * scale / 2f) * 2, Math.round(height * scale / 2f) * 2};
     }

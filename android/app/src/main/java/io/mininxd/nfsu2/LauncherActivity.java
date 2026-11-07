@@ -913,6 +913,7 @@ public final class LauncherActivity extends Activity {
         startActivity(new Intent(this, GameActivity.class)
                 .putExtra("language", GameOptions.language(this))
                 .putExtra("renderWidth", size[0]).putExtra("renderHeight", size[1])
+                .putExtra("resolutionPercent", GameOptions.get(this, GameOptions.RESOLUTION))
                 .putExtra("frameCap", Integer.parseInt(GameOptions.get(this, GameOptions.FPS)))
                 .putExtra("widescreenMode", GameOptions.widescreenMode(this))
                 .putExtra("minimapTop", GameOptions.get(this, GameOptions.MINIMAP).equals("top"))

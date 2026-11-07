@@ -931,6 +931,111 @@ static void look_camera_frame_tick(void) {
     }
 }
 
+static const uint32_t kAllResolutionPercents[] = {
+    25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100, 125, 150, 200
+};
+#define NUM_ALL_RESOLUTION_PERCENTS (sizeof(kAllResolutionPercents) / sizeof(kAllResolutionPercents[0]))
+
+static int s_res_window_start = -1;
+static uint32_t s_display_w = 0, s_display_h = 0;
+static uint32_t s_target_pct = 75;
+
+static void update_resolution_slots_in_memory(void) {
+    if (!g_p_mem_base || !*g_p_mem_base) return;
+    if (!rh_mem_committed(0x800538u, 24) || !rh_mem_committed(0x800550u, 24) || !rh_mem_committed(0x86e880u, 24)) return;
+
+    const uint32_t label_vas[6] = {0x78fa1cu, 0x78fa14u, 0x78fa08u, 0x78f9fcu, 0x78f9f0u, 0x78f9e4u};
+    const uint32_t label_caps[6] = {8, 8, 12, 12, 12, 12};
+
+    if (s_res_window_start < 0) s_res_window_start = 0;
+    if (s_res_window_start > (int)NUM_ALL_RESOLUTION_PERCENTS - 6) s_res_window_start = (int)NUM_ALL_RESOLUTION_PERCENTS - 6;
+
+    for (int i = 0; i < 6; i++) {
+        uint32_t pct = kAllResolutionPercents[s_res_window_start + i];
+        uint32_t w = s_display_w > 0 ? ((s_display_w * pct / 100u) & ~1u) : 1280;
+        uint32_t h = s_display_h > 0 ? ((s_display_h * pct / 100u) & ~1u) : 720;
+        if (w < 320) w = 320;
+        if (h < 240) h = 240;
+
+        MR32(0x800538u + i * 4) = w;
+        MR32(0x800550u + i * 4) = h;
+        MR32(0x86e880u + i * 4) = 1;
+
+        if (rh_mem_committed(label_vas[i], label_caps[i])) {
+            char buf[16];
+            snprintf(buf, sizeof(buf), "%u%%", pct);
+            memset(GPTR(label_vas[i]), 0, label_caps[i]);
+            strncpy((char *)GPTR(label_vas[i]), buf, label_caps[i] - 1);
+        }
+    }
+}
+
+void roam_resolution_nav(int dir) {
+    if (!g_p_mem_base || !*g_p_mem_base || !rh_mem_committed(0x870d1cu, 4)) return;
+    // Only navigate resolution in menus (MR32(0x008709a0u) == 0 means not in race/world)
+    if (rh_mem_committed(0x008709a0u, 4) && MR32(0x008709a0u) != 0) return;
+
+    uint32_t cur = MR32(0x870d1cu);
+
+    if (dir > 0 && cur >= 5 && s_res_window_start < (int)NUM_ALL_RESOLUTION_PERCENTS - 6) {
+        s_res_window_start++;
+        update_resolution_slots_in_memory();
+        MR32(0x870d1cu) = 4;
+        if (rh_mem_committed(0x8709d1u, 1)) MR8(0x8709d1u) = 1;
+    } else if (dir < 0 && cur == 0 && s_res_window_start > 0) {
+        s_res_window_start--;
+        update_resolution_slots_in_memory();
+        MR32(0x870d1cu) = 1;
+        if (rh_mem_committed(0x8709d1u, 1)) MR8(0x8709d1u) = 1;
+    }
+}
+
+static void resolution_frame_tick(void) {
+    if (!g_p_mem_base || !*g_p_mem_base || !rh_mem_committed(0x86e880u, 24)) return;
+
+    // Ensure all 6 slots are always marked as available (fixes Issue #41)
+    for (int i = 0; i < 6; i++) {
+        MR32(0x86e880u + i * 4) = 1;
+    }
+
+    static int s_res_initialized = 0;
+    if (!s_res_initialized) {
+        s_res_initialized = 1;
+        const char *w_str = getenv("NFSU2_DISPLAY_WIDTH");
+        const char *h_str = getenv("NFSU2_DISPLAY_HEIGHT");
+        const char *p_str = getenv("NFSU2_RES_PERCENT");
+
+        if (w_str) s_display_w = (uint32_t)atoi(w_str);
+        if (h_str) s_display_h = (uint32_t)atoi(h_str);
+        if (p_str) s_target_pct = (uint32_t)atoi(p_str);
+        if (s_target_pct == 0) s_target_pct = 75;
+
+        int best_idx = 0;
+        int best_diff = 999999;
+        for (size_t i = 0; i < NUM_ALL_RESOLUTION_PERCENTS; i++) {
+            int diff = abs((int)kAllResolutionPercents[i] - (int)s_target_pct);
+            if (diff < best_diff) {
+                best_diff = diff;
+                best_idx = (int)i;
+            }
+        }
+
+        s_res_window_start = best_idx - 2;
+        if (s_res_window_start < 0) s_res_window_start = 0;
+        if (s_res_window_start > (int)NUM_ALL_RESOLUTION_PERCENTS - 6) s_res_window_start = (int)NUM_ALL_RESOLUTION_PERCENTS - 6;
+
+        update_resolution_slots_in_memory();
+
+        int active_slot = best_idx - s_res_window_start;
+        if (active_slot < 0) active_slot = 0;
+        if (active_slot > 5) active_slot = 5;
+
+        if (rh_mem_committed(0x870d1cu, 4)) {
+            MR32(0x870d1cu) = (uint32_t)active_slot;
+        }
+    }
+}
+
 static _Atomic int s_tick_in_progress = 0;
 __attribute__((visibility("default"))) void nfs_roam_frame_tick(void) {
     if (!roam_android_init_symbols() || !g_p_esp || !*g_p_esp) return;
@@ -944,6 +1049,7 @@ __attribute__((visibility("default"))) void nfs_roam_frame_tick(void) {
     g_frame_count++;
     hiddenraces_frame_tick();
     framerate_pacing_fix();
+    resolution_frame_tick();
     look_camera_frame_tick();
     roam_game_frame(NULL);
     atomic_store(&s_tick_in_progress, 0);
@@ -1399,6 +1505,14 @@ JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeGpuDriver(
     }
     if (s_gpu_driver) {
         s_gpu_driver(env, clazz, hooks, temp, directory, library);
+    }
+}
+
+JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeKeyNav(
+        JNIEnv *env, jclass clazz, jint scan, jboolean down) {
+    (void)env; (void)clazz;
+    if (down && (scan == 0xcb || scan == 0xcd)) {
+        roam_resolution_nav(scan == 0xcd ? 1 : -1);
     }
 }
 
