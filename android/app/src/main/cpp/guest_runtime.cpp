@@ -597,6 +597,16 @@ void loadImage(const char* path) {
     bindImports(imageBase,imageSize,directory.VirtualAddress,directory.Size);
     NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Guest PE mapped: base=%08x size=%08x entry=%08x; %zu imports bound; %u lifted functions",
         imageBase,imageSize,entry,imports.size(),recomp_dispatch_count);
+    if(memory&&memory->readable(0x007fa9d4u,12)){
+        for(int i=0;i<3;++i){
+            uint32_t addr=0x007fa9d4u+i*4u;
+            if(read32(addr)<48000)write32(addr,48000);
+        }
+        if(memory->readable(0x0061c744u,1)&&*static_cast<const uint8_t*>(ptr(0x0061c744u,1))==0x16){
+            *static_cast<uint8_t*>(ptr(0x0061c744u,1))=0x7f;
+        }
+        NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Patched guest CarPool memory (48MB, ride slots 127)");
+    }
 }
 uint32_t callGuest(uint32_t va, const uint32_t* args, size_t count, uint32_t cleanup, bool threadStart) {
     State saved; saved.save();

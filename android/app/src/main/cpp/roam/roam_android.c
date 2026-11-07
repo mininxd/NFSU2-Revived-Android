@@ -999,6 +999,7 @@ jint JNI_OnLoad(JavaVM *vm, void *reserved) {
             g_mid_on_send = (*env)->GetStaticMethodID(env, g_client_class, "onNativeSend", "(II[B)V");
         }
     }
+    roam_android_patch_carpool();
     return JNI_VERSION_1_6;
 }
 

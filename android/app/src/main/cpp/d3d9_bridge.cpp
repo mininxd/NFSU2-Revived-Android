@@ -1,4 +1,5 @@
 #include "d3d9_bridge.h"
+#include "guest_runtime.h"
 #include "runtime_log.h"
 #include "dxt_shadow.h"
 #include "vertex_formats.h"

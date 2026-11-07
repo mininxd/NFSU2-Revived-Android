@@ -54,9 +54,16 @@ void copyLockBack(uint32_t address,uint32_t subresource){
         uint32_t offset=(data.rectangle.top/4)*data.pitch+(data.rectangle.left/4)*texture.blockBytes();
         for(uint32_t row=0;row<data.rows;++row)std::memcpy(raw.data()+offset+row*data.pitch,static_cast<const uint8_t*>(pointer(data.guest))+row*data.pitch,data.rowBytes);
         uint32_t width=texture.mipWidth(data.compressed.level),height=texture.mipHeight(data.compressed.level);
-        auto pixels=decodeDXT(texture.mode(),width,height,raw.data(),raw.size());
-        for(int32_t row=0;row<data.rectangle.bottom-data.rectangle.top;++row)
-            std::memcpy(static_cast<uint8_t*>(data.native)+row*data.nativePitch,pixels.data()+((size_t(data.rectangle.top)+row)*width+data.rectangle.left)*4,(data.rectangle.right-data.rectangle.left)*4);
+        try {
+            auto pixels=decodeDXT(texture.mode(),width,height,raw.data(),raw.size());
+            if(data.native&&!pixels.empty()){
+                for(int32_t row=0;row<data.rectangle.bottom-data.rectangle.top;++row)
+                    std::memcpy(static_cast<uint8_t*>(data.native)+row*data.nativePitch,pixels.data()+((size_t(data.rectangle.top)+row)*width+data.rectangle.left)*4,(data.rectangle.right-data.rectangle.left)*4);
+            }
+        } catch(const std::exception& e) {
+            NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","DXT decode failed for %ux%u level %u: %s",width,height,data.compressed.level,e.what());
+        }
+        checkGuestProgress();
     }
 }
 void releaseLock(uint32_t address,uint32_t subresource){auto lock=resourceLocks.find(lockKey(address,subresource));if(lock!=resourceLocks.end()){freeGuest(lock->second.guest);resourceLocks.erase(lock);}}
