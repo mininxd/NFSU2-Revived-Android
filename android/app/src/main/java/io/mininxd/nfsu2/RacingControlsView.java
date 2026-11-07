@@ -79,6 +79,11 @@ final class RacingControlsView extends View {
     private float dragStartX, dragStartY;
     private boolean hasMovedControl = false;
     private float controlOpacity = 1.0f;
+    private float toolbarX = Float.NaN, toolbarY = Float.NaN;
+    private int toolbarDragPointer = -1;
+    private float toolbarDragStartX, toolbarDragStartY;
+    private float toolbarDragInitX, toolbarDragInitY;
+    private boolean isDraggingToolbar = false;
 
     public interface OnEditingChangeListener {
         void onEditingChanged(boolean editing);
@@ -97,6 +102,8 @@ final class RacingControlsView extends View {
         } else {
             this.selected = null;
             this.dragPointer = -1;
+            this.isDraggingToolbar = false;
+            this.toolbarDragPointer = -1;
         }
         if (onEditingChangeListener != null) {
             onEditingChangeListener.onEditingChanged(edit);
@@ -470,22 +477,78 @@ final class RacingControlsView extends View {
         }
 
         if (editing) {
-            float w = getWidth() / scale, cx = w / 2f;
-            drawToolbarButton(canvas, new RectF(cx - 245, 18, cx - 155, 58), "RESET", 0xE0182028, 0x44FFFFFF, COLOR_TEXT);
-            drawToolbarButton(canvas, new RectF(cx - 145, 18, cx - 105, 58), "−", 0xE01E2836, 0x66FFFFFF, Color.WHITE);
-            drawToolbarButton(canvas, new RectF(cx - 95, 18, cx - 55, 58), "+", 0xE01E2836, 0x66FFFFFF, Color.WHITE);
-            drawToolbarButton(canvas, new RectF(cx - 45, 18, cx + 50, 58), "SAVE", 0xE018301C, 0xAA88E060, COLOR_LIME);
-            drawToolbarButton(canvas, new RectF(cx + 60, 18, cx + 150, 58), "CANCEL", 0xE0182028, 0x44FFFFFF, COLOR_TEXT);
-            drawToolbarButton(canvas, new RectF(cx + 160, 18, cx + 250, 58), "EXIT", 0xE036181C, 0xAAFF6B6B, 0xFFFF7B7B);
-            if (controlsHidden) {
-                drawToolbarButton(canvas, new RectF(cx - 205, 68, cx - 75, 106), "SHOW BUTTON", 0xE018301C, 0xAA88E060, COLOR_LIME);
-            } else {
-                drawToolbarButton(canvas, new RectF(cx - 205, 68, cx - 75, 106), "HIDE BUTTON", 0xE0282018, 0xAAFFB74D, 0xFFFFB74D);
+            float w = getWidth() / scale, h = getHeight() / scale;
+            if (Float.isNaN(toolbarX) || Float.isNaN(toolbarY)) {
+                toolbarX = w / 2f;
+                toolbarY = 16f;
             }
-            drawToolbarButton(canvas, new RectF(cx - 65, 68, cx + 65, 106), "OPTIONS", 0xE0162534, 0xAA5AC8FA, 0xFF5AC8FA);
-            drawToolbarButton(canvas, new RectF(cx + 75, 68, cx + 205, 106), "OPACITY (" + Math.round(controlOpacity * 100) + "%)", 0xE0162534, 0xAA5AC8FA, 0xFF5AC8FA);
+            clampToolbar(w, h);
+            float cx = toolbarX, ty = toolbarY;
+
+            // Draggable container card behind toolbar
+            RectF card = new RectF(cx - 305, ty, cx + 258, ty + 96);
+            fill.setColor(isDraggingToolbar ? 0xEE141C24 : 0xDD101620);
+            line.setColor(isDraggingToolbar ? COLOR_LIME : 0x55FFFFFF);
+            line.setStrokeWidth(1.5f);
+            canvas.drawRoundRect(card, 16f, 16f, fill);
+            canvas.drawRoundRect(card, 16f, 16f, line);
+
+            // Drag handle (Hamburger icon from Google Icons)
+            RectF dragHandle = new RectF(cx - 297, ty + 8, cx - 253, ty + 88);
+            fill.setColor(isDraggingToolbar ? 0x55C8F088 : 0x33FFFFFF);
+            line.setColor(isDraggingToolbar ? COLOR_LIME : 0x66FFFFFF);
+            canvas.drawRoundRect(dragHandle, 12f, 12f, fill);
+            canvas.drawRoundRect(dragHandle, 12f, 12f, line);
+            drawHamburgerIcon(canvas, dragHandle, isDraggingToolbar ? COLOR_LIME : Color.WHITE);
+
+            // Row 1 buttons (y: ty + 8 .. ty + 46, height 38)
+            drawToolbarButton(canvas, new RectF(cx - 245, ty + 8, cx - 155, ty + 46), "RESET", 0xE0182028, 0x44FFFFFF, COLOR_TEXT);
+            drawToolbarButton(canvas, new RectF(cx - 145, ty + 8, cx - 105, ty + 46), "−", 0xE01E2836, 0x66FFFFFF, Color.WHITE);
+            drawToolbarButton(canvas, new RectF(cx - 95, ty + 8, cx - 55, ty + 46), "+", 0xE01E2836, 0x66FFFFFF, Color.WHITE);
+            drawToolbarButton(canvas, new RectF(cx - 45, ty + 8, cx + 50, ty + 46), "SAVE", 0xE018301C, 0xAA88E060, COLOR_LIME);
+            drawToolbarButton(canvas, new RectF(cx + 60, ty + 8, cx + 150, ty + 46), "CANCEL", 0xE0182028, 0x44FFFFFF, COLOR_TEXT);
+            drawToolbarButton(canvas, new RectF(cx + 160, ty + 8, cx + 250, ty + 46), "EXIT", 0xE036181C, 0xAAFF6B6B, 0xFFFF7B7B);
+
+            // Row 2 buttons (y: ty + 50 .. ty + 88, height 38)
+            if (controlsHidden) {
+                drawToolbarButton(canvas, new RectF(cx - 205, ty + 50, cx - 75, ty + 88), "SHOW BUTTON", 0xE018301C, 0xAA88E060, COLOR_LIME);
+            } else {
+                drawToolbarButton(canvas, new RectF(cx - 205, ty + 50, cx - 75, ty + 88), "HIDE BUTTON", 0xE0282018, 0xAAFFB74D, 0xFFFFB74D);
+            }
+            drawToolbarButton(canvas, new RectF(cx - 65, ty + 50, cx + 65, ty + 88), "OPTIONS", 0xE0162534, 0xAA5AC8FA, 0xFF5AC8FA);
+            drawToolbarButton(canvas, new RectF(cx + 75, ty + 50, cx + 205, ty + 88), "OPACITY (" + Math.round(controlOpacity * 100) + "%)", 0xE0162534, 0xAA5AC8FA, 0xFF5AC8FA);
         }
         canvas.restore();
+    }
+
+    private static int applyAlpha(int color, float opacity) {
+        if (opacity >= 0.999f) return color;
+        int a = (color >>> 24);
+        int modulated = Math.max(0, Math.min(255, Math.round(a * opacity)));
+        return (color & 0x00FFFFFF) | (modulated << 24);
+    }
+
+    private void clampToolbar(float w, float h) {
+        float minX = 310f;
+        float maxX = Math.max(minX, w - 265f);
+        float minY = 6f;
+        float maxY = Math.max(minY, h - 102f);
+        if (toolbarX < minX) toolbarX = minX;
+        else if (toolbarX > maxX) toolbarX = maxX;
+        if (toolbarY < minY) toolbarY = minY;
+        else if (toolbarY > maxY) toolbarY = maxY;
+    }
+
+    private void drawHamburgerIcon(Canvas canvas, RectF area, int color) {
+        fill.setColor(color);
+        float cx = area.centerX(), cy = area.centerY();
+        float barW = area.width() * 0.52f;
+        float barH = Math.max(3f, area.height() * 0.055f);
+        float spacing = area.height() * 0.22f;
+        float r = barH / 2f;
+        canvas.drawRoundRect(cx - barW / 2f, cy - spacing - barH / 2f, cx + barW / 2f, cy - spacing + barH / 2f, r, r, fill);
+        canvas.drawRoundRect(cx - barW / 2f, cy - barH / 2f, cx + barW / 2f, cy + barH / 2f, r, r, fill);
+        canvas.drawRoundRect(cx - barW / 2f, cy + spacing - barH / 2f, cx + barW / 2f, cy + spacing + barH / 2f, r, r, fill);
     }
 
     private void drawControl(Canvas canvas, Control c) {
@@ -495,47 +558,43 @@ final class RacingControlsView extends View {
 
         float op = (c.scan == EDIT) ? Math.max(0.40f, controlOpacity) : controlOpacity;
         float effectiveOpacity = on ? Math.min(1.0f, op * 1.4f + 0.15f) : op;
-        int alpha = editing ? 255 : Math.max(20, Math.min(255, Math.round(255f * effectiveOpacity)));
-        int layer = canvas.saveLayerAlpha(c.area.left - 8f, c.area.top - 8f, c.area.right + 8f, c.area.bottom + 8f, alpha);
+        if (editing) effectiveOpacity = 1.0f;
 
-        try {
-            // Background
-            fill.setColor(on ? COLOR_BG_PRESSED : COLOR_BG);
-            line.setColor(picked ? 0xFFFFD18A : on ? COLOR_STROKE_PRESSED : COLOR_STROKE);
-            line.setStrokeWidth(Math.max(1.5f, 2.0f));
+        // Background
+        fill.setColor(applyAlpha(on ? COLOR_BG_PRESSED : COLOR_BG, effectiveOpacity));
+        line.setColor(applyAlpha(picked ? 0xFFFFD18A : (on ? COLOR_STROKE_PRESSED : COLOR_STROKE), effectiveOpacity));
+        line.setStrokeWidth(Math.max(1.5f, 2.0f));
 
-            if (c.shape == WHEEL) {
-                // Thumbstick base & knob
-                canvas.drawCircle(cx, cy, r, fill);
-                canvas.drawCircle(cx, cy, r - 1f, line);
-                float knobR = r * 0.42f;
-                float kx = cx + c.steering * (r - knobR);
-                fill.setColor(on ? 0xD0182414 : 0x88000000);
-                canvas.drawCircle(kx, cy, knobR, fill);
-                line.setColor(on ? COLOR_LIME : 0x88FFFFFF);
-                canvas.drawCircle(kx, cy, knobR, line);
-                return;
-            }
-
-            float corner = 18f;
-            if (c.shape == PEDAL) corner = 22f;
-            else if (c.shape == PILL) corner = c.area.height() / 2f;
-            else if (c.shape == DPAD) corner = 14f;
-            else if (c.shape == ROUND) corner = r;
-
-            canvas.drawRoundRect(c.area, corner, corner, fill);
-            canvas.drawRoundRect(c.area, corner, corner, line);
-
-            // Foreground content (Text or SVG icon)
-            int ink = on ? COLOR_LIME : COLOR_TEXT;
-            line.setColor(ink);
-            fill.setColor(ink);
-            text.setColor(ink);
-
-            drawIcon(canvas, c, cx, cy, r, on);
-        } finally {
-            canvas.restoreToCount(layer);
+        if (c.shape == WHEEL) {
+            // Thumbstick base & knob
+            canvas.drawCircle(cx, cy, r, fill);
+            canvas.drawCircle(cx, cy, r - 1f, line);
+            float knobR = r * 0.42f;
+            float kx = cx + c.steering * (r - knobR);
+            fill.setColor(applyAlpha(on ? 0xD0182414 : 0x88000000, effectiveOpacity));
+            canvas.drawCircle(kx, cy, knobR, fill);
+            line.setColor(applyAlpha(on ? COLOR_LIME : 0x88FFFFFF, effectiveOpacity));
+            canvas.drawCircle(kx, cy, knobR, line);
+            return;
         }
+
+        float corner = 18f;
+        if (c.shape == PEDAL) corner = 22f;
+        else if (c.shape == PILL) corner = c.area.height() / 2f;
+        else if (c.shape == DPAD) corner = 14f;
+        else if (c.shape == ROUND) corner = r;
+
+        canvas.drawRoundRect(c.area, corner, corner, fill);
+        canvas.drawRoundRect(c.area, corner, corner, line);
+
+        // Foreground content (Text or SVG icon)
+        int ink = applyAlpha(on ? COLOR_LIME : COLOR_TEXT, effectiveOpacity);
+        line.setColor(ink);
+        fill.setColor(ink);
+        text.setColor(ink);
+        bitmapPaint.setAlpha(Math.max(0, Math.min(255, Math.round(255f * effectiveOpacity))));
+
+        drawIcon(canvas, c, cx, cy, r, on);
     }
 
     private void drawIcon(Canvas canvas, Control c, float cx, float cy, float r, boolean on) {
@@ -831,50 +890,88 @@ final class RacingControlsView extends View {
 
     private boolean editTouch(MotionEvent e) {
         int action = e.getActionMasked(), index = e.getActionIndex();
-        float x = e.getX(index) / scale, y = e.getY(index) / scale, w = getWidth() / scale;
+        float x = e.getX(index) / scale, y = e.getY(index) / scale, w = getWidth() / scale, h = getHeight() / scale;
+        if (Float.isNaN(toolbarX) || Float.isNaN(toolbarY)) {
+            toolbarX = w / 2f;
+            toolbarY = 16f;
+        }
+        clampToolbar(w, h);
+        float cx = toolbarX, ty = toolbarY;
+
         if (action == MotionEvent.ACTION_DOWN) {
-            float cx = w / 2f;
-            if (x >= cx - 205 && x <= cx - 75 && y >= 66 && y <= 108) {
-                toggleControlsVisibility();
-                return true;
-            }
-            if (x >= cx - 65 && x <= cx + 65 && y >= 66 && y <= 108) {
-                showOptions();
-                return true;
-            }
-            if (x >= cx + 75 && x <= cx + 205 && y >= 66 && y <= 108) {
-                chooseButtonOpacity();
-                return true;
-            }
-            if (y >= 16 && y <= 60) {
-                boolean handled = true;
-                if (x >= cx - 245 && x <= cx - 155) {
-                    for (Control c : controls) c.area.set(c.original);
-                    selected = null;
-                    hasMovedControl = true;
-                } else if (x >= cx - 145 && x <= cx - 105) {
-                    resizeSelected(-0.1f);
-                    hasMovedControl = true;
-                } else if (x >= cx - 95 && x <= cx - 55) {
-                    resizeSelected(0.1f);
-                    hasMovedControl = true;
-                } else if (x >= cx - 45 && x <= cx + 50) {
-                    saveLayout();
-                    setEditing(false);
-                    layoutControls();
-                } else if (x >= cx + 60 && x <= cx + 150) {
-                    setEditing(false);
-                    layoutControls();
-                } else if (x >= cx + 160 && x <= cx + 250) {
-                    confirmExitToLauncher();
-                } else {
-                    handled = false;
-                }
-                if (handled) {
+            // Check if touch is inside the floating toolbar card: [cx - 305 .. cx + 258, ty .. ty + 96]
+            if (x >= cx - 305 && x <= cx + 258 && y >= ty && y <= ty + 96) {
+                // Drag handle area: [cx - 305 .. cx - 250, ty .. ty + 96]
+                if (x <= cx - 250) {
+                    toolbarDragPointer = e.getPointerId(index);
+                    toolbarDragStartX = x;
+                    toolbarDragStartY = y;
+                    toolbarDragInitX = toolbarX;
+                    toolbarDragInitY = toolbarY;
+                    isDraggingToolbar = true;
                     invalidate();
                     return true;
                 }
+
+                // Row 2 buttons: [ty + 48 .. ty + 90]
+                if (y >= ty + 48 && y <= ty + 90) {
+                    if (x >= cx - 205 && x <= cx - 75) {
+                        toggleControlsVisibility();
+                        return true;
+                    }
+                    if (x >= cx - 65 && x <= cx + 65) {
+                        showOptions();
+                        return true;
+                    }
+                    if (x >= cx + 75 && x <= cx + 205) {
+                        chooseButtonOpacity();
+                        return true;
+                    }
+                }
+
+                // Row 1 buttons: [ty + 6 .. ty + 48]
+                if (y >= ty + 6 && y <= ty + 48) {
+                    boolean handled = true;
+                    if (x >= cx - 245 && x <= cx - 155) {
+                        for (Control c : controls) c.area.set(c.original);
+                        selected = null;
+                        hasMovedControl = true;
+                    } else if (x >= cx - 145 && x <= cx - 105) {
+                        resizeSelected(-0.1f);
+                        hasMovedControl = true;
+                    } else if (x >= cx - 95 && x <= cx - 55) {
+                        resizeSelected(0.1f);
+                        hasMovedControl = true;
+                    } else if (x >= cx - 45 && x <= cx + 50) {
+                        saveLayout();
+                        setEditing(false);
+                        layoutControls();
+                    } else if (x >= cx + 60 && x <= cx + 150) {
+                        setEditing(false);
+                        layoutControls();
+                    } else if (x >= cx + 160 && x <= cx + 250) {
+                        confirmExitToLauncher();
+                    } else {
+                        handled = false;
+                    }
+                    if (handled) {
+                        invalidate();
+                        return true;
+                    }
+                }
+
+                // Touched anywhere on toolbar card outside action buttons -> drag toolbar!
+                toolbarDragPointer = e.getPointerId(index);
+                toolbarDragStartX = x;
+                toolbarDragStartY = y;
+                toolbarDragInitX = toolbarX;
+                toolbarDragInitY = toolbarY;
+                isDraggingToolbar = true;
+                invalidate();
+                return true;
             }
+
+            // Outside toolbar card: check controls
             Control hitControl = hit(e.getX(index), e.getY(index));
             if (!hasMovedControl && hitControl != null && hitControl.scan == EDIT) {
                 setEditing(false);
@@ -888,22 +985,47 @@ final class RacingControlsView extends View {
             dragY = y;
             dragStartX = x;
             dragStartY = y;
-        } else if (action == MotionEvent.ACTION_MOVE && selected != null && dragPointer >= 0) {
-            int i = e.findPointerIndex(dragPointer);
-            if (i >= 0) {
-                x = e.getX(i) / scale;
-                y = e.getY(i) / scale;
-                if (!hasMovedControl && Math.hypot(x - dragStartX, y - dragStartY) > 4.0f) {
-                    hasMovedControl = true;
+        } else if (action == MotionEvent.ACTION_MOVE) {
+            if (isDraggingToolbar && toolbarDragPointer >= 0) {
+                int i = e.findPointerIndex(toolbarDragPointer);
+                if (i >= 0) {
+                    float curX = e.getX(i) / scale, curY = e.getY(i) / scale;
+                    toolbarX = toolbarDragInitX + (curX - toolbarDragStartX);
+                    toolbarY = toolbarDragInitY + (curY - toolbarDragStartY);
+                    clampToolbar(w, h);
+                    invalidate();
+                    return true;
                 }
-                selected.area.offset(x - dragX, y - dragY);
-                clamp(selected);
-                dragX = x;
-                dragY = y;
             }
-        } else if (action == MotionEvent.ACTION_CANCEL || action == MotionEvent.ACTION_UP ||
-                (action == MotionEvent.ACTION_POINTER_UP && e.getPointerId(index) == dragPointer)) {
+            if (selected != null && dragPointer >= 0) {
+                int i = e.findPointerIndex(dragPointer);
+                if (i >= 0) {
+                    x = e.getX(i) / scale;
+                    y = e.getY(i) / scale;
+                    if (!hasMovedControl && Math.hypot(x - dragStartX, y - dragStartY) > 4.0f) {
+                        hasMovedControl = true;
+                    }
+                    selected.area.offset(x - dragX, y - dragY);
+                    clamp(selected);
+                    dragX = x;
+                    dragY = y;
+                }
+            }
+        } else if (action == MotionEvent.ACTION_CANCEL || action == MotionEvent.ACTION_UP) {
+            if (isDraggingToolbar) {
+                isDraggingToolbar = false;
+                toolbarDragPointer = -1;
+            }
             dragPointer = -1;
+        } else if (action == MotionEvent.ACTION_POINTER_UP) {
+            int pid = e.getPointerId(index);
+            if (pid == toolbarDragPointer) {
+                isDraggingToolbar = false;
+                toolbarDragPointer = -1;
+            }
+            if (pid == dragPointer) {
+                dragPointer = -1;
+            }
         }
         invalidate();
         return true;
