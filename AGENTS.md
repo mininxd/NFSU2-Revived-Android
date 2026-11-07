@@ -24,3 +24,17 @@ Only an explicit choice of antislop during or after selects a session mode. A re
 If the mode is unresolved, ask during/after and end the response; wait for the answer before any UI review, planning, or concept. For read-only tasks, put the active-mode notice only at the start of the final answer, never in progress messages. For editing tasks, announce before the first edit and omit it from the final answer.
 To update antislop later: `npx antislop-ai --update`, or run `npx antislop-ai` and pick Overwrite them.
 <!-- antislop:end -->
+
+## Build & CI Workflow
+
+- **Never Build Locally:** Do not run local Gradle, NDK, or Cargo builds (`./gradlew`, etc.) in the workspace environment.
+- **GitHub Actions CI:** Always push changes to GitHub (`origin/main`) and let GitHub Actions run the build pipeline.
+- **Error Diagnosis & Retry:** Monitor the GitHub Actions workflow. If the build fails:
+  1. Inspect the failed job logs (`gh run view <run-id> --log-failed`).
+  2. Diagnose and fix the errors.
+  3. Commit, push again, and report the progress.
+- **Automatic Deployment to Cache:** Once the GitHub Actions build succeeds:
+  1. Automatically download the release APK artifact (`NFSU2-Android-APK`).
+  2. Extract and copy the APK to `/sdcard/cache/NFSU2.apk` (replacing any existing file).
+  3. Verify the destination file and report the build status to the user.
+
