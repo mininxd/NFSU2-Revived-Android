@@ -94,12 +94,14 @@ static int g_carpool_patched = 0;
 /* Online Mode Lobby Patch: removes '*' from "*pcnfs05.ea.com" at 0x7FBDBCu
  * so DirtySock connects via plain TCP on port 20920 instead of SSL 2.0 on 20921 */
 static void roam_android_patch_online(void) {
-    if (g_online_patched || !g_p_esp || !*g_p_esp || !rh_mem_committed(0x7FBDBCu, 16)) return;
+    if (g_online_patched || !g_p_mem_base || !*g_p_mem_base || !rh_mem_committed(0x7FBDBCu, 16)) return;
     uint8_t *p = GPTR(0x7FBDBCu);
     if (memcmp(p, "*pcnfs05.ea.com", 15) == 0) {
         memcpy(p, "pcnfs05.ea.com\0", 15);
         g_online_patched = 1;
         __android_log_print(ANDROID_LOG_INFO, "NFSU2-Roam", "Patched 0x7FBDBC: removed '*' from *pcnfs05.ea.com for plain TCP lobby");
+    } else if (memcmp(p, "pcnfs05.ea.com", 14) == 0) {
+        g_online_patched = 1;
     }
 }
 
@@ -113,28 +115,26 @@ static inline void roam_android_patch_carpool(void) {
 }
 
 int roam_android_init_symbols(void) {
-    if (__builtin_expect(g_p_mem_base && g_p_recomp_lookup && g_p_esp && *g_p_mem_base != 0 && *g_p_esp != 0, 1)) {
-        if (!g_carpool_patched) roam_android_patch_carpool();
-        if (!g_online_patched) roam_android_patch_online();
-        return 1;
+    if (!g_p_mem_base) {
+        void *h = dlopen("libnfsu2_android.so", RTLD_NOLOAD | RTLD_GLOBAL);
+        if (!h) h = dlopen("libnfsu2_android.so", RTLD_LAZY | RTLD_GLOBAL);
+        if (!h) h = RTLD_DEFAULT;
+
+        g_p_mem_base = (ptrdiff_t *)dlsym(h, "g_mem_base");
+        g_p_recomp_lookup = (recomp_func_t (*)(uint32_t))dlsym(h, "recomp_lookup");
+        g_p_esp = (uint32_t *)dlsym(h, "g_esp");
+        g_p_eax = (uint32_t *)dlsym(h, "g_eax");
+        g_p_ecx = (uint32_t *)dlsym(h, "g_ecx");
+        g_p_edx = (uint32_t *)dlsym(h, "g_edx");
+        g_p_guest_is_readable = (int (*)(uint32_t, uint32_t))dlsym(h, "guest_is_readable");
     }
 
-    void *h = dlopen("libnfsu2_android.so", RTLD_NOLOAD | RTLD_GLOBAL);
-    if (!h) h = dlopen("libnfsu2_android.so", RTLD_LAZY | RTLD_GLOBAL);
-    if (!h) h = RTLD_DEFAULT;
-
-    if (!g_p_mem_base) g_p_mem_base = (ptrdiff_t *)dlsym(h, "g_mem_base");
-    if (!g_p_recomp_lookup) g_p_recomp_lookup = (recomp_func_t (*)(uint32_t))dlsym(h, "recomp_lookup");
-    if (!g_p_esp) g_p_esp = (uint32_t *)dlsym(h, "g_esp");
-    if (!g_p_eax) g_p_eax = (uint32_t *)dlsym(h, "g_eax");
-    if (!g_p_ecx) g_p_ecx = (uint32_t *)dlsym(h, "g_ecx");
-    if (!g_p_edx) g_p_edx = (uint32_t *)dlsym(h, "g_edx");
-    if (!g_p_guest_is_readable) g_p_guest_is_readable = (int (*)(uint32_t, uint32_t))dlsym(h, "guest_is_readable");
-
-    if (g_p_mem_base && *g_p_mem_base != 0 && g_p_recomp_lookup && g_p_esp && *g_p_esp != 0) {
-        if (!g_carpool_patched) roam_android_patch_carpool();
+    if (g_p_mem_base && *g_p_mem_base != 0) {
         if (!g_online_patched) roam_android_patch_online();
-        return 1;
+        if (g_p_esp && *g_p_esp != 0) {
+            if (!g_carpool_patched) roam_android_patch_carpool();
+            return 1;
+        }
     }
     return 0;
 }
@@ -1058,12 +1058,7 @@ static void roam_do_receive(JNIEnv *env, jint srcIp, jint srcPort, jbyteArray jD
 }
 
 static void roam_do_tick(void) {
-    /* Background Java threads (e.g. RoamTickWorker, GameCompanionTicker) must not
-     * invoke nfs_roam_frame_tick() directly because it executes guest x86 functions
-     * and mutates guest stack/registers (g_esp, g_eax, g_ecx), causing fatal
-     * race conditions and SIGSEGV when running concurrently with the guest game thread.
-     * nfs_roam_frame_tick() is already invoked synchronously on every frame render
-     * in guest_runtime.cpp at Direct3D9 Present (token 0x7e002110u). */
+    nfs_roam_frame_tick();
 }
 
 static void roam_do_say(jint phrase) {

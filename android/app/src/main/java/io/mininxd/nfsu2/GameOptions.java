@@ -229,7 +229,7 @@ public final class GameOptions {
     public static String roamServer(Context context) {
         String server = onlineServer(context);
         // For eahub classic, the adhoc/roam service lives on adhoc.eahub.eu
-        if (DEFAULT_ONLINE_SERVER.equalsIgnoreCase(server) || "eahub.eu".equalsIgnoreCase(server)) {
+        if (isEahubClassic(server)) {
             return DEFAULT_ROAM_SERVER;
         }
         // For custom servers, use the same host (they host both online and roam)

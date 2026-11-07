@@ -193,10 +193,12 @@ public final class AdhocPostofficeClient {
         switch (opcode) {
             case OPCODE_CONNECT_BSSID: {
                 byte[] bssid = readFully(in, 6);
-                connected.set(true);
+                boolean wasConnected = connected.getAndSet(true);
                 String bssidStr = formatMac(bssid);
                 Log.i(TAG, "Joined room group BSSID: " + bssidStr);
-                if (listener != null) listener.onConnected(bssidStr);
+                if (!wasConnected && listener != null) {
+                    listener.onConnected(bssidStr);
+                }
                 break;
             }
             case OPCODE_CONNECT: {
@@ -208,6 +210,12 @@ public final class AdhocPostofficeClient {
                 while (nullIdx < nameBuf.length && nameBuf[nullIdx] != 0) nullIdx++;
                 String peerName = new String(nameBuf, 0, nullIdx, StandardCharsets.UTF_8);
                 int peerIp = ByteBuffer.wrap(ipBuf).order(ByteOrder.LITTLE_ENDIAN).getInt();
+
+                if (!connected.getAndSet(true)) {
+                    String adhocGroup = (roomName != null && !roomName.isEmpty()) ? roomName : "FREEROAM";
+                    Log.i(TAG, "Connected to room group: " + adhocGroup);
+                    if (listener != null) listener.onConnected(adhocGroup);
+                }
 
                 if (!Arrays.equals(peerMac, localMac)) {
                     Peer p = getOrCreatePeer(peerName, peerMac, peerIp);
@@ -382,12 +390,6 @@ public final class AdhocPostofficeClient {
         try {
             byte[] broadcastMac = new byte[] { (byte)0xFF, (byte)0xFF, (byte)0xFF, (byte)0xFF, (byte)0xFF, (byte)0xFF };
             sendPdpPacket(broadcastMac, data);
-
-            for (Peer p : peers.values()) {
-                if (p.mac != null && p.mac.length == 6 && !Arrays.equals(p.mac, localMac)) {
-                    sendPdpPacket(p.mac, data);
-                }
-            }
         } catch (Exception e) {
             Log.d(TAG, "Failed to broadcast to adhoc peers: " + e.getMessage());
         }

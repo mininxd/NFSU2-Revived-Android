@@ -389,7 +389,8 @@ public final class GameActivity extends NativeActivity {
         } else {
             // Classic server (eahub.eu or custom): gethostbyname in guest_network.inc
             // redirects all *.ea.com DNS lookups to this host directly over plain TCP.
-            nativeOnlineServer(configuredServer);
+            String eaNationServer = GameOptions.isEahubClassic(configuredServer) ? "eahub.eu" : configuredServer;
+            nativeOnlineServer(eaNationServer);
         }
         io.mininxd.nfsu2.net.EahubClassicOnline.logStartup(this, configuredServer, !useLocalBridge);
         minimapTop = launch.getBooleanExtra("minimapTop", GameOptions.get(this, GameOptions.MINIMAP).equals("top"));
@@ -431,7 +432,8 @@ public final class GameActivity extends NativeActivity {
         boolean roamEnabled = launch.getBooleanExtra("roamEnabled", GameOptions.isRoamEnabled(this));
         if (roamEnabled || isWs) {
             String roamServer = launch.getStringExtra("roamServer");
-            if (roamServer == null || roamServer.isEmpty()) roamServer = configuredServer;
+            if (roamServer == null || roamServer.isEmpty()) roamServer = GameOptions.roamServer(this);
+            else if (GameOptions.isEahubClassic(roamServer)) roamServer = GameOptions.DEFAULT_ROAM_SERVER;
             String roamRoom = launch.hasExtra("roamRoom") ? launch.getStringExtra("roamRoom") : GameOptions.roamRoom(this);
             if (roamRoom == null) roamRoom = "";
             String roamName = launch.getStringExtra("roamName");
