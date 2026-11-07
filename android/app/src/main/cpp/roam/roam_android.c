@@ -88,22 +88,7 @@ extern int nfs_rust_apply_engine_pacing(uint8_t *mem_base, float real_elapsed);
 #define G_CARPOOL_KB 0x007fa9d4u
 #define CARPOOL_KB   48000
 
-static int g_online_patched = 0;
 static int g_carpool_patched = 0;
-
-/* Online Mode Lobby Patch: removes '*' from "*pcnfs05.ea.com" at 0x7FBDBCu
- * so DirtySock connects via plain TCP on port 20920 instead of SSL 2.0 on 20921 */
-static void roam_android_patch_online(void) {
-    if (g_online_patched || !g_p_mem_base || !*g_p_mem_base || !rh_mem_committed(0x7FBDBCu, 16)) return;
-    uint8_t *p = GPTR(0x7FBDBCu);
-    if (memcmp(p, "*pcnfs05.ea.com", 15) == 0) {
-        memcpy(p, "pcnfs05.ea.com\0", 15);
-        g_online_patched = 1;
-        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Roam", "Patched 0x7FBDBC: removed '*' from *pcnfs05.ea.com for plain TCP lobby");
-    } else if (memcmp(p, "pcnfs05.ea.com", 14) == 0) {
-        g_online_patched = 1;
-    }
-}
 
 static inline void roam_android_patch_carpool(void) {
     if (!g_carpool_patched && g_p_esp && *g_p_esp && rh_mem_committed(G_CARPOOL_KB, 4)) {
@@ -129,12 +114,9 @@ int roam_android_init_symbols(void) {
         g_p_guest_is_readable = (int (*)(uint32_t, uint32_t))dlsym(h, "guest_is_readable");
     }
 
-    if (g_p_mem_base && *g_p_mem_base != 0) {
-        if (!g_online_patched) roam_android_patch_online();
-        if (g_p_esp && *g_p_esp != 0) {
-            if (!g_carpool_patched) roam_android_patch_carpool();
-            return 1;
-        }
+    if (g_p_mem_base && *g_p_mem_base != 0 && g_p_esp && *g_p_esp != 0) {
+        if (!g_carpool_patched) roam_android_patch_carpool();
+        return 1;
     }
     return 0;
 }

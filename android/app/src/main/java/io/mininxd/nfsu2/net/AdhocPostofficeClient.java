@@ -300,7 +300,8 @@ public final class AdhocPostofficeClient {
                         byte[] payload = readFully(in, size);
                         if (Arrays.equals(srcMac, localMac)) continue;
 
-                        Peer p = getOrCreatePeer("Player", srcMac, 0);
+                        getOrCreatePeer("Player", srcMac, 0);
+                        forwardToLocalGame(payload);
                         if (listener != null) {
                             listener.onDatagramReceived(srcMac, payload);
                         }
@@ -322,6 +323,18 @@ public final class AdhocPostofficeClient {
         postofficeThread.start();
     }
 
+    private void forwardToLocalGame(byte[] payload) {
+        try {
+            if (localUdpSocket != null && !localUdpSocket.isClosed()) {
+                InetAddress loopback = InetAddress.getByName("127.0.0.1");
+                DatagramPacket packet = new DatagramPacket(payload, payload.length, loopback, DEFAULT_GAME_PORT);
+                localUdpSocket.send(packet);
+            }
+        } catch (Exception e) {
+            Log.d(TAG, "Failed forwarding PDP payload to local game: " + e.getMessage());
+        }
+    }
+
     public synchronized Peer getOrCreatePeer(String name, byte[] mac, int ip) {
         String key = formatMac(mac);
         Peer existing = peers.get(key);
@@ -330,38 +343,7 @@ public final class AdhocPostofficeClient {
             return existing;
         }
 
-        int vPort = nextVirtualPort.getAndIncrement();
-        if (vPort > 47290) {
-            nextVirtualPort.set(47212);
-            vPort = 47212;
-        }
-
-        final Peer peer = new Peer(name, mac, ip, vPort);
-        try {
-            peer.socket = new DatagramSocket(vPort, InetAddress.getByName("127.0.0.1"));
-            peer.socket.setBroadcast(false);
-
-            peer.worker = new Thread(() -> {
-                byte[] buf = new byte[2048];
-                while (running.get() && peer.socket != null && !peer.socket.isClosed()) {
-                    try {
-                        DatagramPacket pkt = new DatagramPacket(buf, buf.length);
-                        peer.socket.receive(pkt);
-                        if (pkt.getLength() > 0) {
-                            byte[] data = Arrays.copyOf(pkt.getData(), pkt.getLength());
-                            sendPdpPacket(peer.mac, data);
-                        }
-                    } catch (Exception e) {
-                        break;
-                    }
-                }
-            }, "PeerWorker-" + vPort);
-            peer.worker.setDaemon(true);
-            peer.worker.start();
-        } catch (Exception e) {
-            Log.e(TAG, "Failed creating peer socket on port " + vPort + ": " + e.getMessage());
-        }
-
+        final Peer peer = new Peer(name, mac, ip, 0);
         peers.put(key, peer);
         return peer;
     }

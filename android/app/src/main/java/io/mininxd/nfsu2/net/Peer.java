@@ -14,6 +14,10 @@ public class Peer {
     public Thread worker;
     public volatile long lastSeen;
 
+    public Peer(String name, byte[] mac, int ip) {
+        this(name, mac, ip, 0);
+    }
+
     public Peer(String name, byte[] mac, int ip, int virtualPort) {
         this.name = (name != null && !name.trim().isEmpty()) ? name.trim() : "Player";
         this.mac = mac != null ? mac.clone() : new byte[6];

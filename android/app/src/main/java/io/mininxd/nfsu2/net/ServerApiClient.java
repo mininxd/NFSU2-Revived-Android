@@ -105,10 +105,10 @@ public final class ServerApiClient {
 
     public static boolean isWsHost(String host) {
         if (host == null) return false;
-        String h = host.toLowerCase().trim();
-        if (h.equals("adhoc.eahub.eu") || h.equals("eahub.eu")) {
+        if (GameOptions.isEahubClassic(host)) {
             return false;
         }
+        String h = host.toLowerCase().trim();
         if (h.startsWith("adhoc.") && !h.contains("nfsu2")) {
             return false;
         }
