@@ -1060,7 +1060,7 @@ void setGuestPadConnected(bool connected){
     inputPadConnected=connected;if(!connected)inputPad=InputPad{};
 }
 bool guestGamepadInUse(){return inputPadAcquired.load()>0;}
-void setGuestPadButtonNames(bool playStation){padPlayStationNames=playStation;}
+void setGuestPadButtonNames(bool playStation){(void)playStation;}
 void setGuestDisplaySize(unsigned width,unsigned height){displayWidth=width;displayHeight=height;}
 void setGuestResolution(unsigned width,unsigned height){
     std::lock_guard<MachineMutex> lock(machine);if(memory)return;

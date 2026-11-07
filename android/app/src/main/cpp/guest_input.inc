@@ -31,7 +31,6 @@ struct InputObject {
 // stick, Rz centred; buttons A B X Y LB RB Back Start LS RS; one POV hat.
 struct InputPad {float axis[6]{};uint32_t buttons=0;int hatX=0,hatY=0;};
 InputPad inputPad;bool inputPadConnected=false;
-std::atomic<bool> padPlayStationNames{false};
 std::atomic<int> inputPadAcquired{0};
 std::array<uint8_t,16> directInputGuid(uint32_t data1){
     std::array<uint8_t,16> guid={0,0,0,0,0xf3,0xc9,0xcf,0x11,0xbf,0xc7,0x44,0x45,0x53,0x54,0,0};
@@ -41,8 +40,8 @@ const std::array<uint8_t,16> padGuid={0x20,0x50,0x41,0x44,0x00,0x00,0x00,0x00,0x
 // guidProduct of a HID device: PID<<16|VID, then "PIDVID".
 const std::array<uint8_t,16> padProductGuid={0x5e,0x04,0x8e,0x02,0,0,0,0,0,0,0x50,0x49,0x44,0x56,0x49,0x44};
 struct PadObject {uint32_t guidData1,offset,type,flags;const char* name;};
-// Offsets are those of c_dfDIJoystick / DIJOYSTATE. Default Xbox layout names.
-const PadObject padObjectsXbox[]={
+// Offsets are those of c_dfDIJoystick / DIJOYSTATE.
+const PadObject padObjects[]={
     {0xa36d02e0u,0,0x0002u|(0u<<8),0x100u,"X Axis"},{0xa36d02e1u,4,0x0002u|(1u<<8),0x100u,"Y Axis"},
     {0xa36d02e2u,8,0x0002u|(2u<<8),0x100u,"Z-Axis"},{0xa36d02f4u,12,0x0002u|(3u<<8),0x100u,"X Rotation"},
     {0xa36d02f5u,16,0x0002u|(4u<<8),0x100u,"Y Rotation"},{0xa36d02e3u,20,0x0002u|(5u<<8),0x100u,"Z Rotation"},
@@ -52,15 +51,10 @@ const PadObject padObjectsXbox[]={
     {0xa36d02f0u,52,0x0004u|(4u<<8),0,"LB"},{0xa36d02f0u,53,0x0004u|(5u<<8),0,"RB"},
     {0xa36d02f0u,54,0x0004u|(6u<<8),0,"Back"},{0xa36d02f0u,55,0x0004u|(7u<<8),0,"Start"},
     {0xa36d02f0u,56,0x0004u|(8u<<8),0,"LS"},{0xa36d02f0u,57,0x0004u|(9u<<8),0,"RS"},
-    {0xa36d02f0u,58,0x0004u|(10u<<8),0,"LT"},{0xa36d02f0u,59,0x0004u|(11u<<8),0,"RT"},
+    {0xa36d02f0u,58,0x0004u|(10u<<8),0,"Button 10"},{0xa36d02f0u,59,0x0004u|(11u<<8),0,"Button 11"},
     {0xa36d02f0u,60,0x0004u|(12u<<8),0,"Button 12"},{0xa36d02f0u,61,0x0004u|(13u<<8),0,"Button 13"},
     {0xa36d02f0u,62,0x0004u|(14u<<8),0,"Button 14"},{0xa36d02f0u,63,0x0004u|(15u<<8),0,"Button 15"},
 };
-const char* padDeviceNameXbox="Xbox Controller";
-#include "guest_input_ps2.inc"
-constexpr unsigned padObjectCount=unsigned(std::size(padObjectsXbox));
-const PadObject* activePadObjects(){return padPlayStationNames.load()?padObjectsPs2:padObjectsXbox;}
-const char* activePadDeviceName(){return padPlayStationNames.load()?padDeviceNamePs2:padDeviceNameXbox;}
 // The value DirectInput would report for a resolved format item (type: class
 // in the low byte, our object index in bits 8..23, 0xffff = not on this pad).
 uint32_t padItemValue(const InputObject& object,const InputFormatObject& item){
@@ -99,7 +93,7 @@ void inputDeviceInstance(uint32_t address,uint32_t kind,uint32_t bytes){
     if(kind==4){
         std::memcpy(ptr(address+4,16),padGuid.data(),16);std::memcpy(ptr(address+20,16),padProductGuid.data(),16);
         write32(address+36,0x10215);  // DI8DEVTYPE_GAMEPAD, standard subtype, HID
-        const char* name=activePadDeviceName();
+        const char* name="Android Gamepad";
         std::memcpy(ptr(address+40,std::strlen(name)+1),name,std::strlen(name)+1);
         std::memcpy(ptr(address+300,std::strlen(name)+1),name,std::strlen(name)+1);
         if(bytes>=580){*static_cast<uint16_t*>(ptr(address+576,2))=1;*static_cast<uint16_t*>(ptr(address+578,2))=5;}
@@ -143,12 +137,11 @@ void releaseInputObject(uint32_t address){auto found=inputObjects.find(address);
 bool joystickMethod(InputObject& object,uint32_t self,uint32_t method){
     (void)self;
     auto objectFor=[&](uint32_t how,uint32_t id)->int{
-        const PadObject* objects=activePadObjects();
-        for(unsigned i=0;i<padObjectCount;++i){
+        for(unsigned i=0;i<std::size(padObjects);++i){
             if(how==1){  // DIPH_BYOFFSET: offset in the installed data format
-                for(auto& item:object.format)if(item.offset==id&&((item.type>>8)&0xffff)==((objects[i].type>>8)&0xffff)&&
-                    ((item.type&objects[i].type&0x1f)))return int(i);
-            }else if(how==2&&((id&0xffff1f)==(objects[i].type&0xffff1f)))return int(i);
+                for(auto& item:object.format)if(item.offset==id&&((item.type>>8)&0xffff)==((padObjects[i].type>>8)&0xffff)&&
+                    ((item.type&padObjects[i].type&0x1f)))return int(i);
+            }else if(how==2&&((id&0xffff1f)==(padObjects[i].type&0xffff1f)))return int(i);
         }return -1;};
     auto fillObject=[&](uint32_t output,const PadObject& entry){
         uint32_t bytes=read32(output);std::memset(ptr(output+4,bytes-4),0,bytes-4);
@@ -162,8 +155,7 @@ bool joystickMethod(InputObject& object,uint32_t self,uint32_t method){
         write32(output+12,6);write32(output+16,16);write32(output+20,1);ret(0,2);return true;}
     case 4:{uint32_t callback=arg(1),context=arg(2),flags=arg(3);if(!callback){ret(diInvalid,4);return true;}
         uint32_t instance=allocate(316);
-        try{const PadObject* objects=activePadObjects();
-        for(unsigned i=0;i<padObjectCount;++i){const PadObject& entry=objects[i];
+        try{for(auto& entry:padObjects){
             uint32_t category=flags&0x1f;
             if(category&&!(entry.type&category))continue;
             write32(instance,316);fillObject(instance,entry);
@@ -253,7 +245,7 @@ bool joystickMethod(InputObject& object,uint32_t self,uint32_t method){
     case 14:{uint32_t output=arg(1),objectId=arg(2),how=arg(3);
         if(!output||(read32(output)!=316&&read32(output)!=280)){ret(diInvalid,4);return true;}
         int found=objectFor(how,objectId);if(found<0){ret(0x80070002,4);return true;}
-        fillObject(output,activePadObjects()[found]);ret(0,4);return true;}
+        fillObject(output,padObjects[found]);ret(0,4);return true;}
     case 19:ret(0,4);return true;   // EnumEffects: no force feedback
     case 25:ret(object.acquired?0:diNotAcquired,1);return true;
     case 29:ret(0x80004001,4);return true;
