@@ -252,7 +252,7 @@ void checkGuestProgress() {
     if((++checkpoints&63u)==0){
         auto now=std::chrono::steady_clock::now();
         if(now>bootDeadline)throw GuestStop("CRT bring-up time budget reached at "+hex(g_cur_func));
-        auto slice=renderThread?std::chrono::microseconds(3000):std::chrono::microseconds(500);
+        auto slice=renderThread?std::chrono::microseconds(16000):std::chrono::microseconds(1000);
         if(now-machine.acquired>=slice&&machine.hasWaiters()){
             yieldGuestMachine();
             if(renderThread){++renderYields;renderWait+=std::chrono::steady_clock::now()-now;}

@@ -66,7 +66,7 @@ public:
         memory_.commit(address,capacity+std::min<uint32_t>(remaining,4096u));
         free_.erase(slot); if(remaining) free_[address+static_cast<uint32_t>(capacity)]=remaining;
         h->second.blocks[address]={static_cast<uint32_t>(capacity),bytes}; h->second.live+=capacity;
-        if(flags&8) std::memset(memory_.address(address,capacity),0,capacity);
+        std::memset(memory_.address(address,capacity),0,capacity);
         return address;
     }
     bool free(uint32_t heap,uint32_t address) {
