@@ -963,12 +963,22 @@ std::string connectGuestRuntime(const char* executable) {
                 NFS_RUNTIME_LOG(ANDROID_LOG_INFO, "NFSU2", "Patched 0x7FBDBC: removed '*' from *pcnfs05.ea.com for plain TCP lobby");
             }
         }
-        // Expand CarPool budget to 48MB (0x007fa9d4u in SPEED2.EXE v1.2) to prevent memory allocation halts
-        if (memory->writable(0x007fa9d4u, 4)) {
-            uint32_t* pCarpool = static_cast<uint32_t*>(ptr(0x007fa9d4u, 4));
-            if (pCarpool && *pCarpool < 48000) {
-                *pCarpool = 48000;
-                NFS_RUNTIME_LOG(ANDROID_LOG_INFO, "NFSU2", "Patched carpool KB at 0x007fa9d4 to %u", *pCarpool);
+        // Expand all 3 CarPool budgets to 48MB (0x007fa9d4u, 0x007fa9d8u [SUV], 0x007fa9dcu) to prevent memory allocation halts
+        for (uint32_t va : {0x007fa9d4u, 0x007fa9d8u, 0x007fa9dcu}) {
+            if (memory->writable(va, 4)) {
+                uint32_t* pCarpool = static_cast<uint32_t*>(ptr(va, 4));
+                if (pCarpool && *pCarpool < 48000) {
+                    *pCarpool = 48000;
+                    NFS_RUNTIME_LOG(ANDROID_LOG_INFO, "NFSU2", "Patched carpool KB at 0x%08x to %u", va, *pCarpool);
+                }
+            }
+        }
+        // Expand CarLoadedRideInfoSlotPool capacity at 0x0061c744 from 22 to 127
+        if (memory->writable(0x0061c744u, 1)) {
+            uint8_t* pSlot = static_cast<uint8_t*>(ptr(0x0061c744u, 1));
+            if (pSlot && *pSlot == 0x16) {
+                *pSlot = 0x7f;
+                NFS_RUNTIME_LOG(ANDROID_LOG_INFO, "NFSU2", "Patched CarLoadedRideInfoSlotPool capacity at 0x0061c744 to 127");
             }
         }
         // Expand EventHandlerSlotPool capacity at 0x005d7b07 from 20 to 128 to prevent overflow
