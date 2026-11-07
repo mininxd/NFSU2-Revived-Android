@@ -395,6 +395,15 @@ public final class GameOptions {
         if (android.os.Build.BOARD != null && !android.os.Build.BOARD.isEmpty()) {
             ids.add(android.os.Build.BOARD.toLowerCase(java.util.Locale.US).trim());
         }
+        if (android.os.Build.MODEL != null && !android.os.Build.MODEL.isEmpty()) {
+            ids.add(android.os.Build.MODEL.toLowerCase(java.util.Locale.US).trim());
+        }
+        if (android.os.Build.DEVICE != null && !android.os.Build.DEVICE.isEmpty()) {
+            ids.add(android.os.Build.DEVICE.toLowerCase(java.util.Locale.US).trim());
+        }
+        if (android.os.Build.PRODUCT != null && !android.os.Build.PRODUCT.isEmpty()) {
+            ids.add(android.os.Build.PRODUCT.toLowerCase(java.util.Locale.US).trim());
+        }
         if (android.os.Build.VERSION.SDK_INT >= 31) {
             try {
                 if (android.os.Build.SOC_MODEL != null && !android.os.Build.SOC_MODEL.isEmpty()) {
@@ -402,7 +411,7 @@ public final class GameOptions {
                 }
             } catch (Throwable ignored) {}
         }
-        String[] propKeys = {"ro.board.platform", "ro.hardware", "ro.mediatek.platform", "ro.soc.model", "ro.boot.hardware"};
+        String[] propKeys = {"ro.board.platform", "ro.hardware", "ro.mediatek.platform", "ro.soc.model", "ro.boot.hardware", "ro.hardware.egl", "ro.opengles.version"};
         try {
             Class<?> sp = Class.forName("android.os.SystemProperties");
             java.lang.reflect.Method getMethod = sp.getMethod("get", String.class);

@@ -22,6 +22,8 @@
 #include <dlfcn.h>
 #include <sched.h>
 #include <dirent.h>
+#include <signal.h>
+#include <setjmp.h>
 #include <jni.h>
 
 ptrdiff_t *g_p_mem_base = NULL;
@@ -1494,6 +1496,182 @@ JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeDrawDistance(
     Java_com_nfsu2_androidevolved_GameActivity_nativeDrawDistance(env, clazz, distance);
 }
 
+/* ========================================================================= */
+/* PowerVR / IMG BXM Vulkan Pipeline Creation Fault Guard                    */
+/* ========================================================================= */
+typedef void* VkInstance_t;
+typedef void* VkDevice_t;
+typedef uint64_t VkPipelineCache_t;
+typedef uint64_t VkPipeline_t;
+typedef void (*PFN_vkVoidFunction_t)(void);
+typedef PFN_vkVoidFunction_t (*PFN_vkGetInstanceProcAddr_t)(VkInstance_t instance, const char* pName);
+typedef PFN_vkVoidFunction_t (*PFN_vkGetDeviceProcAddr_t)(VkDevice_t device, const char* pName);
+typedef int32_t VkResult_t;
+
+typedef VkResult_t (*PFN_vkCreateGraphicsPipelines_t)(
+    VkDevice_t device,
+    VkPipelineCache_t pipelineCache,
+    uint32_t createInfoCount,
+    const void* pCreateInfos,
+    const void* pAllocator,
+    VkPipeline_t* pPipelines);
+
+static PFN_vkGetInstanceProcAddr_t s_real_vkGetInstanceProcAddr = NULL;
+static PFN_vkGetDeviceProcAddr_t s_real_vkGetDeviceProcAddr = NULL;
+static PFN_vkCreateGraphicsPipelines_t s_real_vkCreateGraphicsPipelines = NULL;
+
+static __thread sigjmp_buf s_powervr_pipeline_jmp_buf;
+static __thread volatile sig_atomic_t s_powervr_in_pipeline_create = 0;
+static struct sigaction s_old_sa_segv;
+static struct sigaction s_old_sa_bus;
+static pthread_mutex_t s_powervr_sig_mu = PTHREAD_MUTEX_INITIALIZER;
+static int s_powervr_handler_installed = 0;
+
+static void powervr_sig_handler(int sig, siginfo_t *info, void *ucontext) {
+    if (s_powervr_in_pipeline_create) {
+        __android_log_print(ANDROID_LOG_WARN, "NFSU2",
+            "PowerVR Fault Guard: trapped signal %d (fault addr: %p) during vkCreateGraphicsPipelines, recovering...",
+            sig, info ? info->si_addr : NULL);
+        siglongjmp(s_powervr_pipeline_jmp_buf, sig);
+    }
+    struct sigaction *old_sa = (sig == SIGBUS) ? &s_old_sa_bus : &s_old_sa_segv;
+    if (old_sa->sa_flags & SA_SIGINFO) {
+        if (old_sa->sa_sigaction) old_sa->sa_sigaction(sig, info, ucontext);
+    } else if (old_sa->sa_handler && old_sa->sa_handler != SIG_DFL && old_sa->sa_handler != SIG_IGN) {
+        old_sa->sa_handler(sig);
+    } else {
+        signal(sig, SIG_DFL);
+        raise(sig);
+    }
+}
+
+static void ensure_powervr_signal_handler(void) {
+    pthread_mutex_lock(&s_powervr_sig_mu);
+    if (!s_powervr_handler_installed) {
+        struct sigaction sa;
+        memset(&sa, 0, sizeof(sa));
+        sa.sa_sigaction = powervr_sig_handler;
+        sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
+        sigemptyset(&sa.sa_mask);
+        sigaction(SIGSEGV, &sa, &s_old_sa_segv);
+        sigaction(SIGBUS, &sa, &s_old_sa_bus);
+        s_powervr_handler_installed = 1;
+    }
+    pthread_mutex_unlock(&s_powervr_sig_mu);
+}
+
+static VkResult_t guarded_vkCreateGraphicsPipelines(
+    VkDevice_t device,
+    VkPipelineCache_t pipelineCache,
+    uint32_t createInfoCount,
+    const void *pCreateInfos,
+    const void *pAllocator,
+    VkPipeline_t *pPipelines) {
+
+    if (!s_real_vkCreateGraphicsPipelines) {
+        void *libvulkan = dlopen("libvulkan.so", RTLD_NOW | RTLD_LOCAL);
+        if (libvulkan) {
+            s_real_vkCreateGraphicsPipelines = (PFN_vkCreateGraphicsPipelines_t)dlsym(libvulkan, "vkCreateGraphicsPipelines");
+        }
+    }
+    if (!s_real_vkCreateGraphicsPipelines) {
+        return -3; /* VK_ERROR_INITIALIZATION_FAILED */
+    }
+
+    ensure_powervr_signal_handler();
+
+    s_powervr_in_pipeline_create = 1;
+    int sig = sigsetjmp(s_powervr_pipeline_jmp_buf, 1);
+    VkResult_t res;
+
+    if (sig == 0) {
+        res = s_real_vkCreateGraphicsPipelines(device, pipelineCache, createInfoCount, pCreateInfos, pAllocator, pPipelines);
+    } else {
+        __android_log_print(ANDROID_LOG_WARN, "NFSU2",
+            "PowerVR Fault Guard: trapped crash (sig %d). Retrying with VK_NULL_HANDLE pipeline cache...", sig);
+        s_powervr_in_pipeline_create = 1;
+        int sig2 = sigsetjmp(s_powervr_pipeline_jmp_buf, 1);
+        if (sig2 == 0) {
+            res = s_real_vkCreateGraphicsPipelines(device, 0, createInfoCount, pCreateInfos, pAllocator, pPipelines);
+        } else {
+            __android_log_print(ANDROID_LOG_ERROR, "NFSU2",
+                "PowerVR Fault Guard: pipeline creation aborted safely (sig %d). Returning VK_ERROR_INITIALIZATION_FAILED", sig2);
+            s_powervr_in_pipeline_create = 0;
+            if (pPipelines && createInfoCount > 0) {
+                for (uint32_t i = 0; i < createInfoCount; ++i) pPipelines[i] = 0;
+            }
+            return -3; /* VK_ERROR_INITIALIZATION_FAILED */
+        }
+    }
+    s_powervr_in_pipeline_create = 0;
+    return res;
+}
+
+static PFN_vkVoidFunction_t powervr_hook_vkGetDeviceProcAddr(VkDevice_t device, const char *pName) {
+    if (!pName) return NULL;
+    if (strcmp(pName, "vkCreateGraphicsPipelines") == 0) {
+        if (s_real_vkGetDeviceProcAddr) {
+            PFN_vkCreateGraphicsPipelines_t real_fn = (PFN_vkCreateGraphicsPipelines_t)s_real_vkGetDeviceProcAddr(device, pName);
+            if (real_fn) s_real_vkCreateGraphicsPipelines = real_fn;
+        }
+        return (PFN_vkVoidFunction_t)guarded_vkCreateGraphicsPipelines;
+    }
+    if (s_real_vkGetDeviceProcAddr) {
+        return s_real_vkGetDeviceProcAddr(device, pName);
+    }
+    return NULL;
+}
+
+static PFN_vkVoidFunction_t powervr_hook_vkGetInstanceProcAddr(VkInstance_t instance, const char *pName) {
+    if (!pName) return NULL;
+    if (strcmp(pName, "vkCreateGraphicsPipelines") == 0) {
+        if (s_real_vkGetInstanceProcAddr) {
+            PFN_vkCreateGraphicsPipelines_t real_fn = (PFN_vkCreateGraphicsPipelines_t)s_real_vkGetInstanceProcAddr(instance, pName);
+            if (real_fn) s_real_vkCreateGraphicsPipelines = real_fn;
+        }
+        return (PFN_vkVoidFunction_t)guarded_vkCreateGraphicsPipelines;
+    }
+    if (strcmp(pName, "vkGetDeviceProcAddr") == 0) {
+        if (s_real_vkGetInstanceProcAddr) {
+            PFN_vkGetDeviceProcAddr_t real_gdpa = (PFN_vkGetDeviceProcAddr_t)s_real_vkGetInstanceProcAddr(instance, pName);
+            if (real_gdpa) s_real_vkGetDeviceProcAddr = real_gdpa;
+        }
+        return (PFN_vkVoidFunction_t)powervr_hook_vkGetDeviceProcAddr;
+    }
+    if (s_real_vkGetInstanceProcAddr) {
+        return s_real_vkGetInstanceProcAddr(instance, pName);
+    }
+    return NULL;
+}
+
+static void install_powervr_fault_guard(void) {
+    typedef void (*fn_set_ipa_t)(PFN_vkGetInstanceProcAddr_t);
+    typedef PFN_vkGetInstanceProcAddr_t (*fn_get_ipa_t)(void);
+
+    fn_set_ipa_t set_ipa = (fn_set_ipa_t)dlsym(RTLD_DEFAULT, "dxvkAndroidSetInstanceProcAddr");
+    fn_get_ipa_t get_ipa = (fn_get_ipa_t)dlsym(RTLD_DEFAULT, "dxvkAndroidGetInstanceProcAddr");
+    if (!set_ipa || !get_ipa) return;
+
+    PFN_vkGetInstanceProcAddr_t current = get_ipa();
+    if (current == powervr_hook_vkGetInstanceProcAddr) return;
+
+    s_real_vkGetInstanceProcAddr = current;
+    void *libvulkan = dlopen("libvulkan.so", RTLD_NOW | RTLD_LOCAL);
+    if (libvulkan) {
+        PFN_vkCreateGraphicsPipelines_t sys_cgp = (PFN_vkCreateGraphicsPipelines_t)dlsym(libvulkan, "vkCreateGraphicsPipelines");
+        if (sys_cgp) s_real_vkCreateGraphicsPipelines = sys_cgp;
+        PFN_vkGetDeviceProcAddr_t sys_gdpa = (PFN_vkGetDeviceProcAddr_t)dlsym(libvulkan, "vkGetDeviceProcAddr");
+        if (sys_gdpa) s_real_vkGetDeviceProcAddr = sys_gdpa;
+    }
+
+    set_ipa(powervr_hook_vkGetInstanceProcAddr);
+    __android_log_print(ANDROID_LOG_INFO, "NFSU2", "PowerVR Fault Guard installed successfully for DXVK");
+}
+
+__attribute__((constructor)) static void powervr_guard_ctor(void) {
+    install_powervr_fault_guard();
+}
+
 JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeGpuDriver(
         JNIEnv *env, jclass clazz, jstring hooks, jstring temp, jstring directory, jstring library) {
     typedef void (*fn_gpu_driver)(JNIEnv*, jclass, jstring, jstring, jstring, jstring);
@@ -1506,6 +1684,7 @@ JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeGpuDriver(
     if (s_gpu_driver) {
         s_gpu_driver(env, clazz, hooks, temp, directory, library);
     }
+    install_powervr_fault_guard();
 }
 
 JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeKeyNav(

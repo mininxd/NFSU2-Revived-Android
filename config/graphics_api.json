@@ -1,5 +1,13 @@
 {
   "opengl": [
+    "mt6761",
+    "mt6762",
+    "mt6765",
+    "mt6768",
+    "mt6769",
+    "mt6781",
+    "mt6785",
+    "mt6789",
     "mt6833",
     "mt6835",
     "mt6853",
@@ -30,8 +38,27 @@
     "mt8792",
     "mt8796",
     "mt8797",
-    "mt8798"
+    "mt8798",
+    "g99",
+    "g96",
+    "g95",
+    "g90",
+    "g88",
+    "g85",
+    "g80",
+    "dimensity 7020",
+    "dimensity 7025",
+    "dimensity 7060",
+    "dimensity 930",
+    "dimensity 6020",
+    "dimensity 6080",
+    "powervr",
+    "bxm",
+    "bxm-8-256",
+    "bxm 8-256",
+    "k6855",
+    "mt6855v",
+    "advan s50"
   ],
   "vulkan": []
 }
-

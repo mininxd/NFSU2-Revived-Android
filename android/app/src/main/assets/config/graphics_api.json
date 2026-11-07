@@ -45,7 +45,20 @@
     "g90",
     "g88",
     "g85",
-    "g80"
+    "g80",
+    "dimensity 7020",
+    "dimensity 7025",
+    "dimensity 7060",
+    "dimensity 930",
+    "dimensity 6020",
+    "dimensity 6080",
+    "powervr",
+    "bxm",
+    "bxm-8-256",
+    "bxm 8-256",
+    "k6855",
+    "mt6855v",
+    "advan s50"
   ],
   "vulkan": []
 }
