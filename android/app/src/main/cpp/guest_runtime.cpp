@@ -12,6 +12,7 @@
 #if defined(__ANDROID__) || defined(NFS_D3D9_BACKEND)
 #include "d3d9_bridge.h"
 #include "nfs_widescreen.h"
+#include "adpf_manager.h"
 #endif
 #include <array>
 #include <vector>
@@ -349,6 +350,12 @@ void d3dDispatch(){
     if(timed){auto spent=std::chrono::steady_clock::now()-bridgeStart;bridgeTime+=token==0x7e002110u?spent:spent*64;presentTime+=token==0x7e002110u?spent:std::chrono::nanoseconds{};
         methodTime[((token-0x7e000000u)/16u)&4095u]+=token==0x7e002110u?spent:spent*64;}
     if(token==0x7e002110u){
+        static bool s_adpf_inited=false;
+        if(!s_adpf_inited){
+            s_adpf_inited=true;
+            nfs_adpf_init(60);
+        }
+        nfs_adpf_end_frame();
         nfs_widescreen_apply_frame_rate();
         static void (*s_roam_tick)()=nullptr;
         if(!s_roam_tick){
@@ -361,14 +368,17 @@ void d3dDispatch(){
         lastPresentMs=steadyMs();
         startStallWatch();
     }
-    if(token==0x7e002110u&&result==0){
-        static FramePacer pacer;
-        auto now=std::chrono::steady_clock::now();
-        auto deadline=pacer.deadline(now,frameLimit.load(std::memory_order_relaxed));
-        // The renderer has returned; guest audio/streaming workers can use the
-        // machine while this thread waits. Late frames incur no extra delay.
-        renderThread=true;
-        if(deadline>now)yieldGuestMachine(0,deadline);
+    if(token==0x7e002110u){
+        if(result==0){
+            static FramePacer pacer;
+            auto now=std::chrono::steady_clock::now();
+            auto deadline=pacer.deadline(now,frameLimit.load(std::memory_order_relaxed));
+            // The renderer has returned; guest audio/streaming workers can use the
+            // machine while this thread waits. Late frames incur no extra delay.
+            renderThread=true;
+            if(deadline>now)yieldGuestMachine(0,deadline);
+        }
+        nfs_adpf_begin_frame();
         static unsigned frames=0;static auto since=std::chrono::steady_clock::now();
         if(++frames==120){serviceGuestSound();auto now=std::chrono::steady_clock::now();double seconds=std::chrono::duration<double>(now-since).count();
             NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Guest D3D9 presentation %.1f FPS over %.2f seconds; bridge ~%.2f ms/frame (present %.2f), %.0f calls/frame",

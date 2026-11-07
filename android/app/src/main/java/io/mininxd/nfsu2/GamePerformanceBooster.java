@@ -155,6 +155,8 @@ public final class GamePerformanceBooster {
             }
 
             Os.setenv("DXVK_CONFIG_FILE", confFile.getAbsolutePath(), true);
+            Os.setenv("DXVK_STATE_CACHE_PATH", cacheDir.getAbsolutePath(), true);
+            Os.setenv("DXVK_STATE_CACHE", "1", true);
             Os.setenv("DXVK_ASYNC", "1", true);
             Os.setenv("WINE_HEAP_DELAY_FREE", "1", true);
             Os.setenv("WINE_HEAP_ZERO_MEMORY", "1", true);
