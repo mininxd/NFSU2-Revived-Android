@@ -101,4 +101,23 @@ public:
             output[i]=std::clamp(output[i],-1.f,1.f);
         }
     }
+    void advance(unsigned frames){
+        if(!frames) return;
+        std::lock_guard<std::mutex> lock(mutex);
+        for(auto& voice:voices){
+            if(!voice||!voice->playing||voice->samples.empty())continue;
+            size_t count=voice->samples.size()/voice->block();if(!count)continue;
+            double step=double(voice->frequency)/rate;
+            if(voice->streaming()&&voice->staleFrames>=double(count)){
+                voice->position=std::fmod(voice->position+step*frames,double(count));
+                continue;
+            }
+            voice->staleFrames+=step*frames;
+            voice->position+=step*frames;
+            if(voice->position>=count){
+                if(voice->loop) voice->position=std::fmod(voice->position,double(count));
+                else{voice->playing=false;voice->position=0;}
+            }
+        }
+    }
 };

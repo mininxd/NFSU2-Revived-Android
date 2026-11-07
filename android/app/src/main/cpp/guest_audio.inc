@@ -1,4 +1,5 @@
 #include "audio_mixer.h"
+#include "audio_watchdog.h"
 constexpr uint32_t soundMethodBase=0x7c000000;
 constexpr uint32_t soundBadFormat=0x88780064;
 PcmMixer soundMixer;
@@ -30,10 +31,12 @@ void soundErrorCallback(AAudioStream*,void*,aaudio_result_t error){
 aaudio_data_callback_result_t soundCallback(AAudioStream*,void*,void* data,int32_t frames){
     if(guestPaused.load(std::memory_order_relaxed)){
         std::memset(data,0,sizeof(float)*2*frames);
+        nfs_audio_watchdog::notifyCallbackRendered();
         return AAUDIO_CALLBACK_RESULT_CONTINUE;
     }
     auto start=std::chrono::steady_clock::now();
     soundMixer.render(static_cast<float*>(data),unsigned(frames));
+    nfs_audio_watchdog::notifyCallbackRendered();
     uint32_t us=uint32_t(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now()-start).count());
     auto peak=soundCallbackPeakUs.load(std::memory_order_relaxed);
     while(us>peak&&!soundCallbackPeakUs.compare_exchange_weak(peak,us,std::memory_order_relaxed)){}
@@ -88,7 +91,13 @@ void closeSoundStreamOnly(){
     if(soundStream){
         AAudioStream* s=soundStream;
         soundStream=nullptr;
-        AAudioStream_requestStop(s);
+        aaudio_stream_state_t st = AAudioStream_getState(s);
+        if(st != AAUDIO_STREAM_STATE_DISCONNECTED &&
+           st != AAUDIO_STREAM_STATE_CLOSING &&
+           st != AAUDIO_STREAM_STATE_CLOSED &&
+           st != AAUDIO_STREAM_STATE_UNINITIALIZED){
+            AAudioStream_requestStop(s);
+        }
         AAudioStream_close(s);
     }
 }
@@ -97,14 +106,19 @@ bool restartSoundStreamOnly(){
     NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Recreating AAudio stream on route change (preserving all voices & DirectSound buffers)");
     closeSoundStreamOnly();
     soundStreamRestartPending.store(false,std::memory_order_release);
+    nfs_audio_watchdog::recordReconnectAttempt();
     return startSoundStream();
 }
 
 // Called on the guest thread after Present, never from the real-time callback.
 // Grow only after an actual underrun, one burst at a time, bounded by capacity.
 void serviceGuestSound(){
+    nfs_audio_watchdog::serviceSyntheticClock(soundMixer);
     if(!soundStream){
-        if(!guestPaused.load(std::memory_order_relaxed))startSoundStream();
+        if(!guestPaused.load(std::memory_order_relaxed)&&nfs_audio_watchdog::canAttemptReconnect()){
+            nfs_audio_watchdog::recordReconnectAttempt();
+            startSoundStream();
+        }
         return;
     }
     bool pending=soundStreamRestartPending.exchange(false,std::memory_order_acq_rel);
@@ -112,7 +126,9 @@ void serviceGuestSound(){
     if(pending||state==AAUDIO_STREAM_STATE_DISCONNECTED||state==AAUDIO_STREAM_STATE_CLOSING||state==AAUDIO_STREAM_STATE_CLOSED){
         NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","AAudio stream disconnected (state=%d, pending=%d), restarting stream...",int(state),int(pending));
         if(!guestPaused.load(std::memory_order_relaxed)){
-            restartSoundStreamOnly();
+            if(nfs_audio_watchdog::canAttemptReconnect()){
+                restartSoundStreamOnly();
+            }
         }else{
             closeSoundStreamOnly();
         }

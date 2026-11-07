@@ -38,6 +38,7 @@ public final class GamePerformanceBooster {
         try {
             optimizeProcessPriority();
             detectAndTuneHyperOS(activity);
+            detectAndTuneMediaTek(activity);
             configureAndroidGameManager(activity);
             enableSustainedPerformance(activity, window);
             configureDxvkAndDriver(activity);
@@ -85,6 +86,23 @@ public final class GamePerformanceBooster {
                     setGame.invoke(instance, true);
                     Log.i(TAG, "Notified Joyose Game Turbo mode active");
                 }
+            } catch (Throwable ignored) {}
+        }
+    }
+
+    /**
+     * Detects MediaTek platforms (Dimensity / Helio) and signals performance boosting.
+     */
+    private static void detectAndTuneMediaTek(Context context) {
+        String hardware = getSystemProperty("ro.hardware", "").toLowerCase();
+        String platform = getSystemProperty("ro.board.platform", "").toLowerCase();
+        if (hardware.contains("mt") || platform.contains("mt") || Build.HARDWARE.toLowerCase().contains("mt")) {
+            Log.i(TAG, "Detected MediaTek SoC: hardware=" + hardware + " platform=" + platform);
+            try {
+                Class<?> perfClass = Class.forName("com.mediatek.perfservice.PerfServiceWrapper");
+                Method boostMethod = perfClass.getMethod("boostEnable", int.class);
+                boostMethod.invoke(null, 1);
+                Log.i(TAG, "Enabled MediaTek PerfService boost");
             } catch (Throwable ignored) {}
         }
     }
@@ -140,6 +158,7 @@ public final class GamePerformanceBooster {
                 pw.println("# NFSU2 Revived DXVK Profile (Zero Stutter / Low Latency)");
                 pw.println("dxvk.enableStateCache = True");
                 pw.println("dxvk.numCompilerThreads = 4");
+                pw.println("dxvk.useRawSsbo = True");
                 pw.println("d3d9.tearFree = True");
                 pw.println("d3d9.maxFrameLatency = 1");
                 pw.println("d3d9.deferSurfaceCreation = True");
@@ -147,8 +166,10 @@ public final class GamePerformanceBooster {
                 pw.println("d3d9.lenientClear = True");
                 pw.println("d3d9.allowDiscard = True");
                 pw.println("d3d9.allowDoNotWait = True");
+                pw.println("d3d9.cachedDynamicBuffers = True");
                 pw.println("d3d9.evictManagedOnUnlock = True");
                 pw.println("d3d9.memoryTrackTest = False");
+                pw.println("d3d9.maxAvailableMemory = 4096");
                 pw.println("dxgi.deferSurfaceCreation = True");
                 pw.println("dxgi.maxDeviceMemory = 4096");
                 pw.println("dxgi.maxSharedMemory = 2048");
@@ -158,13 +179,16 @@ public final class GamePerformanceBooster {
             Os.setenv("DXVK_STATE_CACHE_PATH", cacheDir.getAbsolutePath(), true);
             Os.setenv("DXVK_STATE_CACHE", "1", true);
             Os.setenv("DXVK_ASYNC", "1", true);
+            Os.setenv("DXVK_LOG_LEVEL", "none", true);
+            Os.setenv("WINEDEBUG", "-all", true);
             Os.setenv("WINE_HEAP_DELAY_FREE", "1", true);
             Os.setenv("WINE_HEAP_ZERO_MEMORY", "1", true);
             Os.setenv("WINE_DISABLE_FULLSCREEN_HACK", "1", true);
             Os.setenv("WINE_DISABLE_HARDWARE_SCHEDULING", "1", true);
+            Os.setenv("WINE_DO_NOT_CREATE_DXGI_DEVICE_MANAGER", "1", true);
             Os.setenv("MESA_VK_WSI_PRESENT_MODE", "mailbox", true);
             Os.setenv("MESA_SHADER_CACHE_DISABLE", "false", true);
-            Os.setenv("MESA_SHADER_CACHE_MAX_SIZE", "512MB", true);
+            Os.setenv("MESA_SHADER_CACHE_MAX_SIZE", "1024MB", true);
             Os.setenv("mesa_glthread", "true", true);
             Os.setenv("GALLIUM_DRIVER", "zink", true);
             Log.i(TAG, "Configured DXVK performance environment: " + confFile.getAbsolutePath());

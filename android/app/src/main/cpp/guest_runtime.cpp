@@ -13,6 +13,8 @@
 #include "d3d9_bridge.h"
 #include "nfs_widescreen.h"
 #include "adpf_manager.h"
+#include "performance_tuner.h"
+#include "audio_watchdog.h"
 #endif
 #include <array>
 #include <vector>

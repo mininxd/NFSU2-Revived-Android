@@ -64,6 +64,7 @@ void exitThread(){
 void* guestThreadEntry(void* context){
     insideGuestThread=true;
     auto& thread=*static_cast<GuestThread*>(context);
+    nfs_perf::tuneThread(thread.timer ? nfs_perf::ThreadRole::BACKGROUND_WORKER : nfs_perf::ThreadRole::GUEST_AUDIO, "NFSU2-Worker");
     std::unique_lock<MachineMutex> lease(machine);machineLease=&lease;guestThreadId=thread.id;
     State fresh;fresh.esp=thread.stack+(4u<<20)-64;fresh.fs=thread.tib;fresh.load();
     try {

@@ -1,5 +1,6 @@
 #pragma once
 #include "guest_runtime.h"
+#include "performance_tuner.h"
 #include <pthread.h>
 #include <mutex>
 #include <string>
@@ -11,6 +12,7 @@ class GuestBootWorker {
     std::mutex mutex_;
     std::string executable_,status_="Pending CRT boot";
     static void* run(void* context) {
+        nfs_perf::tuneThread(nfs_perf::ThreadRole::RENDER_MAIN, "NFSU2-MainRender");
         auto& self=*static_cast<GuestBootWorker*>(context);
         auto result=connectGuestRuntime(self.executable_.c_str());
         std::lock_guard<std::mutex> guard(self.mutex_);self.status_=result;return nullptr;
