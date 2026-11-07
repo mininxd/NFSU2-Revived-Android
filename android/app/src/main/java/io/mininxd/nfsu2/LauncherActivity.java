@@ -424,12 +424,12 @@ public final class LauncherActivity extends Activity {
         optionsList.addView(optionRow("Language", languageLabel(), this::chooseLanguage));
         for (GameOptions.Option option : GameOptions.ALL)
             optionsList.addView(optionRow(option.title, option.label(GameOptions.get(this, option.key)), () -> chooseOption(option)));
-        // Cheat codes hidden
+        // Hidden because they do not work:
         // optionsList.addView(optionRow("Cheat Codes", cheatCodesSummary(), this::chooseCheatCodes));
-        optionsList.addView(optionRow("Freeroam Online (beta)", GameOptions.isRoamEnabled(this) ? "On" : "Off", this::toggleFreeRoam));
-        optionsList.addView(optionRow("Ghost Mode", GameOptions.isGhostModeEnabled(this) ? "On" : "Off", this::toggleGhostMode));
+        // optionsList.addView(optionRow("Freeroam Online (beta)", GameOptions.isRoamEnabled(this) ? "On" : "Off", this::toggleFreeRoam));
+        // optionsList.addView(optionRow("Ghost Mode", GameOptions.isGhostModeEnabled(this) ? "On" : "Off", this::toggleGhostMode));
         optionsList.addView(optionRow("Online Server", serverStatusSummary(), this::chooseOnlineServer));
-        optionsList.addView(optionRow("Room Name", GameOptions.roamRoom(this).isEmpty() ? "Default (Public)" : GameOptions.roamRoom(this), this::chooseRoamRoom));
+        // optionsList.addView(optionRow("Room Name", GameOptions.roamRoom(this).isEmpty() ? "Default (Public)" : GameOptions.roamRoom(this), this::chooseRoamRoom));
         // optionsList.addView(optionRow("Crew Name", GameOptions.roamCrew(this).isEmpty() ? "None" : GameOptions.roamCrew(this), this::chooseRoamCrew));
         optionsList.addView(optionRow("Check for updates",
                 checkingUpdates ? "Checking GitHub…" : "Version " + ReleaseUpdates.installed(this), () -> checkUpdates(true)));
