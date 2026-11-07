@@ -46,18 +46,15 @@ public final class GameOptions {
             new Option(DISPLAY_LOGS, "Display Logs", "off",
                     new String[] {"off", "compact", "full"},
                     new String[] {"Off", "Compact", "Full"}),
-            new Option(WIDESCREEN, "Corrected HUD", "off",
+            new Option(WIDESCREEN, "Widescreen HUD", "off",
                     new String[] {"on", "off"},
-                    new String[] {"Widescreen", "4:3"}),
+                    new String[] {"On", "Off"}),
             new Option(MINIMAP, "Minimap", "top",
                     new String[] {"top", "bottom"},
                     new String[] {"Top left", "Bottom left (original)"}),
             new Option(PAD_LAYOUT, "Gamepad Layout", "port",
                     new String[] {"port", "console"},
                     new String[] {"Default Xbox", "PS2 style"}),
-            new Option(SPEEDOMETER, "Speedometer Position", "bottom",
-                    new String[] {"bottom", "raised", "middle", "brake"},
-                    new String[] {"Bottom Right (original)", "Raised · right side, mid height", "Middle · bottom center", "Beside Brake · left of the pedals"}),
     };
 
     private static final String PREFS = "nfsu2_game";
@@ -74,10 +71,9 @@ public final class GameOptions {
         return null;
     }
 
-    /** Speedometer for nativeSpeedometerPosition: 0 bottom right (original), 1 raised, 2 bottom center, 3 beside the brake pedal. */
+    /** Speedometer for nativeSpeedometerPosition: 0 bottom right (original). */
     static int speedometerPosition(Context context) {
-        String position = get(context, SPEEDOMETER);
-        return "brake".equals(position) ? 3 : "middle".equals(position) ? 2 : "raised".equals(position) ? 1 : 0;
+        return 0;
     }
 
     /**
@@ -94,9 +90,9 @@ public final class GameOptions {
     }
 
     /**
-     * Applies the correct HUD layout file based on the Corrected HUD option.
-     * Widescreen: ensures scripts/NFSUnderground2.WidescreenFix.dat is present so elements are placed at display edges.
-     * 4:3: parks the .dat file as .hold so the game keeps full-screen 3D widescreen and aspect correction,
+     * Applies the correct HUD layout file based on the Widescreen HUD option.
+     * On: ensures scripts/NFSUnderground2.WidescreenFix.dat is present so elements are placed at display edges.
+     * Off: parks the .dat file as .hold so the game keeps full-screen 3D widescreen and aspect correction,
      * but without .dat offsets the HUD stays centered in a 4:3 box.
      */
     static void applyWidescreenPatchFile(Context context) {
