@@ -495,7 +495,7 @@ def generate_svg(data, output_path=SVG_PATH):
     
     WIDTH = 960
     # Colors matching hackch NFSU2 save-coverage.svg and dark theme
-    BG_COLOR = "#0f172a"
+    BG_COLOR = "#212830"
     CARD_BG = "#1e293b"
     BORDER_COLOR = "#334155"
     COLOR_IMP = "#10b981"   # Emerald Green
