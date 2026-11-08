@@ -38,6 +38,45 @@ public final class GameActivity extends NativeActivity {
     private boolean foreground;
     private TextView status;
     private PopupWindow statusWindow;
+
+    private android.media.AudioManager audioManager;
+    private final android.media.AudioManager.OnAudioFocusChangeListener audioFocusListener = focusChange -> {
+        switch (focusChange) {
+            case android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
+            case android.media.AudioManager.AUDIOFOCUS_LOSS:
+                GameLog.w("Audio", "Audio focus lost (" + focusChange + "), incoming call or media switch active");
+                break;
+            case android.media.AudioManager.AUDIOFOCUS_GAIN:
+            case android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT:
+            case android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK:
+                GameLog.i("Audio", "Audio focus restored (" + focusChange + ")");
+                break;
+        }
+    };
+
+    private void requestGameAudioFocus() {
+        try {
+            if (audioManager == null) {
+                audioManager = (android.media.AudioManager) getSystemService(AUDIO_SERVICE);
+            }
+            if (audioManager != null) {
+                if (Build.VERSION.SDK_INT >= 26) {
+                    android.media.AudioFocusRequest request = new android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN)
+                            .setAudioAttributes(new android.media.AudioAttributes.Builder()
+                                    .setUsage(android.media.AudioAttributes.USAGE_GAME)
+                                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_GAME)
+                                    .build())
+                            .setOnAudioFocusChangeListener(audioFocusListener)
+                            .build();
+                    audioManager.requestAudioFocus(request);
+                } else {
+                    audioManager.requestAudioFocus(audioFocusListener, android.media.AudioManager.STREAM_MUSIC, android.media.AudioManager.AUDIOFOCUS_GAIN);
+                }
+            }
+        } catch (Throwable t) {
+            GameLog.w("Audio", "Could not request audio focus: " + t.getMessage());
+        }
+    }
     private PopupWindow controlsWindow;
     private DiagnosticOverlay diagnosticOverlay;
     private RacingControlsView touchControls;
@@ -532,7 +571,8 @@ public final class GameActivity extends NativeActivity {
         if (text != null) {
             GameLog.i("Status", text);
             if (text.contains("halted") || text.contains("detenido") || text.contains("Error")
-                    || text.contains("failed") || text.contains("terminada") || text.contains("finished")) {
+                    || text.contains("failed") || text.contains("terminada") || text.contains("finished")
+                    || text.contains("stall") || text.contains("freeze")) {
                 GameLog.logHalt(this, text);
             }
         }
@@ -609,6 +649,7 @@ public final class GameActivity extends NativeActivity {
     @Override protected void onResume() {
         super.onResume();
         foreground=true;
+        requestGameAudioFocus();
         startCompanionTicker();
         holdLanBroadcasts(true);
         updateTiltSensor();

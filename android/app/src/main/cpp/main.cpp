@@ -24,6 +24,13 @@
 #include "vulkan_driver.h"
 #include "nfs_widescreen.h"
 
+static android_app* s_active_app = nullptr;
+void notifyHaltToHost(const char* message) {
+    if (s_active_app) {
+        showStatus(s_active_app, message);
+    }
+}
+
 static void showStatus(android_app* app, const char* message) {
     JNIEnv* env = nullptr;
     if (app->activity->vm->AttachCurrentThread(&env, nullptr) != JNI_OK) return;
@@ -417,6 +424,7 @@ static void configurePipelineCache(android_app* app){
     __android_log_print(ANDROID_LOG_INFO,"NFSU2","DXVK persistent pipeline state cache: %s",directory.c_str());
 }
 void android_main(android_app* app) {
+    s_active_app = app;
     configurePipelineCache(app);
     Host host; app->userData = &host; app->onAppCmd = onCommand;app->onInputEvent=onInput;
     try {

@@ -123,8 +123,9 @@ void serviceGuestSound(){
     }
     bool pending=soundStreamRestartPending.exchange(false,std::memory_order_acq_rel);
     aaudio_stream_state_t state=AAudioStream_getState(soundStream);
-    if(pending||state==AAUDIO_STREAM_STATE_DISCONNECTED||state==AAUDIO_STREAM_STATE_CLOSING||state==AAUDIO_STREAM_STATE_CLOSED){
-        NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","AAudio stream disconnected (state=%d, pending=%d), restarting stream...",int(state),int(pending));
+    bool stalled=nfs_audio_watchdog::isCallbackStalled();
+    if(pending||stalled||state==AAUDIO_STREAM_STATE_DISCONNECTED||state==AAUDIO_STREAM_STATE_CLOSING||state==AAUDIO_STREAM_STATE_CLOSED){
+        NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","AAudio stream disconnected or stalled (state=%d, pending=%d, stalled=%d), restarting stream...",int(state),int(pending),int(stalled));
         if(!guestPaused.load(std::memory_order_relaxed)){
             if(nfs_audio_watchdog::canAttemptReconnect()){
                 restartSoundStreamOnly();

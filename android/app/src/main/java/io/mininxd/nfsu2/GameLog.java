@@ -111,9 +111,13 @@ public final class GameLog {
             } catch (Throwable ignored) {}
         }
 
-        sb.append("\n--- Logcat Tail (Recent NFSU2 Logs) ---\n");
+        sb.append("\n--- Logcat Tail (Recent NFSU2 & System Logs) ---\n");
         try {
-            java.lang.Process p = Runtime.getRuntime().exec(new String[]{"logcat", "-d", "-v", "time", "-t", "200", "NFSU2:*", "*:W"});
+            java.lang.Process p = Runtime.getRuntime().exec(new String[]{
+                "logcat", "-d", "-b", "main", "-b", "system", "-b", "crash",
+                "-v", "time", "-t", "350",
+                "NFSU2:*", "AudioTrack:*", "AudioStreamLegacy:*", "AAudioStream:*", "Telecom:*", "*:W"
+            });
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
@@ -131,7 +135,7 @@ public final class GameLog {
         final Context ctx = appContext != null ? appContext : context;
         writerExecutor.execute(() -> {
             writeToFile(ctx, haltReport);
-            writeHaltFile(haltReport);
+            writeHaltFile(ctx, haltReport);
         });
     }
 
@@ -174,7 +178,26 @@ public final class GameLog {
         }
     }
 
-    private static void writeHaltFile(String report) {
+    private static void writeHaltFile(Context ctx, String report) {
+        if (ctx != null) {
+            try {
+                File internalHalt = new File(ctx.getFilesDir(), "halt_log.txt");
+                try (FileWriter writer = new FileWriter(internalHalt, true)) {
+                    writer.write(report);
+                    writer.flush();
+                }
+            } catch (Throwable ignored) {}
+            try {
+                File extDir = ctx.getExternalFilesDir(null);
+                if (extDir != null) {
+                    File extHalt = new File(extDir, "halt_log.txt");
+                    try (FileWriter writer = new FileWriter(extHalt, true)) {
+                        writer.write(report);
+                        writer.flush();
+                    }
+                }
+            } catch (Throwable ignored) {}
+        }
         for (String folder : new String[]{"NFSU2", "nfsu2"}) {
             try {
                 File sdcardDir = new File(Environment.getExternalStorageDirectory(), folder);
@@ -186,6 +209,43 @@ public final class GameLog {
                     }
                 }
             } catch (Throwable ignored) {}
+        }
+    }
+
+    public static File getPrimaryHaltFile(Context ctx) {
+        for (String folder : new String[]{"NFSU2", "nfsu2"}) {
+            try {
+                File f = new File(new File(Environment.getExternalStorageDirectory(), folder), "halt_log.txt");
+                if (f.exists() && f.length() > 0) return f;
+            } catch (Throwable ignored) {}
+        }
+        if (ctx != null) {
+            try {
+                File ext = ctx.getExternalFilesDir(null);
+                if (ext != null) {
+                    File f = new File(ext, "halt_log.txt");
+                    if (f.exists() && f.length() > 0) return f;
+                }
+            } catch (Throwable ignored) {}
+            try {
+                File f = new File(ctx.getFilesDir(), "halt_log.txt");
+                if (f.exists() && f.length() > 0) return f;
+            } catch (Throwable ignored) {}
+        }
+        return null;
+    }
+
+    public static byte[] getHaltLogBytes(Context ctx) {
+        File file = getPrimaryHaltFile(ctx);
+        if (file == null || !file.exists()) return new byte[0];
+        try (InputStream in = new FileInputStream(file);
+             java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
+            return out.toByteArray();
+        } catch (Throwable t) {
+            return new byte[0];
         }
     }
 

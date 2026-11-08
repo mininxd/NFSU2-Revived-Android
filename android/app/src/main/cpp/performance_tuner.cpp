@@ -101,11 +101,8 @@ void tuneThread(ThreadRole role, const char* name) {
 
     switch (role) {
         case ThreadRole::RENDER_MAIN: {
-            // Pin render thread exclusively to big/prime performance cores
-            int rc = sched_setaffinity(0, sizeof(cpu_set_t), &s_perf_mask);
-            if (rc != 0) {
-                __android_log_print(ANDROID_LOG_WARN, "NFSU2", "sched_setaffinity to perf cores returned %d", rc);
-            }
+            // High priority nice value for UI/render loop; leave core affinity to Linux EAS
+            // to dynamically utilize Cortex-X3 prime cores without throttling.
             setpriority(PRIO_PROCESS, 0, -10);
             break;
         }
@@ -114,8 +111,6 @@ void tuneThread(ThreadRole role, const char* name) {
             break;
         }
         case ThreadRole::BACKGROUND_WORKER: {
-            (void)s_little_mask;
-            sched_setaffinity(0, sizeof(cpu_set_t), &s_all_mask);
             setpriority(PRIO_PROCESS, 0, 0);
             break;
         }

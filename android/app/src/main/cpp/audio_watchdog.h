@@ -13,6 +13,9 @@ void notifyCallbackRendered();
 // (e.g. during screen recorder attach, incoming call, or audio routing renegotiation).
 void serviceSyntheticClock(PcmMixer& mixer);
 
+// Returns true if audio stream was active but callback has stopped firing for > 250ms.
+bool isCallbackStalled();
+
 // Cooldown tracker for AAudio stream reconnection to avoid audio HAL thrashing.
 bool canAttemptReconnect();
 void recordReconnectAttempt();

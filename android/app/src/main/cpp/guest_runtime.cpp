@@ -194,36 +194,7 @@ struct WaitScope {
 };
 std::atomic<int64_t> lastPresentMs{0};
 int64_t steadyMs(){return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();}
-void startStallWatch(){
-    static std::once_flag started;
-    std::call_once(started,[]{std::thread([]{
-        int64_t reportedFor=0;
-        while(!stopRequested.load()){
-            std::this_thread::sleep_for(std::chrono::seconds(2));
-            int64_t last=lastPresentMs.load(),idle=steadyMs()-last;
-            if(guestPaused.load()||idle<12000||reportedFor==last)continue;
-            reportedFor=last;
-            NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","Guest stall: no frame for %lld s; guest threads:",static_cast<long long>(idle/1000));
-            std::lock_guard<std::mutex> lock(threadTracesMutex);
-            for(auto& [id,trace]:threadTraces){
-                const char* wait=trace->wait.load();uint32_t handle=trace->handle.load();
-                std::string detail,held,callers;
-                // Read-only peeks at guest memory from this host thread: stable while the guest is stuck.
-                if(wait&&!std::strcmp(wait,"EnterCriticalSection")&&memory&&memory->readable(handle,24))
-                    detail=" (owner thread "+std::to_string(read32(handle+12))+", count "+std::to_string(read32(handle+8))+")";
-                for(auto& slot:trace->held)if(uint32_t cs=slot.load())held+=" "+hex(cs);
-                uint32_t esp=trace->esp.load();
-                for(unsigned i=0,found=0;memory&&i<256&&found<10;++i){
-                    if(!memory->readable(esp+i*4,4))break;
-                    uint32_t value=read32(esp+i*4);
-                    if(value>=0x401000u&&value<0x75d000u&&recomp_lookup(value)==nullptr){callers+=" "+hex(value);++found;}
-                }
-                NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","  thread %u at %08x %s %08x%s; holds:%s; stack:%s",id,trace->func.load(),
-                    wait?wait:"running",wait?handle:0u,detail.c_str(),held.empty()?" none":held.c_str(),callers.c_str());
-            }
-        }
-    }).detach();});
-}
+void startStallWatch();
 void yieldGuestMachine(unsigned milliseconds=0,std::chrono::steady_clock::time_point deadline={}) {
     if(!machineLease||!machineLease->owns_lock())throw GuestStop("Guest scheduler ownership missing");
     {auto& trace=currentTrace();trace.func=g_cur_func;trace.esp=g_esp;}
@@ -451,6 +422,73 @@ inline void syncPreTimestepPacing() {
 #include "guest_input.inc"
 #include "guest_audio.inc"
 #include "guest_network.inc"
+
+void notifyHaltToHost(const char* message);
+
+static void writeNativeHaltLog(const std::string& dump) {
+    const char* targets[] = {
+        "/sdcard/NFSU2/halt_log.txt",
+        "/sdcard/nfsu2/halt_log.txt",
+        "/storage/emulated/0/NFSU2/halt_log.txt",
+        "/storage/emulated/0/nfsu2/halt_log.txt"
+    };
+    for (const char* target : targets) {
+        FILE* fp = std::fopen(target, "a");
+        if (fp) {
+            std::fputs(dump.c_str(), fp);
+            std::fflush(fp);
+            std::fclose(fp);
+        }
+    }
+}
+
+void startStallWatch(){
+    static std::once_flag started;
+    std::call_once(started,[]{std::thread([]{
+        int64_t reportedFor=0;
+        while(!stopRequested.load()){
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            // Keep synthetic clock alive if audio stream is running so DirectSound calls don't block
+            if(!guestPaused.load(std::memory_order_relaxed)){
+                nfs_audio_watchdog::serviceSyntheticClock(soundMixer);
+                if(nfs_audio_watchdog::isCallbackStalled()&&nfs_audio_watchdog::canAttemptReconnect()){
+                    soundStreamRestartPending.store(true,std::memory_order_release);
+                }
+            }
+            int64_t last=lastPresentMs.load(),idle=steadyMs()-last;
+            if(guestPaused.load()||idle<4000||reportedFor==last)continue;
+            reportedFor=last;
+            std::ostringstream ss;
+            ss << "\n==================== GAME STALL HALT ====================\n";
+            ss << "Idle: " << (idle / 1000) << " seconds without D3D9 present\n";
+            ss << "Guest Threads:\n";
+            {
+                std::lock_guard<std::mutex> lock(threadTracesMutex);
+                for(auto& [id,trace]:threadTraces){
+                    const char* wait=trace->wait.load();uint32_t handle=trace->handle.load();
+                    std::string detail,held,callers;
+                    if(wait&&!std::strcmp(wait,"EnterCriticalSection")&&memory&&memory->readable(handle,24))
+                        detail=" (owner thread "+std::to_string(read32(handle+12))+", count "+std::to_string(read32(handle+8))+")";
+                    for(auto& slot:trace->held)if(uint32_t cs=slot.load())held+=" "+hex(cs);
+                    uint32_t esp=trace->esp.load();
+                    for(unsigned i=0,found=0;memory&&i<256&&found<10;++i){
+                        if(!memory->readable(esp+i*4,4))break;
+                        uint32_t value=read32(esp+i*4);
+                        if(value>=0x401000u&&value<0x75d000u&&recomp_lookup(value)==nullptr){callers+=" "+hex(value);++found;}
+                    }
+                    ss << "  thread " << id << " at " << hex(trace->func.load()) << " " << (wait?wait:"running")
+                       << " " << hex(wait?handle:0u) << detail << "; holds:" << (held.empty()?" none":held)
+                       << "; stack:" << callers << "\n";
+                }
+            }
+            ss << "==========================================================\n";
+            std::string dump = ss.str();
+            NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","%s",dump.c_str());
+            writeNativeHaltLog(dump);
+            notifyHaltToHost(("Guest stall detected: " + std::to_string(idle/1000) + "s idle\n" + dump).c_str());
+        }
+    }).detach();});
+}
 void testGuestScheduling(){
     State original;original.save();uint32_t savedError=lastError,savedTLS=tlsValues[1087];
     g_eax=0x11223344;g_fs_base=0x21000000;g_st[0]=123.5;g_xmm[7].u64[0]=0x123456789abcdef0ull;

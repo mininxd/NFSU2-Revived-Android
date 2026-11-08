@@ -52,6 +52,13 @@ void serviceSyntheticClock(PcmMixer& mixer) {
     }
 }
 
+bool isCallbackStalled() {
+    int64_t now = currentSteadyUs();
+    int64_t lastCb = s_lastCallbackTimeUs.load(std::memory_order_relaxed);
+    if (lastCb == 0) return false;
+    return (now - lastCb) > 250000;
+}
+
 bool canAttemptReconnect() {
     int64_t now = currentSteadyUs();
     int64_t last = s_lastReconnectAttemptUs.load(std::memory_order_relaxed);

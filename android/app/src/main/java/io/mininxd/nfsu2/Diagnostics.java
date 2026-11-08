@@ -92,6 +92,10 @@ final class Diagnostics {
             add(zip, "logcat.txt", logcat(0));
             add(zip, "network_log.txt", io.mininxd.nfsu2.net.NetLog.getLogBytes(context));
             add(zip, "game_log.txt", GameLog.getLogBytes(context));
+            byte[] haltBytes = GameLog.getHaltLogBytes(context);
+            if (haltBytes != null && haltBytes.length > 0) {
+                add(zip, "halt_log.txt", haltBytes);
+            }
             ActivityManager manager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
             if (Build.VERSION.SDK_INT >= 30 && manager != null) addExitInfo(zip, manager, context);
         } catch (Exception error) {
@@ -226,7 +230,7 @@ final class Diagnostics {
     private static byte[] logcat(int lines, String... filters) throws IOException {
         java.lang.Process process = null;
         try {
-            List<String> command = new java.util.ArrayList<>(Arrays.asList("logcat", "-d", "-b", "main", "-b", "crash",
+            List<String> command = new java.util.ArrayList<>(Arrays.asList("logcat", "-d", "-b", "main", "-b", "system", "-b", "crash",
                     "-v", "threadtime", "--uid=" + Process.myUid()));
             if (lines > 0) { command.add("-t"); command.add(String.valueOf(lines)); }
             command.addAll(Arrays.asList(filters));
