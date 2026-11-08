@@ -620,7 +620,7 @@ def generate_svg(data, output_path=SVG_PATH):
     elements.append(f'<line x1="32" y1="{y}" x2="{WIDTH-32}" y2="{y}" stroke="{BORDER_COLOR}" stroke-width="1"/>')
     y += 18
     elements.append(f'<text x="32" y="{y}" font-family="Segoe UI, sans-serif" font-size="11" fill="{TEXT_DIM}">Last updated: {data["last_updated"]} | Configured via library-progress.json | Run python scripts/library_progress.py</text>')
-    elements.append(f'<text x="{WIDTH-32}" y="{y}" font-family="Segoe UI, sans-serif" font-size="11" fill="{COLOR_ACCENT}" text-anchor="end">Need for Speed: Underground 2 Revived</text>')
+    elements.append(f'<text x="{WIDTH-32}" y="{y}" font-family="Segoe UI, sans-serif" font-size="11" fill="{COLOR_ACCENT}" text-anchor="end">git:mininxd/NFSU2-Revived-Android</text>')
     y += 24
 
     # Build final SVG
