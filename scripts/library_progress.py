@@ -511,8 +511,7 @@ def generate_svg(data, output_path=SVG_PATH):
     elements = []
     
     # Outer Card & Background
-    elements.append(f'<rect width="100%" height="100%" fill="{BG_COLOR}" rx="12"/>')
-    elements.append(f'<rect x="1" y="1" width="{WIDTH-2}" height="100%" fill="none" stroke="{BORDER_COLOR}" stroke-width="1" rx="12"/>')
+    elements.append(f'<rect width="100%" height="100%" fill="{BG_COLOR}"/>')
 
     # Header Section
     y = 38

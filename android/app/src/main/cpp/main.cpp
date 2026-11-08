@@ -259,8 +259,9 @@ static bool acceptedGamepad(const AInputEvent* event){
 static void setPadKey(unsigned scan,bool down){setGuestKey(scan,down);}
 static void publishPad(){
     auto state=gamepad.padState();
-    // Z: LT pushes it one way and RT the other, as DirectInput shows an Xbox pad (Z-Axis).
-    const float axes[6]={state.leftX,state.leftY,state.leftTrigger-state.rightTrigger,state.rightX,state.rightY,0.f};
+    // Z: LT pushes it one way and RT the other, as DirectInput shows an Xbox pad.
+    // Rz (axes[5]) provides right trigger independently for custom remapping.
+    const float axes[6]={state.leftX,state.leftY,state.leftTrigger-state.rightTrigger,state.rightX,state.rightY,state.rightTrigger*2.f-1.f};
     setGuestPad(axes,state.buttons,state.hatX,state.hatY);
 }
 static void onCommand(android_app* app, int32_t command) {
@@ -278,7 +279,7 @@ static void onCommand(android_app* app, int32_t command) {
 static std::atomic<bool> gamepadUsed{false};
 static void notePadUse(const AInputEvent* event){
     if(AInputEvent_getType(event)==AINPUT_EVENT_TYPE_KEY){if(AKeyEvent_getAction(event)==AKEY_EVENT_ACTION_DOWN)gamepadUsed=true;return;}
-    for(int32_t axis:{AMOTION_EVENT_AXIS_X,AMOTION_EVENT_AXIS_Y,AMOTION_EVENT_AXIS_Z,AMOTION_EVENT_AXIS_RZ,AMOTION_EVENT_AXIS_RX,AMOTION_EVENT_AXIS_RY,AMOTION_EVENT_AXIS_HAT_X,AMOTION_EVENT_AXIS_HAT_Y})
+    for(int32_t axis:{AMOTION_EVENT_AXIS_X,AMOTION_EVENT_AXIS_Y,AMOTION_EVENT_AXIS_Z,AMOTION_EVENT_AXIS_RZ,AMOTION_EVENT_AXIS_HAT_X,AMOTION_EVENT_AXIS_HAT_Y})
         if(std::fabs(AMotionEvent_getAxisValue(event,axis,0))>.5f){gamepadUsed=true;return;}
     for(int32_t axis:{AMOTION_EVENT_AXIS_LTRIGGER,AMOTION_EVENT_AXIS_RTRIGGER,AMOTION_EVENT_AXIS_BRAKE,AMOTION_EVENT_AXIS_GAS})
         if(AMotionEvent_getAxisValue(event,axis,0)>.3f){gamepadUsed=true;return;}

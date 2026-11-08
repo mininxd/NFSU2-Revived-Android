@@ -43,10 +43,8 @@ public:
         auto axis=[&](int32_t which){return AMotionEvent_getAxisValue(event,which,0);};
         stickX_=axis(AMOTION_EVENT_AXIS_X);stickY_=axis(AMOTION_EVENT_AXIS_Y);
         hatX_=axis(AMOTION_EVENT_AXIS_HAT_X);hatY_=axis(AMOTION_EVENT_AXIS_HAT_Y);
-        // Android's standard right stick is Z/RZ, but many Xbox/HID controllers report RX/RY.
-        float rx=axis(AMOTION_EVENT_AXIS_Z),ry=axis(AMOTION_EVENT_AXIS_RZ);
-        if(std::fabs(rx)<0.001f&&std::fabs(ry)<0.001f){rx=axis(AMOTION_EVENT_AXIS_RX);ry=axis(AMOTION_EVENT_AXIS_RY);}
-        rightX_=rx;rightY_=ry;
+        // Android's standard right stick is Z/RZ.
+        rightX_=axis(AMOTION_EVENT_AXIS_Z);rightY_=axis(AMOTION_EVENT_AXIS_RZ);
         // Pads report triggers as LTRIGGER/RTRIGGER, BRAKE/GAS or both.
         leftTrigger_=std::fmax(axis(AMOTION_EVENT_AXIS_LTRIGGER),axis(AMOTION_EVENT_AXIS_BRAKE));
         rightTrigger_=std::fmax(axis(AMOTION_EVENT_AXIS_RTRIGGER),axis(AMOTION_EVENT_AXIS_GAS));
@@ -95,8 +93,8 @@ private:
         case AKEYCODE_BUTTON_R2:case AKEYCODE_BUTTON_8:return R2;
         case AKEYCODE_BUTTON_SELECT:case AKEYCODE_BUTTON_9:case AKEYCODE_BACK:return Select;
         case AKEYCODE_BUTTON_START:case AKEYCODE_BUTTON_10:case AKEYCODE_MENU:return Start;
-        case AKEYCODE_BUTTON_THUMBL:case AKEYCODE_BUTTON_11:case AKEYCODE_BUTTON_13:return ThumbL;
-        case AKEYCODE_BUTTON_THUMBR:case AKEYCODE_BUTTON_12:case AKEYCODE_BUTTON_14:return ThumbR;
+        case AKEYCODE_BUTTON_THUMBL:case AKEYCODE_BUTTON_11:return ThumbL;
+        case AKEYCODE_BUTTON_THUMBR:case AKEYCODE_BUTTON_12:return ThumbR;
         case AKEYCODE_DPAD_UP:return Up;case AKEYCODE_DPAD_DOWN:return Down;
         case AKEYCODE_DPAD_LEFT:return Left;case AKEYCODE_DPAD_RIGHT:return Right;
         case AKEYCODE_DPAD_CENTER:return A;
@@ -116,7 +114,7 @@ private:
             want[0xcd]=past(stickX_,0xcd)||hatRight;
             want[0xc8]=buttons_[R2]||past(rightTrigger_,0xc8);
             want[0xd0]=buttons_[L2]||past(leftTrigger_,0xd0);
-            want[0x39]=buttons_[A];want[0x38]=buttons_[B];want[0x2e]=buttons_[X]||buttons_[ThumbR];want[0x30]=buttons_[Y];
+            want[0x39]=buttons_[A];want[0x38]=buttons_[B];want[0x2e]=buttons_[X];want[0x30]=buttons_[Y];
             want[0x2a]=buttons_[R1];want[0x1d]=buttons_[L1];
             want[0x01]=buttons_[Start]||buttons_[Select];
             // HAT navigation in free roam: Up = Enter event, Down = Player info, Left = Map, Right = SMS

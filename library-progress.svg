@@ -1,8 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="816" viewBox="0 0 960 816" role="img" aria-labelledby="title desc">
 <title id="title">NFSU2 Win32 &amp; DirectX 9 Translation Progress</title>
 <desc id="desc">288 implemented, 7 stubbed, 50 missing out of 345 tracked APIs (84.5% coverage).</desc>
-<rect width="100%" height="100%" fill="#212830" rx="12"/>
-<rect x="1" y="1" width="958" height="100%" fill="none" stroke="#373e47" stroke-width="1" rx="12"/>
+<rect width="100%" height="100%" fill="#212830"/>
 <text x="32" y="38" font-family="Segoe UI, -apple-system, sans-serif" font-size="22" font-weight="bold" fill="#f8fafc">NFSU2 Win32 &amp; DirectX 9 Translation Progress</text>
 <text x="32" y="62" font-family="Segoe UI, -apple-system, sans-serif" font-size="14" fill="#38bdf8">SPEED2.EXE ARM64 / Android HLE Surface Coverage</text>
 <text x="32" y="82" font-family="Segoe UI, -apple-system, sans-serif" font-size="12" fill="#94a3b8">Library implementation status and function coverage for Need for Speed: Underground 2 recompilation.</text>
