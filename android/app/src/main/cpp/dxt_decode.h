@@ -3,6 +3,7 @@
 #include <vector>
 #include <stdexcept>
 #include <cstring>
+#include <dlfcn.h>
 
 // Decode DXT1, DXT3 or DXT5 into byte-ordered RGBA8, including partial edge blocks.
 inline std::vector<uint8_t> decodeDXT(unsigned mode,uint32_t width,uint32_t height,
@@ -13,6 +14,23 @@ inline std::vector<uint8_t> decodeDXT(unsigned mode,uint32_t width,uint32_t heig
     if(!width||!height||blocksWide*blocksHigh*blockBytes>sourceBytes||uint64_t(width)*height>0x1fffffff)
         throw std::invalid_argument("Invalid DXT dimensions or truncated blocks");
     std::vector<uint8_t> rgba(size_t(width)*height*4);
+
+    // Fast-path hardware-accelerated DXT decompression via Rust
+    if (mode == 1) {
+        static auto s_dxt1 = reinterpret_cast<int(*)(uint32_t, uint32_t, const uint8_t*, size_t, uint8_t*)>(
+            dlsym(RTLD_DEFAULT, "nfs_tex_dxt1_decode_fast")
+        );
+        if (s_dxt1 && s_dxt1(width, height, source, sourceBytes, rgba.data()) == 0) {
+            return rgba;
+        }
+    } else if (mode == 5) {
+        static auto s_dxt5 = reinterpret_cast<int(*)(uint32_t, uint32_t, const uint8_t*, size_t, uint8_t*)>(
+            dlsym(RTLD_DEFAULT, "nfs_tex_dxt5_decode_fast")
+        );
+        if (s_dxt5 && s_dxt5(width, height, source, sourceBytes, rgba.data()) == 0) {
+            return rgba;
+        }
+    }
     for(uint32_t by=0;by<blocksHigh;++by)for(uint32_t bx=0;bx<blocksWide;++bx){
         const uint8_t* block=source+(size_t(by)*blocksWide+bx)*blockBytes;
         const uint8_t* colors=block+(mode==1?0:8);

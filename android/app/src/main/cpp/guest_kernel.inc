@@ -276,15 +276,48 @@ void getTimeZoneInformation(){
     std::memcpy(ptr(output+4,sizeof name),name,sizeof name);
     std::memcpy(ptr(output+88,sizeof name),name,sizeof name);ret(0,1);
 }
+static std::atomic<uint32_t> guestProcessAffinityMask{0};
+
 void getProcessAffinityMask(){
     if(!processHandle(arg(0))){lastError=6;ret(0,3);return;}
     if(!arg(1)||!arg(2)){lastError=87;ret(0,3);return;}
-    // The serialized guest machine exposes one virtual x86 processor.
-    write32(arg(1),1);write32(arg(2),1);ret(1,3);
+    long ncores = sysconf(_SC_NPROCESSORS_ONLN);
+    if(ncores <= 0 || ncores > 32) ncores = 8;
+    uint32_t systemMask = (ncores >= 32) ? 0xFFFFFFFFu : ((1u << ncores) - 1u);
+    uint32_t procMask = guestProcessAffinityMask.load();
+    if(procMask == 0) { procMask = systemMask; guestProcessAffinityMask.store(procMask); }
+    write32(arg(1), procMask);
+    write32(arg(2), systemMask);
+    ret(1,3);
 }
+
 void setProcessAffinityMask(){
     if(!processHandle(arg(0))){lastError=6;ret(0,2);return;}
-    if(arg(1)!=1){lastError=87;ret(0,2);return;}ret(1,2);
+    uint32_t mask = arg(1);
+    long ncores = sysconf(_SC_NPROCESSORS_ONLN);
+    if(ncores <= 0 || ncores > 32) ncores = 8;
+    uint32_t systemMask = (ncores >= 32) ? 0xFFFFFFFFu : ((1u << ncores) - 1u);
+    if(!mask || (mask & ~systemMask)) {
+        if(mask != 1) { lastError=87; ret(0,2); return; }
+    }
+    guestProcessAffinityMask.store(mask);
+    NFS_RUNTIME_LOG(ANDROID_LOG_INFO, "NFSU2", "Process affinity scaled to mask 0x%x (cores: %ld)", mask, ncores);
+    ret(1,2);
+}
+
+void setThreadAffinityMask(){
+    uint32_t handle = arg(0);
+    uint32_t mask = arg(1);
+    long ncores = sysconf(_SC_NPROCESSORS_ONLN);
+    if(ncores <= 0 || ncores > 32) ncores = 8;
+    uint32_t systemMask = (ncores >= 32) ? 0xFFFFFFFFu : ((1u << ncores) - 1u);
+    uint32_t prevMask = guestProcessAffinityMask.load();
+    if(prevMask == 0) prevMask = systemMask;
+    if(!mask || (mask & ~systemMask)) {
+        if(mask != 1) { lastError=87; ret(0,2); return; }
+    }
+    NFS_RUNTIME_LOG(ANDROID_LOG_INFO, "NFSU2", "Thread %u affinity scaled to mask 0x%x", handle, mask);
+    ret(prevMask, 2);
 }
 void setPriorityClass(){
     if(!processHandle(arg(0))){lastError=6;ret(0,2);return;}uint32_t priority=arg(1);
@@ -536,7 +569,7 @@ const std::map<std::string,recomp_func_t> kernelFunctions={
     {"IsBadReadPtr",isBadReadPtr},{"IsBadWritePtr",isBadWritePtr},{"VirtualProtect",virtualProtect},
     {"CreateMutexA",createMutex},{"ReleaseMutex",releaseMutex},
     {"GetTimeZoneInformation",getTimeZoneInformation},
-    {"GetProcessAffinityMask",getProcessAffinityMask},{"SetProcessAffinityMask",setProcessAffinityMask},
+    {"GetProcessAffinityMask",getProcessAffinityMask},{"SetProcessAffinityMask",setProcessAffinityMask},{"SetThreadAffinityMask",setThreadAffinityMask},
     {"GetPriorityClass",getPriorityClass},{"SetPriorityClass",setPriorityClass},{"GetThreadPriority",getThreadPriority},
     {"LoadLibraryA",loadLibrary},{"FreeLibrary",freeLibrary},
     {"SetErrorMode",setErrorMode},
