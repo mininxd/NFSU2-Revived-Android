@@ -1024,9 +1024,10 @@ std::string connectGuestRuntime(const char* executable) {
         // so DirtySock connects via plain TCP on port 20920 instead of SSL 2.0 on 20921.
         if (memory->readable(0x7FBDBCu, 16)) {
             uint8_t* p = static_cast<uint8_t*>(ptr(0x7FBDBCu, 16));
-            if (p && std::memcmp(p, "*pcnfs05.ea.com", 15) == 0) {
-                std::memcpy(p, "pcnfs05.ea.com\0", 16);
-                NFS_RUNTIME_LOG(ANDROID_LOG_INFO, "NFSU2", "Patched 0x7FBDBC: removed '*' from *pcnfs05.ea.com for plain TCP lobby");
+            if (p && p[0] == '*') {
+                std::memmove(p, p + 1, 15);
+                p[15] = 0;
+                NFS_RUNTIME_LOG(ANDROID_LOG_INFO, "NFSU2", "Patched 0x7FBDBC: removed '*' from lobby host for plain TCP");
             }
         }
         // Expand all 3 CarPool budgets to 48MB (0x007fa9d4u, 0x007fa9d8u [SUV], 0x007fa9dcu) to prevent memory allocation halts
@@ -1166,9 +1167,10 @@ void setGuestOnlineServer(const std::string& host){
     if(!host.empty())onlineServer=host;
     if(memory&&memory->readable(0x7FBDBCu,16)){
         uint8_t* p=static_cast<uint8_t*>(ptr(0x7FBDBCu,16));
-        if(p&&std::memcmp(p,"*pcnfs05.ea.com",15)==0){
-            std::memcpy(p,"pcnfs05.ea.com\0",16);
-            NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Patched 0x7FBDBC: removed '*' from *pcnfs05.ea.com for plain TCP lobby");
+        if(p&&p[0]=='*'){
+            std::memmove(p, p + 1, 15);
+            p[15] = 0;
+            NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Patched 0x7FBDBC: removed '*' from lobby host for plain TCP");
         }
     }
 }

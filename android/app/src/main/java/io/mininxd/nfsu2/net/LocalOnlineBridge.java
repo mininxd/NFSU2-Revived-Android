@@ -159,6 +159,7 @@ public final class LocalOnlineBridge {
             } while (cid == 0 || connections.containsKey(cid));
 
             int localPort = localSocket.getPort();
+            int listenPort = localSocket.getLocalPort();
             VirtualConn conn = new VirtualConn(cid, targetPort, localPort, localSocket);
             connections.put(cid, conn);
 
@@ -167,8 +168,8 @@ public final class LocalOnlineBridge {
                 InputStream localIn = localSocket.getInputStream();
 
                 // Send TCP SYN (op 1) to 10.77.0.1:targetPort
-                Log.i(TAG, "Connecting TCP stream to 10.77.0.1:" + targetPort + " (cid=" + cid + ", lport=" + localPort + ")");
-                NetLog.step(TAG, "DirtySock connected, sending TCP SYN to 10.77.0.1:" + targetPort + " (cid=" + cid + ")");
+                Log.i(TAG, "Connecting TCP stream from local :" + listenPort + " to 10.77.0.1:" + targetPort + " (cid=" + cid + ", clientPort=" + localPort + ")");
+                NetLog.step(TAG, "DirtySock connected to 127.0.0.1:" + listenPort + ", sending TCP SYN to 10.77.0.1:" + targetPort + " (cid=" + cid + ")");
                 wsClient.sendTcpFrame(VHOST_VIP, localPort, targetPort, TCP_OP_SYN, 64, cid, new byte[0]);
 
                 // Wait for SYNACK from virtual host (up to 6s)
@@ -191,7 +192,10 @@ public final class LocalOnlineBridge {
                     if (n > 0) {
                         byte[] payload = new byte[n];
                         System.arraycopy(buf, 0, payload, 0, n);
-                        NetLog.i(TAG, "Local TCP -> 10.77.0.1:" + targetPort + " [cid=" + cid + "] (len=" + n
+                        if (payload.length >= 3 && (payload[0] & 0x80) != 0 && payload[2] == 0x01) {
+                            NetLog.w(TAG, "SSL 2.0 Client Hello detected on listen port " + listenPort + "! DirtySock SSL is active. Target 10.77.0.1:" + targetPort + " requires plain TCP @dir.");
+                        }
+                        NetLog.i(TAG, "Local TCP (" + listenPort + ") -> 10.77.0.1:" + targetPort + " [cid=" + cid + "] (len=" + n
                                 + ", hex=" + NetLog.hexPreview(payload, 32) + ")");
                         wsClient.sendTcpFrame(VHOST_VIP, localPort, targetPort, TCP_OP_DATA, 64, cid, payload);
                     }

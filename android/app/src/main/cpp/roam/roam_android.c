@@ -1038,6 +1038,20 @@ static void resolution_frame_tick(void) {
     }
 }
 
+static void lobby_frame_tick(void) {
+    static int s_lobby_patched = 0;
+    if (s_lobby_patched || !g_p_mem_base || !*g_p_mem_base) return;
+    if (rh_mem_committed(0x007fbdbcu, 16)) {
+        uint8_t *p = (uint8_t *)GPTR(0x007fbdbcu);
+        if (p && p[0] == '*') {
+            memmove(p, p + 1, 15);
+            p[15] = '\0';
+            s_lobby_patched = 1;
+            __android_log_print(ANDROID_LOG_INFO, "NFSU2", "roam: patched 0x007fbdbc: removed '*' from lobby host for plain TCP");
+        }
+    }
+}
+
 static _Atomic int s_tick_in_progress = 0;
 __attribute__((visibility("default"))) void nfs_roam_frame_tick(void) {
     if (!roam_android_init_symbols() || !g_p_esp || !*g_p_esp) return;
@@ -1050,6 +1064,7 @@ __attribute__((visibility("default"))) void nfs_roam_frame_tick(void) {
     }
     g_frame_count++;
     hiddenraces_frame_tick();
+    lobby_frame_tick();
     framerate_pacing_fix();
     resolution_frame_tick();
     look_camera_frame_tick();

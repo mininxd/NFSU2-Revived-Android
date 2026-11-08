@@ -271,6 +271,20 @@ uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumen
             parameters.MultiSampleType=static_cast<D3DMULTISAMPLE_TYPE>(p[4]);parameters.MultiSampleQuality=p[5];parameters.SwapEffect=static_cast<D3DSWAPEFFECT>(p[6]);parameters.hDeviceWindow=window;
             parameters.Windowed=p[8];parameters.EnableAutoDepthStencil=p[9];parameters.AutoDepthStencilFormat=static_cast<D3DFORMAT>(p[10]);parameters.Flags=p[11];parameters.FullScreen_RefreshRateInHz=p[12];parameters.PresentationInterval=D3DPRESENT_INTERVAL_IMMEDIATE;
             IDirect3DDevice9* device=nullptr;HRESULT status=d3d->CreateDevice(args[1],static_cast<D3DDEVTYPE>(args[2]),window,args[4],&parameters,&device);
+            if (FAILED(status)) {
+                // Device creation fallback for PowerVR GE8322 / low-end mobile Vulkan implementations:
+                // Fall back to 16-bit depth buffer (D3DFMT_D16) and disable multisampling
+                D3DPRESENT_PARAMETERS fallback = parameters;
+                fallback.AutoDepthStencilFormat = D3DFMT_D16;
+                fallback.MultiSampleType = D3DMULTISAMPLE_NONE;
+                fallback.MultiSampleQuality = 0;
+                HRESULT fbStatus = d3d->CreateDevice(args[1],static_cast<D3DDEVTYPE>(args[2]),window,args[4],&fallback,&device);
+                if (SUCCEEDED(fbStatus)) {
+                    status = fbStatus;
+                    parameters = fallback;
+                    NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","D3D9 CreateDevice succeeded with D16 depth fallback");
+                }
+            }
             NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","D3D9 backbuffer %ux%u CreateDevice result=%08x",parameters.BackBufferWidth,parameters.BackBufferHeight,uint32_t(status));
             // Without a device the game carries on and faults later in its own
             // code (PowerVR GE8322 reports): after its retry also fails, stop
