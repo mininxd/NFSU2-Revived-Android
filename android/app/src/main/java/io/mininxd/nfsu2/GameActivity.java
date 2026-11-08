@@ -64,7 +64,7 @@ public final class GameActivity extends NativeActivity {
                     android.media.AudioFocusRequest request = new android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN)
                             .setAudioAttributes(new android.media.AudioAttributes.Builder()
                                     .setUsage(android.media.AudioAttributes.USAGE_GAME)
-                                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_GAME)
+                                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
                                     .build())
                             .setOnAudioFocusChangeListener(audioFocusListener)
                             .build();
