@@ -13,6 +13,7 @@ pub mod pipeline_cache;
 pub mod render_queue;
 pub mod simd_audio;
 pub mod win32_ddraw;
+pub mod win32_dinput;
 pub mod win32_netapi;
 pub mod win32_shell;
 
@@ -20,6 +21,7 @@ pub use crowd_filter::*;
 pub use headlights::*;
 pub use math_simd::*;
 pub use win32_ddraw::*;
+pub use win32_dinput::*;
 pub use win32_netapi::*;
 pub use win32_shell::*;
 

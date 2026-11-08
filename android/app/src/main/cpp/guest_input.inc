@@ -336,9 +336,13 @@ void keyboardMouseObjectInfo(uint32_t kind){
     }
     ret(0,4);
 }
+#include "guest_dinput_feedback.inc"
+
 void inputDispatch(){
     uint32_t kind=(inputToken-inputMethodBase)/0x1000,method=((inputToken-inputMethodBase)%0x1000)/16;
-    uint32_t self=arg(0);auto found=inputObjects.find(self);
+    uint32_t self=arg(0);
+    if(kind==5){dinputEffectDispatch(self,method);return;}
+    auto found=inputObjects.find(self);
     if(found==inputObjects.end()||found->second.kind!=kind)throw GuestStop("Invalid DirectInput object");
     auto& object=found->second;
     if(++inputMethodCalls[inputToken]<=3)NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","DirectInput kind=%u method=%u",kind,method);
@@ -461,11 +465,11 @@ void inputDispatch(){
     case 15:{uint32_t output=arg(1);if(!output||(read32(output)!=580&&read32(output)!=560)){ret(diInvalid,2);return;}inputDeviceInstance(output,kind,read32(output));ret(0,2);return;}
     case 16:ret(0x80004001,3);return; // RunControlPanel
     case 17:ret(0,4);return;          // Initialize
-    case 18:ret(0x80004001,5);return; // CreateEffect
+    case 18:dinputDeviceCreateEffect();return; // CreateEffect
     case 19:ret(0,4);return;          // EnumEffects
     case 20:ret(0x80004001,3);return; // GetEffectInfo
-    case 21:ret(0x80004001,2);return; // GetForceFeedbackState
-    case 22:ret(0x80004001,2);return; // SendForceFeedbackCommand
+    case 21:dinputDeviceGetForceFeedbackState();return; // GetForceFeedbackState
+    case 22:dinputDeviceSendForceFeedbackCommand();return; // SendForceFeedbackCommand
     case 23:ret(0,3);return;          // EnumCreatedEffectObjects
     case 24:ret(0x80004001,2);return; // Escape
     case 25:ret(object.acquired?0:diNotAcquired,1);return;

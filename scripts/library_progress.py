@@ -332,8 +332,8 @@ DEFAULT_LIBRARIES = {
         ("IDirectInputDevice8A::SetProperty", "implemented", "Configures deadzones, saturation, and buffer size"),
         ("IDirectInputDevice8A::GetProperty", "implemented", "Queries device range and joystick capabilities"),
         ("IDirectInputDevice8A::EnumObjects", "implemented", "Enumerates axis and button controls"),
-        ("IDirectInputDevice8A::CreateEffect", "stub", "Haptic force feedback effect stub"),
-        ("IDirectInputDevice8A::SendForceFeedbackCommand", "stub", "Haptic vibration trigger stub")
+        ("IDirectInputDevice8A::CreateEffect", "implemented", "Rust-backed DirectInput force feedback effect creation & engine"),
+        ("IDirectInputDevice8A::SendForceFeedbackCommand", "implemented", "Rust-backed DirectInput haptic vibration command dispatcher")
     ],
 
     "ws2_32.dll": [

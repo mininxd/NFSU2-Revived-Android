@@ -2,7 +2,7 @@
   "title": "NFSU2 Win32 & DirectX 9 Translation Progress",
   "subtitle": "SPEED2.EXE ARM64 / Android HLE Surface Coverage",
   "description": "Library implementation status and function coverage for Need for Speed: Underground 2 recompilation.",
-  "last_updated": "2026-11-08 09:11:43Z",
+  "last_updated": "2026-11-08 21:42:07Z",
   "libraries": {
     "kernel32.dll": [
       {
@@ -1435,13 +1435,13 @@
       },
       {
         "name": "IDirectInputDevice8A::CreateEffect",
-        "status": "stub",
-        "description": "Haptic force feedback effect stub"
+        "status": "implemented",
+        "description": "Rust-backed DirectInput force feedback effect creation & engine"
       },
       {
         "name": "IDirectInputDevice8A::SendForceFeedbackCommand",
-        "status": "stub",
-        "description": "Haptic vibration trigger stub"
+        "status": "implemented",
+        "description": "Rust-backed DirectInput haptic vibration command dispatcher"
       }
     ],
     "ws2_32.dll": [
@@ -1739,22 +1739,37 @@
     "shell32.dll": [
       {
         "name": "ShellExecuteA",
-        "status": "missing",
-        "description": "Executes external command or URL"
+        "status": "implemented",
+        "description": "Rust-backed ShellExecute external launcher & URL dispatcher"
       }
     ],
     "netapi32.dll": [
       {
         "name": "Netbios",
-        "status": "stub",
-        "description": "NetBIOS control block stub for LAN player discovery"
+        "status": "implemented",
+        "description": "Rust-backed Netbios LANA enumeration and MAC query"
+      },
+      {
+        "name": "NetApiBufferFree",
+        "status": "implemented",
+        "description": "Rust-backed NetApi buffer deallocation"
+      },
+      {
+        "name": "NetWkstaGetInfo",
+        "status": "implemented",
+        "description": "Rust-backed Workstation info query"
+      },
+      {
+        "name": "NetGetJoinInformation",
+        "status": "implemented",
+        "description": "Rust-backed Workgroup join status query"
       }
     ],
     "ddraw.dll": [
       {
         "name": "DirectDrawCreate",
-        "status": "missing",
-        "description": "DirectDraw legacy display creation"
+        "status": "implemented",
+        "description": "Rust-backed DirectDraw device & mode enumeration"
       }
     ]
   }
