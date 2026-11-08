@@ -93,8 +93,8 @@ private:
         case AKEYCODE_BUTTON_R2:case AKEYCODE_BUTTON_8:return R2;
         case AKEYCODE_BUTTON_SELECT:case AKEYCODE_BUTTON_9:case AKEYCODE_BACK:return Select;
         case AKEYCODE_BUTTON_START:case AKEYCODE_BUTTON_10:case AKEYCODE_MENU:return Start;
-        case AKEYCODE_BUTTON_THUMBL:case AKEYCODE_BUTTON_11:return ThumbL;
-        case AKEYCODE_BUTTON_THUMBR:case AKEYCODE_BUTTON_12:return ThumbR;
+        case AKEYCODE_BUTTON_THUMBL:case AKEYCODE_BUTTON_11:case AKEYCODE_BUTTON_13:return ThumbL;
+        case AKEYCODE_BUTTON_THUMBR:case AKEYCODE_BUTTON_12:case AKEYCODE_BUTTON_14:return ThumbR;
         case AKEYCODE_DPAD_UP:return Up;case AKEYCODE_DPAD_DOWN:return Down;
         case AKEYCODE_DPAD_LEFT:return Left;case AKEYCODE_DPAD_RIGHT:return Right;
         case AKEYCODE_DPAD_CENTER:return A;
