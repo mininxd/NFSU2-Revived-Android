@@ -12,18 +12,24 @@ pub mod math_simd;
 pub mod pipeline_cache;
 pub mod render_queue;
 pub mod simd_audio;
+pub mod win32_comm;
 pub mod win32_ddraw;
 pub mod win32_dinput;
+pub mod win32_gdi;
 pub mod win32_netapi;
 pub mod win32_shell;
+pub mod win32_tapi;
 
 pub use crowd_filter::*;
 pub use headlights::*;
 pub use math_simd::*;
+pub use win32_comm::*;
 pub use win32_ddraw::*;
 pub use win32_dinput::*;
+pub use win32_gdi::*;
 pub use win32_netapi::*;
 pub use win32_shell::*;
+pub use win32_tapi::*;
 
 use async_compiler::AsyncCompilerEngine;
 use pipeline_cache::{PipelineCacheManager, VK_UUID_SIZE};

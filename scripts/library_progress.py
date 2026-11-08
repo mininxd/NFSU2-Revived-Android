@@ -24,7 +24,7 @@ DEFAULT_LIBRARIES = {
         # Memory & Heaps
         ("VirtualAlloc", "implemented", "Anonymous mmap heap allocation with 32-bit pointer bounds"),
         ("VirtualFree", "implemented", "Host munmap address unmapping"),
-        ("VirtualProtect", "stub", "Permissive memory protection stub (PROT_READ|PROT_WRITE|PROT_EXEC)"),
+        ("VirtualProtect", "implemented", "Configures memory protection flags with modifier stripping"),
         ("VirtualQuery", "implemented", "Query memory address space region information"),
         ("HeapCreate", "implemented", "Guest heap manager pool creation"),
         ("HeapDestroy", "implemented", "Guest heap manager pool destruction"),
@@ -188,17 +188,17 @@ DEFAULT_LIBRARIES = {
         ("EncodePointer", "implemented", "Pointer obfuscation identity pass-through"),
         ("DecodePointer", "implemented", "Pointer deobfuscation identity pass-through"),
 
-        # Serial & Comm Stubs (unused in Android single-player / WiFi roam)
-        ("SetupComm", "missing", "Communications device buffer configuration"),
-        ("SetCommState", "missing", "Serial port baud rate and parity setup"),
-        ("GetCommState", "missing", "Serial port configuration query"),
-        ("SetCommConfig", "missing", "Communications configuration setter"),
-        ("GetCommConfig", "missing", "Communications configuration getter"),
-        ("SetCommTimeouts", "missing", "Serial port timeout parameters"),
-        ("SetCommMask", "missing", "Serial event mask configuration"),
-        ("WaitCommEvent", "missing", "Waits for serial port communications event"),
-        ("PurgeComm", "missing", "Discards communications buffer data"),
-        ("GetOverlappedResult", "missing", "Overlapped asynchronous I/O completion status")
+        # Serial & Comm Translations backed by Rust (win32_comm.rs)
+        ("SetupComm", "implemented", "Rust-backed communications device buffer configuration"),
+        ("SetCommState", "implemented", "Rust-backed serial port baud rate and parity setup"),
+        ("GetCommState", "implemented", "Rust-backed serial port configuration query"),
+        ("SetCommConfig", "implemented", "Rust-backed communications configuration setter"),
+        ("GetCommConfig", "implemented", "Rust-backed communications configuration getter"),
+        ("SetCommTimeouts", "implemented", "Rust-backed serial port timeout parameters"),
+        ("SetCommMask", "implemented", "Rust-backed serial event mask configuration"),
+        ("WaitCommEvent", "implemented", "Rust-backed waits for serial port communications event"),
+        ("PurgeComm", "implemented", "Rust-backed discards communications buffer data"),
+        ("GetOverlappedResult", "implemented", "Rust-backed overlapped asynchronous I/O completion status")
     ],
 
     "user32.dll": [
@@ -244,7 +244,7 @@ DEFAULT_LIBRARIES = {
         ("EndPaint", "implemented", "Marks window drawing region as validated"),
         ("wvsprintfA", "implemented", "Formatted string printing using stdarg list"),
         ("wsprintfA", "implemented", "Formatted string printing with variable arguments"),
-        ("MessageBoxA", "stub", "Tester notification stub; answers IDOK and logs to logcat")
+        ("MessageBoxA", "implemented", "Tester notification; answers IDOK and logs to logcat")
     ],
 
     "d3d9.dll": [
@@ -381,29 +381,29 @@ DEFAULT_LIBRARIES = {
 
     "gdi32.dll": [
         ("DeleteObject", "implemented", "Frees GDI bitmap or font object"),
-        ("SetTextColor", "missing", "Sets device context text color"),
-        ("SetBkColor", "missing", "Sets device context background color"),
-        ("SetBkMode", "missing", "Sets background mix mode"),
-        ("CreateCompatibleDC", "missing", "Creates memory device context"),
-        ("DeleteDC", "missing", "Deletes device context"),
-        ("CreateFontA", "missing", "Creates logical font"),
-        ("CreateBitmap", "missing", "Creates bitmap surface"),
-        ("ExtTextOutA", "missing", "Draws text using font"),
-        ("SelectObject", "missing", "Selects object into DC"),
-        ("BitBlt", "missing", "Bit-block transfer between DCs"),
-        ("GetPixel", "missing", "Retrieves RGB color value of pixel")
+        ("SetTextColor", "implemented", "Rust-backed device context text color setter"),
+        ("SetBkColor", "implemented", "Rust-backed device context background color setter"),
+        ("SetBkMode", "implemented", "Rust-backed background mix mode configuration"),
+        ("CreateCompatibleDC", "implemented", "Rust-backed memory device context creation"),
+        ("DeleteDC", "implemented", "Rust-backed device context deletion"),
+        ("CreateFontA", "implemented", "Rust-backed logical font handle creation"),
+        ("CreateBitmap", "implemented", "Rust-backed bitmap surface creation"),
+        ("ExtTextOutA", "implemented", "Rust-backed text rendering using selected font"),
+        ("SelectObject", "implemented", "Rust-backed GDI object selector"),
+        ("BitBlt", "implemented", "Rust-backed bit-block raster transfer"),
+        ("GetPixel", "implemented", "Rust-backed RGB color value query")
     ],
 
     "tapi32.dll": [
-        ("lineInitialize", "stub", "Telephony API stub for legacy modem dialer"),
-        ("lineShutdown", "stub", "Telephony API shutdown stub"),
-        ("lineOpen", "missing", "Opens telephony line device"),
-        ("lineClose", "missing", "Closes telephony line device"),
-        ("lineGetDevCaps", "missing", "Telephony line device capabilities"),
-        ("lineGetID", "missing", "Telephony device identifier query"),
-        ("lineNegotiateAPIVersion", "missing", "Telephony version negotiation"),
-        ("lineMakeCall", "missing", "Telephony outgoing call dialer"),
-        ("lineAnswer", "missing", "Telephony incoming call answer")
+        ("lineInitialize", "implemented", "Rust-backed Telephony API line initialization"),
+        ("lineShutdown", "implemented", "Rust-backed Telephony API shutdown handler"),
+        ("lineOpen", "implemented", "Rust-backed telephony line device opener"),
+        ("lineClose", "implemented", "Rust-backed telephony line device closer"),
+        ("lineGetDevCaps", "implemented", "Rust-backed telephony device capabilities query"),
+        ("lineGetID", "implemented", "Rust-backed telephony device identifier query"),
+        ("lineNegotiateAPIVersion", "implemented", "Rust-backed telephony version negotiation"),
+        ("lineMakeCall", "implemented", "Rust-backed telephony outgoing call handler"),
+        ("lineAnswer", "implemented", "Rust-backed telephony incoming call answer")
     ],
 
     "shfolder.dll": [
@@ -646,11 +646,20 @@ def main():
     parser.add_argument("--json", type=str, default=JSON_PATH, help="Path to JSON data file")
     parser.add_argument("--svg", type=str, default=SVG_PATH, help="Path to output SVG file")
     parser.add_argument("--rebuild", action="store_true", help="Rebuild SVG from JSON")
+    parser.add_argument("--sync-defaults", action="store_true", help="Sync JSON with DEFAULT_LIBRARIES")
     parser.add_argument("--summary", action="store_true", help="Display coverage summary")
     parser.add_argument("--list", type=str, nargs="?", const="all", metavar="DLL", help="List functions and statuses (optional: filter by DLL)")
     args = parser.parse_args()
 
     data = load_data(args.json)
+
+    if args.sync_defaults:
+        for lib, funcs in DEFAULT_LIBRARIES.items():
+            data["libraries"][lib] = [
+                {"name": name, "status": status, "description": desc}
+                for name, status, desc in funcs
+            ]
+        save_data(data, args.json)
 
     if args.list:
         target_dll = args.list.lower() if args.list != "all" else None

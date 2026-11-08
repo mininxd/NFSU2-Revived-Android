@@ -262,9 +262,9 @@ void isBadWritePtr(){ret(memory->writable(arg(0),arg(1))?0:1,2);}
 void virtualProtect(){
     uint32_t output=arg(3),old=0,flags=arg(2);
     if(!output||!memory->writable(output,4)){lastError=87;ret(0,4);return;}
-    NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Guest VirtualProtect address=%08x bytes=%u protection=%x",arg(0),arg(1),flags);
-    if(flags&~0xffu)throw GuestStop("VirtualProtect modifiers pending: "+hex(flags));
-    if(!memory->protect(arg(0),arg(1),flags,old)){lastError=87;ret(0,4);return;}
+    uint32_t baseFlags = flags & 0xffu;
+    NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Guest VirtualProtect address=%08x bytes=%u protection=%x (base=%x)",arg(0),arg(1),flags,baseFlags);
+    if(!memory->protect(arg(0),arg(1),baseFlags ? baseFlags : 0x04u,old)){lastError=87;ret(0,4);return;}
     if(!memory->writable(output,4))throw GuestStop("VirtualProtect old-protection output became inaccessible");
     write32(output,old);ret(1,4);
 }

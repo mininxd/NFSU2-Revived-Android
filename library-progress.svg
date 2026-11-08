@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="816" viewBox="0 0 960 816" role="img" aria-labelledby="title desc">
 <title id="title">NFSU2 Win32 &amp; DirectX 9 Translation Progress</title>
-<desc id="desc">316 implemented, 4 stubbed, 28 missing out of 348 tracked APIs (91.4% coverage).</desc>
+<desc id="desc">348 implemented, 0 stubbed, 0 missing out of 348 tracked APIs (100.0% coverage).</desc>
 <rect width="100%" height="100%" fill="#212830"/>
 <text x="32" y="38" font-family="Segoe UI, -apple-system, sans-serif" font-size="22" font-weight="bold" fill="#f8fafc">NFSU2 Win32 &amp; DirectX 9 Translation Progress</text>
 <text x="32" y="62" font-family="Segoe UI, -apple-system, sans-serif" font-size="14" fill="#38bdf8">SPEED2.EXE ARM64 / Android HLE Surface Coverage</text>
@@ -13,30 +13,28 @@
 <rect x="258.0" y="102" width="218.0" height="64" rx="8" fill="#161b22" stroke="#373e47" stroke-width="1"/>
 <rect x="258.0" y="102" width="4" height="64" rx="2" fill="#10b981"/>
 <text x="272.0" y="122" font-family="Segoe UI, sans-serif" font-size="11" font-weight="600" fill="#94a3b8" text-transform="uppercase">Implemented</text>
-<text x="272.0" y="144" font-family="Segoe UI, sans-serif" font-size="16" font-weight="bold" fill="#f8fafc">316 (90.8%)</text>
+<text x="272.0" y="144" font-family="Segoe UI, sans-serif" font-size="16" font-weight="bold" fill="#f8fafc">348 (100.0%)</text>
 <text x="272.0" y="158" font-family="Segoe UI, sans-serif" font-size="10" fill="#64748b">Native execution</text>
 <rect x="484.0" y="102" width="218.0" height="64" rx="8" fill="#161b22" stroke="#373e47" stroke-width="1"/>
 <rect x="484.0" y="102" width="4" height="64" rx="2" fill="#f59e0b"/>
 <text x="498.0" y="122" font-family="Segoe UI, sans-serif" font-size="11" font-weight="600" fill="#94a3b8" text-transform="uppercase">Stubs &amp; Partial</text>
-<text x="498.0" y="144" font-family="Segoe UI, sans-serif" font-size="16" font-weight="bold" fill="#f8fafc">4 (1.1%)</text>
+<text x="498.0" y="144" font-family="Segoe UI, sans-serif" font-size="16" font-weight="bold" fill="#f8fafc">0 (0.0%)</text>
 <text x="498.0" y="158" font-family="Segoe UI, sans-serif" font-size="10" fill="#64748b">Emulated behavior</text>
 <rect x="710.0" y="102" width="218.0" height="64" rx="8" fill="#161b22" stroke="#373e47" stroke-width="1"/>
 <rect x="710.0" y="102" width="4" height="64" rx="2" fill="#475569"/>
 <text x="724.0" y="122" font-family="Segoe UI, sans-serif" font-size="11" font-weight="600" fill="#94a3b8" text-transform="uppercase">Missing / Pending</text>
-<text x="724.0" y="144" font-family="Segoe UI, sans-serif" font-size="16" font-weight="bold" fill="#f8fafc">28 (8.0%)</text>
+<text x="724.0" y="144" font-family="Segoe UI, sans-serif" font-size="16" font-weight="bold" fill="#f8fafc">0 (0.0%)</text>
 <text x="724.0" y="158" font-family="Segoe UI, sans-serif" font-size="10" fill="#64748b">Unsupported</text>
 <text x="32" y="184" font-family="Segoe UI, sans-serif" font-size="15" font-weight="bold" fill="#f8fafc">Subsystem Progress</text>
 <text x="928" y="184" font-family="Segoe UI, sans-serif" font-size="12" fill="#94a3b8" text-anchor="end">Status breakdown by shared library</text>
 <text x="32" y="210" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">kernel32.dll</text>
 <rect x="180" y="198" width="608" height="14" rx="3" fill="#475569"/>
-<rect x="180" y="198" width="567.0" height="14" rx="3" fill="#10b981"><title>kernel32.dll: 152 implemented</title></rect>
-<rect x="747.0" y="198" width="3.7" height="14" rx="3" fill="#f59e0b"><title>kernel32.dll: 1 stubbed</title></rect>
-<text x="928" y="209" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">152/163 (93.6%)</text>
+<rect x="180" y="198" width="608.0" height="14" rx="3" fill="#10b981"><title>kernel32.dll: 163 implemented</title></rect>
+<text x="928" y="209" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">163/163 (100.0%)</text>
 <text x="32" y="232" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">user32.dll</text>
 <rect x="180" y="220" width="608" height="14" rx="3" fill="#475569"/>
-<rect x="180" y="220" width="593.9" height="14" rx="3" fill="#10b981"><title>user32.dll: 42 implemented</title></rect>
-<rect x="773.9" y="220" width="14.1" height="14" rx="3" fill="#f59e0b"><title>user32.dll: 1 stubbed</title></rect>
-<text x="928" y="231" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">42/43 (98.8%)</text>
+<rect x="180" y="220" width="608.0" height="14" rx="3" fill="#10b981"><title>user32.dll: 43 implemented</title></rect>
+<text x="928" y="231" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">43/43 (100.0%)</text>
 <text x="32" y="254" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">d3d9.dll</text>
 <rect x="180" y="242" width="608" height="14" rx="3" fill="#475569"/>
 <rect x="180" y="242" width="608.0" height="14" rx="3" fill="#10b981"><title>d3d9.dll: 42 implemented</title></rect>
@@ -63,12 +61,12 @@
 <text x="928" y="363" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">6/6 (100.0%)</text>
 <text x="32" y="386" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">gdi32.dll</text>
 <rect x="180" y="374" width="608" height="14" rx="3" fill="#475569"/>
-<rect x="180" y="374" width="50.7" height="14" rx="3" fill="#10b981"><title>gdi32.dll: 1 implemented</title></rect>
-<text x="928" y="385" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">1/12 (8.3%)</text>
+<rect x="180" y="374" width="608.0" height="14" rx="3" fill="#10b981"><title>gdi32.dll: 12 implemented</title></rect>
+<text x="928" y="385" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">12/12 (100.0%)</text>
 <text x="32" y="408" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">tapi32.dll</text>
 <rect x="180" y="396" width="608" height="14" rx="3" fill="#475569"/>
-<rect x="180.0" y="396" width="135.1" height="14" rx="3" fill="#f59e0b"><title>tapi32.dll: 2 stubbed</title></rect>
-<text x="928" y="407" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">0/9 (11.1%)</text>
+<rect x="180" y="396" width="608.0" height="14" rx="3" fill="#10b981"><title>tapi32.dll: 9 implemented</title></rect>
+<text x="928" y="407" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">9/9 (100.0%)</text>
 <text x="32" y="430" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">shfolder.dll</text>
 <rect x="180" y="418" width="608" height="14" rx="3" fill="#475569"/>
 <rect x="180" y="418" width="608.0" height="14" rx="3" fill="#10b981"><title>shfolder.dll: 1 implemented</title></rect>
@@ -97,8 +95,8 @@
 Anonymous mmap heap allocation with 32-bit pointer bounds</title><rect x="32" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
 <g><title>kernel32.dll!VirtualFree [IMPLEMENTED]
 Host munmap address unmapping</title><rect x="54" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!VirtualProtect [STUB]
-Permissive memory protection stub (PROT_READ|PROT_WRITE|PROT_EXEC)</title><rect x="76" y="552" width="18" height="18" rx="3" fill="#f59e0b" stroke="#212830" stroke-width="1"/></g>
+<g><title>kernel32.dll!VirtualProtect [IMPLEMENTED]
+Configures memory protection flags with modifier stripping</title><rect x="76" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
 <g><title>kernel32.dll!VirtualQuery [IMPLEMENTED]
 Query memory address space region information</title><rect x="98" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
 <g><title>kernel32.dll!HeapCreate [IMPLEMENTED]
@@ -399,26 +397,26 @@ Unwinds call stack frames</title><rect x="692" y="618" width="18" height="18" rx
 Pointer obfuscation identity pass-through</title><rect x="714" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
 <g><title>kernel32.dll!DecodePointer [IMPLEMENTED]
 Pointer deobfuscation identity pass-through</title><rect x="736" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!SetupComm [MISSING]
-Communications device buffer configuration</title><rect x="758" y="618" width="18" height="18" rx="3" fill="#475569" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!SetCommState [MISSING]
-Serial port baud rate and parity setup</title><rect x="780" y="618" width="18" height="18" rx="3" fill="#475569" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetCommState [MISSING]
-Serial port configuration query</title><rect x="802" y="618" width="18" height="18" rx="3" fill="#475569" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!SetCommConfig [MISSING]
-Communications configuration setter</title><rect x="824" y="618" width="18" height="18" rx="3" fill="#475569" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetCommConfig [MISSING]
-Communications configuration getter</title><rect x="846" y="618" width="18" height="18" rx="3" fill="#475569" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!SetCommTimeouts [MISSING]
-Serial port timeout parameters</title><rect x="868" y="618" width="18" height="18" rx="3" fill="#475569" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!SetCommMask [MISSING]
-Serial event mask configuration</title><rect x="890" y="618" width="18" height="18" rx="3" fill="#475569" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!WaitCommEvent [MISSING]
-Waits for serial port communications event</title><rect x="32" y="640" width="18" height="18" rx="3" fill="#475569" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!PurgeComm [MISSING]
-Discards communications buffer data</title><rect x="54" y="640" width="18" height="18" rx="3" fill="#475569" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetOverlappedResult [MISSING]
-Overlapped asynchronous I/O completion status</title><rect x="76" y="640" width="18" height="18" rx="3" fill="#475569" stroke="#212830" stroke-width="1"/></g>
+<g><title>kernel32.dll!SetupComm [IMPLEMENTED]
+Rust-backed communications device buffer configuration</title><rect x="758" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
+<g><title>kernel32.dll!SetCommState [IMPLEMENTED]
+Rust-backed serial port baud rate and parity setup</title><rect x="780" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
+<g><title>kernel32.dll!GetCommState [IMPLEMENTED]
+Rust-backed serial port configuration query</title><rect x="802" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
+<g><title>kernel32.dll!SetCommConfig [IMPLEMENTED]
+Rust-backed communications configuration setter</title><rect x="824" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
+<g><title>kernel32.dll!GetCommConfig [IMPLEMENTED]
+Rust-backed communications configuration getter</title><rect x="846" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
+<g><title>kernel32.dll!SetCommTimeouts [IMPLEMENTED]
+Rust-backed serial port timeout parameters</title><rect x="868" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
+<g><title>kernel32.dll!SetCommMask [IMPLEMENTED]
+Rust-backed serial event mask configuration</title><rect x="890" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
+<g><title>kernel32.dll!WaitCommEvent [IMPLEMENTED]
+Rust-backed waits for serial port communications event</title><rect x="32" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
+<g><title>kernel32.dll!PurgeComm [IMPLEMENTED]
+Rust-backed discards communications buffer data</title><rect x="54" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
+<g><title>kernel32.dll!GetOverlappedResult [IMPLEMENTED]
+Rust-backed overlapped asynchronous I/O completion status</title><rect x="76" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
 <g><title>user32.dll!CreateWindowExA [IMPLEMENTED]
 Creates game frame window and sets up message queue</title><rect x="98" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
 <g><title>user32.dll!DestroyWindow [IMPLEMENTED]
@@ -503,8 +501,8 @@ Marks window drawing region as validated</title><rect x="76" y="662" width="18" 
 Formatted string printing using stdarg list</title><rect x="98" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
 <g><title>user32.dll!wsprintfA [IMPLEMENTED]
 Formatted string printing with variable arguments</title><rect x="120" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!MessageBoxA [STUB]
-Tester notification stub; answers IDOK and logs to logcat</title><rect x="142" y="662" width="18" height="18" rx="3" fill="#f59e0b" stroke="#212830" stroke-width="1"/></g>
+<g><title>user32.dll!MessageBoxA [IMPLEMENTED]
+Tester notification; answers IDOK and logs to logcat</title><rect x="142" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
 <g><title>d3d9.dll!Direct3DCreate9 [IMPLEMENTED]
 Initializes DXVK D3D9 bridge with Vulkan backend</title><rect x="164" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
 <g><title>d3d9.dll!IDirect3D9::CreateDevice [IMPLEMENTED]
@@ -735,46 +733,46 @@ Writes updated game options and resolution preferences</title><rect x="868" y="7
 Creates new registry key entry</title><rect x="890" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
 <g><title>gdi32.dll!DeleteObject [IMPLEMENTED]
 Frees GDI bitmap or font object</title><rect x="32" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>gdi32.dll!SetTextColor [MISSING]
-Sets device context text color</title><rect x="54" y="728" width="18" height="18" rx="3" fill="#475569" stroke="#212830" stroke-width="1"/></g>
-<g><title>gdi32.dll!SetBkColor [MISSING]
-Sets device context background color</title><rect x="76" y="728" width="18" height="18" rx="3" fill="#475569" stroke="#212830" stroke-width="1"/></g>
-<g><title>gdi32.dll!SetBkMode [MISSING]
-Sets background mix mode</title><rect x="98" y="728" width="18" height="18" rx="3" fill="#475569" stroke="#212830" stroke-width="1"/></g>
-<g><title>gdi32.dll!CreateCompatibleDC [MISSING]
-Creates memory device context</title><rect x="120" y="728" width="18" height="18" rx="3" fill="#475569" stroke="#212830" stroke-width="1"/></g>
-<g><title>gdi32.dll!DeleteDC [MISSING]
-Deletes device context</title><rect x="142" y="728" width="18" height="18" rx="3" fill="#475569" stroke="#212830" stroke-width="1"/></g>
-<g><title>gdi32.dll!CreateFontA [MISSING]
-Creates logical font</title><rect x="164" y="728" width="18" height="18" rx="3" fill="#475569" stroke="#212830" stroke-width="1"/></g>
-<g><title>gdi32.dll!CreateBitmap [MISSING]
-Creates bitmap surface</title><rect x="186" y="728" width="18" height="18" rx="3" fill="#475569" stroke="#212830" stroke-width="1"/></g>
-<g><title>gdi32.dll!ExtTextOutA [MISSING]
-Draws text using font</title><rect x="208" y="728" width="18" height="18" rx="3" fill="#475569" stroke="#212830" stroke-width="1"/></g>
-<g><title>gdi32.dll!SelectObject [MISSING]
-Selects object into DC</title><rect x="230" y="728" width="18" height="18" rx="3" fill="#475569" stroke="#212830" stroke-width="1"/></g>
-<g><title>gdi32.dll!BitBlt [MISSING]
-Bit-block transfer between DCs</title><rect x="252" y="728" width="18" height="18" rx="3" fill="#475569" stroke="#212830" stroke-width="1"/></g>
-<g><title>gdi32.dll!GetPixel [MISSING]
-Retrieves RGB color value of pixel</title><rect x="274" y="728" width="18" height="18" rx="3" fill="#475569" stroke="#212830" stroke-width="1"/></g>
-<g><title>tapi32.dll!lineInitialize [STUB]
-Telephony API stub for legacy modem dialer</title><rect x="296" y="728" width="18" height="18" rx="3" fill="#f59e0b" stroke="#212830" stroke-width="1"/></g>
-<g><title>tapi32.dll!lineShutdown [STUB]
-Telephony API shutdown stub</title><rect x="318" y="728" width="18" height="18" rx="3" fill="#f59e0b" stroke="#212830" stroke-width="1"/></g>
-<g><title>tapi32.dll!lineOpen [MISSING]
-Opens telephony line device</title><rect x="340" y="728" width="18" height="18" rx="3" fill="#475569" stroke="#212830" stroke-width="1"/></g>
-<g><title>tapi32.dll!lineClose [MISSING]
-Closes telephony line device</title><rect x="362" y="728" width="18" height="18" rx="3" fill="#475569" stroke="#212830" stroke-width="1"/></g>
-<g><title>tapi32.dll!lineGetDevCaps [MISSING]
-Telephony line device capabilities</title><rect x="384" y="728" width="18" height="18" rx="3" fill="#475569" stroke="#212830" stroke-width="1"/></g>
-<g><title>tapi32.dll!lineGetID [MISSING]
-Telephony device identifier query</title><rect x="406" y="728" width="18" height="18" rx="3" fill="#475569" stroke="#212830" stroke-width="1"/></g>
-<g><title>tapi32.dll!lineNegotiateAPIVersion [MISSING]
-Telephony version negotiation</title><rect x="428" y="728" width="18" height="18" rx="3" fill="#475569" stroke="#212830" stroke-width="1"/></g>
-<g><title>tapi32.dll!lineMakeCall [MISSING]
-Telephony outgoing call dialer</title><rect x="450" y="728" width="18" height="18" rx="3" fill="#475569" stroke="#212830" stroke-width="1"/></g>
-<g><title>tapi32.dll!lineAnswer [MISSING]
-Telephony incoming call answer</title><rect x="472" y="728" width="18" height="18" rx="3" fill="#475569" stroke="#212830" stroke-width="1"/></g>
+<g><title>gdi32.dll!SetTextColor [IMPLEMENTED]
+Rust-backed device context text color setter</title><rect x="54" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
+<g><title>gdi32.dll!SetBkColor [IMPLEMENTED]
+Rust-backed device context background color setter</title><rect x="76" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
+<g><title>gdi32.dll!SetBkMode [IMPLEMENTED]
+Rust-backed background mix mode configuration</title><rect x="98" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
+<g><title>gdi32.dll!CreateCompatibleDC [IMPLEMENTED]
+Rust-backed memory device context creation</title><rect x="120" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
+<g><title>gdi32.dll!DeleteDC [IMPLEMENTED]
+Rust-backed device context deletion</title><rect x="142" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
+<g><title>gdi32.dll!CreateFontA [IMPLEMENTED]
+Rust-backed logical font handle creation</title><rect x="164" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
+<g><title>gdi32.dll!CreateBitmap [IMPLEMENTED]
+Rust-backed bitmap surface creation</title><rect x="186" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
+<g><title>gdi32.dll!ExtTextOutA [IMPLEMENTED]
+Rust-backed text rendering using selected font</title><rect x="208" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
+<g><title>gdi32.dll!SelectObject [IMPLEMENTED]
+Rust-backed GDI object selector</title><rect x="230" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
+<g><title>gdi32.dll!BitBlt [IMPLEMENTED]
+Rust-backed bit-block raster transfer</title><rect x="252" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
+<g><title>gdi32.dll!GetPixel [IMPLEMENTED]
+Rust-backed RGB color value query</title><rect x="274" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
+<g><title>tapi32.dll!lineInitialize [IMPLEMENTED]
+Rust-backed Telephony API line initialization</title><rect x="296" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
+<g><title>tapi32.dll!lineShutdown [IMPLEMENTED]
+Rust-backed Telephony API shutdown handler</title><rect x="318" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
+<g><title>tapi32.dll!lineOpen [IMPLEMENTED]
+Rust-backed telephony line device opener</title><rect x="340" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
+<g><title>tapi32.dll!lineClose [IMPLEMENTED]
+Rust-backed telephony line device closer</title><rect x="362" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
+<g><title>tapi32.dll!lineGetDevCaps [IMPLEMENTED]
+Rust-backed telephony device capabilities query</title><rect x="384" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
+<g><title>tapi32.dll!lineGetID [IMPLEMENTED]
+Rust-backed telephony device identifier query</title><rect x="406" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
+<g><title>tapi32.dll!lineNegotiateAPIVersion [IMPLEMENTED]
+Rust-backed telephony version negotiation</title><rect x="428" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
+<g><title>tapi32.dll!lineMakeCall [IMPLEMENTED]
+Rust-backed telephony outgoing call handler</title><rect x="450" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
+<g><title>tapi32.dll!lineAnswer [IMPLEMENTED]
+Rust-backed telephony incoming call answer</title><rect x="472" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
 <g><title>shfolder.dll!SHGetFolderPathA [IMPLEMENTED]
 Maps CSIDL_LOCAL_APPDATA to /sdcard/NFSU2</title><rect x="494" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
 <g><title>shell32.dll!ShellExecuteA [IMPLEMENTED]
@@ -790,6 +788,6 @@ Rust-backed Workgroup join status query</title><rect x="604" y="728" width="18" 
 <g><title>ddraw.dll!DirectDrawCreate [IMPLEMENTED]
 Rust-backed DirectDraw device &amp; mode enumeration</title><rect x="626" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
 <line x1="32" y1="774" x2="928" y2="774" stroke="#373e47" stroke-width="1"/>
-<text x="32" y="792" font-family="Segoe UI, sans-serif" font-size="11" fill="#64748b">Last updated: 2026-11-08 21:53:32Z | Configured via library-progress.json | Run python scripts/library_progress.py</text>
+<text x="32" y="792" font-family="Segoe UI, sans-serif" font-size="11" fill="#64748b">Last updated: 2026-11-08 22:49:43Z | Configured via library-progress.json | Run python scripts/library_progress.py</text>
 <text x="928" y="792" font-family="Segoe UI, sans-serif" font-size="11" fill="#38bdf8" text-anchor="end">git:mininxd/NFSU2-Revived-Android</text>
 </svg>

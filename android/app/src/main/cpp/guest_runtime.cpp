@@ -424,6 +424,9 @@ inline void syncPreTimestepPacing() {
 #include "guest_network.inc"
 #include "guest_win32_compat.inc"
 #include "guest_win32_core.inc"
+#include "guest_win32_comm.inc"
+#include "guest_win32_tapi.inc"
+#include "guest_win32_gdi.inc"
 
 void notifyHaltToHost(const char* message);
 
@@ -528,6 +531,9 @@ void testGuestSoundCaps(){
 recomp_func_t resolveFunction(const std::string& dll, const std::string& name) {
     if (auto compat = resolveWin32CompatFunction(dll, name)) return compat;
     if (auto core = resolveCoreWin32Function(dll, name)) return core;
+    if (auto comm = resolveWin32CommFunction(dll, name)) return comm;
+    if (auto tapi = resolveWin32TapiFunction(dll, name)) return tapi;
+    if (auto gdi = resolveWin32GdiFunction(dll, name)) return gdi;
     if((dll=="shfolder.dll"||dll=="shell32.dll")&&name=="SHGetFolderPathA")return shellFolderPath;
     if(dll=="dsound.dll"&&(name=="#1"||name=="DirectSoundCreate"))return directSoundCreate;
     if(dll=="dinput8.dll"&&name=="DirectInput8Create")return directInputCreate;
