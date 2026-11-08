@@ -166,9 +166,12 @@ public final class VirtualSwitchClient {
                                 + " (attempt " + (attempt + 1) + "/" + tryPorts.length + ")");
                         if (curSsl) {
                             SSLSocketFactory factory = (SSLSocketFactory) SSLSocketFactory.getDefault();
-                            wsSocket = factory.createSocket(host, curPort);
+                            Socket underlying = new Socket();
+                            underlying.connect(new java.net.InetSocketAddress(host, curPort), 6000);
+                            wsSocket = factory.createSocket(underlying, host, curPort, true);
                         } else {
-                            wsSocket = new Socket(host, curPort);
+                            wsSocket = new Socket();
+                            wsSocket.connect(new java.net.InetSocketAddress(host, curPort), 6000);
                         }
                         wsSocket.setTcpNoDelay(true);
                         wsSocket.setSoTimeout(35000);
@@ -212,6 +215,16 @@ public final class VirtualSwitchClient {
                         }
                         String statusLine = headerBuf.toString(StandardCharsets.ISO_8859_1.name());
                         if (!statusLine.contains("101")) {
+                            if (wasResumed) {
+                                sLastToken = "";
+                                sLastVipStr = "";
+                                if (context != null) {
+                                    context.getSharedPreferences("nfsu2_switch", Context.MODE_PRIVATE).edit()
+                                            .remove("switch_token")
+                                            .remove("switch_vip_str")
+                                            .apply();
+                                }
+                            }
                             NetLog.fail(TAG, "WebSocket upgrade rejected by server: " + statusLine.split("\r\n")[0]);
                             throw new IOException("WebSocket upgrade rejected: " + statusLine.split("\r\n")[0]);
                         }
@@ -288,6 +301,16 @@ public final class VirtualSwitchClient {
                             }
                         }
                     } catch (Exception e) {
+                        if (wasResumed) {
+                            sLastToken = "";
+                            sLastVipStr = "";
+                            if (context != null) {
+                                context.getSharedPreferences("nfsu2_switch", Context.MODE_PRIVATE).edit()
+                                        .remove("switch_token")
+                                        .remove("switch_vip_str")
+                                        .apply();
+                            }
+                        }
                         if (running.get()) {
                             String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
                             Log.w(TAG, "Switch connection attempt failed (" + curPort + "): " + msg);

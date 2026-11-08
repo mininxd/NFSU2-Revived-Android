@@ -309,6 +309,7 @@ public final class AdhocRoamClient {
     public synchronized void start(Context context, String host, String room, String name, boolean ghostMode) {
         QuickChatManager.setContext(context);
         this.appContext = context != null ? context.getApplicationContext() : null;
+        switchClient.setContext(this.appContext);
         this.ghostMode = ghostMode;
         if (running.get()) {
             if (host.equals(serverHost) && room.equals(roomName) && name.equals(playerName)) {

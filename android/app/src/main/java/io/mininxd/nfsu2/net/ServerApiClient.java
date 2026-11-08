@@ -105,10 +105,19 @@ public final class ServerApiClient {
 
     public static boolean isWsHost(String host) {
         if (host == null) return false;
+        String h = host.toLowerCase().trim();
+        if (h.startsWith("ws://") || h.startsWith("wss://") || h.startsWith("http://") || h.startsWith("https://")) {
+            return true;
+        }
         if (GameOptions.isEahubClassic(host)) {
             return false;
         }
-        String h = host.toLowerCase().trim();
+        if (h.endsWith(":27312") || h.endsWith(":27313") || h.contains("postoffice")) {
+            return false;
+        }
+        if (h.endsWith(":80") || h.endsWith(":443") || h.endsWith(":8080") || h.endsWith(":3000") || h.endsWith(":8000")) {
+            return true;
+        }
         if (h.startsWith("adhoc.") && !h.contains("nfsu2")) {
             return false;
         }
