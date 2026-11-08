@@ -158,6 +158,8 @@ int roam_android_horn_held(void) {
     return atomic_load(&g_horn_held);
 }
 
+static void roam_apply_gamepad_layout(int is_ps2);
+
 static JavaVM         *g_jvm = NULL;
 static jclass          g_client_class = NULL;
 static jmethodID       g_mid_on_said = NULL;
