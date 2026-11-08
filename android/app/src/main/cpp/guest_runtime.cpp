@@ -422,6 +422,7 @@ inline void syncPreTimestepPacing() {
 #include "guest_input.inc"
 #include "guest_audio.inc"
 #include "guest_network.inc"
+#include "guest_win32_compat.inc"
 
 void notifyHaltToHost(const char* message);
 
@@ -524,6 +525,7 @@ void testGuestSoundCaps(){
     NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSMW","DirectSound caps passed: mono/stereo, 8/16-bit, continuous rates, software buffers and guest ABI");
 }
 recomp_func_t resolveFunction(const std::string& dll, const std::string& name) {
+    if (auto compat = resolveWin32CompatFunction(dll, name)) return compat;
     if((dll=="shfolder.dll"||dll=="shell32.dll")&&name=="SHGetFolderPathA")return shellFolderPath;
     if(dll=="dsound.dll"&&(name=="#1"||name=="DirectSoundCreate"))return directSoundCreate;
     if(dll=="dinput8.dll"&&name=="DirectInput8Create")return directInputCreate;
@@ -926,6 +928,7 @@ extern "C" recomp_func_t recomp_lookup_import(uint32_t va) {
     checkGuestProgress();
     if(va>=soundMethodBase+0x1000&&va<soundMethodBase+0x3000&&!(va%16)){soundToken=va;return soundDispatch;}
     if(va>=inputMethodBase+0x1000&&va<inputMethodBase+0x5000&&!(va%16)){inputToken=va;return inputDispatch;}  // kinds 1-4: DirectInput, keyboard, mouse, gamepad
+    if(va>=ddrawMethodBase+0x1000&&va<ddrawMethodBase+0x3000&&!(va%16)){ddrawToken=va;return ddrawDispatch;}
 #if defined(__ANDROID__) || defined(NFS_D3D9_BACKEND)
     if(va>=0x7e001000u&&va<0x7e010000u&&!(va%16)){d3dToken=va;return d3dDispatch;}
 #endif

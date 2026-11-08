@@ -411,15 +411,18 @@ DEFAULT_LIBRARIES = {
     ],
 
     "shell32.dll": [
-        ("ShellExecuteA", "missing", "Executes external command or URL")
+        ("ShellExecuteA", "implemented", "Rust-backed ShellExecute external launcher & URL dispatcher")
     ],
 
     "netapi32.dll": [
-        ("Netbios", "stub", "NetBIOS control block stub for LAN player discovery")
+        ("Netbios", "implemented", "Rust-backed Netbios LANA enumeration and MAC query"),
+        ("NetApiBufferFree", "implemented", "Rust-backed NetApi buffer deallocation"),
+        ("NetWkstaGetInfo", "implemented", "Rust-backed Workstation info query"),
+        ("NetGetJoinInformation", "implemented", "Rust-backed Workgroup join status query")
     ],
 
     "ddraw.dll": [
-        ("DirectDrawCreate", "missing", "DirectDraw legacy display creation")
+        ("DirectDrawCreate", "implemented", "Rust-backed DirectDraw device & mode enumeration")
     ]
 }
 
