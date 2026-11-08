@@ -306,6 +306,8 @@ static int32_t onInput(android_app*,AInputEvent* event){
     case AKEYCODE_DEL:scan=0xe;break;
     case AKEYCODE_SHIFT_LEFT:case AKEYCODE_BUTTON_Y:scan=0x2a;break;
     case AKEYCODE_CTRL_LEFT:scan=0x1d;break;case AKEYCODE_TAB:scan=0xf;break;
+    case AKEYCODE_BUTTON_THUMBL:case AKEYCODE_BUTTON_11:case AKEYCODE_BUTTON_13:case AKEYCODE_BUTTON_15:scan=0x31;break;
+    case AKEYCODE_BUTTON_THUMBR:case AKEYCODE_BUTTON_12:case AKEYCODE_BUTTON_14:case AKEYCODE_BUTTON_16:scan=0x2e;break;
     default:{static const unsigned letters[]={0x1e,0x30,0x2e,0x20,0x12,0x21,0x22,0x23,0x17,0x24,0x25,0x26,0x32,0x31,0x18,0x19,0x10,0x13,0x1f,0x14,0x16,0x2f,0x11,0x2d,0x15,0x2c};
         if(key>=AKEYCODE_A&&key<=AKEYCODE_Z)scan=letters[key-AKEYCODE_A];
         else if(key>=AKEYCODE_0&&key<=AKEYCODE_9)scan=key==AKEYCODE_0?0xb:unsigned(key-AKEYCODE_0)+1;

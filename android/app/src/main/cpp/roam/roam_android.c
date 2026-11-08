@@ -1069,6 +1069,11 @@ __attribute__((visibility("default"))) void nfs_roam_frame_tick(void) {
     framerate_pacing_fix();
     resolution_frame_tick();
     look_camera_frame_tick();
+    static int s_gamepad_hooked_tick = 0;
+    if (!s_gamepad_hooked_tick) {
+        roam_apply_gamepad_layout(0);
+        s_gamepad_hooked_tick = 1;
+    }
     roam_game_frame(NULL);
     atomic_store(&s_tick_in_progress, 0);
 }
@@ -1896,8 +1901,8 @@ int _ZN12GamepadInput9buttonForEi(int code) {
         case 105: case 195: return 7;          /* R2, Button 8 -> R2 */
         case 108: case 197: case 82: return 8; /* Start, Button 10, Menu -> Start */
         case 109: case 196: case 4: return 9;  /* Select, Button 9, Back -> Select */
-        case 106: case 198: return 10;         /* ThumbL (106), Button 11 (198) -> ThumbL (LS / L3) */
-        case 107: case 199: return 11;         /* ThumbR (107), Button 12 (199) -> ThumbR (RS / R3) */
+        case 106: case 198: case 200: case 202: return 10; /* ThumbL (106), Button 11 (198), Button 13 (200), Button 15 (202) -> ThumbL (LS / L3) */
+        case 107: case 199: case 201: case 203: return 11; /* ThumbR (107), Button 12 (199), Button 14 (201), Button 16 (203) -> ThumbR (RS / R3) */
         case 19: return 12;                    /* Dpad Up */
         case 20: return 13;                    /* Dpad Down */
         case 21: return 14;                    /* Dpad Left */
@@ -1915,18 +1920,20 @@ static void roam_apply_gamepad_layout(int is_ps2) {
     Dl_info dlinfo;
     if (sym && dladdr(sym, &dlinfo) && dlinfo.dli_fbase) {
         uintptr_t base = (uintptr_t)dlinfo.dli_fbase;
+        uintptr_t page_size = sysconf(_SC_PAGESIZE);
+        if (page_size == 0) page_size = 4096;
 
         /* 1. Hook GOT entry for _ZN12GamepadInput9buttonForEi (resolves LS and RS button issues) */
         void **got_entry = (void**)(base + 0x97dd968);
-        uintptr_t got_page = ((uintptr_t)got_entry) & ~(uintptr_t)0xfff;
-        mprotect((void*)got_page, 4096, PROT_READ | PROT_WRITE);
+        uintptr_t got_page = ((uintptr_t)got_entry) & ~(page_size - 1);
+        mprotect((void*)got_page, page_size, PROT_READ | PROT_WRITE);
         *got_entry = (void*)_ZN12GamepadInput9buttonForEi;
 
         /* 2. Patch padObjects DirectInput names table (Xbox vs PS2 names) */
         uint32_t *p = (uint32_t*)(base + 0x975d880);
         if (p[0] == 0xa36d02e0 && p[1] == 0 && p[2] == 0x2) {
-            uintptr_t pad_page = (base + 0x975d880) & ~(uintptr_t)0xfff;
-            mprotect((void*)pad_page, 4096, PROT_READ | PROT_WRITE);
+            uintptr_t pad_page = (base + 0x975d880) & ~(page_size - 1);
+            mprotect((void*)pad_page, page_size, PROT_READ | PROT_WRITE);
             struct RoamPadObject *objs = (struct RoamPadObject*)(base + 0x975d880);
             const char **names = is_ps2 ? s_ps2_pad_names : s_xbox_pad_names;
             for (int i = 0; i < 17; i++) {
@@ -1936,8 +1943,8 @@ static void roam_apply_gamepad_layout(int is_ps2) {
 
         /* 3. Patch device name ("PlayStation 2" vs "Xbox Controller") */
         char *dev_name = (char*)(base + 0x18511e);
-        uintptr_t dev_name_page = ((uintptr_t)dev_name) & ~(uintptr_t)0xfff;
-        mprotect((void*)dev_name_page, 4096, PROT_READ | PROT_WRITE);
+        uintptr_t dev_name_page = ((uintptr_t)dev_name) & ~(page_size - 1);
+        mprotect((void*)dev_name_page, page_size, PROT_READ | PROT_WRITE);
         if (is_ps2) {
             memcpy(dev_name, "PlayStation 2\0", 14);
         } else {
