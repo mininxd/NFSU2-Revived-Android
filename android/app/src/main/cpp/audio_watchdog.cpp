@@ -1,5 +1,7 @@
 #include "audio_watchdog.h"
 #include <algorithm>
+#include <thread>
+#include <pthread.h>
 #include <android/log.h>
 
 namespace nfs_audio_watchdog {
@@ -7,6 +9,8 @@ namespace nfs_audio_watchdog {
 static std::atomic<int64_t> s_lastCallbackTimeUs{0};
 static std::atomic<int64_t> s_lastSyntheticTickUs{0};
 static std::atomic<int64_t> s_lastReconnectAttemptUs{0};
+static std::thread s_watchdogThread;
+static std::atomic<bool> s_watchdogRunning{false};
 
 static inline int64_t currentSteadyUs() {
     return std::chrono::duration_cast<std::chrono::microseconds>(
@@ -68,6 +72,24 @@ bool canAttemptReconnect() {
 
 void recordReconnectAttempt() {
     s_lastReconnectAttemptUs.store(currentSteadyUs(), std::memory_order_relaxed);
+}
+
+void startWatchdogThread(PcmMixer& mixer) {
+    if (s_watchdogRunning.exchange(true, std::memory_order_acq_rel)) return;
+    s_watchdogThread = std::thread([&mixer]() {
+        pthread_setname_np(pthread_self(), "nfs_audio_wdog");
+        while (s_watchdogRunning.load(std::memory_order_relaxed)) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(15));
+            serviceSyntheticClock(mixer);
+        }
+    });
+}
+
+void stopWatchdogThread() {
+    if (!s_watchdogRunning.exchange(false, std::memory_order_acq_rel)) return;
+    if (s_watchdogThread.joinable()) {
+        s_watchdogThread.join();
+    }
 }
 
 } // namespace nfs_audio_watchdog

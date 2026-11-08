@@ -20,4 +20,9 @@ bool isCallbackStalled();
 bool canAttemptReconnect();
 void recordReconnectAttempt();
 
+// Autonomous background watchdog thread to continuously advance DirectSound synthetic clock
+// even if guest render thread is waiting on audio locks during an incoming call or device switch.
+void startWatchdogThread(PcmMixer& mixer);
+void stopWatchdogThread();
+
 } // namespace nfs_audio_watchdog

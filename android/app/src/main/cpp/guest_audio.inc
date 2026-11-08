@@ -84,6 +84,7 @@ bool startSoundStream(){
     soundLastXruns=0;soundCallbackPeakUs=0;
     auto status=AAudioStream_requestStart(soundStream);
     if(status!=AAUDIO_OK){AAudioStream_close(soundStream);soundStream=nullptr;return false;}
+    nfs_audio_watchdog::startWatchdogThread(soundMixer);
     NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","AAudio stereo float stream started: %u Hz",soundMixer.rate);return true;
 }
 
@@ -164,6 +165,7 @@ inline void closeSoundStreamOnly(){}
 inline bool restartSoundStreamOnly(){return true;}
 #endif
 void shutdownGuestSound(){
+    nfs_audio_watchdog::stopWatchdogThread();
 #ifdef __ANDROID__
     closeSoundStreamOnly();
 #endif
@@ -233,11 +235,15 @@ void soundDispatch(){
     auto voice=object.voice;if(!voice)throw GuestStop("DirectSound buffer missing PCM voice");
     switch(method){
     case 3:{uint32_t out=arg(1);if(!out||read32(out)!=20){ret(0x80070057,2);return;}write32(out+4,(object.flags&~4u)|8u);write32(out+8,uint32_t(voice->samples.size()));write32(out+12,0);write32(out+16,0);ret(0,2);return;}
-    case 4:{std::lock_guard<std::mutex> lock(soundMixer.mutex);uint32_t bytes=uint32_t(voice->samples.size()),position=uint32_t(voice->position)*voice->block();
+    case 4:{
+        nfs_audio_watchdog::serviceSyntheticClock(soundMixer);
+        std::lock_guard<std::mutex> lock(soundMixer.mutex);uint32_t bytes=uint32_t(voice->samples.size()),position=uint32_t(voice->position)*voice->block();
         if(arg(1))write32(arg(1),position);if(arg(2))write32(arg(2),bytes?(position+soundMixer.rate/100*voice->block())%bytes:0);ret(0,3);return;}
     case 6:case 7:case 8:case 9:{if(!arg(1)){ret(0x80004003,2);return;}
         std::lock_guard<std::mutex> lock(soundMixer.mutex);write32(arg(1),method==6?object.volume:method==7?object.pan:method==8?voice->frequency:(voice->playing?1u|(voice->loop?4u:0u):0u));ret(0,2);return;}
-    case 11:{uint32_t bytes=uint32_t(voice->samples.size()),offset=arg(1),length=arg(2),flags=arg(7);
+    case 11:{
+        nfs_audio_watchdog::serviceSyntheticClock(soundMixer);
+        uint32_t bytes=uint32_t(voice->samples.size()),offset=arg(1),length=arg(2),flags=arg(7);
         if(!bytes||object.locked||flags&~3u||!arg(3)||!arg(4)){ret(0x80070057,8);return;}
         if(flags&1){std::lock_guard<std::mutex> lock(soundMixer.mutex);offset=(uint32_t(voice->position)*voice->block()+soundMixer.rate/100*voice->block())%bytes;}
         if(flags&2){offset=0;length=bytes;}
@@ -254,7 +260,9 @@ void soundDispatch(){
         voice->left=gain*(pan>0?std::pow(10.f,-pan/2000.f):1);voice->right=gain*(pan<0?std::pow(10.f,pan/2000.f):1);ret(0,2);return;}
     case 17:{uint32_t frequency=arg(1)?arg(1):voice->rate;if(frequency<100||frequency>200000){ret(0x80070057,2);return;}std::lock_guard<std::mutex> lock(soundMixer.mutex);voice->frequency=frequency;ret(0,2);return;}
     case 18:{std::lock_guard<std::mutex> lock(soundMixer.mutex);voice->playing=false;ret(0,1);return;}
-    case 19:{uint32_t bytes=uint32_t(voice->samples.size()),first=std::min(object.lockBytes,bytes-object.lockOffset),second=object.lockBytes-first;
+    case 19:{
+        nfs_audio_watchdog::serviceSyntheticClock(soundMixer);
+        uint32_t bytes=uint32_t(voice->samples.size()),first=std::min(object.lockBytes,bytes-object.lockOffset),second=object.lockBytes-first;
         if(!object.locked||arg(1)!=object.guestSamples+object.lockOffset||arg(2)!=first||arg(3)!=(second?object.guestSamples:0)||arg(4)!=second){ret(0x80070057,5);return;}
         // Publish only what the guest locked. Copying the whole ring under the
         // mixer lock made every Unlock stall the AAudio callback and could
