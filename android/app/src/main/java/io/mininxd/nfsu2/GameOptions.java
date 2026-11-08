@@ -586,6 +586,10 @@ public final class GameOptions {
                     } else if (trimmed.startsWith("DisableCutsceneBorders")) {
                         String target = "DisableCutsceneBorders = " + cutsceneBorders + "               ; Removes letterboxing that appears during cutscenes.";
                         if (!line.startsWith("DisableCutsceneBorders = " + cutsceneBorders)) { line = target; changed = true; }
+                    } else if (trimmed.startsWith("ImproveGamepadSupport")) {
+                        String padSupport = isConsolePad(context) ? "2" : "1";
+                        String target = "ImproveGamepadSupport = " + padSupport + "                ; Adds text to buttons and assigns front-end actions. Requires an XInput gamepad. (1 = Xbox Text | 2 = PlayStation Text | 3 = PC Text | 4 = None)";
+                        if (!line.startsWith("ImproveGamepadSupport = " + padSupport)) { line = target; changed = true; }
                     }
                     lines.add(line);
                 }

@@ -24,6 +24,7 @@
 #include <dirent.h>
 #include <signal.h>
 #include <setjmp.h>
+#include <sys/mman.h>
 #include <jni.h>
 
 ptrdiff_t *g_p_mem_base = NULL;
@@ -1851,8 +1852,118 @@ static void install_powervr_fault_guard(void) {
     __android_log_print(ANDROID_LOG_INFO, "NFSU2", "PowerVR Fault Guard installed successfully for DXVK");
 }
 
+/* ========================================================================= */
+/* Gamepad Layout & LS/RS Controller Input Fix                               */
+/* ========================================================================= */
+struct RoamPadObject {
+    uint32_t guidData1;
+    uint32_t offset;
+    uint32_t type;
+    uint32_t flags;
+    const char *name;
+};
+
+static const char *s_ps2_pad_names[] = {
+    "Left Stick X", "Left Stick Y", "L2 / R2",
+    "Right Stick X", "Right Stick Y", "Right Stick Z",
+    "D-Pad",
+    "Cross", "Circle", "Square", "Triangle",
+    "L1", "R1",
+    "Select", "Start",
+    "L3", "R3"
+};
+
+static const char *s_xbox_pad_names[] = {
+    "X Axis", "Y Axis", "Z-Axis",
+    "X Rotation", "Y Rotation", "Z Rotation",
+    "D-pad",
+    "A", "B", "X", "Y",
+    "LB", "RB",
+    "Back", "Start",
+    "LS", "RS"
+};
+
+__attribute__((visibility("default")))
+int _ZN12GamepadInput9buttonForEi(int code) {
+    switch (code) {
+        case 96: case 188: case 23: return 0;   /* A, Button 1, Dpad Center -> A */
+        case 97: case 189: return 1;           /* B, Button 2 -> B */
+        case 99: case 190: return 2;           /* X, Button 3 -> X */
+        case 100: case 191: return 3;          /* Y, Button 4 -> Y */
+        case 102: case 192: return 4;          /* L1, Button 5 -> L1 */
+        case 103: case 193: return 5;          /* R1, Button 6 -> R1 */
+        case 104: case 194: return 6;          /* L2, Button 7 -> L2 */
+        case 105: case 195: return 7;          /* R2, Button 8 -> R2 */
+        case 108: case 197: case 82: return 8; /* Start, Button 10, Menu -> Start */
+        case 109: case 196: case 4: return 9;  /* Select, Button 9, Back -> Select */
+        case 106: case 198: case 200: return 10; /* ThumbL, Button 11, Button 13 -> ThumbL (LS) */
+        case 107: case 199: case 201: return 11; /* ThumbR, Button 12, Button 14 -> ThumbR (RS) */
+        case 19: return 12;                    /* Dpad Up */
+        case 20: return 13;                    /* Dpad Down */
+        case 21: return 14;                    /* Dpad Left */
+        case 22: return 15;                    /* Dpad Right */
+        default: return -1;
+    }
+}
+
+static void roam_apply_gamepad_layout(int is_ps2) {
+    void *h = dlopen("libnfsu2_android.so", RTLD_NOLOAD | RTLD_GLOBAL);
+    if (!h) h = dlopen("libnfsu2_android.so", RTLD_LAZY | RTLD_GLOBAL);
+    void *sym = dlsym(h ? h : RTLD_DEFAULT, "recomp_lookup");
+    if (!sym) sym = dlsym(h ? h : RTLD_DEFAULT, "g_mem_base");
+    if (!sym) sym = dlsym(RTLD_DEFAULT, "_ZN12GamepadInput9buttonForEi");
+    Dl_info dlinfo;
+    if (sym && dladdr(sym, &dlinfo) && dlinfo.dli_fbase) {
+        uintptr_t base = (uintptr_t)dlinfo.dli_fbase;
+
+        /* 1. Hook GOT entry for _ZN12GamepadInput9buttonForEi (resolves LS and RS button issues) */
+        void **got_entry = (void**)(base + 0x97dd968);
+        uintptr_t got_page = ((uintptr_t)got_entry) & ~(uintptr_t)0xfff;
+        mprotect((void*)got_page, 4096, PROT_READ | PROT_WRITE);
+        *got_entry = (void*)_ZN12GamepadInput9buttonForEi;
+
+        /* 2. Patch padObjects DirectInput names table (Xbox vs PS2 names) */
+        uint32_t *p = (uint32_t*)(base + 0x975d880);
+        if (p[0] == 0xa36d02e0 && p[1] == 0 && p[2] == 0x2) {
+            uintptr_t pad_page = (base + 0x975d880) & ~(uintptr_t)0xfff;
+            mprotect((void*)pad_page, 4096, PROT_READ | PROT_WRITE);
+            struct RoamPadObject *objs = (struct RoamPadObject*)(base + 0x975d880);
+            const char **names = is_ps2 ? s_ps2_pad_names : s_xbox_pad_names;
+            for (int i = 0; i < 17; i++) {
+                objs[i].name = names[i];
+            }
+        }
+
+        /* 3. Patch device name ("PlayStation 2" vs "Xbox Controller") */
+        char *dev_name = (char*)(base + 0x18511e);
+        uintptr_t dev_name_page = ((uintptr_t)dev_name) & ~(uintptr_t)0xfff;
+        mprotect((void*)dev_name_page, 4096, PROT_READ | PROT_WRITE);
+        if (is_ps2) {
+            memcpy(dev_name, "PlayStation 2\0", 14);
+        } else {
+            memcpy(dev_name, "Xbox Controller", 16);
+        }
+
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2",
+            "Applied %s gamepad layout (DirectInput padObjects updated, LS/RS buttons bound to _ZN12GamepadInput9buttonForEi)",
+            is_ps2 ? "PS2 Style" : "Xbox Default");
+    }
+}
+
+JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeGamepadLayout(
+        JNIEnv *env, jclass clazz, jboolean console) {
+    (void)env; (void)clazz;
+    roam_apply_gamepad_layout(console == JNI_TRUE);
+}
+
+JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeGamepadLayout(
+        JNIEnv *env, jclass clazz, jboolean console) {
+    Java_com_nfsu2_androidevolved_GameActivity_nativeGamepadLayout(env, clazz, console);
+}
+
 __attribute__((constructor)) static void powervr_guard_ctor(void) {
     install_powervr_fault_guard();
+    roam_apply_gamepad_layout(0);
 }
 
 JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeGpuDriver(
