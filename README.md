@@ -157,6 +157,12 @@ The pipeline lifts disassembled 32-bit x86 instructions into platform-independen
 | **Controller / Joypad** | Android | **Complete** | DirectInput pad device enumeration, normalized Z-Axis triggers, button labels. |
 | **Thread Pinning (EAS)** | Android | **Complete** | Automatic binding of worker threads to Big/Prime CPU cores. |
 
+### Win32 & DirectX Library Translation Coverage
+
+![NFSU2 Library Progress](library-progress.svg)
+
+The translation surface tracks all Win32 and DirectX 9 functions imported by `SPEED2.EXE` and required by the Android native runtime. Progress can be viewed, updated, and regenerated using `scripts/library_progress.py`.
+
 ---
 
 ## Tested Game Executable
