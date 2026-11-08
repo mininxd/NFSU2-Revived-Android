@@ -2,6 +2,7 @@
 //!
 //! Pipeline cache validation, disk persistence, and background compilation workers.
 
+pub mod audio_engine;
 pub mod async_compiler;
 pub mod crowd_filter;
 pub mod d3d9_filter;
@@ -17,11 +18,13 @@ pub mod texture_pipeline;
 pub mod win32_comm;
 pub mod win32_ddraw;
 pub mod win32_dinput;
+pub mod win32_fs;
 pub mod win32_gdi;
 pub mod win32_netapi;
 pub mod win32_shell;
 pub mod win32_tapi;
 
+pub use audio_engine::*;
 pub use crowd_filter::*;
 pub use headlights::*;
 pub use math_simd::*;
@@ -30,6 +33,7 @@ pub use texture_pipeline::*;
 pub use win32_comm::*;
 pub use win32_ddraw::*;
 pub use win32_dinput::*;
+pub use win32_fs::*;
 pub use win32_gdi::*;
 pub use win32_netapi::*;
 pub use win32_shell::*;

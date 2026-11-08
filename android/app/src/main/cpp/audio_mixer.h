@@ -90,15 +90,39 @@ public:
                         }
                     }
                     output[frame*2]+=left*voice->left;output[frame*2+1]+=right*voice->right;
-                }else for(unsigned channel=0;channel<2;++channel){float first=sample(*voice,a,channel),second=sample(*voice,b,channel);
-                    output[frame*2+channel]+=(first+(second-first)*fraction)*(channel?voice->right:voice->left);}
-                voice->position+=step;
+                }else {
+                    static auto s_render_linear = reinterpret_cast<int(*)(
+                        float*, uint32_t, const uint8_t*, uint32_t, uint32_t, size_t, double, double, int, float, float, double*
+                    )>(dlsym(RTLD_DEFAULT, "nfs_audio_mixer_render_linear"));
+                    if (s_render_linear) {
+                        double next_pos = voice->position;
+                        int still = s_render_linear(
+                            output + frame * 2, frames - frame,
+                            voice->samples.data(), voice->bits, voice->channels, count,
+                            voice->position, step, voice->loop ? 1 : 0,
+                            voice->left, voice->right, &next_pos
+                        );
+                        voice->position = next_pos;
+                        if (!still) { voice->playing = false; }
+                        break;
+                    }
+                    for(unsigned channel=0;channel<2;++channel){float first=sample(*voice,a,channel),second=sample(*voice,b,channel);
+                        output[frame*2+channel]+=(first+(second-first)*fraction)*(channel?voice->right:voice->left);}
+                    voice->position+=step;
+                }
             }
         }
-        for(unsigned i=0;i<frames*2;++i){
-            float amplitude=std::abs(output[i]);peakAmplitude=std::max(peakAmplitude,amplitude);
-            if(amplitude>1.f)++clippedSamples;
-            output[i]=std::clamp(output[i],-1.f,1.f);
+        static auto s_clamp_stats = reinterpret_cast<void(*)(float*, size_t, float*, uint64_t*)>(
+            dlsym(RTLD_DEFAULT, "nfs_audio_mixer_clamp_and_stats")
+        );
+        if (s_clamp_stats) {
+            s_clamp_stats(output, frames * 2, &peakAmplitude, &clippedSamples);
+        } else {
+            for(unsigned i=0;i<frames*2;++i){
+                float amplitude=std::abs(output[i]);peakAmplitude=std::max(peakAmplitude,amplitude);
+                if(amplitude>1.f)++clippedSamples;
+                output[i]=std::clamp(output[i],-1.f,1.f);
+            }
         }
     }
     void advance(unsigned frames){

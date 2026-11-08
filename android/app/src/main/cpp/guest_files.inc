@@ -11,6 +11,18 @@ void logicalDrives(){ret(4,0);}
 void driveType(){auto path=lower(guestString(arg(0)));ret(path.empty()||path.rfind("c:",0)==0?3:1,1);}
 uint32_t fileError(){switch(errno){case ENOENT:return 2;case EACCES:case EPERM:return 5;case EEXIST:return 80;case ENOSPC:return 112;case EBADF:return 6;default:return 1;}}
 std::filesystem::path gamePath(std::string guest){
+    static auto s_lookup = reinterpret_cast<int(*)(const char*, char*, size_t)>(
+        dlsym(RTLD_DEFAULT, "rust_fs_cache_lookup")
+    );
+    static auto s_insert = reinterpret_cast<void(*)(const char*, const char*)>(
+        dlsym(RTLD_DEFAULT, "rust_fs_cache_insert")
+    );
+    char cached[1024];
+    if (s_lookup && s_lookup(guest.c_str(), cached, sizeof(cached))) {
+        return std::filesystem::path(cached);
+    }
+
+    std::string originalGuest = guest;
     std::replace(guest.begin(),guest.end(),'\\','/');auto normalized=lower(guest);
     if(normalized=="c:/nfsu2")guest.clear();
     else if(normalized.rfind("c:/nfsu2/",0)==0)guest=guest.substr(9);
@@ -30,6 +42,9 @@ std::filesystem::path gamePath(std::string guest){
                 guest.c_str(),resolved.string().c_str(),root.string().c_str());
             break;
         }
+    }
+    if (s_insert) {
+        s_insert(originalGuest.c_str(), resolved.string().c_str());
     }
     return resolved;
 }
