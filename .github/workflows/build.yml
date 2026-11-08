@@ -123,6 +123,10 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
+          if ! curl -sILf --max-time 8 https://services.gradle.org/distributions/gradle-8.9-bin.zip > /dev/null 2>&1; then
+            echo "services.gradle.org / GitHub distribution CDN returned error or timeout; switching to fallback Gradle mirror"
+            sed -i 's|services.gradle.org/distributions|mirrors.cloud.tencent.com/gradle|' gradle/wrapper/gradle-wrapper.properties
+          fi
           ./gradlew assembleRelease --no-daemon
           mkdir -p ../artifacts
           if [ -f "app/build/outputs/apk/release/app-release.apk" ]; then
