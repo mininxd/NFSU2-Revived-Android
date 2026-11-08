@@ -426,13 +426,14 @@ DEFAULT_LIBRARIES = {
     ]
 }
 
-def load_data():
-    if os.path.exists(JSON_PATH):
+def load_data(json_path=None):
+    path = json_path or JSON_PATH
+    if os.path.exists(path):
         try:
-            with open(JSON_PATH, "r", encoding="utf-8") as f:
+            with open(path, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
-            print(f"Warning: Failed loading existing {JSON_PATH}: {e}")
+            print(f"Warning: Failed loading existing {path}: {e}")
     
     # Construct initial JSON model
     data = {
@@ -447,14 +448,15 @@ def load_data():
             {"name": name, "status": status, "description": desc}
             for name, status, desc in funcs
         ]
-    save_data(data)
+    save_data(data, path)
     return data
 
-def save_data(data):
+def save_data(data, json_path=None):
+    path = json_path or JSON_PATH
     data["last_updated"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%SZ")
-    with open(JSON_PATH, "w", encoding="utf-8") as f:
+    with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
-    print(f"Saved configuration database to: {JSON_PATH}")
+    print(f"Saved configuration database to: {path}")
 
 def calculate_stats(data):
     total = 0
@@ -496,8 +498,8 @@ def generate_svg(data, output_path=SVG_PATH):
     WIDTH = 960
     # Colors matching hackch NFSU2 save-coverage.svg and dark theme
     BG_COLOR = "#212830"
-    CARD_BG = "#1e293b"
-    BORDER_COLOR = "#334155"
+    CARD_BG = "#161b22"
+    BORDER_COLOR = "#373e47"
     COLOR_IMP = "#10b981"   # Emerald Green
     COLOR_STUB = "#f59e0b"  # Amber Orange
     COLOR_MISS = "#475569"  # Slate Grey
@@ -550,8 +552,8 @@ def generate_svg(data, output_path=SVG_PATH):
 
     for lib, lstat in stats["libraries"].items():
         elements.append(f'<text x="32" y="{y+12}" font-family="monospace" font-size="12" font-weight="600" fill="{TEXT_MAIN}">{escape(lib)}</text>')
-        # Track background
-        elements.append(f'<rect x="{bar_x}" y="{y}" width="{bar_width}" height="14" rx="3" fill="{CARD_BG}"/>')
+        # Track background matching square/chunk missing color
+        elements.append(f'<rect x="{bar_x}" y="{y}" width="{bar_width}" height="14" rx="3" fill="{COLOR_MISS}"/>')
         
         # Segmented progress
         imp_w = (lstat["implemented"] / lstat["total"]) * bar_width if lstat["total"] else 0
@@ -649,7 +651,7 @@ def main():
     parser.add_argument("--list", type=str, nargs="?", const="all", metavar="DLL", help="List functions and statuses (optional: filter by DLL)")
     args = parser.parse_args()
 
-    data = load_data()
+    data = load_data(args.json)
 
     if args.list:
         target_dll = args.list.lower() if args.list != "all" else None
@@ -691,7 +693,7 @@ def main():
                 "description": args.desc or f"{dll} function"
             })
             print(f"Added {dll}!{func} -> {status}")
-        save_data(data)
+        save_data(data, args.json)
 
     stats = generate_svg(data, args.svg)
     print(f"\n--- Coverage Summary ---")

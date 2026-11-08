@@ -2,26 +2,26 @@
 <title id="title">NFSU2 Win32 &amp; DirectX 9 Translation Progress</title>
 <desc id="desc">288 implemented, 7 stubbed, 50 missing out of 345 tracked APIs (84.5% coverage).</desc>
 <rect width="100%" height="100%" fill="#212830" rx="12"/>
-<rect x="1" y="1" width="958" height="100%" fill="none" stroke="#334155" stroke-width="1" rx="12"/>
+<rect x="1" y="1" width="958" height="100%" fill="none" stroke="#373e47" stroke-width="1" rx="12"/>
 <text x="32" y="38" font-family="Segoe UI, -apple-system, sans-serif" font-size="22" font-weight="bold" fill="#f8fafc">NFSU2 Win32 &amp; DirectX 9 Translation Progress</text>
 <text x="32" y="62" font-family="Segoe UI, -apple-system, sans-serif" font-size="14" fill="#38bdf8">SPEED2.EXE ARM64 / Android HLE Surface Coverage</text>
 <text x="32" y="82" font-family="Segoe UI, -apple-system, sans-serif" font-size="12" fill="#94a3b8">Library implementation status and function coverage for Need for Speed: Underground 2 recompilation.</text>
-<rect x="32.0" y="102" width="218.0" height="64" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+<rect x="32.0" y="102" width="218.0" height="64" rx="8" fill="#161b22" stroke="#373e47" stroke-width="1"/>
 <rect x="32.0" y="102" width="4" height="64" rx="2" fill="#38bdf8"/>
 <text x="46.0" y="122" font-family="Segoe UI, sans-serif" font-size="11" font-weight="600" fill="#94a3b8" text-transform="uppercase">Total APIs</text>
 <text x="46.0" y="144" font-family="Segoe UI, sans-serif" font-size="16" font-weight="bold" fill="#f8fafc">345</text>
 <text x="46.0" y="158" font-family="Segoe UI, sans-serif" font-size="10" fill="#64748b">Tracked surface</text>
-<rect x="258.0" y="102" width="218.0" height="64" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+<rect x="258.0" y="102" width="218.0" height="64" rx="8" fill="#161b22" stroke="#373e47" stroke-width="1"/>
 <rect x="258.0" y="102" width="4" height="64" rx="2" fill="#10b981"/>
 <text x="272.0" y="122" font-family="Segoe UI, sans-serif" font-size="11" font-weight="600" fill="#94a3b8" text-transform="uppercase">Implemented</text>
 <text x="272.0" y="144" font-family="Segoe UI, sans-serif" font-size="16" font-weight="bold" fill="#f8fafc">288 (83.5%)</text>
 <text x="272.0" y="158" font-family="Segoe UI, sans-serif" font-size="10" fill="#64748b">Native execution</text>
-<rect x="484.0" y="102" width="218.0" height="64" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+<rect x="484.0" y="102" width="218.0" height="64" rx="8" fill="#161b22" stroke="#373e47" stroke-width="1"/>
 <rect x="484.0" y="102" width="4" height="64" rx="2" fill="#f59e0b"/>
 <text x="498.0" y="122" font-family="Segoe UI, sans-serif" font-size="11" font-weight="600" fill="#94a3b8" text-transform="uppercase">Stubs &amp; Partial</text>
 <text x="498.0" y="144" font-family="Segoe UI, sans-serif" font-size="16" font-weight="bold" fill="#f8fafc">7 (2.0%)</text>
 <text x="498.0" y="158" font-family="Segoe UI, sans-serif" font-size="10" fill="#64748b">Emulated behavior</text>
-<rect x="710.0" y="102" width="218.0" height="64" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+<rect x="710.0" y="102" width="218.0" height="64" rx="8" fill="#161b22" stroke="#373e47" stroke-width="1"/>
 <rect x="710.0" y="102" width="4" height="64" rx="2" fill="#475569"/>
 <text x="724.0" y="122" font-family="Segoe UI, sans-serif" font-size="11" font-weight="600" fill="#94a3b8" text-transform="uppercase">Missing / Pending</text>
 <text x="724.0" y="144" font-family="Segoe UI, sans-serif" font-size="16" font-weight="bold" fill="#f8fafc">50 (14.5%)</text>
@@ -29,61 +29,61 @@
 <text x="32" y="184" font-family="Segoe UI, sans-serif" font-size="15" font-weight="bold" fill="#f8fafc">Subsystem Progress</text>
 <text x="928" y="184" font-family="Segoe UI, sans-serif" font-size="12" fill="#94a3b8" text-anchor="end">Status breakdown by shared library</text>
 <text x="32" y="210" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">kernel32.dll</text>
-<rect x="180" y="198" width="608" height="14" rx="3" fill="#1e293b"/>
+<rect x="180" y="198" width="608" height="14" rx="3" fill="#475569"/>
 <rect x="180" y="198" width="499.8" height="14" rx="3" fill="#10b981"><title>kernel32.dll: 134 implemented</title></rect>
 <rect x="679.8" y="198" width="3.7" height="14" rx="3" fill="#f59e0b"><title>kernel32.dll: 1 stubbed</title></rect>
 <text x="928" y="209" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">134/163 (82.5%)</text>
 <text x="32" y="232" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">user32.dll</text>
-<rect x="180" y="220" width="608" height="14" rx="3" fill="#1e293b"/>
+<rect x="180" y="220" width="608" height="14" rx="3" fill="#475569"/>
 <rect x="180" y="220" width="579.7" height="14" rx="3" fill="#10b981"><title>user32.dll: 41 implemented</title></rect>
 <rect x="759.7" y="220" width="14.1" height="14" rx="3" fill="#f59e0b"><title>user32.dll: 1 stubbed</title></rect>
 <text x="928" y="231" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">41/43 (96.5%)</text>
 <text x="32" y="254" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">d3d9.dll</text>
-<rect x="180" y="242" width="608" height="14" rx="3" fill="#1e293b"/>
+<rect x="180" y="242" width="608" height="14" rx="3" fill="#475569"/>
 <rect x="180" y="242" width="608.0" height="14" rx="3" fill="#10b981"><title>d3d9.dll: 42 implemented</title></rect>
 <text x="928" y="253" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">42/42 (100.0%)</text>
 <text x="32" y="276" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">dsound.dll</text>
-<rect x="180" y="264" width="608" height="14" rx="3" fill="#1e293b"/>
+<rect x="180" y="264" width="608" height="14" rx="3" fill="#475569"/>
 <rect x="180" y="264" width="608.0" height="14" rx="3" fill="#10b981"><title>dsound.dll: 23 implemented</title></rect>
 <text x="928" y="275" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">23/23 (100.0%)</text>
 <text x="32" y="298" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">dinput8.dll</text>
-<rect x="180" y="286" width="608" height="14" rx="3" fill="#1e293b"/>
+<rect x="180" y="286" width="608" height="14" rx="3" fill="#475569"/>
 <rect x="180" y="286" width="526.9" height="14" rx="3" fill="#10b981"><title>dinput8.dll: 13 implemented</title></rect>
 <rect x="706.9" y="286" width="81.1" height="14" rx="3" fill="#f59e0b"><title>dinput8.dll: 2 stubbed</title></rect>
 <text x="928" y="297" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">13/15 (93.3%)</text>
 <text x="32" y="320" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">ws2_32.dll</text>
-<rect x="180" y="308" width="608" height="14" rx="3" fill="#1e293b"/>
+<rect x="180" y="308" width="608" height="14" rx="3" fill="#475569"/>
 <rect x="180" y="308" width="608.0" height="14" rx="3" fill="#10b981"><title>ws2_32.dll: 22 implemented</title></rect>
 <text x="928" y="319" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">22/22 (100.0%)</text>
 <text x="32" y="342" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">winmm.dll</text>
-<rect x="180" y="330" width="608" height="14" rx="3" fill="#1e293b"/>
+<rect x="180" y="330" width="608" height="14" rx="3" fill="#475569"/>
 <rect x="180" y="330" width="608.0" height="14" rx="3" fill="#10b981"><title>winmm.dll: 6 implemented</title></rect>
 <text x="928" y="341" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">6/6 (100.0%)</text>
 <text x="32" y="364" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">advapi32.dll</text>
-<rect x="180" y="352" width="608" height="14" rx="3" fill="#1e293b"/>
+<rect x="180" y="352" width="608" height="14" rx="3" fill="#475569"/>
 <rect x="180" y="352" width="506.7" height="14" rx="3" fill="#10b981"><title>advapi32.dll: 5 implemented</title></rect>
 <text x="928" y="363" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">5/6 (83.3%)</text>
 <text x="32" y="386" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">gdi32.dll</text>
-<rect x="180" y="374" width="608" height="14" rx="3" fill="#1e293b"/>
+<rect x="180" y="374" width="608" height="14" rx="3" fill="#475569"/>
 <rect x="180" y="374" width="50.7" height="14" rx="3" fill="#10b981"><title>gdi32.dll: 1 implemented</title></rect>
 <text x="928" y="385" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">1/12 (8.3%)</text>
 <text x="32" y="408" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">tapi32.dll</text>
-<rect x="180" y="396" width="608" height="14" rx="3" fill="#1e293b"/>
+<rect x="180" y="396" width="608" height="14" rx="3" fill="#475569"/>
 <rect x="180.0" y="396" width="135.1" height="14" rx="3" fill="#f59e0b"><title>tapi32.dll: 2 stubbed</title></rect>
 <text x="928" y="407" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">0/9 (11.1%)</text>
 <text x="32" y="430" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">shfolder.dll</text>
-<rect x="180" y="418" width="608" height="14" rx="3" fill="#1e293b"/>
+<rect x="180" y="418" width="608" height="14" rx="3" fill="#475569"/>
 <rect x="180" y="418" width="608.0" height="14" rx="3" fill="#10b981"><title>shfolder.dll: 1 implemented</title></rect>
 <text x="928" y="429" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">1/1 (100.0%)</text>
 <text x="32" y="452" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">shell32.dll</text>
-<rect x="180" y="440" width="608" height="14" rx="3" fill="#1e293b"/>
+<rect x="180" y="440" width="608" height="14" rx="3" fill="#475569"/>
 <text x="928" y="451" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">0/1 (0.0%)</text>
 <text x="32" y="474" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">netapi32.dll</text>
-<rect x="180" y="462" width="608" height="14" rx="3" fill="#1e293b"/>
+<rect x="180" y="462" width="608" height="14" rx="3" fill="#475569"/>
 <rect x="180.0" y="462" width="608.0" height="14" rx="3" fill="#f59e0b"><title>netapi32.dll: 1 stubbed</title></rect>
 <text x="928" y="473" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">0/1 (50.0%)</text>
 <text x="32" y="496" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">ddraw.dll</text>
-<rect x="180" y="484" width="608" height="14" rx="3" fill="#1e293b"/>
+<rect x="180" y="484" width="608" height="14" rx="3" fill="#475569"/>
 <text x="928" y="495" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">0/1 (0.0%)</text>
 <text x="32" y="518" font-family="Segoe UI, sans-serif" font-size="15" font-weight="bold" fill="#f8fafc">API Function Discovery Matrix</text>
 <text x="32" y="536" font-family="Segoe UI, sans-serif" font-size="12" fill="#64748b">Each cell represents an imported function or COM method. Hover over cells for implementation details.</text>
@@ -783,7 +783,7 @@ Executes external command or URL</title><rect x="516" y="728" width="18" height=
 NetBIOS control block stub for LAN player discovery</title><rect x="538" y="728" width="18" height="18" rx="3" fill="#f59e0b" stroke="#212830" stroke-width="1"/></g>
 <g><title>ddraw.dll!DirectDrawCreate [MISSING]
 DirectDraw legacy display creation</title><rect x="560" y="728" width="18" height="18" rx="3" fill="#475569" stroke="#212830" stroke-width="1"/></g>
-<line x1="32" y1="774" x2="928" y2="774" stroke="#334155" stroke-width="1"/>
+<line x1="32" y1="774" x2="928" y2="774" stroke="#373e47" stroke-width="1"/>
 <text x="32" y="792" font-family="Segoe UI, sans-serif" font-size="11" fill="#64748b">Last updated: 2026-11-08 09:11:43Z | Configured via library-progress.json | Run python scripts/library_progress.py</text>
 <text x="928" y="792" font-family="Segoe UI, sans-serif" font-size="11" fill="#38bdf8" text-anchor="end">git:mininxd/NFSU2-Revived-Android</text>
 </svg>
