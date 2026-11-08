@@ -1864,7 +1864,7 @@ struct RoamPadObject {
 };
 
 static const char *s_ps2_pad_names[] = {
-    "Left Stick X", "Left Stick Y", "L2 / R2",
+    "Left Stick X", "Left Stick Y", "Trigger/Gas",
     "Right Stick X", "Right Stick Y", "Right Stick Z",
     "D-Pad",
     "Cross", "Circle", "Square", "Triangle",
@@ -1896,8 +1896,8 @@ int _ZN12GamepadInput9buttonForEi(int code) {
         case 105: case 195: return 7;          /* R2, Button 8 -> R2 */
         case 108: case 197: case 82: return 8; /* Start, Button 10, Menu -> Start */
         case 109: case 196: case 4: return 9;  /* Select, Button 9, Back -> Select */
-        case 106: case 198: case 200: return 10; /* ThumbL, Button 11, Button 13 -> ThumbL (LS) */
-        case 107: case 199: case 201: return 11; /* ThumbR, Button 12, Button 14 -> ThumbR (RS) */
+        case 106: case 198: return 10;         /* ThumbL (106), Button 11 (198) -> ThumbL (LS / L3) */
+        case 107: case 199: return 11;         /* ThumbR (107), Button 12 (199) -> ThumbR (RS / R3) */
         case 19: return 12;                    /* Dpad Up */
         case 20: return 13;                    /* Dpad Down */
         case 21: return 14;                    /* Dpad Left */

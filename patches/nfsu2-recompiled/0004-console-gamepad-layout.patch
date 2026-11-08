@@ -18,7 +18,7 @@ index 5da071b..01f9215 100644
 -        std::memcpy(ptr(output+32,std::strlen(entry.name)+1),entry.name,std::strlen(entry.name)+1);
 +        static const char* const xbox[]={"A","B","X","Y","LB","RB","Back","Start","LS","RS","LT","RT"};
 +        static const char* const playStation[]={"Cross","Circle","Square","Triangle","L1","R1","Select","Start","L3","R3","L2","R2"};
-+        static const char* const playStationAxes[]={"Left Stick X","Left Stick Y","L2 / R2","Right Stick X","Right Stick Y","Right Stick Z"};
++        static const char* const playStationAxes[]={"Left Stick X","Left Stick Y","Trigger/Gas","Right Stick X","Right Stick Y","Right Stick Z"};
 +        const char* name=entry.name;uint32_t index=(entry.type>>8)&0xffff;
 +        if((entry.type&0x04u)&&index<std::size(xbox))name=padPlayStationNames.load(std::memory_order_relaxed)?playStation[index]:xbox[index];
 +        else if(padPlayStationNames.load(std::memory_order_relaxed)&&(entry.type&0x02u)&&index<std::size(playStationAxes))name=playStationAxes[index];
@@ -98,7 +98,7 @@ index 0000000..1111111
 +// the Xbox pad table; only the names the controls screen shows change.
 +const PadObject padObjectsPs2[]={
 +    {0xa36d02e0u,0,0x0002u|(0u<<8),0x100u,"Left Stick X"},{0xa36d02e1u,4,0x0002u|(1u<<8),0x100u,"Left Stick Y"},
-+    {0xa36d02e2u,8,0x0002u|(2u<<8),0x100u,"L2 / R2"},{0xa36d02f4u,12,0x0002u|(3u<<8),0x100u,"Right Stick X"},
++    {0xa36d02e2u,8,0x0002u|(2u<<8),0x100u,"Trigger/Gas"},{0xa36d02f4u,12,0x0002u|(3u<<8),0x100u,"Right Stick X"},
 +    {0xa36d02f5u,16,0x0002u|(4u<<8),0x100u,"Right Stick Y"},{0xa36d02e3u,20,0x0002u|(5u<<8),0x100u,"Right Stick Z"},
 +    {0xa36d02f2u,32,0x0010u|(0u<<8),0,"D-Pad"},
 +    {0xa36d02f0u,48,0x0004u|(0u<<8),0,"Cross"},{0xa36d02f0u,49,0x0004u|(1u<<8),0,"Circle"},
