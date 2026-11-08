@@ -2,7 +2,7 @@
   "title": "NFSU2 Win32 & DirectX 9 Translation Progress",
   "subtitle": "SPEED2.EXE ARM64 / Android HLE Surface Coverage",
   "description": "Library implementation status and function coverage for Need for Speed: Underground 2 recompilation.",
-  "last_updated": "2026-11-08 21:42:07Z",
+  "last_updated": "2026-11-08 21:53:32Z",
   "libraries": {
     "kernel32.dll": [
       {
@@ -22,7 +22,7 @@
       },
       {
         "name": "VirtualQuery",
-        "status": "missing",
+        "status": "implemented",
         "description": "Query memory address space region information"
       },
       {
@@ -82,7 +82,7 @@
       },
       {
         "name": "IsBadCodePtr",
-        "status": "missing",
+        "status": "implemented",
         "description": "Check code pointer readability"
       },
       {
@@ -217,7 +217,7 @@
       },
       {
         "name": "SetStdHandle",
-        "status": "missing",
+        "status": "implemented",
         "description": "Redirects standard handles"
       },
       {
@@ -547,7 +547,7 @@
       },
       {
         "name": "DebugBreak",
-        "status": "missing",
+        "status": "implemented",
         "description": "Hard breakpoint trap"
       },
       {
@@ -607,17 +607,17 @@
       },
       {
         "name": "CompareStringA",
-        "status": "missing",
+        "status": "implemented",
         "description": "Locale-sensitive string comparison"
       },
       {
         "name": "CompareStringW",
-        "status": "missing",
+        "status": "implemented",
         "description": "Locale-sensitive wide string comparison"
       },
       {
         "name": "GetStringTypeA",
-        "status": "missing",
+        "status": "implemented",
         "description": "Character type classification (ANSI)"
       },
       {
@@ -627,7 +627,7 @@
       },
       {
         "name": "LCMapStringA",
-        "status": "missing",
+        "status": "implemented",
         "description": "Locale-specific string transformation (ANSI)"
       },
       {
@@ -652,32 +652,32 @@
       },
       {
         "name": "IsValidCodePage",
-        "status": "missing",
+        "status": "implemented",
         "description": "Code page validation check"
       },
       {
         "name": "IsValidLocale",
-        "status": "missing",
+        "status": "implemented",
         "description": "Locale validation check"
       },
       {
         "name": "EnumSystemLocalesA",
-        "status": "missing",
+        "status": "implemented",
         "description": "Enumerates installed system locales"
       },
       {
         "name": "GetLocaleInfoA",
-        "status": "missing",
+        "status": "implemented",
         "description": "Retrieves locale attributes (ANSI)"
       },
       {
         "name": "GetLocaleInfoW",
-        "status": "missing",
+        "status": "implemented",
         "description": "Retrieves locale attributes (Unicode)"
       },
       {
         "name": "GetUserDefaultLCID",
-        "status": "missing",
+        "status": "implemented",
         "description": "Default user locale ID"
       },
       {
@@ -712,7 +712,7 @@
       },
       {
         "name": "SetEnvironmentVariableA",
-        "status": "missing",
+        "status": "implemented",
         "description": "Sets environment variable"
       },
       {
@@ -747,17 +747,17 @@
       },
       {
         "name": "UnhandledExceptionFilter",
-        "status": "missing",
+        "status": "implemented",
         "description": "Default crash handler filter"
       },
       {
         "name": "RaiseException",
-        "status": "missing",
+        "status": "implemented",
         "description": "Invokes software exception"
       },
       {
         "name": "RtlUnwind",
-        "status": "missing",
+        "status": "implemented",
         "description": "Unwinds call stack frames"
       },
       {
@@ -1029,7 +1029,7 @@
       },
       {
         "name": "wsprintfA",
-        "status": "missing",
+        "status": "implemented",
         "description": "Formatted string printing with variable arguments"
       },
       {
@@ -1616,7 +1616,7 @@
       },
       {
         "name": "RegCreateKeyA",
-        "status": "missing",
+        "status": "implemented",
         "description": "Creates new registry key entry"
       }
     ],

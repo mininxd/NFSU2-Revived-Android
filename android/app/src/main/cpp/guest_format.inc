@@ -1,5 +1,4 @@
-void winFormatA(){
-    uint32_t output=arg(0),arguments=arg(2);auto format=guestString(arg(1));
+inline uint32_t winFormatString(uint32_t output, const std::string& format, uint32_t arguments){
     std::string result;
     for(size_t position=0;position<format.size();){
         if(format[position]!='%'){result+=format[position++];continue;}
@@ -30,5 +29,15 @@ void winFormatA(){
         result+=piece;if(result.size()>1023)throw GuestStop("wvsprintf result exceeds Windows buffer");
     }
     if(result.size()>1023)throw GuestStop("wvsprintf result exceeds Windows buffer");
-    std::memcpy(ptr(output,result.size()+1),result.c_str(),result.size()+1);ret(uint32_t(result.size()),3);
+    std::memcpy(ptr(output,result.size()+1),result.c_str(),result.size()+1);
+    return uint32_t(result.size());
+}
+void winFormatA(){
+    uint32_t len = winFormatString(arg(0), guestString(arg(1)), arg(2));
+    ret(len, 3);
+}
+void winFormatCdeclA(){
+    // wsprintfA is __cdecl (WINAPIV): arguments on stack at g_esp + 12, caller cleans up
+    uint32_t len = winFormatString(arg(0), guestString(arg(1)), g_esp + 12);
+    ret(len, 0);
 }
