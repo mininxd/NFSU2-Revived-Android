@@ -106,6 +106,99 @@ pub unsafe extern "C" fn nfs_tex_dxt1_decode_fast(
     0
 }
 
+/// Decodes a DXT3/BC2 texture to RGBA8 using fast fixed-point alpha and color decompression.
+#[no_mangle]
+pub unsafe extern "C" fn nfs_tex_dxt3_decode_fast(
+    width: u32,
+    height: u32,
+    src: *const u8,
+    src_len: usize,
+    dst_rgba: *mut u8,
+) -> i32 {
+    if src.is_null() || dst_rgba.is_null() || width == 0 || height == 0 {
+        return -1;
+    }
+
+    let bw = (width + 3) / 4;
+    let bh = (height + 3) / 4;
+    let required_src = (bw * bh * 16) as usize;
+    if src_len < required_src {
+        return -2;
+    }
+
+    let src_slice = std::slice::from_raw_parts(src, src_len);
+    let dst_slice = std::slice::from_raw_parts_mut(dst_rgba, (width * height * 4) as usize);
+
+    let mut src_offset = 0;
+
+    for by in 0..bh {
+        for bx in 0..bw {
+            // First 8 bytes: 16 4-bit explicit alpha values
+            let alpha_bytes = &src_slice[src_offset..src_offset + 8];
+
+            // Next 8 bytes: DXT1 color block
+            let color_offset = src_offset + 8;
+            let c0 = (src_slice[color_offset] as u16) | ((src_slice[color_offset + 1] as u16) << 8);
+            let c1 = (src_slice[color_offset + 2] as u16) | ((src_slice[color_offset + 3] as u16) << 8);
+
+            let (r0, g0, b0) = rgb565_to_rgb888(c0);
+            let (r1, g1, b1) = rgb565_to_rgb888(c1);
+
+            // In DXT3, color palette is always 4-color interpolated (no punch-through alpha)
+            let mut pal = [(0u8, 0u8, 0u8); 4];
+            pal[0] = (r0, g0, b0);
+            pal[1] = (r1, g1, b1);
+            pal[2] = (
+                (((2 * r0 as u32 + r1 as u32) * 85 + 128) >> 8) as u8,
+                (((2 * g0 as u32 + g1 as u32) * 85 + 128) >> 8) as u8,
+                (((2 * b0 as u32 + b1 as u32) * 85 + 128) >> 8) as u8,
+            );
+            pal[3] = (
+                (((r0 as u32 + 2 * r1 as u32) * 85 + 128) >> 8) as u8,
+                (((g0 as u32 + 2 * g1 as u32) * 85 + 128) >> 8) as u8,
+                (((b0 as u32 + 2 * b1 as u32) * 85 + 128) >> 8) as u8,
+            );
+
+            let color_bits = (src_slice[color_offset + 4] as u32)
+                | ((src_slice[color_offset + 5] as u32) << 8)
+                | ((src_slice[color_offset + 6] as u32) << 16)
+                | ((src_slice[color_offset + 7] as u32) << 24);
+
+            for py in 0..4 {
+                let y = by * 4 + py;
+                if y >= height { continue; }
+                for px in 0..4 {
+                    let x = bx * 4 + px;
+                    if x >= width { continue; }
+
+                    let linear_pixel = py * 4 + px;
+                    let alpha_byte = alpha_bytes[linear_pixel / 2];
+                    let alpha_nibble = if (linear_pixel & 1) == 0 {
+                        alpha_byte & 0x0F
+                    } else {
+                        (alpha_byte >> 4) & 0x0F
+                    };
+                    let alpha = alpha_nibble * 17; // Scale 0..15 to 0..255
+
+                    let color_shift = linear_pixel * 2;
+                    let color_code = ((color_bits >> color_shift) & 0x03) as usize;
+                    let color = pal[color_code];
+
+                    let out_idx = ((y * width + x) * 4) as usize;
+                    dst_slice[out_idx] = color.0;
+                    dst_slice[out_idx + 1] = color.1;
+                    dst_slice[out_idx + 2] = color.2;
+                    dst_slice[out_idx + 3] = alpha;
+                }
+            }
+
+            src_offset += 16;
+        }
+    }
+
+    0
+}
+
 /// Decodes a DXT5/BC3 texture to RGBA8 using fast fixed-point alpha and color decompression.
 #[no_mangle]
 pub unsafe extern "C" fn nfs_tex_dxt5_decode_fast(

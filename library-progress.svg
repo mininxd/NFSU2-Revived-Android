@@ -1,793 +1,206 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="816" viewBox="0 0 960 816" role="img" aria-labelledby="title desc">
-<title id="title">NFSU2 Win32 &amp; DirectX 9 Translation Progress</title>
-<desc id="desc">348 implemented, 0 stubbed, 0 missing out of 348 tracked APIs (100.0% coverage).</desc>
-<rect width="100%" height="100%" fill="#212830"/>
-<text x="32" y="38" font-family="Segoe UI, -apple-system, sans-serif" font-size="22" font-weight="bold" fill="#f8fafc">NFSU2 Win32 &amp; DirectX 9 Translation Progress</text>
-<text x="32" y="62" font-family="Segoe UI, -apple-system, sans-serif" font-size="14" fill="#38bdf8">SPEED2.EXE ARM64 / Android HLE Surface Coverage</text>
-<text x="32" y="82" font-family="Segoe UI, -apple-system, sans-serif" font-size="12" fill="#94a3b8">Library implementation status and function coverage for Need for Speed: Underground 2 recompilation.</text>
-<rect x="32.0" y="102" width="218.0" height="64" rx="8" fill="#161b22" stroke="#373e47" stroke-width="1"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="638" viewBox="0 0 960 638" role="img" aria-labelledby="title desc">
+<title id="title">NFSU2 Native Rust Migration &amp; Subsystem Coverage</title>
+<desc id="desc">67 pure Rust, 1 hybrid, 0 pending out of 68 tracked modules (99.3% weighted coverage).</desc>
+<rect width="100%" height="100%" fill="#1b1f24"/>
+<text x="32" y="38" font-family="Segoe UI, -apple-system, sans-serif" font-size="22" font-weight="bold" fill="#f8fafc">NFSU2 Native Rust Migration &amp; Subsystem Coverage</text>
+<text x="32" y="62" font-family="Segoe UI, -apple-system, sans-serif" font-size="14" fill="#f97316">Pure Rust Performance Engines, SIMD Pipelines &amp; Driver Shims</text>
+<text x="32" y="82" font-family="Segoe UI, -apple-system, sans-serif" font-size="12" fill="#94a3b8">Migration status and conversion coverage from C/C++/Java into high-performance, memory-safe Rust crates.</text>
+<rect x="32.0" y="102" width="218.0" height="64" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1"/>
 <rect x="32.0" y="102" width="4" height="64" rx="2" fill="#38bdf8"/>
-<text x="46.0" y="122" font-family="Segoe UI, sans-serif" font-size="11" font-weight="600" fill="#94a3b8" text-transform="uppercase">Total APIs</text>
-<text x="46.0" y="144" font-family="Segoe UI, sans-serif" font-size="16" font-weight="bold" fill="#f8fafc">348</text>
-<text x="46.0" y="158" font-family="Segoe UI, sans-serif" font-size="10" fill="#64748b">Tracked surface</text>
-<rect x="258.0" y="102" width="218.0" height="64" rx="8" fill="#161b22" stroke="#373e47" stroke-width="1"/>
-<rect x="258.0" y="102" width="4" height="64" rx="2" fill="#10b981"/>
-<text x="272.0" y="122" font-family="Segoe UI, sans-serif" font-size="11" font-weight="600" fill="#94a3b8" text-transform="uppercase">Implemented</text>
-<text x="272.0" y="144" font-family="Segoe UI, sans-serif" font-size="16" font-weight="bold" fill="#f8fafc">348 (100.0%)</text>
-<text x="272.0" y="158" font-family="Segoe UI, sans-serif" font-size="10" fill="#64748b">Native execution</text>
-<rect x="484.0" y="102" width="218.0" height="64" rx="8" fill="#161b22" stroke="#373e47" stroke-width="1"/>
-<rect x="484.0" y="102" width="4" height="64" rx="2" fill="#f59e0b"/>
-<text x="498.0" y="122" font-family="Segoe UI, sans-serif" font-size="11" font-weight="600" fill="#94a3b8" text-transform="uppercase">Stubs &amp; Partial</text>
-<text x="498.0" y="144" font-family="Segoe UI, sans-serif" font-size="16" font-weight="bold" fill="#f8fafc">0 (0.0%)</text>
-<text x="498.0" y="158" font-family="Segoe UI, sans-serif" font-size="10" fill="#64748b">Emulated behavior</text>
-<rect x="710.0" y="102" width="218.0" height="64" rx="8" fill="#161b22" stroke="#373e47" stroke-width="1"/>
+<text x="46.0" y="122" font-family="Segoe UI, sans-serif" font-size="11" font-weight="600" fill="#94a3b8" text-transform="uppercase">Tracked Modules</text>
+<text x="46.0" y="144" font-family="Segoe UI, sans-serif" font-size="16" font-weight="bold" fill="#f8fafc">68</text>
+<text x="46.0" y="158" font-family="Segoe UI, sans-serif" font-size="10" fill="#64748b">Total architecture</text>
+<rect x="258.0" y="102" width="218.0" height="64" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+<rect x="258.0" y="102" width="4" height="64" rx="2" fill="#f97316"/>
+<text x="272.0" y="122" font-family="Segoe UI, sans-serif" font-size="11" font-weight="600" fill="#94a3b8" text-transform="uppercase">Pure Rust (Native)</text>
+<text x="272.0" y="144" font-family="Segoe UI, sans-serif" font-size="16" font-weight="bold" fill="#f8fafc">67 (98.5%)</text>
+<text x="272.0" y="158" font-family="Segoe UI, sans-serif" font-size="10" fill="#64748b">Zero GC / SIMD</text>
+<rect x="484.0" y="102" width="218.0" height="64" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+<rect x="484.0" y="102" width="4" height="64" rx="2" fill="#eab308"/>
+<text x="498.0" y="122" font-family="Segoe UI, sans-serif" font-size="11" font-weight="600" fill="#94a3b8" text-transform="uppercase">Hybrid / In-Progress</text>
+<text x="498.0" y="144" font-family="Segoe UI, sans-serif" font-size="16" font-weight="bold" fill="#f8fafc">1 (1.5%)</text>
+<text x="498.0" y="158" font-family="Segoe UI, sans-serif" font-size="10" fill="#64748b">C/Rust bridged</text>
+<rect x="710.0" y="102" width="218.0" height="64" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1"/>
 <rect x="710.0" y="102" width="4" height="64" rx="2" fill="#475569"/>
-<text x="724.0" y="122" font-family="Segoe UI, sans-serif" font-size="11" font-weight="600" fill="#94a3b8" text-transform="uppercase">Missing / Pending</text>
+<text x="724.0" y="122" font-family="Segoe UI, sans-serif" font-size="11" font-weight="600" fill="#94a3b8" text-transform="uppercase">Pending Migration</text>
 <text x="724.0" y="144" font-family="Segoe UI, sans-serif" font-size="16" font-weight="bold" fill="#f8fafc">0 (0.0%)</text>
-<text x="724.0" y="158" font-family="Segoe UI, sans-serif" font-size="10" fill="#64748b">Unsupported</text>
-<text x="32" y="184" font-family="Segoe UI, sans-serif" font-size="15" font-weight="bold" fill="#f8fafc">Subsystem Progress</text>
-<text x="928" y="184" font-family="Segoe UI, sans-serif" font-size="12" fill="#94a3b8" text-anchor="end">Status breakdown by shared library</text>
-<text x="32" y="210" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">kernel32.dll</text>
+<text x="724.0" y="158" font-family="Segoe UI, sans-serif" font-size="10" fill="#64748b">Legacy C / Java</text>
+<text x="32" y="184" font-family="Segoe UI, sans-serif" font-size="15" font-weight="bold" fill="#f8fafc">Rust Crate &amp; Engine Subsystems</text>
+<text x="928" y="184" font-family="Segoe UI, sans-serif" font-size="12" fill="#94a3b8" text-anchor="end">Weighted Migration: 99.3%</text>
+<text x="32" y="210" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">perf_cores</text>
 <rect x="180" y="198" width="608" height="14" rx="3" fill="#475569"/>
-<rect x="180" y="198" width="608.0" height="14" rx="3" fill="#10b981"><title>kernel32.dll: 163 implemented</title></rect>
-<text x="928" y="209" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">163/163 (100.0%)</text>
-<text x="32" y="232" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">user32.dll</text>
-<rect x="180" y="220" width="608" height="14" rx="3" fill="#475569"/>
-<rect x="180" y="220" width="608.0" height="14" rx="3" fill="#10b981"><title>user32.dll: 43 implemented</title></rect>
-<text x="928" y="231" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">43/43 (100.0%)</text>
-<text x="32" y="254" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">d3d9.dll</text>
-<rect x="180" y="242" width="608" height="14" rx="3" fill="#475569"/>
-<rect x="180" y="242" width="608.0" height="14" rx="3" fill="#10b981"><title>d3d9.dll: 42 implemented</title></rect>
-<text x="928" y="253" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">42/42 (100.0%)</text>
-<text x="32" y="276" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">dsound.dll</text>
-<rect x="180" y="264" width="608" height="14" rx="3" fill="#475569"/>
-<rect x="180" y="264" width="608.0" height="14" rx="3" fill="#10b981"><title>dsound.dll: 23 implemented</title></rect>
-<text x="928" y="275" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">23/23 (100.0%)</text>
-<text x="32" y="298" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">dinput8.dll</text>
-<rect x="180" y="286" width="608" height="14" rx="3" fill="#475569"/>
-<rect x="180" y="286" width="608.0" height="14" rx="3" fill="#10b981"><title>dinput8.dll: 15 implemented</title></rect>
-<text x="928" y="297" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">15/15 (100.0%)</text>
-<text x="32" y="320" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">ws2_32.dll</text>
-<rect x="180" y="308" width="608" height="14" rx="3" fill="#475569"/>
-<rect x="180" y="308" width="608.0" height="14" rx="3" fill="#10b981"><title>ws2_32.dll: 22 implemented</title></rect>
-<text x="928" y="319" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">22/22 (100.0%)</text>
-<text x="32" y="342" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">winmm.dll</text>
-<rect x="180" y="330" width="608" height="14" rx="3" fill="#475569"/>
-<rect x="180" y="330" width="608.0" height="14" rx="3" fill="#10b981"><title>winmm.dll: 6 implemented</title></rect>
-<text x="928" y="341" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">6/6 (100.0%)</text>
-<text x="32" y="364" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">advapi32.dll</text>
-<rect x="180" y="352" width="608" height="14" rx="3" fill="#475569"/>
-<rect x="180" y="352" width="608.0" height="14" rx="3" fill="#10b981"><title>advapi32.dll: 6 implemented</title></rect>
-<text x="928" y="363" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">6/6 (100.0%)</text>
-<text x="32" y="386" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">gdi32.dll</text>
-<rect x="180" y="374" width="608" height="14" rx="3" fill="#475569"/>
-<rect x="180" y="374" width="608.0" height="14" rx="3" fill="#10b981"><title>gdi32.dll: 12 implemented</title></rect>
-<text x="928" y="385" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">12/12 (100.0%)</text>
-<text x="32" y="408" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">tapi32.dll</text>
-<rect x="180" y="396" width="608" height="14" rx="3" fill="#475569"/>
-<rect x="180" y="396" width="608.0" height="14" rx="3" fill="#10b981"><title>tapi32.dll: 9 implemented</title></rect>
-<text x="928" y="407" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">9/9 (100.0%)</text>
-<text x="32" y="430" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">shfolder.dll</text>
-<rect x="180" y="418" width="608" height="14" rx="3" fill="#475569"/>
-<rect x="180" y="418" width="608.0" height="14" rx="3" fill="#10b981"><title>shfolder.dll: 1 implemented</title></rect>
-<text x="928" y="429" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">1/1 (100.0%)</text>
-<text x="32" y="452" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">shell32.dll</text>
-<rect x="180" y="440" width="608" height="14" rx="3" fill="#475569"/>
-<rect x="180" y="440" width="608.0" height="14" rx="3" fill="#10b981"><title>shell32.dll: 1 implemented</title></rect>
-<text x="928" y="451" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">1/1 (100.0%)</text>
-<text x="32" y="474" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">netapi32.dll</text>
-<rect x="180" y="462" width="608" height="14" rx="3" fill="#475569"/>
-<rect x="180" y="462" width="608.0" height="14" rx="3" fill="#10b981"><title>netapi32.dll: 4 implemented</title></rect>
-<text x="928" y="473" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">4/4 (100.0%)</text>
-<text x="32" y="496" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">ddraw.dll</text>
-<rect x="180" y="484" width="608" height="14" rx="3" fill="#475569"/>
-<rect x="180" y="484" width="608.0" height="14" rx="3" fill="#10b981"><title>ddraw.dll: 1 implemented</title></rect>
-<text x="928" y="495" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">1/1 (100.0%)</text>
-<text x="32" y="518" font-family="Segoe UI, sans-serif" font-size="15" font-weight="bold" fill="#f8fafc">API Function Discovery Matrix</text>
-<text x="32" y="536" font-family="Segoe UI, sans-serif" font-size="12" fill="#64748b">Each cell represents an imported function or COM method. Hover over cells for implementation details.</text>
-<rect x="608" y="524" width="10" height="10" rx="2" fill="#10b981"/>
-<text x="624" y="533" font-family="Segoe UI, sans-serif" font-size="11" fill="#94a3b8">Implemented</text>
-<rect x="713" y="524" width="10" height="10" rx="2" fill="#f59e0b"/>
-<text x="729" y="533" font-family="Segoe UI, sans-serif" font-size="11" fill="#94a3b8">Stubbed</text>
-<rect x="798" y="524" width="10" height="10" rx="2" fill="#475569"/>
-<text x="814" y="533" font-family="Segoe UI, sans-serif" font-size="11" fill="#94a3b8">Missing</text>
-<g><title>kernel32.dll!VirtualAlloc [IMPLEMENTED]
-Anonymous mmap heap allocation with 32-bit pointer bounds</title><rect x="32" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!VirtualFree [IMPLEMENTED]
-Host munmap address unmapping</title><rect x="54" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!VirtualProtect [IMPLEMENTED]
-Configures memory protection flags with modifier stripping</title><rect x="76" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!VirtualQuery [IMPLEMENTED]
-Query memory address space region information</title><rect x="98" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!HeapCreate [IMPLEMENTED]
-Guest heap manager pool creation</title><rect x="120" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!HeapDestroy [IMPLEMENTED]
-Guest heap manager pool destruction</title><rect x="142" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!HeapAlloc [IMPLEMENTED]
-Dynamic 8-byte aligned heap allocation</title><rect x="164" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!HeapFree [IMPLEMENTED]
-Dynamic heap memory deallocation</title><rect x="186" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!HeapReAlloc [IMPLEMENTED]
-Dynamic heap buffer resizing</title><rect x="208" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!HeapSize [IMPLEMENTED]
-Allocation block size query</title><rect x="230" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetProcessHeap [IMPLEMENTED]
-Returns process default heap handle (0x70000000)</title><rect x="252" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GlobalAlloc [IMPLEMENTED]
-Fixed/movable global memory allocation</title><rect x="274" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GlobalFree [IMPLEMENTED]
-Global memory block release</title><rect x="296" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!IsBadReadPtr [IMPLEMENTED]
-Safe readable virtual address bounds check</title><rect x="318" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!IsBadWritePtr [IMPLEMENTED]
-Safe writable virtual address bounds check</title><rect x="340" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!IsBadCodePtr [IMPLEMENTED]
-Check code pointer readability</title><rect x="362" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!MapViewOfFile [IMPLEMENTED]
-Memory-mapped file view binder</title><rect x="384" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!UnmapViewOfFile [IMPLEMENTED]
-Memory-mapped file view release</title><rect x="406" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!CreateFileMappingA [IMPLEMENTED]
-File backing or anonymous page file mapping object</title><rect x="428" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!CreateFileA [IMPLEMENTED]
-Translates Windows paths to Android root with case-insensitive resolver</title><rect x="450" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!CreateFileW [IMPLEMENTED]
-UTF-16 path translation to local file descriptor</title><rect x="472" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!ReadFile [IMPLEMENTED]
-Synchronous file block reading</title><rect x="494" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!WriteFile [IMPLEMENTED]
-Synchronous file block writing</title><rect x="516" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!SetFilePointer [IMPLEMENTED]
-64-bit/32-bit seek with SEEK_SET, SEEK_CUR, SEEK_END</title><rect x="538" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!SetEndOfFile [IMPLEMENTED]
-Truncates or extends file to current position</title><rect x="560" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!FlushFileBuffers [IMPLEMENTED]
-Host fsync flush</title><rect x="582" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetFileSize [IMPLEMENTED]
-Stat-based file length query</title><rect x="604" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetFullPathNameA [IMPLEMENTED]
-Normalizes relative game paths</title><rect x="626" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetLongPathNameA [IMPLEMENTED]
-Returns standardized long pathname</title><rect x="648" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!FindFirstFileA [IMPLEMENTED]
-Directory search traversal with wildcard matching</title><rect x="670" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!FindNextFileA [IMPLEMENTED]
-Iterates directory entry enumeration</title><rect x="692" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!FindClose [IMPLEMENTED]
-Closes search handle</title><rect x="714" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!DeleteFileA [IMPLEMENTED]
-Unlinks target file on storage</title><rect x="736" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!MoveFileA [IMPLEMENTED]
-Renames or moves target file atomically</title><rect x="758" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!CreateDirectoryA [IMPLEMENTED]
-Creates single or recursive directory path</title><rect x="780" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!RemoveDirectoryA [IMPLEMENTED]
-Removes empty directory path</title><rect x="802" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetCurrentDirectoryA [IMPLEMENTED]
-Returns active game root directory</title><rect x="824" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetDiskFreeSpaceA [IMPLEMENTED]
-Host statvfs free bytes calculation</title><rect x="846" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetDiskFreeSpaceExA [IMPLEMENTED]
-64-bit free space for large Android storage volumes</title><rect x="868" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetDriveTypeA [IMPLEMENTED]
-Returns DRIVE_FIXED (hard drive)</title><rect x="890" y="552" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetLogicalDrives [IMPLEMENTED]
-Bitmask containing drive C: and D:</title><rect x="32" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetFileType [IMPLEMENTED]
-Returns FILE_TYPE_DISK for regular files</title><rect x="54" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!SetStdHandle [IMPLEMENTED]
-Redirects standard handles</title><rect x="76" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetStdHandle [IMPLEMENTED]
-Returns guest standard input/output/error descriptors</title><rect x="98" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!CreateThread [IMPLEMENTED]
-Forks native POSIX host thread with guest stack allocation</title><rect x="120" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!ExitThread [IMPLEMENTED]
-Terminates guest worker thread cleanly</title><rect x="142" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!TerminateThread [IMPLEMENTED]
-Forces worker thread termination</title><rect x="164" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!SuspendThread [IMPLEMENTED]
-Pauses guest worker execution</title><rect x="186" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!ResumeThread [IMPLEMENTED]
-Resumes suspended guest worker execution</title><rect x="208" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetExitCodeThread [IMPLEMENTED]
-Queries thread termination code</title><rect x="230" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetCurrentThread [IMPLEMENTED]
-Pseudo-handle for current thread</title><rect x="252" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetCurrentThreadId [IMPLEMENTED]
-Unique guest thread identifier</title><rect x="274" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!SetThreadPriority [IMPLEMENTED]
-Maps Win32 priority to nice levels</title><rect x="296" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetThreadPriority [IMPLEMENTED]
-Returns mapped thread priority</title><rect x="318" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!CreateMutexA [IMPLEMENTED]
-Recursive POSIX mutex with named lookup</title><rect x="340" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!ReleaseMutex [IMPLEMENTED]
-Releases owned mutex</title><rect x="362" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!CreateEventA [IMPLEMENTED]
-Manual/auto-reset conditional variable event</title><rect x="384" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!SetEvent [IMPLEMENTED]
-Signals waiting threads on event</title><rect x="406" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!ResetEvent [IMPLEMENTED]
-Clears event signal state</title><rect x="428" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!WaitForSingleObject [IMPLEMENTED]
-Waits on mutex, event, or thread with timeout</title><rect x="450" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!WaitForMultipleObjects [IMPLEMENTED]
-Wait-any or wait-all synchronization barrier</title><rect x="472" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!InitializeCriticalSection [IMPLEMENTED]
-Fast user-mode lock structure initialization</title><rect x="494" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!InitializeCriticalSectionAndSpinCount [IMPLEMENTED]
-Spin-count user-mode lock initialization</title><rect x="516" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!EnterCriticalSection [IMPLEMENTED]
-Exclusive reentrant critical section acquisition</title><rect x="538" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!LeaveCriticalSection [IMPLEMENTED]
-Critical section lock release</title><rect x="560" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!DeleteCriticalSection [IMPLEMENTED]
-Cleans up critical section resources</title><rect x="582" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!InterlockedExchange [IMPLEMENTED]
-Atomic 32-bit exchange</title><rect x="604" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!InterlockedIncrement [IMPLEMENTED]
-Atomic 32-bit increment</title><rect x="626" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!InterlockedDecrement [IMPLEMENTED]
-Atomic 32-bit decrement</title><rect x="648" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!InterlockedCompareExchange [IMPLEMENTED]
-Atomic 32-bit compare-and-swap</title><rect x="670" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!Sleep [IMPLEMENTED]
-Yields machine lock and sleeps host thread</title><rect x="692" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!SleepEx [IMPLEMENTED]
-Alertable sleep with timeout</title><rect x="714" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetCurrentProcess [IMPLEMENTED]
-Pseudo-handle for process (0xFFFFFFFF)</title><rect x="736" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetCurrentProcessId [IMPLEMENTED]
-Process ID query</title><rect x="758" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!ExitProcess [IMPLEMENTED]
-Clean shutdown and lifecycle termination</title><rect x="780" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!TerminateProcess [IMPLEMENTED]
-Forced process kill</title><rect x="802" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetPriorityClass [IMPLEMENTED]
-Returns NORMAL_PRIORITY_CLASS</title><rect x="824" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!SetPriorityClass [IMPLEMENTED]
-Sets process execution priority</title><rect x="846" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetProcessAffinityMask [IMPLEMENTED]
-Topology affinity mask query</title><rect x="868" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!SetProcessAffinityMask [IMPLEMENTED]
-Tuned CPU cluster affinity configuration</title><rect x="890" y="574" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetCommandLineA [IMPLEMENTED]
-Returns SPEED2.EXE command line arguments</title><rect x="32" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetStartupInfoA [IMPLEMENTED]
-Supplies STARTUPINFO structure for CRT bring-up</title><rect x="54" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetModuleHandleA [IMPLEMENTED]
-Returns base address of SPEED2.EXE or loaded DLLs</title><rect x="76" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetModuleHandleW [IMPLEMENTED]
-Wide-string module lookup</title><rect x="98" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetModuleFileNameA [IMPLEMENTED]
-Full path to SPEED2.EXE on storage</title><rect x="120" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!LoadLibraryA [IMPLEMENTED]
-Dynamic module lookup and lifted DLL binding</title><rect x="142" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!FreeLibrary [IMPLEMENTED]
-Decrements module reference count</title><rect x="164" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetProcAddress [IMPLEMENTED]
-Resolves exported guest symbols and HLE thunks</title><rect x="186" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!CreateToolhelp32Snapshot [IMPLEMENTED]
-Captures running process/module list snapshot</title><rect x="208" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!Process32First [IMPLEMENTED]
-First process entry in toolhelp snapshot</title><rect x="230" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!Process32Next [IMPLEMENTED]
-Next process entry in toolhelp snapshot</title><rect x="252" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!Module32First [IMPLEMENTED]
-First module entry in toolhelp snapshot</title><rect x="274" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!Module32Next [IMPLEMENTED]
-Next module entry in toolhelp snapshot</title><rect x="296" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!DuplicateHandle [IMPLEMENTED]
-Duplicates synchronization or file handle</title><rect x="318" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!CloseHandle [IMPLEMENTED]
-Closes kernel handle</title><rect x="340" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!SetHandleCount [IMPLEMENTED]
-Obsolete Win32 file limit helper (no-op)</title><rect x="362" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetTickCount [IMPLEMENTED]
-Millisecond counter since system boot</title><rect x="384" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!QueryPerformanceCounter [IMPLEMENTED]
-Nanosecond steady clock performance counter</title><rect x="406" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!QueryPerformanceFrequency [IMPLEMENTED]
-High-resolution timer frequency (10 MHz)</title><rect x="428" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetSystemTimeAsFileTime [IMPLEMENTED]
-64-bit UTC timestamp in 100ns units</title><rect x="450" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!FileTimeToSystemTime [IMPLEMENTED]
-Decomposes 64-bit filetime to calendar fields</title><rect x="472" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!FileTimeToLocalFileTime [IMPLEMENTED]
-Adjusts UTC filetime to local timezone</title><rect x="494" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetTimeZoneInformation [IMPLEMENTED]
-Supplies daylight saving and UTC bias</title><rect x="516" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetSystemInfo [IMPLEMENTED]
-Page size (4KB) and processor architecture (x86)</title><rect x="538" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetVersion [IMPLEMENTED]
-Windows XP SP2 version tuple (5.1.2600)</title><rect x="560" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetVersionExA [IMPLEMENTED]
-OSVERSIONINFOA with XP SP2 identifier</title><rect x="582" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!IsProcessorFeaturePresent [IMPLEMENTED]
-Reports MMX, SSE, SSE2, and CMPXCHG8B support</title><rect x="604" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!IsDebuggerPresent [IMPLEMENTED]
-Returns false to bypass anti-debug assertions</title><rect x="626" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!DebugBreak [IMPLEMENTED]
-Hard breakpoint trap</title><rect x="648" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!OutputDebugStringA [IMPLEMENTED]
-Redirects guest debug prints to Android logcat</title><rect x="670" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!SetErrorMode [IMPLEMENTED]
-Suppresses Windows crash dialogs</title><rect x="692" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetLastError [IMPLEMENTED]
-Thread-local error code retrieval</title><rect x="714" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!SetLastError [IMPLEMENTED]
-Thread-local error code assignment</title><rect x="736" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!TlsAlloc [IMPLEMENTED]
-Thread-local storage slot reservation</title><rect x="758" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!TlsFree [IMPLEMENTED]
-Thread-local storage slot release</title><rect x="780" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!TlsGetValue [IMPLEMENTED]
-Retrieves thread-local slot value</title><rect x="802" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!TlsSetValue [IMPLEMENTED]
-Stores thread-local slot value</title><rect x="824" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!MultiByteToWideChar [IMPLEMENTED]
-Converts ASCII/CP1252 to UTF-16</title><rect x="846" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!WideCharToMultiByte [IMPLEMENTED]
-Converts UTF-16 to ASCII/CP1252</title><rect x="868" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!lstrcmpiA [IMPLEMENTED]
-Case-insensitive ASCII string comparison</title><rect x="890" y="596" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!CompareStringA [IMPLEMENTED]
-Locale-sensitive string comparison</title><rect x="32" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!CompareStringW [IMPLEMENTED]
-Locale-sensitive wide string comparison</title><rect x="54" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetStringTypeA [IMPLEMENTED]
-Character type classification (ANSI)</title><rect x="76" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetStringTypeW [IMPLEMENTED]
-Character type classification (Unicode)</title><rect x="98" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!LCMapStringA [IMPLEMENTED]
-Locale-specific string transformation (ANSI)</title><rect x="120" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!LCMapStringW [IMPLEMENTED]
-Locale-specific string transformation (Unicode)</title><rect x="142" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetCPInfo [IMPLEMENTED]
-Code page character width metrics</title><rect x="164" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetACP [IMPLEMENTED]
-Active ANSI code page (1252 Latin 1)</title><rect x="186" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetOEMCP [IMPLEMENTED]
-Active OEM code page (437 US)</title><rect x="208" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!IsValidCodePage [IMPLEMENTED]
-Code page validation check</title><rect x="230" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!IsValidLocale [IMPLEMENTED]
-Locale validation check</title><rect x="252" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!EnumSystemLocalesA [IMPLEMENTED]
-Enumerates installed system locales</title><rect x="274" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetLocaleInfoA [IMPLEMENTED]
-Retrieves locale attributes (ANSI)</title><rect x="296" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetLocaleInfoW [IMPLEMENTED]
-Retrieves locale attributes (Unicode)</title><rect x="318" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetUserDefaultLCID [IMPLEMENTED]
-Default user locale ID</title><rect x="340" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetThreadLocale [IMPLEMENTED]
-Returns thread locale ID (0x0409 US English)</title><rect x="362" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetEnvironmentStrings [IMPLEMENTED]
-Retrieves process environment block</title><rect x="384" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetEnvironmentStringsA [IMPLEMENTED]
-ANSI environment block retrieval</title><rect x="406" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetEnvironmentStringsW [IMPLEMENTED]
-Unicode environment block retrieval</title><rect x="428" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!FreeEnvironmentStringsA [IMPLEMENTED]
-Frees ANSI environment block</title><rect x="450" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!FreeEnvironmentStringsW [IMPLEMENTED]
-Frees Unicode environment block</title><rect x="472" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!SetEnvironmentVariableA [IMPLEMENTED]
-Sets environment variable</title><rect x="494" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!FindResourceA [IMPLEMENTED]
-Locates RT_RCDATA effect files in guest PE resource tree</title><rect x="516" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!FindResourceW [IMPLEMENTED]
-Wide resource directory locator</title><rect x="538" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!LoadResource [IMPLEMENTED]
-Returns memory pointer to resource payload</title><rect x="560" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!LockResource [IMPLEMENTED]
-Accesses resource data buffer in memory</title><rect x="582" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!SizeofResource [IMPLEMENTED]
-Returns byte size of resource payload</title><rect x="604" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!SetUnhandledExceptionFilter [IMPLEMENTED]
-Installs top-level exception handler</title><rect x="626" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!UnhandledExceptionFilter [IMPLEMENTED]
-Default crash handler filter</title><rect x="648" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!RaiseException [IMPLEMENTED]
-Invokes software exception</title><rect x="670" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!RtlUnwind [IMPLEMENTED]
-Unwinds call stack frames</title><rect x="692" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!EncodePointer [IMPLEMENTED]
-Pointer obfuscation identity pass-through</title><rect x="714" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!DecodePointer [IMPLEMENTED]
-Pointer deobfuscation identity pass-through</title><rect x="736" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!SetupComm [IMPLEMENTED]
-Rust-backed communications device buffer configuration</title><rect x="758" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!SetCommState [IMPLEMENTED]
-Rust-backed serial port baud rate and parity setup</title><rect x="780" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetCommState [IMPLEMENTED]
-Rust-backed serial port configuration query</title><rect x="802" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!SetCommConfig [IMPLEMENTED]
-Rust-backed communications configuration setter</title><rect x="824" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetCommConfig [IMPLEMENTED]
-Rust-backed communications configuration getter</title><rect x="846" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!SetCommTimeouts [IMPLEMENTED]
-Rust-backed serial port timeout parameters</title><rect x="868" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!SetCommMask [IMPLEMENTED]
-Rust-backed serial event mask configuration</title><rect x="890" y="618" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!WaitCommEvent [IMPLEMENTED]
-Rust-backed waits for serial port communications event</title><rect x="32" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!PurgeComm [IMPLEMENTED]
-Rust-backed discards communications buffer data</title><rect x="54" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>kernel32.dll!GetOverlappedResult [IMPLEMENTED]
-Rust-backed overlapped asynchronous I/O completion status</title><rect x="76" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!CreateWindowExA [IMPLEMENTED]
-Creates game frame window and sets up message queue</title><rect x="98" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!DestroyWindow [IMPLEMENTED]
-Dispatches WM_DESTROY/WM_NCDESTROY and cleans up window</title><rect x="120" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!ShowWindow [IMPLEMENTED]
-Controls window visibility and posts WM_SHOWWINDOW</title><rect x="142" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!UpdateWindow [IMPLEMENTED]
-Directly dispatches WM_PAINT to window proc</title><rect x="164" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!SetWindowPos [IMPLEMENTED]
-Positions and sizes window surface with WM_WINDOWPOSCHANGED</title><rect x="186" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!AdjustWindowRect [IMPLEMENTED]
-Calculates required client window dimensions</title><rect x="208" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!GetWindowRect [IMPLEMENTED]
-Returns window bounding screen coordinates</title><rect x="230" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!GetClientRect [IMPLEMENTED]
-Returns inner rendering viewport dimensions</title><rect x="252" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!GetWindowLongA [IMPLEMENTED]
-Queries window procedure, style, exstyle, and user data</title><rect x="274" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!SetWindowLongA [IMPLEMENTED]
-Modifies window procedure, style, or instance data</title><rect x="296" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!GetDesktopWindow [IMPLEMENTED]
-Returns virtual desktop handle (0xF0000001)</title><rect x="318" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!IsIconic [IMPLEMENTED]
-Always reports false (game window is never minimized)</title><rect x="340" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!RegisterClassExA [IMPLEMENTED]
-Registers WNDCLASSEXA with atom identifier and procedure</title><rect x="362" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!UnregisterClassA [IMPLEMENTED]
-Unregisters window class atom</title><rect x="384" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!DefWindowProcA [IMPLEMENTED]
-Default window message handling (WM_NCCREATE, WM_ERASEBKGND)</title><rect x="406" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!GetMessageA [IMPLEMENTED]
-Blocks until message arrives in queue</title><rect x="428" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!PeekMessageA [IMPLEMENTED]
-Non-blocking check for queued input or window messages</title><rect x="450" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!TranslateMessage [IMPLEMENTED]
-Translates virtual keystrokes to WM_CHAR messages</title><rect x="472" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!DispatchMessageA [IMPLEMENTED]
-Passes queued message to registered window procedure</title><rect x="494" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!SendMessageA [IMPLEMENTED]
-Synchronously invokes window procedure with message</title><rect x="516" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!PostMessageA [IMPLEMENTED]
-Enqueues asynchronous message to target window</title><rect x="538" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!PostThreadMessageA [IMPLEMENTED]
-Enqueues message directly to thread queue</title><rect x="560" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!PostQuitMessage [IMPLEMENTED]
-Posts WM_QUIT to trigger message loop exit</title><rect x="582" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!SetActiveWindow [IMPLEMENTED]
-Activates target window and dispatches WM_ACTIVATE</title><rect x="604" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!GetActiveWindow [IMPLEMENTED]
-Returns currently active window handle</title><rect x="626" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!SetForegroundWindow [IMPLEMENTED]
-Brings window to front with WM_ACTIVATEAPP</title><rect x="648" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!GetForegroundWindow [IMPLEMENTED]
-Returns foreground window handle</title><rect x="670" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!SetFocus [IMPLEMENTED]
-Sets keyboard input focus</title><rect x="692" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!GetFocus [IMPLEMENTED]
-Returns focused window handle</title><rect x="714" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!SetCapture [IMPLEMENTED]
-Directs all mouse input to target window</title><rect x="736" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!ReleaseCapture [IMPLEMENTED]
-Releases mouse capture</title><rect x="758" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!GetCursorPos [IMPLEMENTED]
-Returns mouse pointer coordinates mapped to touch</title><rect x="780" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!SetCursor [IMPLEMENTED]
-Sets active cursor handle</title><rect x="802" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!ShowCursor [IMPLEMENTED]
-Adjusts cursor visibility counter</title><rect x="824" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!LoadCursorA [IMPLEMENTED]
-Loads standard IDC_ARROW cursor handle</title><rect x="846" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!LoadIconA [IMPLEMENTED]
-Loads standard IDI_APPLICATION icon handle</title><rect x="868" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!GetSystemMetrics [IMPLEMENTED]
-Screen resolution, SM_CXSCREEN, SM_CYSCREEN, borders</title><rect x="890" y="640" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!SetRect [IMPLEMENTED]
-Fills RECT structure coordinates</title><rect x="32" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!BeginPaint [IMPLEMENTED]
-Prepares window for drawing and returns paint DC</title><rect x="54" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!EndPaint [IMPLEMENTED]
-Marks window drawing region as validated</title><rect x="76" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!wvsprintfA [IMPLEMENTED]
-Formatted string printing using stdarg list</title><rect x="98" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!wsprintfA [IMPLEMENTED]
-Formatted string printing with variable arguments</title><rect x="120" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>user32.dll!MessageBoxA [IMPLEMENTED]
-Tester notification; answers IDOK and logs to logcat</title><rect x="142" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!Direct3DCreate9 [IMPLEMENTED]
-Initializes DXVK D3D9 bridge with Vulkan backend</title><rect x="164" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3D9::CreateDevice [IMPLEMENTED]
-Creates native Vulkan swapchain and D3D9 device</title><rect x="186" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3D9::GetAdapterCount [IMPLEMENTED]
-Enumerates primary graphics adapter</title><rect x="208" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3D9::GetAdapterDisplayMode [IMPLEMENTED]
-Queries Android display resolution and refresh rate</title><rect x="230" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3D9::GetDeviceCaps [IMPLEMENTED]
-Reports shader model 2.0/3.0 capabilities</title><rect x="252" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3D9::CheckDeviceFormat [IMPLEMENTED]
-Validates D3DFMT texture support on Vulkan</title><rect x="274" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3D9::CheckDeviceType [IMPLEMENTED]
-Confirms HAL hardware acceleration</title><rect x="296" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3D9::CheckDepthStencilMatch [IMPLEMENTED]
-Verifies D24S8 depth-stencil compatibility</title><rect x="318" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::Present [IMPLEMENTED]
-VK swapchain presentation with frame pacer and ADPF</title><rect x="340" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::BeginScene [IMPLEMENTED]
-Opens frame render command buffer</title><rect x="362" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::EndScene [IMPLEMENTED]
-Submits draw commands to Vulkan queue</title><rect x="384" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::Clear [IMPLEMENTED]
-Clears color, depth, and stencil surfaces</title><rect x="406" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::SetRenderState [IMPLEMENTED]
-Translates D3D9 states (alpha test, blend, cull, z-test)</title><rect x="428" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::GetRenderState [IMPLEMENTED]
-Retrieves active pipeline state values</title><rect x="450" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::SetTexture [IMPLEMENTED]
-Binds 2D textures, cubemaps, and volume textures</title><rect x="472" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::SetSamplerState [IMPLEMENTED]
-Configures anisotropic filtering and texture address modes</title><rect x="494" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::SetStreamSource [IMPLEMENTED]
-Binds vertex buffer streams to input assembler</title><rect x="516" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::SetIndices [IMPLEMENTED]
-Binds 16-bit/32-bit index buffers</title><rect x="538" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::SetFVF [IMPLEMENTED]
-Fixed function vertex layout definition</title><rect x="560" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::DrawPrimitive [IMPLEMENTED]
-Draws non-indexed primitive lists and strips</title><rect x="582" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::DrawIndexedPrimitive [IMPLEMENTED]
-Draws indexed triangles and lines</title><rect x="604" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::DrawPrimitiveUP [IMPLEMENTED]
-Draws user-memory vertices</title><rect x="626" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::DrawIndexedPrimitiveUP [IMPLEMENTED]
-Draws indexed user-memory geometry</title><rect x="648" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::CreateTexture [IMPLEMENTED]
-Allocates Vulkan image with BC1/BC2/BC3 compression</title><rect x="670" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::CreateVertexBuffer [IMPLEMENTED]
-Allocates Vulkan device memory vertex buffer</title><rect x="692" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::CreateIndexBuffer [IMPLEMENTED]
-Allocates Vulkan device memory index buffer</title><rect x="714" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::CreateVertexDeclaration [IMPLEMENTED]
-Compiles D3DVERTEXELEMENT9 input layout</title><rect x="736" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::CreateVertexShader [IMPLEMENTED]
-Translates DXBC vertex shaders via DXVK SPIR-V compiler</title><rect x="758" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::CreatePixelShader [IMPLEMENTED]
-Translates DXBC pixel shaders via DXVK SPIR-V compiler</title><rect x="780" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::SetVertexShader [IMPLEMENTED]
-Binds active vertex shader pipeline</title><rect x="802" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::SetPixelShader [IMPLEMENTED]
-Binds active pixel shader pipeline</title><rect x="824" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::SetVertexShaderConstantF [IMPLEMENTED]
-Pushes 4-float matrix/vector vertex constants</title><rect x="846" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::SetPixelShaderConstantF [IMPLEMENTED]
-Pushes 4-float lighting/color pixel constants</title><rect x="868" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::Reset [IMPLEMENTED]
-Handles surface recreation and resolution changes</title><rect x="890" y="662" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::TestCooperativeLevel [IMPLEMENTED]
-Always reports D3D_OK; ignores device loss</title><rect x="32" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::GetBackBuffer [IMPLEMENTED]
-Retrieves swapchain color surface</title><rect x="54" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::SetRenderTarget [IMPLEMENTED]
-Binds off-screen render target for mirrors/glow</title><rect x="76" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::GetRenderTarget [IMPLEMENTED]
-Retrieves current active render target</title><rect x="98" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::SetDepthStencilSurface [IMPLEMENTED]
-Binds z-buffer surface</title><rect x="120" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::GetDepthStencilSurface [IMPLEMENTED]
-Retrieves current depth surface</title><rect x="142" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::SetViewport [IMPLEMENTED]
-Sets rasterizer viewport rectangle</title><rect x="164" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>d3d9.dll!IDirect3DDevice9::GetViewport [IMPLEMENTED]
-Retrieves active rasterizer viewport</title><rect x="186" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dsound.dll!DirectSoundCreate [IMPLEMENTED]
-Factory method initializing AAudio high-priority stream</title><rect x="208" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dsound.dll!#1 (DirectSoundEnumerate) [IMPLEMENTED]
-Ordinal #1 returning primary sound device</title><rect x="230" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dsound.dll!IDirectSound::CreateSoundBuffer [IMPLEMENTED]
-Creates primary or secondary PCM audio buffer</title><rect x="252" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dsound.dll!IDirectSound::SetCooperativeLevel [IMPLEMENTED]
-Configures DSSCL_PRIORITY level</title><rect x="274" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dsound.dll!IDirectSound::GetCaps [IMPLEMENTED]
-Reports 44.1kHz/48kHz stereo 16-bit PCM capabilities</title><rect x="296" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dsound.dll!IDirectSound::SetSpeakerConfig [IMPLEMENTED]
-Configures stereo speaker output</title><rect x="318" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dsound.dll!IDirectSound::GetSpeakerConfig [IMPLEMENTED]
-Returns DSSPEAKER_STEREO (4)</title><rect x="340" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dsound.dll!IDirectSoundBuffer::Play [IMPLEMENTED]
-Starts buffer playback with looping support</title><rect x="362" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dsound.dll!IDirectSoundBuffer::Stop [IMPLEMENTED]
-Halts buffer playback and voice mixer</title><rect x="384" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dsound.dll!IDirectSoundBuffer::Lock [IMPLEMENTED]
-Locks cyclic ring buffer for writing guest samples</title><rect x="406" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dsound.dll!IDirectSoundBuffer::Unlock [IMPLEMENTED]
-Publishes PCM audio data to lockless mixer</title><rect x="428" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dsound.dll!IDirectSoundBuffer::SetCurrentPosition [IMPLEMENTED]
-Updates voice read cursor in ring buffer</title><rect x="450" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dsound.dll!IDirectSoundBuffer::GetCurrentPosition [IMPLEMENTED]
-Reports accurate play and write cursors</title><rect x="472" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dsound.dll!IDirectSoundBuffer::SetVolume [IMPLEMENTED]
-Millibel volume attenuation to linear gain</title><rect x="494" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dsound.dll!IDirectSoundBuffer::GetVolume [IMPLEMENTED]
-Returns cached millibel volume level</title><rect x="516" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dsound.dll!IDirectSoundBuffer::SetPan [IMPLEMENTED]
-Stereo balance and panning calculation</title><rect x="538" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dsound.dll!IDirectSoundBuffer::GetPan [IMPLEMENTED]
-Returns cached stereo pan level</title><rect x="560" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dsound.dll!IDirectSoundBuffer::SetFrequency [IMPLEMENTED]
-Resampling frequency adjustments (100Hz - 200kHz)</title><rect x="582" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dsound.dll!IDirectSoundBuffer::GetFrequency [IMPLEMENTED]
-Queries playback sample rate</title><rect x="604" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dsound.dll!IDirectSoundBuffer::GetStatus [IMPLEMENTED]
-Returns DSBSTATUS_PLAYING / DSBSTATUS_LOOPING</title><rect x="626" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dsound.dll!IDirectSoundBuffer::Restore [IMPLEMENTED]
-No-op; software buffers are never lost by driver</title><rect x="648" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dsound.dll!IDirectSoundBuffer::GetCaps [IMPLEMENTED]
-Queries buffer capacity and format flags</title><rect x="670" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dsound.dll!IDirectSoundBuffer::SetFormat [IMPLEMENTED]
-Updates primary buffer format description</title><rect x="692" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dinput8.dll!DirectInput8Create [IMPLEMENTED]
-Initializes DirectInput 8 subsystems and hooks</title><rect x="714" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dinput8.dll!IDirectInput8A::CreateDevice [IMPLEMENTED]
-Instantiates keyboard, mouse, or gamepad device</title><rect x="736" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dinput8.dll!IDirectInput8A::EnumDevices [IMPLEMENTED]
-Enumerates attached controllers and input pads</title><rect x="758" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dinput8.dll!IDirectInputDevice8A::SetDataFormat [IMPLEMENTED]
-Binds c_dfDIJoystick2, c_dfDIKeyboard, or mouse format</title><rect x="780" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dinput8.dll!IDirectInputDevice8A::SetCooperativeLevel [IMPLEMENTED]
-DISCL_FOREGROUND | DISCL_NONEXCLUSIVE</title><rect x="802" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dinput8.dll!IDirectInputDevice8A::Acquire [IMPLEMENTED]
-Acquires input device and enables touch/gamepad stream</title><rect x="824" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dinput8.dll!IDirectInputDevice8A::Unacquire [IMPLEMENTED]
-Releases device acquisition</title><rect x="846" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dinput8.dll!IDirectInputDevice8A::GetDeviceState [IMPLEMENTED]
-Polls axes, buttons, and keys into guest memory</title><rect x="868" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dinput8.dll!IDirectInputDevice8A::GetDeviceData [IMPLEMENTED]
-Buffered input event packet delivery</title><rect x="890" y="684" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dinput8.dll!IDirectInputDevice8A::Poll [IMPLEMENTED]
-Polls gamepad analog sticks, triggers, and D-pad</title><rect x="32" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dinput8.dll!IDirectInputDevice8A::SetProperty [IMPLEMENTED]
-Configures deadzones, saturation, and buffer size</title><rect x="54" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dinput8.dll!IDirectInputDevice8A::GetProperty [IMPLEMENTED]
-Queries device range and joystick capabilities</title><rect x="76" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dinput8.dll!IDirectInputDevice8A::EnumObjects [IMPLEMENTED]
-Enumerates axis and button controls</title><rect x="98" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dinput8.dll!IDirectInputDevice8A::CreateEffect [IMPLEMENTED]
-Rust-backed DirectInput force feedback effect creation &amp; engine</title><rect x="120" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>dinput8.dll!IDirectInputDevice8A::SendForceFeedbackCommand [IMPLEMENTED]
-Rust-backed DirectInput haptic vibration command dispatcher</title><rect x="142" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>ws2_32.dll!WSAStartup [IMPLEMENTED]
-Initializes Windows Sockets 2.2 subsystem</title><rect x="164" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>ws2_32.dll!WSACleanup [IMPLEMENTED]
-Terminates Winsock library context</title><rect x="186" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>ws2_32.dll!WSAGetLastError [IMPLEMENTED]
-Translates POSIX errno to WSA error constants</title><rect x="208" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>ws2_32.dll!WSAIoctl [IMPLEMENTED]
-Socket I/O control command handling</title><rect x="230" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>ws2_32.dll!socket [IMPLEMENTED]
-Creates IPv4 TCP (SOCK_STREAM) or UDP (SOCK_DGRAM) socket</title><rect x="252" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>ws2_32.dll!closesocket [IMPLEMENTED]
-Closes socket file descriptor</title><rect x="274" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>ws2_32.dll!shutdown [IMPLEMENTED]
-Halts send and receive operations</title><rect x="296" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>ws2_32.dll!bind [IMPLEMENTED]
-Binds socket to local address and port</title><rect x="318" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>ws2_32.dll!listen [IMPLEMENTED]
-Places stream socket in listening state for LAN hosting</title><rect x="340" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>ws2_32.dll!accept [IMPLEMENTED]
-Accepts incoming multiplayer client connection</title><rect x="362" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>ws2_32.dll!connect [IMPLEMENTED]
-Connects to adhoc roaming peer or classic lobby</title><rect x="384" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>ws2_32.dll!send [IMPLEMENTED]
-Sends stream data packet</title><rect x="406" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>ws2_32.dll!sendto [IMPLEMENTED]
-Sends UDP datagram to broadcast or peer address</title><rect x="428" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>ws2_32.dll!recv [IMPLEMENTED]
-Receives stream data from socket</title><rect x="450" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>ws2_32.dll!recvfrom [IMPLEMENTED]
-Receives UDP datagram with remote address resolution</title><rect x="472" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>ws2_32.dll!select [IMPLEMENTED]
-Non-blocking multiplexed socket polling with timeout</title><rect x="494" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>ws2_32.dll!ioctlsocket [IMPLEMENTED]
-FIONBIO non-blocking mode configuration</title><rect x="516" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>ws2_32.dll!setsockopt [IMPLEMENTED]
-Configures SO_BROADCAST, SO_REUSEADDR, and TCP_NODELAY</title><rect x="538" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>ws2_32.dll!getsockname [IMPLEMENTED]
-Retrieves local socket IP and port</title><rect x="560" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>ws2_32.dll!getpeername [IMPLEMENTED]
-Retrieves remote connected peer address</title><rect x="582" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>ws2_32.dll!gethostname [IMPLEMENTED]
-Returns local Android hostname</title><rect x="604" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>ws2_32.dll!gethostbyname [IMPLEMENTED]
-DNS host resolution and address lookup</title><rect x="626" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>winmm.dll!timeGetTime [IMPLEMENTED]
-High-precision millisecond multimedia timer</title><rect x="648" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>winmm.dll!timeBeginPeriod [IMPLEMENTED]
-Timer resolution adjustment (1ms target)</title><rect x="670" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>winmm.dll!timeEndPeriod [IMPLEMENTED]
-Restores system timer resolution</title><rect x="692" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>winmm.dll!timeSetEvent [IMPLEMENTED]
-Schedules periodic worker timer callback</title><rect x="714" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>winmm.dll!timeKillEvent [IMPLEMENTED]
-Cancels scheduled timer event</title><rect x="736" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>winmm.dll!timeGetDevCaps [IMPLEMENTED]
-Reports minimum (1ms) and maximum (1000000ms) timer resolution</title><rect x="758" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>advapi32.dll!RegOpenKeyA [IMPLEMENTED]
-Opens registry key for options and career saves</title><rect x="780" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>advapi32.dll!RegOpenKeyExA [IMPLEMENTED]
-Opens registry key with access rights</title><rect x="802" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>advapi32.dll!RegCloseKey [IMPLEMENTED]
-Flushes and closes registry key handle</title><rect x="824" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>advapi32.dll!RegQueryValueExA [IMPLEMENTED]
-Reads profile options, language, and install path</title><rect x="846" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>advapi32.dll!RegSetValueExA [IMPLEMENTED]
-Writes updated game options and resolution preferences</title><rect x="868" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>advapi32.dll!RegCreateKeyA [IMPLEMENTED]
-Creates new registry key entry</title><rect x="890" y="706" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>gdi32.dll!DeleteObject [IMPLEMENTED]
-Frees GDI bitmap or font object</title><rect x="32" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>gdi32.dll!SetTextColor [IMPLEMENTED]
-Rust-backed device context text color setter</title><rect x="54" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>gdi32.dll!SetBkColor [IMPLEMENTED]
-Rust-backed device context background color setter</title><rect x="76" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>gdi32.dll!SetBkMode [IMPLEMENTED]
-Rust-backed background mix mode configuration</title><rect x="98" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>gdi32.dll!CreateCompatibleDC [IMPLEMENTED]
-Rust-backed memory device context creation</title><rect x="120" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>gdi32.dll!DeleteDC [IMPLEMENTED]
-Rust-backed device context deletion</title><rect x="142" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>gdi32.dll!CreateFontA [IMPLEMENTED]
-Rust-backed logical font handle creation</title><rect x="164" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>gdi32.dll!CreateBitmap [IMPLEMENTED]
-Rust-backed bitmap surface creation</title><rect x="186" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>gdi32.dll!ExtTextOutA [IMPLEMENTED]
-Rust-backed text rendering using selected font</title><rect x="208" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>gdi32.dll!SelectObject [IMPLEMENTED]
-Rust-backed GDI object selector</title><rect x="230" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>gdi32.dll!BitBlt [IMPLEMENTED]
-Rust-backed bit-block raster transfer</title><rect x="252" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>gdi32.dll!GetPixel [IMPLEMENTED]
-Rust-backed RGB color value query</title><rect x="274" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>tapi32.dll!lineInitialize [IMPLEMENTED]
-Rust-backed Telephony API line initialization</title><rect x="296" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>tapi32.dll!lineShutdown [IMPLEMENTED]
-Rust-backed Telephony API shutdown handler</title><rect x="318" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>tapi32.dll!lineOpen [IMPLEMENTED]
-Rust-backed telephony line device opener</title><rect x="340" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>tapi32.dll!lineClose [IMPLEMENTED]
-Rust-backed telephony line device closer</title><rect x="362" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>tapi32.dll!lineGetDevCaps [IMPLEMENTED]
-Rust-backed telephony device capabilities query</title><rect x="384" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>tapi32.dll!lineGetID [IMPLEMENTED]
-Rust-backed telephony device identifier query</title><rect x="406" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>tapi32.dll!lineNegotiateAPIVersion [IMPLEMENTED]
-Rust-backed telephony version negotiation</title><rect x="428" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>tapi32.dll!lineMakeCall [IMPLEMENTED]
-Rust-backed telephony outgoing call handler</title><rect x="450" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>tapi32.dll!lineAnswer [IMPLEMENTED]
-Rust-backed telephony incoming call answer</title><rect x="472" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>shfolder.dll!SHGetFolderPathA [IMPLEMENTED]
-Maps CSIDL_LOCAL_APPDATA to /sdcard/NFSU2</title><rect x="494" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>shell32.dll!ShellExecuteA [IMPLEMENTED]
-Rust-backed ShellExecute external launcher &amp; URL dispatcher</title><rect x="516" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>netapi32.dll!Netbios [IMPLEMENTED]
-Rust-backed Netbios LANA enumeration and MAC query</title><rect x="538" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>netapi32.dll!NetApiBufferFree [IMPLEMENTED]
-Rust-backed NetApi buffer deallocation</title><rect x="560" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>netapi32.dll!NetWkstaGetInfo [IMPLEMENTED]
-Rust-backed Workstation info query</title><rect x="582" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>netapi32.dll!NetGetJoinInformation [IMPLEMENTED]
-Rust-backed Workgroup join status query</title><rect x="604" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<g><title>ddraw.dll!DirectDrawCreate [IMPLEMENTED]
-Rust-backed DirectDraw device &amp; mode enumeration</title><rect x="626" y="728" width="18" height="18" rx="3" fill="#10b981" stroke="#212830" stroke-width="1"/></g>
-<line x1="32" y1="774" x2="928" y2="774" stroke="#373e47" stroke-width="1"/>
-<text x="32" y="792" font-family="Segoe UI, sans-serif" font-size="11" fill="#64748b">Last updated: 2026-11-08 22:49:43Z | Configured via library-progress.json | Run python scripts/library_progress.py</text>
-<text x="928" y="792" font-family="Segoe UI, sans-serif" font-size="11" fill="#38bdf8" text-anchor="end">git:mininxd/NFSU2-Revived-Android</text>
+<rect x="180" y="198" width="608.0" height="14" rx="3" fill="#f97316"><title>perf_cores: 8 pure Rust</title></rect>
+<text x="928" y="209" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">8/8 (100.0%)</text>
+<text x="32" y="234" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">roam_rs</text>
+<rect x="180" y="222" width="608" height="14" rx="3" fill="#475569"/>
+<rect x="180" y="222" width="608.0" height="14" rx="3" fill="#f97316"><title>roam_rs: 14 pure Rust</title></rect>
+<text x="928" y="233" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">14/14 (100.0%)</text>
+<text x="32" y="258" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">graphics_cache</text>
+<rect x="180" y="246" width="608" height="14" rx="3" fill="#475569"/>
+<rect x="180" y="246" width="608.0" height="14" rx="3" fill="#f97316"><title>graphics_cache: 14 pure Rust</title></rect>
+<text x="928" y="257" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">14/14 (100.0%)</text>
+<text x="32" y="282" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">simd_audio</text>
+<rect x="180" y="270" width="608" height="14" rx="3" fill="#475569"/>
+<rect x="180" y="270" width="608.0" height="14" rx="3" fill="#f97316"><title>simd_audio: 6 pure Rust</title></rect>
+<text x="928" y="281" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">6/6 (100.0%)</text>
+<text x="32" y="306" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">win32_dinput</text>
+<rect x="180" y="294" width="608" height="14" rx="3" fill="#475569"/>
+<rect x="180" y="294" width="608.0" height="14" rx="3" fill="#f97316"><title>win32_dinput: 6 pure Rust</title></rect>
+<text x="928" y="305" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">6/6 (100.0%)</text>
+<text x="32" y="330" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">win32_compat</text>
+<rect x="180" y="318" width="608" height="14" rx="3" fill="#475569"/>
+<rect x="180" y="318" width="608.0" height="14" rx="3" fill="#f97316"><title>win32_compat: 14 pure Rust</title></rect>
+<text x="928" y="329" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">14/14 (100.0%)</text>
+<text x="32" y="354" font-family="monospace" font-size="12" font-weight="600" fill="#f8fafc">touch_input</text>
+<rect x="180" y="342" width="608" height="14" rx="3" fill="#475569"/>
+<rect x="180" y="342" width="506.7" height="14" rx="3" fill="#f97316"><title>touch_input: 5 pure Rust</title></rect>
+<rect x="686.7" y="342" width="101.3" height="14" rx="3" fill="#eab308"><title>touch_input: 1 hybrid</title></rect>
+<text x="928" y="353" font-family="monospace" font-size="11" fill="#94a3b8" text-anchor="end">5/6 (91.7%)</text>
+<text x="32" y="378" font-family="Segoe UI, sans-serif" font-size="15" font-weight="bold" fill="#f8fafc">Rust Native Component Matrix</text>
+<text x="32" y="396" font-family="Segoe UI, sans-serif" font-size="12" fill="#64748b">Each tile represents a converted module or SIMD pipeline. Hover over cells for implementation details.</text>
+<rect x="608" y="384" width="10" height="10" rx="2" fill="#f97316"/>
+<text x="624" y="393" font-family="Segoe UI, sans-serif" font-size="11" fill="#94a3b8">Pure Rust</text>
+<rect x="713" y="384" width="10" height="10" rx="2" fill="#eab308"/>
+<text x="729" y="393" font-family="Segoe UI, sans-serif" font-size="11" fill="#94a3b8">Hybrid / Bridge</text>
+<rect x="818" y="384" width="10" height="10" rx="2" fill="#475569"/>
+<text x="834" y="393" font-family="Segoe UI, sans-serif" font-size="11" fill="#94a3b8">Pending</text>
+<g><title>perf_cores::cpu_detect [IMPLEMENTED]
+sysfs cpufreq and capacity auto-detection (Cortex-X / A7xx / A5xx)</title><rect x="32" y="412" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="49.0" y="432.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">CPU</text></g>
+<g><title>perf_cores::cluster_mask [IMPLEMENTED]
+64-bit performance core bitmask calculation</title><rect x="72" y="412" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="89.0" y="432.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">CLU</text></g>
+<g><title>perf_cores::sched_affinity [IMPLEMENTED]
+Dynamic thread affinity pinning via SYS_sched_setaffinity</title><rect x="112" y="412" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="129.0" y="432.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">SCH</text></g>
+<g><title>perf_cores::priority_tune [IMPLEMENTED]
+EAS thread priority elevation and -10 nice tuning</title><rect x="152" y="412" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="169.0" y="432.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">PRI</text></g>
+<g><title>perf_cores::comm_scanner [IMPLEMENTED]
+Process task comm scanner prioritizing emu, audio &amp; render threads</title><rect x="192" y="412" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="209.0" y="432.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">COM</text></g>
+<g><title>perf_cores::jni_bindings [IMPLEMENTED]
+Zero-overhead JNI bridge for PerformanceCores.java</title><rect x="232" y="412" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="249.0" y="432.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">JNI</text></g>
+<g><title>perf_cores::steer_math [IMPLEMENTED]
+Progressive cubic steering curve and deadzone computation</title><rect x="272" y="412" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="289.0" y="432.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">STE</text></g>
+<g><title>perf_cores::c_abi_export [IMPLEMENTED]
+nfs_perf_cores_bind C ABI export for companion libraries</title><rect x="312" y="412" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="329.0" y="432.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">C_A</text></g>
+<g><title>roam_rs::wire_reader [IMPLEMENTED]
+Bounds-safe zero-copy binary wire decoding (wire.rs)</title><rect x="352" y="412" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="369.0" y="432.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">WIR</text></g>
+<g><title>roam_rs::wire_writer [IMPLEMENTED]
+Bounds-safe binary wire packet serializer (wire.rs)</title><rect x="392" y="412" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="409.0" y="432.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">WIR</text></g>
+<g><title>roam_rs::crc32_fast [IMPLEMENTED]
+Hardware-accelerated CRC32 packet integrity hashing (crc.rs)</title><rect x="432" y="412" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="449.0" y="432.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">CRC</text></g>
+<g><title>roam_rs::fnv1a_hash [IMPLEMENTED]
+64-bit FNV-1a room and identifier string hashing (hash.rs)</title><rect x="472" y="412" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="489.0" y="432.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">FNV</text></g>
+<g><title>roam_rs::simd_vector [IMPLEMENTED]
+128-bit vector dot, cross, and distance operations (math.rs)</title><rect x="512" y="412" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="529.0" y="432.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">SIM</text></g>
+<g><title>roam_rs::quaternion_lerp [IMPLEMENTED]
+Rotational spherical linear interpolation and pacing (interp.rs)</title><rect x="552" y="412" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="569.0" y="432.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">QUA</text></g>
+<g><title>roam_rs::timestep_lock [IMPLEMENTED]
+Locked 60 Hz simulation time-step governor at 0x007875BC (engine.rs)</title><rect x="592" y="412" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="609.0" y="432.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">TIM</text></g>
+<g><title>roam_rs::high_fps_patch [IMPLEMENTED]
+90/120 Hz high-refresh rate timing patch at 0x0057A084 (engine.rs)</title><rect x="632" y="412" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="649.0" y="432.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">HIG</text></g>
+<g><title>roam_rs::crowd_filter [IMPLEMENTED]
+Trackside 3D crowd suppression filter at 0x00870CD0 (crowd.rs)</title><rect x="672" y="412" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="689.0" y="432.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">CRO</text></g>
+<g><title>roam_rs::sync_guard [IMPLEMENTED]
+Deadlock and spin-stall resolution watchdog (sync_guard.rs)</title><rect x="712" y="412" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="729.0" y="432.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">SYN</text></g>
+<g><title>roam_rs::car_cfg_sync [IMPLEMENTED]
+Visual customization and performance part sync (carcfg.rs)</title><rect x="752" y="412" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="769.0" y="432.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">CAR</text></g>
+<g><title>roam_rs::ws_switch_frame [IMPLEMENTED]
+RFC 6455 WebSocket framing and SIMD XOR mask unmasking (ws_switch.rs)</title><rect x="792" y="412" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="809.0" y="432.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">WS_</text></g>
+<g><title>roam_rs::packet_demux [IMPLEMENTED]
+Multiplexed Free Roam UDP and Online TCP frame demuxer (ws_switch.rs)</title><rect x="832" y="412" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="849.0" y="432.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">PAC</text></g>
+<g><title>roam_rs::engine_pacing [IMPLEMENTED]
+Anti-slowmotion wall-clock elapsed time filter (engine.rs)</title><rect x="872" y="412" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="889.0" y="432.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">ENG</text></g>
+<g><title>graphics_cache::async_compiler [IMPLEMENTED]
+Multi-threaded Vulkan pipeline and shader compilation engine</title><rect x="32" y="452" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="49.0" y="472.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">ASY</text></g>
+<g><title>graphics_cache::d3d9_filter_rs [IMPLEMENTED]
+D3D9 SetRenderState redundant call deduplication shadow filter</title><rect x="72" y="452" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="89.0" y="472.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">D3D</text></g>
+<g><title>graphics_cache::d3d9_filter_tex [IMPLEMENTED]
+D3D9 SetTexture &amp; SetTextureStageState state shadow filter</title><rect x="112" y="452" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="129.0" y="472.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">D3D</text></g>
+<g><title>graphics_cache::d3d9_filter_vtx [IMPLEMENTED]
+D3D9 SetFVF &amp; SetStreamSource redundant vertex state filter</title><rect x="152" y="452" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="169.0" y="472.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">D3D</text></g>
+<g><title>graphics_cache::d3d9_filter_pipe [IMPLEMENTED]
+D3D9 SetVertexShader &amp; SetPixelShader shadow cache</title><rect x="192" y="452" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="209.0" y="472.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">D3D</text></g>
+<g><title>graphics_cache::d3d9_filter_view [IMPLEMENTED]
+D3D9 SetViewport &amp; SetScissorRect redundant bounding filter</title><rect x="232" y="452" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="249.0" y="472.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">D3D</text></g>
+<g><title>graphics_cache::gles_optimizer [IMPLEMENTED]
+GLES driver state shadow filter dropping redundant GL calls</title><rect x="272" y="452" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="289.0" y="472.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">GLE</text></g>
+<g><title>graphics_cache::dxt1_decoder [IMPLEMENTED]
+Fixed-point fast-path DXT1/BC1 block decompressor</title><rect x="312" y="452" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="329.0" y="472.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">DXT</text></g>
+<g><title>graphics_cache::dxt3_decoder [IMPLEMENTED]
+Fast-path explicit 4-bit alpha DXT3/BC2 block decompressor</title><rect x="352" y="452" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="369.0" y="472.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">DXT</text></g>
+<g><title>graphics_cache::dxt5_decoder [IMPLEMENTED]
+Fixed-point fast-path DXT5/BC3 block decompressor</title><rect x="392" y="452" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="409.0" y="472.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">DXT</text></g>
+<g><title>graphics_cache::hor_plus_fov [IMPLEMENTED]
+Dynamic Hor+ FOV expansion calculation for 20:9 ultra-wide screens</title><rect x="432" y="452" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="449.0" y="472.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">HOR</text></g>
+<g><title>graphics_cache::proj_adjust [IMPLEMENTED]
+Perspective projection matrix aspect ratio scaling</title><rect x="472" y="452" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="489.0" y="472.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">PRO</text></g>
+<g><title>graphics_cache::render_queue [IMPLEMENTED]
+Asynchronous lockless ring-buffer render command queue</title><rect x="512" y="452" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="529.0" y="472.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">REN</text></g>
+<g><title>graphics_cache::dynamic_thunk [IMPLEMENTED]
+Decoded DynamicThunk bytecode cache and JIT bridge</title><rect x="552" y="452" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="569.0" y="472.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">DYN</text></g>
+<g><title>simd_audio::neon_sinc_16 [IMPLEMENTED]
+ARM64 NEON 128-bit 16-tap sinc kernel resampler (simd_audio.rs)</title><rect x="592" y="452" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="609.0" y="472.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">NEO</text></g>
+<g><title>simd_audio::scalar_sinc_16 [IMPLEMENTED]
+Portable scalar fallback sinc resampler for non-ARM hosts</title><rect x="632" y="452" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="649.0" y="472.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">SCA</text></g>
+<g><title>simd_audio::audio_clamp [IMPLEMENTED]
+SIMD audio buffer clamping, saturation, and peak stats</title><rect x="672" y="452" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="689.0" y="472.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">AUD</text></g>
+<g><title>simd_audio::mixer_render [IMPLEMENTED]
+Multi-voice linear mixdown and accumulator engine</title><rect x="712" y="452" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="729.0" y="472.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">MIX</text></g>
+<g><title>simd_audio::clock_sync [IMPLEMENTED]
+DirectSound synthetic timing clock synchronizer</title><rect x="752" y="452" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="769.0" y="472.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">CLO</text></g>
+<g><title>simd_audio::watchdog_ping [IMPLEMENTED]
+AAudio stream stall detector and reconnect trigger</title><rect x="792" y="452" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="809.0" y="472.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">WAT</text></g>
+<g><title>win32_dinput::ff_effect_mgr [IMPLEMENTED]
+DirectInput force feedback effect creation and lifecycle manager</title><rect x="832" y="452" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="849.0" y="472.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">FF_</text></g>
+<g><title>win32_dinput::motor_timing [IMPLEMENTED]
+Dual-motor vibration timing, gain curve, and frequency modulator</title><rect x="872" y="452" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="889.0" y="472.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">MOT</text></g>
+<g><title>win32_dinput::pad_remap [IMPLEMENTED]
+Host Android gamepad button and Z-axis trigger normalization</title><rect x="32" y="492" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="49.0" y="512.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">PAD</text></g>
+<g><title>win32_dinput::ff_envelope [IMPLEMENTED]
+Attack, fade, and sustain envelope generator</title><rect x="72" y="492" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="89.0" y="512.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">FF_</text></g>
+<g><title>win32_dinput::periodic_wave [IMPLEMENTED]
+Sine, square, and triangle periodic vibration waveforms</title><rect x="112" y="492" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="129.0" y="512.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">PER</text></g>
+<g><title>win32_dinput::jni_gamepad [IMPLEMENTED]
+Fast-path JNI bridge for racing controls and joypad dispatcher</title><rect x="152" y="492" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="169.0" y="512.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">JNI</text></g>
+<g><title>win32_compat::fs_cache_lookup [IMPLEMENTED]
+Case-insensitive in-memory path lookup and directory cache</title><rect x="192" y="492" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="209.0" y="512.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">FS_</text></g>
+<g><title>win32_compat::gdi_dc_mgr [IMPLEMENTED]
+GDI compatible device context and bitmap memory manager</title><rect x="232" y="492" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="249.0" y="512.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">GDI</text></g>
+<g><title>win32_compat::gdi_font_text [IMPLEMENTED]
+GDI font metrics and ExtTextOutA glyph bounding cache</title><rect x="272" y="492" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="289.0" y="512.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">GDI</text></g>
+<g><title>win32_compat::netapi_netbios [IMPLEMENTED]
+Netbios LANA enumeration and MAC address query emulation</title><rect x="312" y="492" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="329.0" y="512.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">NET</text></g>
+<g><title>win32_compat::netapi_wksta [IMPLEMENTED]
+Workstation info and workgroup domain join status shims</title><rect x="352" y="492" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="369.0" y="512.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">NET</text></g>
+<g><title>win32_compat::ddraw_modes [IMPLEMENTED]
+DirectDraw cooperative level and display mode enumeration</title><rect x="392" y="492" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="409.0" y="512.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">DDR</text></g>
+<g><title>win32_compat::tapi_line_init [IMPLEMENTED]
+Telephony API line initialize, negotiate and device caps</title><rect x="432" y="492" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="449.0" y="512.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">TAP</text></g>
+<g><title>win32_compat::tapi_calls [IMPLEMENTED]
+Telephony line make call, answer, and teardown handlers</title><rect x="472" y="492" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="489.0" y="512.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">TAP</text></g>
+<g><title>win32_compat::comm_timeouts [IMPLEMENTED]
+Communications port DCB and timeouts emulation</title><rect x="512" y="492" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="529.0" y="512.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">COM</text></g>
+<g><title>win32_compat::shell_exec [IMPLEMENTED]
+ShellExecuteA external launcher and browser URL dispatcher</title><rect x="552" y="492" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="569.0" y="512.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">SHE</text></g>
+<g><title>win32_compat::shfolder_path [IMPLEMENTED]
+SHGetFolderPathA CSIDL directory redirector</title><rect x="592" y="492" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="609.0" y="512.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">SHF</text></g>
+<g><title>win32_compat::math_neon_mat4 [IMPLEMENTED]
+128-bit ARM64 NEON 4x4 matrix multiplication (math_simd.rs)</title><rect x="632" y="492" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="649.0" y="512.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">MAT</text></g>
+<g><title>win32_compat::physics_aabb [IMPLEMENTED]
+SIMD axis-aligned bounding box collision overlap test</title><rect x="672" y="492" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="689.0" y="512.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">PHY</text></g>
+<g><title>win32_compat::suspension_ray [IMPLEMENTED]
+Spring and damper suspension raycast collision physics</title><rect x="712" y="492" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="729.0" y="512.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">SUS</text></g>
+<g><title>touch_input::zero_alloc_map [IMPLEMENTED]
+Zero-allocation flat primitive pointer array (0 GC overhead)</title><rect x="752" y="492" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="769.0" y="512.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">ZER</text></g>
+<g><title>touch_input::curve_steer [IMPLEMENTED]
+Rust progressive steering sensitivity and deadband curve</title><rect x="792" y="492" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="809.0" y="512.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">CUR</text></g>
+<g><title>touch_input::pedal_smoothing [IMPLEMENTED]
+Exponential gas/brake pressure response filter</title><rect x="832" y="492" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="849.0" y="512.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">PED</text></g>
+<g><title>touch_input::scancode_mirror [IMPLEMENTED]
+High-frequency DirectInput keyboard scan code mapper</title><rect x="872" y="492" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="889.0" y="512.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">SCA</text></g>
+<g><title>touch_input::tilt_kalman [STUB]
+In-progress NEON tilt accelerometer Kalman smoothing filter</title><rect x="32" y="532" width="34" height="34" rx="4" fill="#eab308" stroke="#1b1f24" stroke-width="1.5"/><text x="49.0" y="552.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">TIL</text></g>
+<g><title>touch_input::haptic_pulse [IMPLEMENTED]
+Low-latency touch click and rumble haptic response</title><rect x="72" y="532" width="34" height="34" rx="4" fill="#f97316" stroke="#1b1f24" stroke-width="1.5"/><text x="89.0" y="552.0" font-family="monospace" font-size="8" font-weight="bold" fill="#000000" text-anchor="middle" opacity="0.6">HAP</text></g>
+<line x1="32" y1="596" x2="928" y2="596" stroke="#30363d" stroke-width="1"/>
+<text x="32" y="614" font-family="Segoe UI, sans-serif" font-size="11" fill="#64748b">Last updated: 2026-11-09 05:29:02Z | Configured via library-progress.json | Run python scripts/library_progress.py</text>
+<text x="928" y="614" font-family="Segoe UI, sans-serif" font-size="11" fill="#f97316" font-weight="bold" text-anchor="end">NFSU2 Android / Rust Native Engine</text>
 </svg>

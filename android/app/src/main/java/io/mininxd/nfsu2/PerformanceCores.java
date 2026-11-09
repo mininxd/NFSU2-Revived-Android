@@ -33,6 +33,36 @@ public final class PerformanceCores {
     public static native long nativeGetPerformanceCoresMask();
     public static native int nativeGetCoreCount();
     public static native String nativeGetSummary();
+    public static native void nativeBoostCallingThread();
+    public static native float nativeCalculateSteering(float rawX, float centerX, float halfWidth, float scale);
+
+    /**
+     * Immediately boosts the priority and pins the calling thread to performance cores.
+     */
+    public static void boostCallingThread() {
+        if (nativeLoaded) {
+            try {
+                nativeBoostCallingThread();
+            } catch (Throwable ignored) {}
+        }
+    }
+
+    /**
+     * Calculates progressive steering sensitivity curve via Rust native SIMD engine.
+     */
+    public static float calculateSteering(float rawX, float centerX, float halfWidth, float scale) {
+        if (nativeLoaded) {
+            try {
+                return nativeCalculateSteering(rawX, centerX, halfWidth, scale);
+            } catch (Throwable ignored) {}
+        }
+        if (scale <= 0f || halfWidth <= 0f) return 0f;
+        float norm = (rawX / scale - centerX) / halfWidth;
+        float clamped = Math.max(-1f, Math.min(1f, norm));
+        float abs = Math.abs(clamped);
+        float curved = abs * 0.30f + abs * abs * abs * 0.70f;
+        return clamped < 0f ? -curved : curved;
+    }
 
     /**
      * Binds the current process and its worker threads to the SoC's Performance cores.

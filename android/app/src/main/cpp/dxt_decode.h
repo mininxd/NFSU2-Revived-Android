@@ -23,6 +23,13 @@ inline std::vector<uint8_t> decodeDXT(unsigned mode,uint32_t width,uint32_t heig
         if (s_dxt1 && s_dxt1(width, height, source, sourceBytes, rgba.data()) == 0) {
             return rgba;
         }
+    } else if (mode == 3) {
+        static auto s_dxt3 = reinterpret_cast<int(*)(uint32_t, uint32_t, const uint8_t*, size_t, uint8_t*)>(
+            dlsym(RTLD_DEFAULT, "nfs_tex_dxt3_decode_fast")
+        );
+        if (s_dxt3 && s_dxt3(width, height, source, sourceBytes, rgba.data()) == 0) {
+            return rgba;
+        }
     } else if (mode == 5) {
         static auto s_dxt5 = reinterpret_cast<int(*)(uint32_t, uint32_t, const uint8_t*, size_t, uint8_t*)>(
             dlsym(RTLD_DEFAULT, "nfs_tex_dxt5_decode_fast")

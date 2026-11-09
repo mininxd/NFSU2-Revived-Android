@@ -66,7 +66,33 @@ final class RacingControlsView extends View {
     private final Path path = new Path();
 
     private final ArrayList<Control> controls = new ArrayList<>();
-    private final HashMap<Integer, Control> fingers = new HashMap<>();
+    // Zero-allocation flat primitive pointer array (0 GC overhead during 60/90/120Hz multi-touch)
+    private final Control[] fingerMap = new Control[32];
+
+    private boolean hasActiveFingers() {
+        for (int i = 0; i < 32; i++) {
+            if (fingerMap[i] != null) return true;
+        }
+        return false;
+    }
+
+    private Control getFinger(int id) {
+        return (id >= 0 && id < 32) ? fingerMap[id] : null;
+    }
+
+    private Control putFinger(int id, Control c) {
+        if (id < 0 || id >= 32) return null;
+        Control old = fingerMap[id];
+        fingerMap[id] = c;
+        return old;
+    }
+
+    private Control removeFinger(int id) {
+        if (id < 0 || id >= 32) return null;
+        Control old = fingerMap[id];
+        fingerMap[id] = null;
+        return old;
+    }
 
     private boolean racing;
     private boolean lastGameMode;
@@ -328,7 +354,7 @@ final class RacingControlsView extends View {
 
     void gamepadUsed() {
         // Fingers on the controls keep them: whatever is touched is in use.
-        if (!gamepadConnected || hiddenByGamepad || editing || !fingers.isEmpty()) return;
+        if (!gamepadConnected || hiddenByGamepad || editing || hasActiveFingers()) return;
         releaseAll();
         hiddenByGamepad = true;
         invalidate();
@@ -1305,7 +1331,8 @@ final class RacingControlsView extends View {
                 if (c.scan == keyNitro) {
                     // Release Gas unless another finger is holding it directly
                     boolean gasHeld = false;
-                    for (Control other : fingers.values()) {
+                    for (int i = 0; i < 32; i++) {
+                        Control other = fingerMap[i];
                         if (other != null && other.scan == keyGas && other.held > 0) {
                             gasHeld = true;
                             break;
@@ -1322,7 +1349,7 @@ final class RacingControlsView extends View {
     }
 
     private void steer(Control c, float x) {
-        c.steering = Math.max(-1f, Math.min(1f, (x / scale - c.area.centerX()) / (c.area.width() / 2f)));
+        c.steering = PerformanceCores.calculateSteering(x, c.area.centerX(), c.area.width() / 2f, scale);
         keys.set(keyLeft, c.steering < -0.18f);
         keys.set(keyRight, c.steering > 0.18f);
     }
@@ -1347,12 +1374,11 @@ final class RacingControlsView extends View {
     }
 
     private void releaseLiftedFingers(MotionEvent e) {
-        java.util.Iterator<java.util.Map.Entry<Integer, Control>> it = fingers.entrySet().iterator();
-        while (it.hasNext()) {
-            java.util.Map.Entry<Integer, Control> finger = it.next();
-            if (e.findPointerIndex(finger.getKey()) < 0) {
-                release(finger.getValue());
-                it.remove();
+        for (int i = 0; i < 32; i++) {
+            Control c = fingerMap[i];
+            if (c != null && e.findPointerIndex(i) < 0) {
+                release(c);
+                fingerMap[i] = null;
             }
         }
         if (pointerId >= 0 && e.findPointerIndex(pointerId) < 0) {
@@ -1361,9 +1387,14 @@ final class RacingControlsView extends View {
     }
 
     void releaseAll() {
-        for (Control c : fingers.values()) release(c);
+        for (int i = 0; i < 32; i++) {
+            Control c = fingerMap[i];
+            if (c != null) {
+                release(c);
+                fingerMap[i] = null;
+            }
+        }
         AdhocRoamClient.setHorn(false);
-        fingers.clear();
         pointerRelease();
         invalidate();
     }
@@ -1426,7 +1457,7 @@ final class RacingControlsView extends View {
                 pointerId = id;
                 pointerTouch(e.getX(index), e.getY(index), 0);
             }
-            release(fingers.put(id, c));
+            release(putFinger(id, c));
             hold(c);
             if (c != null && c.scan == STICK) steer(c, e.getX(index));
         } else if (action == MotionEvent.ACTION_MOVE) {
@@ -1437,7 +1468,7 @@ final class RacingControlsView extends View {
                     if (!racing) pointerTouch(e.getX(i), e.getY(i), 1);
                     continue;
                 }
-                Control old = fingers.get(pointer);
+                Control old = getFinger(pointer);
                 Control next = hit(e.getX(i), e.getY(i));
                 if (old != null && old.scan == STICK) {
                     float oldSteer = old.steering;
@@ -1452,7 +1483,7 @@ final class RacingControlsView extends View {
                 }
                 if (old != next) {
                     release(old);
-                    fingers.put(pointer, next);
+                    putFinger(pointer, next);
                     hold(next);
                     if (next != null && next.scan == STICK) steer(next, e.getX(i));
                     changed = true;
@@ -1465,7 +1496,7 @@ final class RacingControlsView extends View {
                 pointerId = -1;
                 if (!racing) pointerTouch(e.getX(index), e.getY(index), 2);
             }
-            Control c = fingers.remove(id);
+            Control c = removeFinger(id);
             release(c);
             if (c != null && c == hit(e.getX(index), e.getY(index))) {
                 if (c.scan == MODE) {

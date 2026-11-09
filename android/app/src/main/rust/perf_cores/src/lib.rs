@@ -151,6 +151,10 @@ impl CpuCluster {
                 &mask_val as *const c_long,
             );
 
+            // Elevate main and calling thread priority (-10 nice) to maintain high CPU frequencies
+            let _ = libc::setpriority(libc::PRIO_PROCESS, libc::getpid() as u32, -10);
+            let _ = libc::setpriority(libc::PRIO_PROCESS, 0, -10);
+
             // Bind every existing thread in /proc/self/task (GuestBootWorker, audio, render, etc.)
             if let Ok(entries) = fs::read_dir("/proc/self/task") {
                 for entry in entries.flatten() {
@@ -161,6 +165,17 @@ impl CpuCluster {
                             std::mem::size_of::<c_long>(),
                             &mask_val as *const c_long,
                         );
+
+                        // Prioritize audio, render, and emulated guest workers
+                        let comm_path = format!("/proc/self/task/{}/comm", tid);
+                        if let Ok(comm) = fs::read_to_string(&comm_path) {
+                            let n = comm.trim();
+                            if n == "GuestBootWorker" || n == "RenderThread" || n == "main"
+                                || n.starts_with("AAudio") || n.contains("audio") || n.contains("nfs")
+                            {
+                                let _ = libc::setpriority(libc::PRIO_PROCESS, tid as u32, -10);
+                            }
+                        }
                     }
                 }
             }
@@ -244,4 +259,40 @@ pub unsafe extern "C" fn Java_io_mininxd_nfsu2_PerformanceCores_nativeGetSummary
     env.new_string(summary)
         .map(|s| s.into_raw())
         .unwrap_or(std::ptr::null_mut())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn Java_io_mininxd_nfsu2_PerformanceCores_nativeBoostCallingThread(
+    _env: JNIEnv,
+    _class: JClass,
+) {
+    let cluster = CpuCluster::detect();
+    let mask_val = cluster.perf_cores_mask as c_long;
+    let _ = libc::syscall(
+        libc::SYS_sched_setaffinity,
+        0 as c_int,
+        std::mem::size_of::<c_long>(),
+        &mask_val as *const c_long,
+    );
+    let _ = libc::setpriority(libc::PRIO_PROCESS, 0, -10);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn Java_io_mininxd_nfsu2_PerformanceCores_nativeCalculateSteering(
+    _env: JNIEnv,
+    _class: JClass,
+    raw_x: jni::sys::jfloat,
+    center_x: jni::sys::jfloat,
+    half_width: jni::sys::jfloat,
+    scale: jni::sys::jfloat,
+) -> jni::sys::jfloat {
+    if scale <= 0.0 || half_width <= 0.0 {
+        return 0.0;
+    }
+    let norm = (raw_x / scale - center_x) / half_width;
+    let clamped = norm.clamp(-1.0, 1.0);
+    // Progressive steering curve: 30% linear + 70% cubic for highway stability & sharp lock
+    let abs_val = clamped.abs();
+    let curved = abs_val * 0.30 + abs_val * abs_val * abs_val * 0.70;
+    if clamped < 0.0 { -curved } else { curved }
 }

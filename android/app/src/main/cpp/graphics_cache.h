@@ -94,6 +94,9 @@ void nfs_gl_filter_invalidate(void);
 
 int nfs_dxt_decode_rgba8(uint32_t mode, uint32_t width, uint32_t height,
                          const uint8_t* raw, size_t raw_size, uint8_t* out_rgba);
+int nfs_tex_dxt1_decode_fast(uint32_t width, uint32_t height, const uint8_t* src, size_t src_len, uint8_t* dst_rgba);
+int nfs_tex_dxt3_decode_fast(uint32_t width, uint32_t height, const uint8_t* src, size_t src_len, uint8_t* dst_rgba);
+int nfs_tex_dxt5_decode_fast(uint32_t width, uint32_t height, const uint8_t* src, size_t src_len, uint8_t* dst_rgba);
 
 void nfs_gl_program_cache_init(const char* cache_dir);
 int nfs_gl_program_cache_load(uint64_t shader_hash, uint8_t** out_binary,
