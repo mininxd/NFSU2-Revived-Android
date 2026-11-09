@@ -1,0 +1,12 @@
+ %{START CMD=news TITLE="NFSU2 Revived Core" BTN1="OK" BTN1-GOTO="$exit=0" %}
+Welcome to Need for Speed Underground 2 Revived.
+
+Engine Architecture & Core:
+- Lifted Core: Original SPEED2.EXE x86 binary statically lifted to native 64-bit ARM64 C and Rust.
+- Graphics Pipeline: Mobile DXVK Vulkan & GLES translation with dynamic GPU command deduplication.
+- Audio Subsystem: Low-latency AAudio driver with DirectSound buffer cursor tracking running on pure Rust.
+- Preservation Project: Developed as an open-source fan preservation effort. Source code available on GitHub:
+  https://github.com/mininxd/NFSU2-Revived-Android
+
+See you on the streets of Bayview.
+%{%}

@@ -21,8 +21,52 @@ constexpr uint32_t socketError=0xffffffffu,invalidSocket=0xffffffffu;
 constexpr uint32_t wsaEinval=10022,wsaEwouldblock=10035,wsaEnotsock=10038,wsaEfault=10014,wsaEmsgsize=10040,
     wsaEtimedout=10060,wsaEafnosupport=10047,wsaNotinitialised=10093,wsaHostNotFound=11001,wsaNoData=11004;
 constexpr char localHostName[]="nfsu2-android";
+static std::string nfs_fetch_news_payload() {
+#ifdef __ANDROID__
+    android_app* app = getActiveAndroidApp();
+    if (app && app->activity && app->activity->vm) {
+        JNIEnv* env = nullptr;
+        bool detached = false;
+        if (app->activity->vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) {
+            if (app->activity->vm->AttachCurrentThread(&env, nullptr) == JNI_OK) {
+                detached = true;
+            }
+        }
+        if (env) {
+            jclass cls = env->FindClass("io/mininxd/nfsu2/GameActivity");
+            if (cls) {
+                jmethodID mid = env->GetStaticMethodID(cls, "fetchNewsContent", "()Ljava/lang/String;");
+                if (mid) {
+                    jstring jstr = static_cast<jstring>(env->CallStaticObjectMethod(cls, mid));
+                    if (jstr) {
+                        const char* utf = env->GetStringUTFChars(jstr, nullptr);
+                        std::string res(utf ? utf : "");
+                        if (utf) env->ReleaseStringUTFChars(jstr, utf);
+                        env->DeleteLocalRef(jstr);
+                        env->DeleteLocalRef(cls);
+                        if (detached) app->activity->vm->DetachCurrentThread();
+                        if (!res.empty()) return res;
+                    }
+                }
+                env->DeleteLocalRef(cls);
+            }
+            if (detached) app->activity->vm->DetachCurrentThread();
+        }
+    }
+#endif
+    return " %{START CMD=news TITLE=\"NFSU2 Revived Core\" BTN1=\"OK\" BTN1-GOTO=\"$exit=0\" %}\r\n"
+           "Welcome to Need for Speed Underground 2 Revived.\r\n\r\n"
+           "Engine Architecture & Core:\r\n"
+           "- Lifted Core: Original SPEED2.EXE x86 binary statically lifted to native 64-bit ARM64 C and Rust.\r\n"
+           "- Graphics Pipeline: Mobile DXVK Vulkan & GLES translation with dynamic GPU command deduplication.\r\n"
+           "- Audio Subsystem: Low-latency AAudio driver with DirectSound buffer cursor tracking running on pure Rust.\r\n"
+           "- Preservation Project: Developed as an open-source fan preservation effort. Source code available on GitHub:\r\n"
+           "  https://github.com/mininxd/NFSU2-Revived-Android\r\n\r\n"
+           "See you on the streets of Bayview.\r\n"
+           "%{%}";
+}
 // icmp: a Windows raw ICMP socket (ping) on an unprivileged Linux ping socket; see icmpReceive.
-struct Socket{int fd;bool guestNonBlocking=false,connecting=false,icmp=false;uint16_t icmpId=0;uint32_t recvTimeout=0,sendTimeout=0;std::set<std::string> peersLogged;
+struct Socket{int fd;bool guestNonBlocking=false,connecting=false,icmp=false,isHttp=false,httpResponded=false;int httpPeerFd=-1;uint16_t icmpId=0;uint32_t recvTimeout=0,sendTimeout=0;std::set<std::string> peersLogged;
     struct Counter{uint32_t sentPackets=0,sentBytes=0,receivedPackets=0,receivedBytes=0;};
     std::map<std::string,Counter> traffic;std::chrono::steady_clock::time_point nextSummary{};};
 std::map<uint32_t,Socket> sockets;
@@ -218,6 +262,7 @@ void socketCreate(){
 void socketClose(){
     auto found=net::sockets.find(arg(0));
     if(found==net::sockets.end()){ret(net::fail(net::wsaEnotsock),1);return;}
+    if(found->second.httpPeerFd >= 0){ ::close(found->second.httpPeerFd); found->second.httpPeerFd = -1; }
     ::close(found->second.fd);net::sockets.erase(found);ret(0,1);
 }
 void socketBind(){
@@ -250,7 +295,29 @@ void socketConnect(){
     sockaddr_storage address;socklen_t length=net::guestAddress(arg(1),arg(2),address);
     if(!length){ret(net::fail(net::wsaEfault),3);return;}
     auto* in=reinterpret_cast<sockaddr_in*>(&address);char text[INET_ADDRSTRLEN]{};inet_ntop(AF_INET,&in->sin_addr,text,sizeof text);
-    NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Winsock: connect %08x to %s:%u",handle,text,ntohs(in->sin_port));
+    uint16_t port=ntohs(in->sin_port);
+    NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Winsock: connect %08x to %s:%u",handle,text,port);
+    if(port==80||port==8080||port==3000){
+        int pair[2];
+        if(socketpair(AF_UNIX,SOCK_STREAM,0,pair)==0){
+            fcntl(pair[0],F_SETFL,O_NONBLOCK|fcntl(pair[0],F_GETFL,0));
+            fcntl(pair[1],F_SETFL,O_NONBLOCK|fcntl(pair[1],F_GETFL,0));
+            int bufSize=262144;
+            setsockopt(pair[0],SOL_SOCKET,SO_RCVBUF,&bufSize,sizeof bufSize);
+            setsockopt(pair[0],SOL_SOCKET,SO_SNDBUF,&bufSize,sizeof bufSize);
+            setsockopt(pair[1],SOL_SOCKET,SO_RCVBUF,&bufSize,sizeof bufSize);
+            setsockopt(pair[1],SOL_SOCKET,SO_SNDBUF,&bufSize,sizeof bufSize);
+            ::close(socket->fd);
+            socket->fd=pair[0];
+            socket->httpPeerFd=pair[1];
+            socket->isHttp=true;
+            socket->httpResponded=false;
+            socket->connecting=false;
+            NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Winsock: intercepted HTTP connect on handle %08x (port %u)",handle,port);
+            ret(0,3);
+            return;
+        }
+    }
     if(::connect(socket->fd,reinterpret_cast<sockaddr*>(&address),length)==0){socket->connecting=false;ret(0,3);return;}
     if(errno!=EINPROGRESS){
         if(socket->guestNonBlocking){
@@ -277,6 +344,30 @@ void socketSend(){
     auto* socket=net::find(arg(0));if(!socket){ret(net::fail(net::wsaEnotsock),4);return;}
     uint32_t buffer=arg(1),length=arg(2),flags=arg(3);
     const void* data=length?ptr(buffer,length):nullptr;
+    if(socket->isHttp){
+        if(!socket->httpResponded&&data&&length>=3&&
+           (std::memcmp(data,"GET",3)==0||std::memcmp(data,"get",3)==0)){
+            socket->httpResponded=true;
+            std::string req(static_cast<const char*>(data),std::min<size_t>(length,256));
+            NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Winsock: intercepted HTTP GET request: %s",req.c_str());
+            std::string payload=net::nfs_fetch_news_payload();
+            NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Winsock: serving news payload (%zu bytes)",payload.size());
+            std::string response="HTTP/1.0 200 OK\r\n"
+                                 "Server: Apache\r\n"
+                                 "Content-Type: text/plain; charset=utf-8\r\n"
+                                 "Content-Length: "+std::to_string(payload.size())+"\r\n"
+                                 "Connection: close\r\n\r\n"+payload;
+            if(socket->httpPeerFd>=0){
+                ::send(socket->httpPeerFd,response.data(),response.size(),MSG_NOSIGNAL);
+                ::shutdown(socket->httpPeerFd,SHUT_WR);
+            }
+            ret(length,4);
+            return;
+        }else if(socket->httpResponded){
+            ret(length,4);
+            return;
+        }
+    }
     net::noteIcmpSend(*socket,data,length);
     ssize_t sent=net::blocking(*socket,POLLOUT,socket->sendTimeout,[&](int fd){return ::send(fd,data,length,int(flags&7)|MSG_NOSIGNAL);});
     ret(sent<0?net::failErrno():uint32_t(sent),4);

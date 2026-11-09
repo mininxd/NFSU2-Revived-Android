@@ -25,6 +25,9 @@
 #include "nfs_widescreen.h"
 
 static android_app* s_active_app = nullptr;
+android_app* getActiveAndroidApp() {
+    return s_active_app;
+}
 void notifyHaltToHost(const char* message) {
     if (s_active_app) {
         showStatus(s_active_app, message);

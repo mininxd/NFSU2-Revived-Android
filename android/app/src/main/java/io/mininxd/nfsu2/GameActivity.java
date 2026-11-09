@@ -25,9 +25,23 @@ import android.text.InputFilter;
 import android.text.InputType;
 import android.view.inputmethod.EditorInfo;
 import android.util.DisplayMetrics;
+import android.util.Log;
 
 /** Storage permission gateway for the fixed Internal storage/nfsu2 directory. */
 public final class GameActivity extends NativeActivity {
+    private static volatile GameActivity s_instance = null;
+    private static final String DEFAULT_NEWS_CONTENT =
+        " %{START CMD=news TITLE=\"NFSU2 Revived Core\" BTN1=\"OK\" BTN1-GOTO=\"$exit=0\" %}\r\n" +
+        "Welcome to Need for Speed Underground 2 Revived.\r\n\r\n" +
+        "Engine Architecture & Core:\r\n" +
+        "- Lifted Core: Original SPEED2.EXE x86 binary statically lifted to native 64-bit ARM64 C and Rust.\r\n" +
+        "- Graphics Pipeline: Mobile DXVK Vulkan & GLES translation with dynamic GPU command deduplication.\r\n" +
+        "- Audio Subsystem: Low-latency AAudio driver with DirectSound buffer cursor tracking running on pure Rust.\r\n" +
+        "- Preservation Project: Developed as an open-source fan preservation effort. Source code available on GitHub:\r\n" +
+        "  https://github.com/mininxd/NFSU2-Revived-Android\r\n\r\n" +
+        "See you on the streets of Bayview.\r\n" +
+        "%{%}";
+
     static {
         System.loadLibrary("nfsu2_android");
         try {
@@ -324,6 +338,7 @@ public final class GameActivity extends NativeActivity {
     }
     @Override protected void onCreate(Bundle saved) {
         super.onCreate(saved);
+        s_instance = this;
         GameOptions.syncWidescreenIni(this);
         GamePerformanceBooster.apply(this, getWindow());
         PerformanceCores.bindToPerformanceCores();
@@ -414,6 +429,7 @@ public final class GameActivity extends NativeActivity {
 
             android.system.Os.setenv("NFSU2_CROWD", "0", true);
             GraphicsCacheManager.setCrowdSuppression(true);
+            android.system.Os.setenv("NFSU2_NEWS_URL", "https://api.mininxd.tech/nfsu2_news", true);
 
             // Sync touch control size
             String touchSize = GameOptions.get(this, GameOptions.TOUCH_SIZE);
@@ -739,6 +755,64 @@ public final class GameActivity extends NativeActivity {
         android.os.Process.killProcess(android.os.Process.myPid());
     }
 
+    public static String fetchNewsContent() {
+        String customUrl = "https://api.mininxd.tech/nfsu2_news";
+        try {
+            String envUrl = System.getenv("NFSU2_NEWS_URL");
+            if (envUrl != null && !envUrl.trim().isEmpty()) {
+                customUrl = envUrl.trim();
+            }
+            java.net.URL url = new java.net.URL(customUrl);
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+            conn.setConnectTimeout(3000);
+            conn.setReadTimeout(3000);
+            conn.setRequestProperty("User-Agent", "NFSU2-Revived-Android/1.0");
+            conn.setRequestProperty("Accept", "text/plain, */*");
+            int code = conn.getResponseCode();
+            if (code == 200) {
+                java.io.InputStream in = conn.getInputStream();
+                java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+                byte[] buf = new byte[1024];
+                int n;
+                while ((n = in.read(buf)) != -1) {
+                    baos.write(buf, 0, n);
+                }
+                in.close();
+                String res = baos.toString("UTF-8").trim();
+                if (!res.isEmpty()) {
+                    if (!res.contains("CMD=news")) {
+                        res = " %{START CMD=news TITLE=\"NFSU2 News\" BTN1=\"OK\" BTN1-GOTO=\"$exit=0\" %}\r\n" + res + "\r\n%{%}";
+                    }
+                    Log.i("NFSU2News", "Successfully fetched custom news from " + customUrl + " (" + res.length() + " chars)");
+                    return res;
+                }
+            }
+            Log.w("NFSU2News", "Custom news URL returned code " + code + ", falling back to bundled news.txt");
+        } catch (Throwable t) {
+            Log.w("NFSU2News", "Failed fetching custom news (" + t.getMessage() + "), falling back to bundled news.txt");
+        }
+
+        // Offline fallback: read bundled assets/news.txt inside the APK
+        try {
+            if (s_instance != null) {
+                java.io.InputStream in = s_instance.getAssets().open("news.txt");
+                java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+                byte[] buf = new byte[1024];
+                int n;
+                while ((n = in.read(buf)) != -1) {
+                    baos.write(buf, 0, n);
+                }
+                in.close();
+                String res = baos.toString("UTF-8").trim();
+                if (!res.isEmpty()) {
+                    return res;
+                }
+            }
+        } catch (Throwable ignored) {}
+
+        return DEFAULT_NEWS_CONTENT;
+    }
+
     @Override
     public boolean onGenericMotionEvent(android.view.MotionEvent event) {
         if ((event.getSource() & android.view.InputDevice.SOURCE_JOYSTICK) == android.view.InputDevice.SOURCE_JOYSTICK
@@ -759,6 +833,9 @@ public final class GameActivity extends NativeActivity {
     }
 
     @Override protected void onDestroy() {
+        if (s_instance == this) {
+            s_instance = null;
+        }
         super.onDestroy();
         stopCompanionTicker();
         if (diagnosticOverlay != null) diagnosticOverlay.stop();

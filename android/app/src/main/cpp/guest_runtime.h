@@ -30,4 +30,6 @@ void setGuestLanguage(const char* language);
 void setGuestResolution(unsigned width,unsigned height);
 void setGuestFrameLimit(unsigned framesPerSecond);
 void checkGuestProgress();
+struct android_app;
+android_app* getActiveAndroidApp();
 

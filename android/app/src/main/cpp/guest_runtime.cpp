@@ -40,6 +40,8 @@
 #include <deque>
 #ifdef __ANDROID__
 #include <aaudio/AAudio.h>
+#include <android_native_app_glue.h>
+#include <jni.h>
 #endif
 extern "C" {
 #include "recomp_types.h"
