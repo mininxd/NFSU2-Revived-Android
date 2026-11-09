@@ -233,12 +233,12 @@ void nfs_widescreen_apply_frame_rate(void) {
      * When World Detail <= 1, scenery complexity mode (0x00883DDC) is also set to 2. */
     if (s_draw_distance > 0.0f) {
         uint32_t target_lod = 2; /* Default High */
-        if (s_draw_distance <= 200.0f) {
-            target_lod = 0; /* Performance (200m): Low World Detail */
-        } else if (s_draw_distance <= 350.0f) {
-            target_lod = 1; /* Balanced (350m): Medium World Detail */
-        } else if (s_draw_distance <= 500.0f) {
-            target_lod = 2; /* Extended (500m): High World Detail */
+        if (s_draw_distance <= 100.0f) {
+            target_lod = 0; /* Ultra Performance (50m) & Performance (100m): Low World Detail */
+        } else if (s_draw_distance <= 250.0f) {
+            target_lod = 1; /* Balanced (250m): Medium World Detail */
+        } else if (s_draw_distance <= 450.0f) {
+            target_lod = 2; /* Extended (450m): High World Detail */
         }
         if (MEM32(0x00870CF4u) > target_lod) {
             MEM32(0x00870CF4u) = target_lod;
@@ -320,8 +320,8 @@ void recomp_hook(uint32_t va) {
         g_st[0] = view == 3 ? 0.45 : 1.0;   /* rear-view mirror */
         if (s_draw_distance > 0.0f) {
             float max_far = (view == 3) ? (s_draw_distance * 0.75f) : s_draw_distance;
-            if (view == 3 && max_far < 150.0f) max_far = 150.0f;
-            if (max_far >= 50.0f) {
+            if (view == 3 && max_far < 35.0f) max_far = 35.0f;
+            if (max_far >= 30.0f) {
                 /* View 1 (main camera) hardcodes 15000.0f at [esp+0x0C] on stack
                  * at 0x005C7F0A, bypassing cam+0xC0. Overwriting [esp+0x0C] ensures both
                  * the projection matrix and frustum far plane clamp to max_far. */
