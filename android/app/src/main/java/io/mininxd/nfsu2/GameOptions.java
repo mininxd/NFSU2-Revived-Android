@@ -90,12 +90,12 @@ public final class GameOptions {
     }
 
     private static final String MINIMAP_HUD_DAT =
-            "# Minimap anchor entries (retained for 4:3 HUD so top-left minimap functions)\n" +
-            "MiniMap_Pos_1                       -223.0   70.0                 -109.0  0.0\n" +
-            "MiniMap_Pos_2                       -223.0   142.0                -109.0  0.0\n" +
-            "MiniMap_Pos_3                       -223.0   71.0                 -109.0  0.0\n" +
-            "MiniMap_Pos_4                       -223.0   143.0                -109.0  0.0\n" +
-            "MiniMap_Filter_Pos                  -143.0   196.0                -109.0  0.0\n";
+            "# Minimap anchor entries for 4:3 HUD (offset -106.666664 so with s_hud_offset=0 it stays at 4:3 X position)\n" +
+            "MiniMap_Pos_1                       -223.0   70.0                 -106.666664  0.0\n" +
+            "MiniMap_Pos_2                       -223.0   142.0                -106.666664  0.0\n" +
+            "MiniMap_Pos_3                       -223.0   71.0                 -106.666664  0.0\n" +
+            "MiniMap_Pos_4                       -223.0   143.0                -106.666664  0.0\n" +
+            "MiniMap_Filter_Pos                  -143.0   196.0                -106.666664  0.0\n";
 
     /**
      * Applies the correct HUD layout file based on the Widescreen HUD option.

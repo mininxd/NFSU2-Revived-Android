@@ -1635,6 +1635,8 @@ int nfs_bind_to_perf_cores(void) {
 }
 
 /* JNI Bindings for io.mininxd.nfsu2.net.RoamNativeBridge / GameActivity key mapping query */
+static int s_current_screen_mode = 0;
+static void apply_hud_screen_mode(int mode);
 static const jint DEFAULT_ACTION_KEYS[11] = {
     0xc8, /* 0: Gas (Action 1) */
     0xd0, /* 1: Brake (Action 2) */
@@ -1691,6 +1693,9 @@ static jintArray get_action_keys_array(JNIEnv *env) {
         }
     }
 
+    if (s_current_screen_mode == 2) {
+        apply_hud_screen_mode(2);
+    }
     jintArray result = (*env)->NewIntArray(env, 11);
     if (result) {
         (*env)->SetIntArrayRegion(env, result, 0, 11, keys);
@@ -1827,6 +1832,49 @@ JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeWidescreen(
     Java_com_nfsu2_androidevolved_GameActivity_nativeWidescreen(env, clazz, enabled);
 }
 
+static float* get_guest_hud_offset_ptr(void) {
+    static float *s_p_hud_offset = NULL;
+    static int s_checked = 0;
+    if (!s_checked) {
+        s_checked = 1;
+        void *fn = dlsym(RTLD_DEFAULT, "nfs_widescreen_set_minimap_offset");
+        if (fn) {
+            const uint32_t *code = (const uint32_t *)fn;
+            uint32_t ins0 = code[0];
+            uint32_t ins1 = code[1];
+            if ((ins0 & 0x9f000000) == 0x90000000 && (ins1 & 0xffc00000) == 0xbd000000) {
+                int64_t immhi = (ins0 >> 5) & 0x7ffff;
+                int64_t immlo = (ins0 >> 29) & 0x3;
+                int64_t imm = (immhi << 2) | immlo;
+                if (imm & (1 << 20)) imm -= (1 << 21);
+                uintptr_t page = ((uintptr_t)code & ~0xfffULL) + (imm << 12);
+                uint32_t offset = ((ins1 >> 10) & 0xfff) * 4;
+                float *p_minimap_dy = (float *)(page + offset);
+                s_p_hud_offset = p_minimap_dy - 1; // [772] is s_hud_offset, [776] is s_minimap_dy
+            }
+        }
+    }
+    return s_p_hud_offset;
+}
+
+static float s_saved_hud_offset = 0.0f;
+
+static void apply_hud_screen_mode(int mode) {
+    s_current_screen_mode = mode;
+    float *p_offset = get_guest_hud_offset_ptr();
+    if (!p_offset) return;
+    if (mode == 2) {
+        if (*p_offset > 0.0f) {
+            s_saved_hud_offset = *p_offset;
+        }
+        *p_offset = 0.0f;
+    } else {
+        if (s_saved_hud_offset > 0.0f) {
+            *p_offset = s_saved_hud_offset;
+        }
+    }
+}
+
 JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeScreenMode(
         JNIEnv *env, jclass clazz, jint mode) {
     (void)env; (void)clazz;
@@ -1840,6 +1888,7 @@ JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeScreenMo
     if (s_set_sm) {
         s_set_sm((int)mode);
     }
+    apply_hud_screen_mode((int)mode);
 }
 
 JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeScreenMode(
@@ -1859,6 +1908,9 @@ JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeMinimapT
     }
     if (s_set_mm) {
         s_set_mm(top ? -230.0f : 0.0f);
+    }
+    if (s_current_screen_mode == 2) {
+        apply_hud_screen_mode(2);
     }
 }
 
