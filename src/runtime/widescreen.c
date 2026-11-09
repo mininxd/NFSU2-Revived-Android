@@ -226,6 +226,27 @@ void nfs_widescreen_apply_frame_rate(void) {
     if (!s_crowd_allowed && MEM32(0x00870CD0u) != 0) {
         MEM32(0x00870CD0u) = 0;
     }
+
+    /* Apply World Detail / Scenery LoD reduction based on configured Draw Distance.
+     * In SPEED2.EXE, g_WorldLodLevel (0x00870CF4) controls scenery mesh LoD:
+     * 0 = Low (drops distant scenery props & models), 1 = Medium, 2 = High, 3 = Maximum.
+     * When World Detail <= 1, scenery complexity mode (0x00883DDC) is also set to 2. */
+    if (s_draw_distance > 0.0f) {
+        uint32_t target_lod = 2; /* Default High */
+        if (s_draw_distance <= 200.0f) {
+            target_lod = 0; /* Performance (200m): Low World Detail */
+        } else if (s_draw_distance <= 350.0f) {
+            target_lod = 1; /* Balanced (350m): Medium World Detail */
+        } else if (s_draw_distance <= 500.0f) {
+            target_lod = 2; /* Extended (500m): High World Detail */
+        }
+        if (MEM32(0x00870CF4u) > target_lod) {
+            MEM32(0x00870CF4u) = target_lod;
+        }
+        if (target_lod <= 1 && MEM32(0x00883DDCu) != 2) {
+            MEM32(0x00883DDCu) = 2;
+        }
+    }
 }
 
 static void set_esp_float(uint32_t offset, float value) { wrf(g_esp + offset, value); }
@@ -297,18 +318,27 @@ void recomp_hook(uint32_t va) {
             s_fov_scale[0] = 1.0; s_fov_scale[1] = 0.5; s_fov_scale[2] = 1.0;
         }
         g_st[0] = view == 3 ? 0.45 : 1.0;   /* rear-view mirror */
-        if (s_draw_distance > 0.0f && g_ebp >= 0x10000u && g_ebp <= 0x7FFFF000u) {
-            uint32_t cam = MEM32(g_ebp + 0x40u);
-            if (cam >= 0x10000u && cam <= 0x7FFFF000u) {
-                float far_z = rdf(cam + 0xC0u);
-                float max_far = s_draw_distance;
-                if (view == 3) {
-                    /* Rear-view mirror: clamp to 75% of draw distance (min 150m) to save fillrate and drawcalls */
-                    max_far = s_draw_distance * 0.75f;
-                    if (max_far < 150.0f) max_far = 150.0f;
+        if (s_draw_distance > 0.0f) {
+            float max_far = (view == 3) ? (s_draw_distance * 0.75f) : s_draw_distance;
+            if (view == 3 && max_far < 150.0f) max_far = 150.0f;
+            if (max_far >= 50.0f) {
+                /* View 1 (main camera) hardcodes 15000.0f at [esp+0x0C] on stack
+                 * at 0x005C7F0A, bypassing cam+0xC0. Overwriting [esp+0x0C] ensures both
+                 * the projection matrix and frustum far plane clamp to max_far. */
+                if (g_esp >= 0x10000u && g_esp <= 0x7FFFF000u) {
+                    float stack_far = rdf(g_esp + 0x0Cu);
+                    if (stack_far > max_far) {
+                        wrf(g_esp + 0x0Cu, max_far);
+                    }
                 }
-                if (far_z > max_far && max_far >= 50.0f) {
-                    wrf(cam + 0xC0u, max_far);
+                if (g_ebp >= 0x10000u && g_ebp <= 0x7FFFF000u) {
+                    uint32_t cam = MEM32(g_ebp + 0x40u);
+                    if (cam >= 0x10000u && cam <= 0x7FFFF000u) {
+                        float far_z = rdf(cam + 0xC0u);
+                        if (far_z > max_far) {
+                            wrf(cam + 0xC0u, max_far);
+                        }
+                    }
                 }
             }
         }
