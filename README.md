@@ -35,7 +35,8 @@
 ## Features
 
 - **⚡ Static Binary Recompilation**: Recompiles 27,742 x86 functions into standard C99 code. Executes directly on target hardware without dynamic binary translation, JIT compilation, or hypervisor emulation overhead.
-- **🛠️ Native Extra Options Mod**: Integrated port of [ExOptsTeam/NFSU2ExOpts](https://github.com/ExOptsTeam/NFSU2ExOpts) (tracked in `third_party/NFSU2ExOpts`) providing configurable lap counts (0-127), opponent counts (0-5), unlocked European regional cars (Peugeot 106 & Opel Corsa in NTSC), Outrun & Free Run track selection, 1-lap race progress display, drift multiplier scaling (up to 9x, AxB display), 3D geometry & wheel clipping fixes, and AI AutoDrive (Dumb AI).
+- **🚗 Unlocked Regional Cars**: Unlocks and integrates European-exclusive cars (**Peugeot 106** and **Opel Corsa**) directly on NTSC game files, available in Career car lot, Quick Race car selection, and AI opponent rosters.
+- **🛠️ Gameplay & Engine Fixes**: Built-in 3D ground shadow alignment fix, damaged glass fix, high-framerate pacing adjustments, and dedicated hydraulic bounce/lift control buttons.
 - **🌋 DXVK Native Vulkan Acceleration**: Translates Direct3D 9 calls to Vulkan via an embedded DXVK Native runtime, featuring widescreen rendering, texture caching, and low-overhead frame pacing.
 - **🌐 Native Free Roam Multiplayer**: Built-in C companion (`libnfsu2_roam.so`) connecting directly to Prometheus Adhoc infrastructure (`adhoc.eahub.eu`). Synchronizes online player cars, 3D body kits, positions, and minimap markers in Bayview free roam with zero port forwarding.
 - **🎮 Input Flexibility & Dynamic Mapping**:

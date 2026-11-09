@@ -482,9 +482,7 @@ public final class GameActivity extends NativeActivity {
         status.setBackgroundColor(0xb0000000);
         status.setTextSize(18);
         status.setPadding(24, 16, 24, 16);
-        boolean exOpts = GameOptions.isExtraOptionsEnabled(this);
-        String branding = "NFSU2 Revived" + (exOpts ? " + Extra Options" : "");
-        status.setText(branding + "\nChecking internal storage/nfsu2…");
+        status.setText("NFSU2 Revived\nChecking internal storage/nfsu2…");
         // NativeActivity gives its main window surface to Vulkan; use a separate
         // non-interactive popup surface for the diagnostic text.
         statusWindow = new PopupWindow(status, ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -586,15 +584,13 @@ public final class GameActivity extends NativeActivity {
         }
         runOnUiThread(() -> {
             if (statusHideTask != null) status.removeCallbacks(statusHideTask);
-            boolean exOpts = GameOptions.isExtraOptionsEnabled(this);
-            String branding = "NFSU2 Revived" + (exOpts ? " + Extra Options" : "");
             if (text != null && (text.contains("Executing game CRT entry") || text.contains("Ejecutando entrada CRT"))) {
-                status.setText(branding + "\n" + text);
+                status.setText("NFSU2 Revived\n" + text);
                 statusHideTask = () -> {statusHidden=true;if(statusWindow.isShowing())statusWindow.dismiss();};
                 status.postDelayed(statusHideTask, 3000);
             } else {
                 statusHidden=false;
-                status.setText(branding + "\n" + text);
+                status.setText("NFSU2 Revived\n" + text);
                 if (!statusWindow.isShowing() && hasWindowFocus())
                     statusWindow.showAtLocation(getWindow().getDecorView(), Gravity.TOP | Gravity.START, 0, 0);
             }
