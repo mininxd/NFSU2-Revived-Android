@@ -475,9 +475,9 @@ public final class GameActivity extends NativeActivity {
         }
         nativeLanguage(language);
         nativeFrameLimit(launch.getIntExtra("frameCap", Integer.parseInt(GameOptions.get(this, GameOptions.FPS))));
-        boolean widescreen = launch.getBooleanExtra("widescreen", "on".equalsIgnoreCase(GameOptions.get(this, GameOptions.WIDESCREEN)));
-        nativeWidescreen(widescreen);
-        nativeScreenMode(widescreen ? 0 : 2);
+        int screenMode = launch.getIntExtra("widescreenMode", GameOptions.widescreenMode(this));
+        nativeWidescreen(true);             // 3D world is ALWAYS widescreen fullscreen, never squished
+        nativeScreenMode(screenMode);       // 0=Widescreen HUD edges, 2=4:3 HUD centre
         nativeDrawDistance(distVal);
         nativeForwardCulling(true);
         String server = launch.getStringExtra("onlineServer");

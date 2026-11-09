@@ -89,25 +89,49 @@ public final class GameOptions {
         return "on".equals(get(context, WIDESCREEN));
     }
 
+    private static final String MINIMAP_HUD_DAT =
+            "# Minimap anchor entries (retained for 4:3 HUD so top-left minimap functions)\n" +
+            "MiniMap_Pos_1                       -223.0   70.0                 -109.0  0.0\n" +
+            "MiniMap_Pos_2                       -223.0   142.0                -109.0  0.0\n" +
+            "MiniMap_Pos_3                       -223.0   71.0                 -109.0  0.0\n" +
+            "MiniMap_Pos_4                       -223.0   143.0                -109.0  0.0\n" +
+            "MiniMap_Filter_Pos                  -143.0   196.0                -109.0  0.0\n";
+
     /**
-     * Ensures scripts/NFSUnderground2.WidescreenFix.dat is present and not parked,
-     * allowing widescreen.c to parse HUD element anchors (minimap, bank, sms, etc.).
+     * Applies the correct HUD layout file based on the Widescreen HUD option.
+     * On: writes the full scripts/NFSUnderground2.WidescreenFix.dat so all HUD elements (tachometer,
+     *     gauges, bank, leaderboard) are placed at widescreen display edges.
+     * Off (4:3 HUD): writes scripts/NFSUnderground2.WidescreenFix.dat with ONLY the minimap anchor
+     *     entries. This keeps all other HUD elements centered in 4:3, while ensuring s_hud_count > 0
+     *     so that nativeMinimapTop (-230.0f) properly positions the minimap at top-left!
      */
     static void applyWidescreenPatchFile(Context context) {
-        java.io.File scripts = new java.io.File(LauncherActivity.gameRoot(), "scripts");
-        if (!scripts.isDirectory()) scripts.mkdirs();
-        java.io.File dat = new java.io.File(scripts, "NFSUnderground2.WidescreenFix.dat");
-        java.io.File held = new java.io.File(scripts, "NFSUnderground2.WidescreenFix.dat.hold");
-        try {
-            if (held.isFile()) {
-                if (dat.isFile()) dat.delete();
-                held.renameTo(dat);
+        java.io.File[] roots = new java.io.File[] {
+                LauncherActivity.gameRoot(),
+                new java.io.File(android.os.Environment.getExternalStorageDirectory(), "nfsu2"),
+                new java.io.File(android.os.Environment.getExternalStorageDirectory(), "NFSU2")
+        };
+        boolean widescreen = usesWidescreenPatch(context);
+        for (java.io.File root : roots) {
+            if (root == null) continue;
+            java.io.File scripts = new java.io.File(root, "scripts");
+            if (!scripts.isDirectory() && !scripts.mkdirs()) continue;
+            java.io.File dat = new java.io.File(scripts, "NFSUnderground2.WidescreenFix.dat");
+            java.io.File held = new java.io.File(scripts, "NFSUnderground2.WidescreenFix.dat.hold");
+            try {
+                if (held.isFile()) {
+                    held.delete();
+                }
+                if (widescreen) {
+                    LauncherActivity.copyAssetFile(context, "scripts/NFSUnderground2.WidescreenFix.dat", dat);
+                } else {
+                    try (java.io.FileOutputStream fos = new java.io.FileOutputStream(dat)) {
+                        fos.write(MINIMAP_HUD_DAT.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    }
+                }
+            } catch (Throwable t) {
+                android.util.Log.w("NFSU2", "WidescreenFix.dat (" + root + "): " + t.getMessage());
             }
-            if (!dat.isFile() || dat.length() == 0) {
-                LauncherActivity.copyAssetFile(context, "scripts/NFSUnderground2.WidescreenFix.dat", dat);
-            }
-        } catch (Throwable t) {
-            android.util.Log.w("NFSU2", "WidescreenFix.dat: " + t.getMessage());
         }
     }
 

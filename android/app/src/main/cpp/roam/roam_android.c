@@ -1814,7 +1814,8 @@ JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeWidescre
     static int s_resolved = 0;
     if (!s_resolved) {
         s_resolved = 1;
-        s_set_ws = (fn_set_ws)dlsym(RTLD_DEFAULT, "setGuestWidescreen");
+        s_set_ws = (fn_set_ws)dlsym(RTLD_DEFAULT, "_Z18setGuestWidescreenb");
+        if (!s_set_ws) s_set_ws = (fn_set_ws)dlsym(RTLD_DEFAULT, "setGuestWidescreen");
     }
     if (s_set_ws) {
         s_set_ws(enabled == JNI_TRUE);
