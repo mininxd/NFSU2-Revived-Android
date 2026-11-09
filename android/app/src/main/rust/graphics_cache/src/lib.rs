@@ -4,6 +4,7 @@
 
 pub mod audio_engine;
 pub mod async_compiler;
+pub mod camera_cull;
 pub mod crowd_filter;
 pub mod d3d9_filter;
 pub mod d3d9_vertex_decl;
@@ -30,6 +31,7 @@ pub mod win32_shell;
 pub mod win32_tapi;
 
 pub use audio_engine::*;
+pub use camera_cull::*;
 pub use crowd_filter::*;
 pub use d3d9_vertex_decl::*;
 pub use dsound_cursor::*;

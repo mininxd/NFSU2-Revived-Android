@@ -84,8 +84,14 @@ case 77:{*argumentCount=2;return device->SetSoftwareVertexProcessing(static_cast
 case 78:{*argumentCount=1;return device->GetSoftwareVertexProcessing();}
 case 79:{*argumentCount=2;return device->SetNPatchMode(floatValue(args[1]));}
 case 80:{*argumentCount=1;return floatBits(device->GetNPatchMode());}
-case 81:{*argumentCount=4;return device->DrawPrimitive(static_cast<D3DPRIMITIVETYPE>(args[1]),static_cast<UINT>(args[2]),static_cast<UINT>(args[3]));}
-case 82:{*argumentCount=7;return device->DrawIndexedPrimitive(static_cast<D3DPRIMITIVETYPE>(args[1]),static_cast<INT>(args[2]),static_cast<UINT>(args[3]),static_cast<UINT>(args[4]),static_cast<UINT>(args[5]),static_cast<UINT>(args[6]));}
+case 81:{*argumentCount=4;
+    static auto s_cull_test = reinterpret_cast<int(*)()>(dlsym(RTLD_DEFAULT, "nfs_camera_cull_test_draw"));
+    if (s_cull_test && s_cull_test()) return D3D_OK;
+    return device->DrawPrimitive(static_cast<D3DPRIMITIVETYPE>(args[1]),static_cast<UINT>(args[2]),static_cast<UINT>(args[3]));}
+case 82:{*argumentCount=7;
+    static auto s_cull_test = reinterpret_cast<int(*)()>(dlsym(RTLD_DEFAULT, "nfs_camera_cull_test_draw"));
+    if (s_cull_test && s_cull_test()) return D3D_OK;
+    return device->DrawIndexedPrimitive(static_cast<D3DPRIMITIVETYPE>(args[1]),static_cast<INT>(args[2]),static_cast<UINT>(args[3]),static_cast<UINT>(args[4]),static_cast<UINT>(args[5]),static_cast<UINT>(args[6]));}
 case 83:{*argumentCount=5;return device->DrawPrimitiveUP(static_cast<D3DPRIMITIVETYPE>(args[1]),static_cast<UINT>(args[2]),static_cast<const void*>(pointer(args[3])),static_cast<UINT>(args[4]));}
 case 84:{*argumentCount=9;return device->DrawIndexedPrimitiveUP(static_cast<D3DPRIMITIVETYPE>(args[1]),static_cast<UINT>(args[2]),static_cast<UINT>(args[3]),static_cast<UINT>(args[4]),static_cast<const void*>(pointer(args[5])),static_cast<D3DFORMAT>(args[6]),static_cast<const void*>(pointer(args[7])),static_cast<UINT>(args[8]));}
 case 85:{*argumentCount=7;return device->ProcessVertices(static_cast<UINT>(args[1]),static_cast<UINT>(args[2]),static_cast<UINT>(args[3]),nativeObject<IDirect3DVertexBuffer9>(args[4]),nativeObject<IDirect3DVertexDeclaration9>(args[5]),static_cast<DWORD>(args[6]));}

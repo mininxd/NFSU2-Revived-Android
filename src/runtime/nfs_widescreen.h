@@ -24,6 +24,9 @@ void nfs_widescreen_set_hud_safe_area(int enabled);
 /* Draw distance: maximum camera FarZ (meters) for 3D views (view 1 and road
  * reflection 4). 0 keeps the game's unclamped distance. */
 void nfs_widescreen_set_draw_distance(float distance);
+/* Forward-only camera back-culling: culls backward-facing objects and suppresses rear-view mirror. */
+void nfs_widescreen_set_forward_culling(int enabled);
+int nfs_widescreen_get_forward_culling(void);
 /* Game frame pacing (the game caps itself at 60): fps >= 30 replaces its 1/60 s
  * frame time; 0 keeps the original. apply() re-asserts it once per frame,
  * since the game re-sets 1/60 on mode changes. */

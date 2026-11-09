@@ -245,6 +245,11 @@ public final class GameActivity extends NativeActivity {
             com.nfsu2.androidevolved.GameActivity.nativeDrawDistance(distance);
         } catch (Throwable ignored) {}
     }
+    private static void nativeForwardCulling(boolean enabled) {
+        try {
+            com.nfsu2.androidevolved.GameActivity.nativeForwardCulling(enabled);
+        } catch (Throwable ignored) {}
+    }
     private static void nativeOnlineServer(String host) {
         try {
             com.nfsu2.androidevolved.GameActivity.nativeOnlineServer(host);
@@ -474,6 +479,8 @@ public final class GameActivity extends NativeActivity {
         nativeWidescreen(true);             // always full screen, never stretched
         nativeScreenMode(screenMode);       // 0=Widescreen HUD edges, 2=4:3 HUD centre
         nativeDrawDistance(distVal);
+        boolean forwardCull = !"off".equalsIgnoreCase(GameOptions.get(this, GameOptions.FORWARD_CULLING));
+        nativeForwardCulling(forwardCull);
         String server = launch.getStringExtra("onlineServer");
         String configuredServer = GameOptions.validServer(server) ? server : GameOptions.onlineServer(this);
         boolean useLocalBridge = io.mininxd.nfsu2.net.EahubClassicOnline.shouldUseLocalBridge(configuredServer);

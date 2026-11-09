@@ -186,6 +186,24 @@ void nfs_widescreen_set_hud_safe_area(int enabled) {
 
 void nfs_widescreen_set_draw_distance(float distance) {
     s_draw_distance = distance;
+#if !defined(_WIN32)
+    extern void nfs_camera_cull_set_far_distance(float) __attribute__((weak));
+    if (nfs_camera_cull_set_far_distance) nfs_camera_cull_set_far_distance(distance);
+#endif
+}
+
+static int s_forward_culling = 1;
+
+void nfs_widescreen_set_forward_culling(int enabled) {
+    s_forward_culling = enabled;
+#if !defined(_WIN32)
+    extern void nfs_camera_cull_set_enabled(int) __attribute__((weak));
+    if (nfs_camera_cull_set_enabled) nfs_camera_cull_set_enabled(enabled);
+#endif
+}
+
+int nfs_widescreen_get_forward_culling(void) {
+    return s_forward_culling;
 }
 
 /* FPSLimit (the mod's Misc.ixx): the game paces its main loop with a fixed
@@ -245,6 +263,43 @@ void nfs_widescreen_apply_frame_rate(void) {
         }
         if (target_lod <= 1 && MEM32(0x00883DDCu) != 2) {
             MEM32(0x00883DDCu) = 2;
+        }
+    }
+
+    /* Forward-only rendering & rear-view mirror suppression */
+    if (s_forward_culling) {
+        /* Force Rear-View Mirror option to 0 (off) */
+        if (MEM32(0x00870CF0u) != 0) {
+            MEM32(0x00870CF0u) = 0;
+        }
+        /* Clamp mirror/screen split mode: 1 = Single View (no rear mirror viewport) */
+        if (MEM32(0x008707E0u) == 2) {
+            MEM32(0x008707E0u) = 1;
+        }
+        /* Disable View 3 active byte (0x00832F38 = 0x00832DE0 + 3*0x70 + 8) */
+        uint32_t view3 = 0x00832DE0u + 3u * 0x70u;
+        if (view3 >= 0x10000u && view3 <= 0x7FFFF000u) {
+            *(volatile uint8_t *)(uintptr_t)(view3 + 8u) = 0;
+        }
+
+        /* Forward player camera position and forward vector to Rust camera cull engine */
+        uint32_t view1 = 0x00832DE0u + 1u * 0x70u;
+        if (view1 >= 0x10000u && view1 <= 0x7FFFF000u) {
+            uint32_t cam1 = MEM32(view1 + 0x40u);
+            if (cam1 >= 0x10000u && cam1 <= 0x7FFFF000u) {
+                float fx = rdf(cam1 + 0x20u);
+                float fy = rdf(cam1 + 0x24u);
+                float fz = rdf(cam1 + 0x28u);
+                float px = rdf(cam1 + 0x30u);
+                float py = rdf(cam1 + 0x34u);
+                float pz = rdf(cam1 + 0x38u);
+#if !defined(_WIN32)
+                extern void nfs_camera_cull_update_camera(float, float, float, float, float, float) __attribute__((weak));
+                if (nfs_camera_cull_update_camera) {
+                    nfs_camera_cull_update_camera(px, py, pz, fx, fy, fz);
+                }
+#endif
+            }
         }
     }
 }
@@ -337,6 +392,20 @@ void recomp_hook(uint32_t va) {
                         float far_z = rdf(cam + 0xC0u);
                         if (far_z > max_far) {
                             wrf(cam + 0xC0u, max_far);
+                        }
+                        if (view == 1 && s_forward_culling) {
+                            float fx = rdf(cam + 0x20u);
+                            float fy = rdf(cam + 0x24u);
+                            float fz = rdf(cam + 0x28u);
+                            float px = rdf(cam + 0x30u);
+                            float py = rdf(cam + 0x34u);
+                            float pz = rdf(cam + 0x38u);
+#if !defined(_WIN32)
+                            extern void nfs_camera_cull_update_camera(float, float, float, float, float, float) __attribute__((weak));
+                            if (nfs_camera_cull_update_camera) {
+                                nfs_camera_cull_update_camera(px, py, pz, fx, fy, fz);
+                            }
+#endif
                         }
                     }
                 }

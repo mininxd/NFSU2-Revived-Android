@@ -35,6 +35,20 @@ void nfs_d3d9_filter_forget_shadow(void);
 void nfs_d3d9_filter_notify_retired(void);
 void nfs_d3d9_filter_stats(uint64_t* out_total, uint64_t* out_filtered);
 
+// Dynamic Camera Forward-Only Back-Culling Engine
+void nfs_camera_cull_set_enabled(int enabled);
+int nfs_camera_cull_is_enabled(void);
+void nfs_camera_cull_set_margin(float margin);
+void nfs_camera_cull_set_far_distance(float dist);
+void nfs_camera_cull_update_camera(float pos_x, float pos_y, float pos_z,
+                                   float fwd_x, float fwd_y, float fwd_z);
+void nfs_camera_cull_update_view(const float* view_ptr);
+void nfs_camera_cull_update_proj(const float* proj_ptr);
+void nfs_camera_cull_update_world(const float* world_ptr);
+void nfs_camera_cull_set_screen_space(int is_screen_space);
+int nfs_camera_cull_test_draw(void);
+void nfs_camera_cull_stats(uint64_t* out_total, uint64_t* out_culled);
+
 // Direct3D 9 Vertex Declaration & FVF Decomposition
 typedef struct D3DVertexElement9Raw {
     uint16_t stream;

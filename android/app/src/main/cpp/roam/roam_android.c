@@ -1786,6 +1786,26 @@ JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeDrawDistance(
     Java_com_nfsu2_androidevolved_GameActivity_nativeDrawDistance(env, clazz, distance);
 }
 
+JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeForwardCulling(
+        JNIEnv *env, jclass clazz, jboolean enabled) {
+    (void)env; (void)clazz;
+    typedef void (*fn_set_fc)(int);
+    static fn_set_fc s_set_fc = NULL;
+    static int s_resolved = 0;
+    if (!s_resolved) {
+        s_resolved = 1;
+        s_set_fc = (fn_set_fc)dlsym(RTLD_DEFAULT, "nfs_widescreen_set_forward_culling");
+    }
+    if (s_set_fc) {
+        s_set_fc(enabled ? 1 : 0);
+    }
+}
+
+JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeForwardCulling(
+        JNIEnv *env, jclass clazz, jboolean enabled) {
+    Java_com_nfsu2_androidevolved_GameActivity_nativeForwardCulling(env, clazz, enabled);
+}
+
 /* ========================================================================= */
 /* PowerVR / IMG BXM Vulkan Pipeline Creation Fault Guard                    */
 /* ========================================================================= */

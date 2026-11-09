@@ -375,6 +375,12 @@ extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeDrawD
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeDrawDistance(JNIEnv*,jclass,jfloat distance){
     nfs_widescreen_set_draw_distance(float(distance));
 }
+extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeForwardCulling(JNIEnv*,jclass,jboolean enabled){
+    nfs_widescreen_set_forward_culling(enabled == JNI_TRUE ? 1 : 0);
+}
+extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeForwardCulling(JNIEnv*,jclass,jboolean enabled){
+    nfs_widescreen_set_forward_culling(enabled == JNI_TRUE ? 1 : 0);
+}
 extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeHudSafeArea(JNIEnv*,jclass,jboolean enabled){setGuestHudSafeArea(enabled==JNI_TRUE);}
 // Minimap at the top-left: the bottom-left corner sits under the steering thumb.
 extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeOnlineServer(JNIEnv* env,jclass,jstring host){

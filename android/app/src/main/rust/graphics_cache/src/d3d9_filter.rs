@@ -202,6 +202,7 @@ impl D3D9ShadowState {
                 self.fvf = fvf_val;
                 self.fvf_valid = true;
                 self.decl_valid = false;
+                crate::camera_cull::GLOBAL_CAMERA_CULL.set_screen_space((fvf_val & 0x004) != 0);
                 false
             }
             // SetVertexShader(pShader)
@@ -359,6 +360,19 @@ pub unsafe extern "C" fn nfs_d3d9_filter_transform(
     }
     TOTAL_CALLS.fetch_add(1, Ordering::Relaxed);
     let incoming = std::slice::from_raw_parts(matrix_ptr, 16);
+    if st == 2 {
+        let mut m = [0.0f32; 16];
+        m.copy_from_slice(incoming);
+        crate::camera_cull::GLOBAL_CAMERA_CULL.update_view_matrix(&m);
+    } else if st == 3 {
+        let mut m = [0.0f32; 16];
+        m.copy_from_slice(incoming);
+        crate::camera_cull::GLOBAL_CAMERA_CULL.update_proj_matrix(&m);
+    } else if st == 256 {
+        let mut m = [0.0f32; 16];
+        m.copy_from_slice(incoming);
+        crate::camera_cull::GLOBAL_CAMERA_CULL.update_world_matrix(&m);
+    }
     if GLOBAL_SHADOW.transforms_valid[st] {
         let cached = &GLOBAL_SHADOW.transforms[st];
         if cached == incoming {
