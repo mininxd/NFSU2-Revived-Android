@@ -1,3 +1,5 @@
+extern "C" void nfs_simd_stream_copy(uint8_t* dst, const uint8_t* src, size_t bytes);
+
 struct ResourceLock {void* native;uint32_t guest,size,pitch,rowBytes,rows,flags;CompressedView compressed{};RECT rectangle{};uint32_t nativePitch{};};
 std::map<uint64_t,ResourceLock> resourceLocks;
 uint64_t lockKey(uint32_t object,uint32_t subresource){return (uint64_t(object)<<32)|subresource;}
@@ -48,7 +50,7 @@ HRESULT lockPixels(uint32_t address,uint32_t subresource,const D3DSURFACE_DESC& 
 void copyLockBack(uint32_t address,uint32_t subresource){
     auto lock=resourceLocks.find(lockKey(address,subresource));if(lock==resourceLocks.end())throw std::runtime_error("D3D9 unlock without guest lock");
     auto& data=lock->second;if(!(data.flags&D3DLOCK_READONLY))for(uint32_t row=0;row<data.rows;++row)
-        if(!data.compressed.texture)std::memcpy(static_cast<uint8_t*>(data.native)+row*data.pitch,static_cast<const uint8_t*>(pointer(data.guest))+row*data.pitch,data.rowBytes);
+        if(!data.compressed.texture)nfs_simd_stream_copy(static_cast<uint8_t*>(data.native)+row*data.pitch,static_cast<const uint8_t*>(pointer(data.guest))+row*data.pitch,data.rowBytes);
     if(data.compressed.texture&&!(data.flags&D3DLOCK_READONLY)){
         auto& texture=*data.compressed.texture;auto& raw=texture.bytes(data.compressed.face,data.compressed.level);
         uint32_t offset=(data.rectangle.top/4)*data.pitch+(data.rectangle.left/4)*texture.blockBytes();
@@ -89,6 +91,6 @@ template<class Buffer,class Desc>HRESULT lockBuffer(uint32_t address,uint32_t of
     auto buffer=nativeObject<Buffer>(address);Desc desc{};HRESULT status=buffer->GetDesc(&desc);if(FAILED(status))return status;
     void* native=nullptr;status=buffer->Lock(offset,size,&native,flags);if(FAILED(status))return status;
     if(!size)size=desc.Size-offset;uint32_t temporary=allocateGuest(size);
-    if(!(flags&D3DLOCK_DISCARD))std::memcpy(pointer(temporary),native,size);
+    if(!(flags&D3DLOCK_DISCARD))nfs_simd_stream_copy(static_cast<uint8_t*>(pointer(temporary)),static_cast<const uint8_t*>(native),size);
     resourceLocks.emplace(lockKey(address,0),ResourceLock{native,temporary,size,size,size,1,flags});write(output,temporary);return D3D_OK;
 }

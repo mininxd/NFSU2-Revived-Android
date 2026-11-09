@@ -208,7 +208,7 @@ thread_local bool renderThread=false;
 // Render-thread slice handovers and the time spent getting the machine back.
 uint64_t renderYields=0;std::chrono::nanoseconds renderWait{};
 void checkGuestProgress() {
-    while(guestPaused.load()&&!stopRequested.load())yieldGuestMachine(20);
+    while(guestPaused.load()&&!stopRequested.load())yieldGuestMachine(1);
     if(stopRequested.load())throw GuestStop("Guest execution cancelled");
     // Imports and lifted back edges can reach this hook many times per frame.
     // Keep cancellation immediate, but amortize full register saves and native

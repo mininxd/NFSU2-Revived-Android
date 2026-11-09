@@ -171,3 +171,69 @@ pub unsafe extern "C" fn nfs_audio_mixer_clamp_and_stats(
         *out_clipped += clipped;
     }
 }
+
+/// Batch calculates 3D audio attenuation and stereo panning for sound emitters.
+#[no_mangle]
+pub unsafe extern "C" fn nfs_audio_3d_positional_batch(
+    count: usize,
+    emitters_xyz: *const f32, // count * 3
+    listener_pos: *const f32, // 3
+    listener_fwd: *const f32, // 3
+    listener_rgt: *const f32, // 3
+    min_dist: f32,
+    max_dist: f32,
+    out_gains_lr: *mut f32,   // count * 2 (gain_l, gain_r)
+) {
+    if emitters_xyz.is_null() || listener_pos.is_null() || listener_rgt.is_null() || out_gains_lr.is_null() || count == 0 {
+        return;
+    }
+
+    let lx = *listener_pos;
+    let ly = *listener_pos.add(1);
+    let lz = *listener_pos.add(2);
+
+    let rx = *listener_rgt;
+    let ry = *listener_rgt.add(1);
+    let rz = *listener_rgt.add(2);
+
+    let dist_range = (max_dist - min_dist).max(0.001);
+
+    for i in 0..count {
+        let ex = *emitters_xyz.add(i * 3);
+        let ey = *emitters_xyz.add(i * 3 + 1);
+        let ez = *emitters_xyz.add(i * 3 + 2);
+
+        let dx = ex - lx;
+        let dy = ey - ly;
+        let dz = ez - lz;
+
+        let dist_sq = dx * dx + dy * dy + dz * dz;
+        let dist = dist_sq.sqrt();
+
+        // Linear roll-off clamped between min_dist and max_dist
+        let atten = if dist <= min_dist {
+            1.0
+        } else if dist >= max_dist {
+            0.0
+        } else {
+            (max_dist - dist) / dist_range
+        };
+
+        // Panning dot product with listener right vector
+        let pan = if dist > 0.001 {
+            let inv_d = 1.0 / dist;
+            let ndx = dx * inv_d;
+            let ndy = dy * inv_d;
+            let ndz = dz * inv_d;
+            (ndx * rx + ndy * ry + ndz * rz).clamp(-1.0, 1.0)
+        } else {
+            0.0
+        };
+
+        let gain_l = atten * (0.5 - 0.5 * pan);
+        let gain_r = atten * (0.5 + 0.5 * pan);
+
+        *out_gains_lr.add(i * 2) = gain_l;
+        *out_gains_lr.add(i * 2 + 1) = gain_r;
+    }
+}

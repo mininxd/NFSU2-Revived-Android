@@ -301,6 +301,9 @@ pub fn generate_patches(cfg: &ExtraOptionsSettings) -> Vec<PatchEntry> {
     patches.push(PatchEntry { va: 0x005C0D3F, bytes: vec![0x78] });
     patches.push(PatchEntry { va: 0x005C0D54, bytes: vec![0x00] });
 
+    // Ground Shadow Alignment Fix (0.015f instead of 0.04f to sit flush with road and prevent wheel clipping)
+    patches.push(PatchEntry { va: 0x007A66B4, bytes: 0.015f32.to_le_bytes().to_vec() });
+
     // 2. LapControllers
     patches.push(PatchEntry { va: 0x004B3D82, bytes: vec![cfg.min_lap] });
     patches.push(PatchEntry { va: 0x004B3D9B, bytes: vec![cfg.min_lap] });
