@@ -43,6 +43,10 @@ pub struct D3D9ShadowState {
     pub stream_freq_valid: [bool; 4],
     pub light_enabled: [bool; 8],
     pub light_valid: [bool; 8],
+    pub transforms: [[f32; 16]; 264],
+    pub transforms_valid: [bool; 264],
+    pub viewport: [u32; 6],
+    pub viewport_valid: bool,
     pub epoch: u64,
 }
 
@@ -81,6 +85,10 @@ impl D3D9ShadowState {
             stream_freq_valid: [false; 4],
             light_enabled: [false; 8],
             light_valid: [false; 8],
+            transforms: [[0.0; 16]; 264],
+            transforms_valid: [false; 264],
+            viewport: [0; 6],
+            viewport_valid: false,
             epoch: 0,
         }
     }
@@ -98,6 +106,9 @@ impl D3D9ShadowState {
         self.ib_valid = false;
         self.stream_freq_valid = [false; 4];
         self.light_valid = [false; 8];
+        self.transforms_valid = [false; 264];
+        self.viewport_valid = false;
+    }
     }
 
     pub fn notify_retired(&mut self) {
@@ -332,4 +343,50 @@ pub unsafe extern "C" fn nfs_d3d9_filter_stats(out_total: *mut u64, out_filtered
     if !out_filtered.is_null() {
         *out_filtered = FILTERED_CALLS.load(Ordering::Relaxed);
     }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_d3d9_filter_transform(
+    state: u32,
+    matrix_ptr: *const f32,
+) -> i32 {
+    if matrix_ptr.is_null() {
+        return 0;
+    }
+    let st = state as usize;
+    if st >= 264 {
+        return 0;
+    }
+    TOTAL_CALLS.fetch_add(1, Ordering::Relaxed);
+    let incoming = std::slice::from_raw_parts(matrix_ptr, 16);
+    if GLOBAL_SHADOW.transforms_valid[st] {
+        let cached = &GLOBAL_SHADOW.transforms[st];
+        if cached == incoming {
+            FILTERED_CALLS.fetch_add(1, Ordering::Relaxed);
+            return 1;
+        }
+    }
+    GLOBAL_SHADOW.transforms[st].copy_from_slice(incoming);
+    GLOBAL_SHADOW.transforms_valid[st] = true;
+    0
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_d3d9_filter_viewport(
+    viewport_ptr: *const u32,
+) -> i32 {
+    if viewport_ptr.is_null() {
+        return 0;
+    }
+    TOTAL_CALLS.fetch_add(1, Ordering::Relaxed);
+    let incoming = std::slice::from_raw_parts(viewport_ptr, 6);
+    if GLOBAL_SHADOW.viewport_valid {
+        if &GLOBAL_SHADOW.viewport[..] == incoming {
+            FILTERED_CALLS.fetch_add(1, Ordering::Relaxed);
+            return 1;
+        }
+    }
+    GLOBAL_SHADOW.viewport.copy_from_slice(incoming);
+    GLOBAL_SHADOW.viewport_valid = true;
+    0
 }

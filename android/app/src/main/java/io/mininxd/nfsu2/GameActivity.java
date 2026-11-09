@@ -498,6 +498,12 @@ public final class GameActivity extends NativeActivity {
         controlsWindow = new PopupWindow(touchControls, ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT, false);
         controlsWindow.setClippingEnabled(false);
+        controlsWindow.setFocusable(false);
+        controlsWindow.setTouchable(true);
+        controlsWindow.setInputMethodMode(PopupWindow.INPUT_METHOD_NOT_NEEDED);
+        if (Build.VERSION.SDK_INT >= 22) {
+            controlsWindow.setAttachedInDecor(true);
+        }
         java.util.ArrayList<String> cheats = launch.getStringArrayListExtra("cheats");
         if (cheats == null) cheats = GameOptions.getActiveCheatCodes(this);
         if (!cheats.isEmpty()) applyCheatCodes(cheats);
@@ -603,7 +609,6 @@ public final class GameActivity extends NativeActivity {
         if(!focused) {
             if(touchControls!=null)touchControls.releaseAll();
             setTiltKeys(false,false);
-            if(controlsWindow!=null)controlsWindow.dismiss();
             if(diagnosticOverlay!=null)diagnosticOverlay.hide();
         }
         if(focused){
@@ -617,6 +622,7 @@ public final class GameActivity extends NativeActivity {
                     android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
             if (wasBackgrounded) {
                 showRecoveryDialog();
+                return;
             }
         }
         if (focused && foreground && statusWindow != null && !statusHidden && !statusWindow.isShowing()) {
@@ -698,6 +704,26 @@ public final class GameActivity extends NativeActivity {
                 .setNeutralButton("Try Resume", (dialog, which) -> {
                     wasBackgrounded = false;
                     dialog.dismiss();
+                    if (controlsWindow != null && !controlsWindow.isShowing() && hasWindowFocus()) {
+                        try {
+                            controlsWindow.showAtLocation(getWindow().getDecorView(), Gravity.TOP | Gravity.START, 0, 0);
+                        } catch (Exception ignored) {}
+                    }
+                    if (diagnosticOverlay != null) {
+                        try { diagnosticOverlay.show(); } catch (Exception ignored) {}
+                    }
+                    final long startFrames = io.mininxd.nfsu2.net.RoamNativeBridge.isLoaded()
+                            ? io.mininxd.nfsu2.net.RoamNativeBridge.nativeGetFrameCount() : -1;
+                    getWindow().getDecorView().postDelayed(() -> {
+                        if (isFinishing() || (Build.VERSION.SDK_INT >= 17 && isDestroyed())) return;
+                        if (io.mininxd.nfsu2.net.RoamNativeBridge.isLoaded() && startFrames >= 0) {
+                            long currentFrames = io.mininxd.nfsu2.net.RoamNativeBridge.nativeGetFrameCount();
+                            if (currentFrames <= startFrames) {
+                                android.util.Log.w("NFSU2", "Game render loop stalled after resume (frames=" + currentFrames + "); triggering quickRestart to recover cleanly");
+                                quickRestart();
+                            }
+                        }
+                    }, 850);
                 })
                 .setNegativeButton("Exit to Launcher", (dialog, which) -> finish())
                 .setCancelable(false)

@@ -29,6 +29,8 @@ uint64_t nfs_async_compiler_completed_count(AsyncCompilerEngine* compiler);
 
 // D3D9 Redundant State Deduplication Filter
 int nfs_d3d9_filter_state(uint32_t method, const uint32_t* args, uint32_t* count);
+int nfs_d3d9_filter_transform(uint32_t state, const float* matrix);
+int nfs_d3d9_filter_viewport(const uint32_t* viewport);
 void nfs_d3d9_filter_forget_shadow(void);
 void nfs_d3d9_filter_notify_retired(void);
 void nfs_d3d9_filter_stats(uint64_t* out_total, uint64_t* out_filtered);

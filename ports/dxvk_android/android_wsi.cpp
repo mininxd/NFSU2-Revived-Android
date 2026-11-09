@@ -63,7 +63,7 @@ extern "C" void dxvkAndroidSetWindow(ANativeWindow* window){
     // full-screen image every frame (Adreno 610: 2.5 MB per frame at 2340x1080).
     if(window&&renderWidth&&renderHeight&&renderWidth<screenWidth&&renderHeight<screenHeight&&
        ANativeWindow_setBuffersGeometry(window,renderWidth,renderHeight,0)==0){bufferWidth=renderWidth;bufferHeight=renderHeight;}
-    currentHandle=window?reinterpret_cast<HWND>(++windowGeneration):nullptr;
+    currentHandle=window?reinterpret_cast<HWND>(uintptr_t{0x1000}):nullptr;
 #else
     currentHandle=window;
 #endif
@@ -93,13 +93,14 @@ void DxvkPlatformExts::initDeviceExtensions(const DxvkInstance*){}
 namespace dxvk::wsi {
 VkResult createSurface(HWND window,const Rc<vk::InstanceFn>& instance,VkSurfaceKHR* surface){
     std::lock_guard<std::mutex> guard(windowMutex);
-    if(!currentWindow||window!=currentHandle)return VK_ERROR_SURFACE_LOST_KHR;
 #ifdef __ANDROID__
+    if(!currentWindow||!window)return VK_ERROR_SURFACE_LOST_KHR;
     auto create=reinterpret_cast<PFN_vkCreateAndroidSurfaceKHR>(dxvkAndroidGetInstanceProcAddr()(instance->instance(),"vkCreateAndroidSurfaceKHR"));
     if(!create)return VK_ERROR_EXTENSION_NOT_PRESENT;
     VkAndroidSurfaceCreateInfoKHR info{VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR};info.window=currentWindow;
     return create(instance->instance(),&info,nullptr,surface);
 #else
+    if(!currentWindow||window!=currentHandle)return VK_ERROR_SURFACE_LOST_KHR;
     auto create=reinterpret_cast<PFN_vkCreateXlibSurfaceKHR>(vkGetInstanceProcAddr(instance->instance(),"vkCreateXlibSurfaceKHR"));
     if(!create)return VK_ERROR_EXTENSION_NOT_PRESENT;
     VkXlibSurfaceCreateInfoKHR info{VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR};info.dpy=currentWindow->display;info.window=currentWindow->window;
@@ -125,15 +126,32 @@ bool getDisplayMode(HMONITOR handle,uint32_t index,WsiMode* mode){
     auto sizes=androidRenderModes(screenWidth,screenHeight,renderWidth?renderWidth:screenWidth,renderHeight?renderHeight:screenHeight);
     *mode={sizes[index].width,sizes[index].height,{60,1},32,false};return true;
 }
-void getWindowSize(HWND window,uint32_t* width,uint32_t* height){std::lock_guard<std::mutex> guard(windowMutex);bool valid=currentWindow&&window==currentHandle;if(width)*width=valid?(bufferWidth?bufferWidth:screenWidth):0;if(height)*height=valid?(bufferHeight?bufferHeight:screenHeight):0;}
-void resizeWindow(HWND window,DxvkWindowState*,uint32_t width,uint32_t height){std::lock_guard<std::mutex> guard(windowMutex);
+void getWindowSize(HWND window,uint32_t* width,uint32_t* height){
+    std::lock_guard<std::mutex> guard(windowMutex);
 #ifdef __ANDROID__
-if(currentWindow&&window==currentHandle&&ANativeWindow_setBuffersGeometry(currentWindow,width,height,0)==0){bufferWidth=width;bufferHeight=height;}
+    bool valid=currentWindow&&window;
 #else
-(void)window;(void)width;(void)height;
+    bool valid=currentWindow&&window==currentHandle;
+#endif
+    if(width)*width=valid?(bufferWidth?bufferWidth:screenWidth):0;
+    if(height)*height=valid?(bufferHeight?bufferHeight:screenHeight):0;
+}
+void resizeWindow(HWND window,DxvkWindowState*,uint32_t width,uint32_t height){
+    std::lock_guard<std::mutex> guard(windowMutex);
+#ifdef __ANDROID__
+    if(currentWindow&&window&&ANativeWindow_setBuffersGeometry(currentWindow,width,height,0)==0){bufferWidth=width;bufferHeight=height;}
+#else
+    (void)window;(void)width;(void)height;
 #endif
 }
-bool isWindow(HWND window){std::lock_guard<std::mutex> guard(windowMutex);return currentWindow&&window==currentHandle;}
+bool isWindow(HWND window){
+    std::lock_guard<std::mutex> guard(windowMutex);
+#ifdef __ANDROID__
+    return currentWindow&&window;
+#else
+    return currentWindow&&window==currentHandle;
+#endif
+}
 HMONITOR getWindowMonitor(HWND window){return isWindow(window)?monitor():nullptr;}
 bool setWindowMode(HMONITOR handle,HWND window,const WsiMode*,bool){return handle==monitor()&&isWindow(window);}
 bool enterFullscreenMode(HMONITOR handle,HWND window,DxvkWindowState*,bool){return handle==monitor()&&isWindow(window);}

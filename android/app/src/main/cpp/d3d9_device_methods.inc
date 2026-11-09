@@ -35,10 +35,22 @@ case 40:{*argumentCount=2;IDirect3DSurface9* object1=nullptr;HRESULT status=devi
 case 41:{*argumentCount=1;return device->BeginScene();}
 case 42:{*argumentCount=1;return device->EndScene();}
 case 43:{*argumentCount=7;return device->Clear(static_cast<DWORD>(args[1]),static_cast<const D3DRECT*>(pointer(args[2])),static_cast<DWORD>(args[3]),static_cast<D3DCOLOR>(args[4]),floatValue(args[5]),static_cast<DWORD>(args[6]));}
-case 44:{*argumentCount=3;return device->SetTransform(static_cast<D3DTRANSFORMSTATETYPE>(args[1]),static_cast<const D3DMATRIX*>(pointer(args[2])));}
+case 44:{*argumentCount=3;
+    static auto s_filter_tf = reinterpret_cast<int(*)(uint32_t,const float*)>(dlsym(RTLD_DEFAULT,"nfs_d3d9_filter_transform"));
+    auto matrix=static_cast<const D3DMATRIX*>(pointer(args[2]));
+    if(s_filter_tf && matrix && s_filter_tf(args[1], reinterpret_cast<const float*>(matrix))){
+        return D3D_OK;
+    }
+    return device->SetTransform(static_cast<D3DTRANSFORMSTATETYPE>(args[1]),matrix);}
 case 45:{*argumentCount=3;return device->GetTransform(static_cast<D3DTRANSFORMSTATETYPE>(args[1]),static_cast<D3DMATRIX*>(pointer(args[2])));}
 case 46:{*argumentCount=3;return device->MultiplyTransform(static_cast<D3DTRANSFORMSTATETYPE>(args[1]),static_cast<const D3DMATRIX*>(pointer(args[2])));}
-case 47:{*argumentCount=2;return device->SetViewport(static_cast<const D3DVIEWPORT9*>(pointer(args[1])));}
+case 47:{*argumentCount=2;
+    static auto s_filter_vp = reinterpret_cast<int(*)(const uint32_t*)>(dlsym(RTLD_DEFAULT,"nfs_d3d9_filter_viewport"));
+    auto vp=static_cast<const D3DVIEWPORT9*>(pointer(args[1]));
+    if(s_filter_vp && vp && s_filter_vp(reinterpret_cast<const uint32_t*>(vp))){
+        return D3D_OK;
+    }
+    return device->SetViewport(vp);}
 case 48:{*argumentCount=2;return device->GetViewport(static_cast<D3DVIEWPORT9*>(pointer(args[1])));}
 case 49:{*argumentCount=2;return device->SetMaterial(static_cast<const D3DMATERIAL9*>(pointer(args[1])));}
 case 50:{*argumentCount=2;return device->GetMaterial(static_cast<D3DMATERIAL9*>(pointer(args[1])));}

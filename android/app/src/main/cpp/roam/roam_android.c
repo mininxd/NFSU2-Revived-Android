@@ -1549,6 +1549,12 @@ JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_AdhocRoamClient_nativeSetFrameLimit
     nfs_roam_set_frame_limit((uint32_t)fps);
 }
 
+JNIEXPORT jlong JNICALL Java_io_mininxd_nfsu2_net_RoamNativeBridge_nativeGetFrameCount(
+        JNIEnv *env, jclass clazz) {
+    (void)env; (void)clazz;
+    return (jlong)g_frame_count;
+}
+
 /* Performance cores CPU affinity binding */
 int nfs_bind_to_perf_cores(void) {
     long highest_freq = 0;
