@@ -38,12 +38,13 @@ public:
     GuestMemory() {
         base_ = mmap(nullptr, size_t(size), PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
         if (base_ == MAP_FAILED) throw std::runtime_error("Guest address-space reservation failed");
-        // Map page 0 as read-only zeros to safely tolerate legacy PC null-structure field reads
-        // (e.g. sub_005996b0 reading [remote_player + 0x40] during online lobby state sync).
-        // Writes to page 0 still trap with SEGV_ACCERR because it is PROT_READ only.
-        if (mprotect(base_, page_, PROT_READ) != 0) {
+        // Map the first 64KB (or page_) of guest space to safely tolerate legacy PC null-pointer field reads
+        // (e.g. sub_005996b0 reading [remote_player + 0x40] during online lobby state sync,
+        // and Carbon Fiber menu reading [CarRenderInfo + 0x60*4] at 0x00545dc8, 0x00566682).
+        size_t null_protect_sz = ((65536 + (size_t)page_ - 1) / (size_t)page_) * (size_t)page_;
+        if (mprotect(base_, null_protect_sz, PROT_READ | PROT_WRITE) != 0) {
             munmap(base_, size_t(size));
-            throw std::runtime_error("Failed to protect guest null page as read-only");
+            throw std::runtime_error("Failed to protect guest null page as read-write");
         }
     }
     GuestMemory(const GuestMemory&) = delete;

@@ -1024,6 +1024,10 @@ std::string connectGuestRuntime(const char* executable) {
         memory=std::make_unique<GuestMemory>();
         hostGameRoot=std::string(executable); hostGameRoot=hostGameRoot.substr(0,hostGameRoot.find_last_of('/'));
         g_mem_base=reinterpret_cast<ptrdiff_t>(memory->base());
+        long page_sz = sysconf(_SC_PAGESIZE);
+        if (page_sz <= 0) page_sz = 16384;
+        size_t null_protect_sz = ((65536 + (size_t)page_sz - 1) / (size_t)page_sz) * (size_t)page_sz;
+        mprotect(memory->base(), null_protect_sz, PROT_READ | PROT_WRITE);
         testGuestHeaps(*memory);
         NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Guest heaps passed ownership, realloc preservation, zero tail, in-place failure and reuse checks");
         heaps=std::make_unique<GuestHeaps>(*memory);

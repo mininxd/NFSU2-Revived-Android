@@ -93,6 +93,88 @@ extern int nfs_rust_apply_engine_pacing(uint8_t *mem_base, float real_elapsed);
 #define G_RIDE_SLOT_CAP  0x0061c744u
 
 static int g_carpool_patched = 0;
+static _Atomic int s_null_page_protected = 0;
+
+static void roam_android_protect_guest_null_page(void) {
+    if (atomic_load(&s_null_page_protected) || !g_p_mem_base || !*g_p_mem_base) return;
+    long page_sz = sysconf(_SC_PAGESIZE);
+    if (page_sz <= 0) page_sz = 16384;
+    size_t null_protect_sz = ((65536 + (size_t)page_sz - 1) / (size_t)page_sz) * (size_t)page_sz;
+    if (mprotect((void *)(*g_p_mem_base), null_protect_sz, PROT_READ | PROT_WRITE) == 0) {
+        atomic_store(&s_null_page_protected, 1);
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2",
+            "Protected guest null page at %p (%zu bytes) as PROT_READ|PROT_WRITE for null-deref tolerance",
+            (void *)(*g_p_mem_base), null_protect_sz);
+    } else {
+        __android_log_print(ANDROID_LOG_WARN, "NFSU2",
+            "Failed to mprotect guest null page at %p: %s",
+            (void *)(*g_p_mem_base), strerror(errno));
+    }
+}
+
+static void *guest_null_page_guard_worker(void *arg) {
+    (void)arg;
+    for (int i = 0; i < 2000 && !atomic_load(&s_null_page_protected); i++) {
+        roam_android_init_symbols();
+        if (g_p_mem_base && *g_p_mem_base != 0) {
+            roam_android_protect_guest_null_page();
+            if (atomic_load(&s_null_page_protected)) break;
+        }
+        usleep(5000); // 5 ms
+    }
+    return NULL;
+}
+
+static struct sigaction s_old_sa_segv;
+static _Atomic int s_segv_handler_installed = 0;
+
+static void guest_null_segv_handler(int sig, siginfo_t *si, void *ucontext) {
+    if (sig == SIGSEGV && si && g_p_mem_base && *g_p_mem_base != 0) {
+        uintptr_t fault_addr = (uintptr_t)si->si_addr;
+        uintptr_t base = (uintptr_t)(*g_p_mem_base);
+        // Intercept any fault within the first 64KB of guest address space (null pointer field access)
+        if (fault_addr >= base && fault_addr < base + 65536) {
+            long page_sz = sysconf(_SC_PAGESIZE);
+            if (page_sz <= 0) page_sz = 16384;
+            size_t null_protect_sz = ((65536 + (size_t)page_sz - 1) / (size_t)page_sz) * (size_t)page_sz;
+            if (mprotect((void *)base, null_protect_sz, PROT_READ | PROT_WRITE) == 0) {
+                atomic_store(&s_null_page_protected, 1);
+                __android_log_print(ANDROID_LOG_INFO, "NFSU2",
+                    "SIGSEGV recovered: protected guest null page at %p (%zu bytes) for fault addr %p",
+                    (void *)base, null_protect_sz, (void *)fault_addr);
+                return; // Safely re-execute the faulting instruction
+            }
+        }
+    }
+
+    // Forward other crashes to original signal handler (debuggerd / crash logger)
+    if (s_old_sa_segv.sa_flags & SA_SIGINFO) {
+        if (s_old_sa_segv.sa_sigaction) {
+            s_old_sa_segv.sa_sigaction(sig, si, ucontext);
+            return;
+        }
+    } else if (s_old_sa_segv.sa_handler && s_old_sa_segv.sa_handler != SIG_DFL && s_old_sa_segv.sa_handler != SIG_IGN) {
+        s_old_sa_segv.sa_handler(sig);
+        return;
+    }
+
+    signal(sig, SIG_DFL);
+    raise(sig);
+}
+
+static void install_guest_null_fault_guard(void) {
+    if (atomic_exchange(&s_segv_handler_installed, 1) != 0) return;
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_sigaction = guest_null_segv_handler;
+    sa.sa_flags = SA_SIGINFO | SA_NODEFER;
+    sigemptyset(&sa.sa_mask);
+    if (sigaction(SIGSEGV, &sa, &s_old_sa_segv) != 0) {
+        __android_log_print(ANDROID_LOG_WARN, "NFSU2", "Failed to install guest null SIGSEGV handler: %s", strerror(errno));
+    } else {
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2", "Installed guest null SIGSEGV recovery guard");
+    }
+}
 
 static inline void roam_android_patch_carpool(void) {
     if (!g_carpool_patched && g_p_esp && *g_p_esp && rh_mem_committed(G_CARPOOL_KB, 12)) {
@@ -122,6 +204,10 @@ int roam_android_init_symbols(void) {
         g_p_ecx = (uint32_t *)dlsym(h, "g_ecx");
         g_p_edx = (uint32_t *)dlsym(h, "g_edx");
         g_p_guest_is_readable = (int (*)(uint32_t, uint32_t))dlsym(h, "guest_is_readable");
+    }
+
+    if (g_p_mem_base && *g_p_mem_base != 0) {
+        roam_android_protect_guest_null_page();
     }
 
     if (g_p_mem_base && *g_p_mem_base != 0 && g_p_esp && *g_p_esp != 0) {
@@ -1231,6 +1317,7 @@ static void lobby_frame_tick(void) {
 static _Atomic int s_tick_in_progress = 0;
 __attribute__((visibility("default"))) void nfs_roam_frame_tick(void) {
     if (!roam_android_init_symbols() || !g_p_esp || !*g_p_esp) return;
+    roam_android_protect_guest_null_page();
     if (atomic_exchange(&s_tick_in_progress, 1) != 0) return;
     pace_frame();
     static int s_perf_bound = 0;
@@ -2146,7 +2233,13 @@ JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeGamepadLayout(
 
 __attribute__((constructor)) static void powervr_guard_ctor(void) {
     install_powervr_fault_guard();
+    install_guest_null_fault_guard();
     roam_apply_gamepad_layout(0);
+
+    pthread_t th;
+    if (pthread_create(&th, NULL, guest_null_page_guard_worker, NULL) == 0) {
+        pthread_detach(th);
+    }
 }
 
 JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeGpuDriver(
