@@ -389,14 +389,9 @@ public final class LauncherActivity extends Activity {
         try {
             File targetDat = new File(scriptsDir, "NFSUnderground2.WidescreenFix.dat");
             File held = new File(scriptsDir, "NFSUnderground2.WidescreenFix.dat.hold");
-            if ((!targetDat.exists() || targetDat.length() == 0) && !held.isFile()) {
-                if (GameOptions.usesWidescreenPatch(this)) {
-                    copyAssetFile(this, "scripts/NFSUnderground2.WidescreenFix.dat", targetDat);
-                    android.util.Log.i("NFSU2", "Installed widescreen data to " + targetDat.getAbsolutePath());
-                } else {
-                    copyAssetFile(this, "scripts/NFSUnderground2.WidescreenFix.dat", held);
-                    android.util.Log.i("NFSU2", "Installed widescreen data to " + held.getAbsolutePath());
-                }
+            if (!targetDat.exists() || targetDat.length() == 0) {
+                copyAssetFile(this, "scripts/NFSUnderground2.WidescreenFix.dat", targetDat);
+                android.util.Log.i("NFSU2", "Installed widescreen data to " + targetDat.getAbsolutePath());
             }
         } catch (Exception e) {
             android.util.Log.w("NFSU2", "Failed to copy widescreen data", e);
@@ -992,6 +987,7 @@ public final class LauncherActivity extends Activity {
                 .putExtra("renderWidth", size[0]).putExtra("renderHeight", size[1])
                 .putExtra("resolutionPercent", GameOptions.get(this, GameOptions.RESOLUTION))
                 .putExtra("frameCap", Integer.parseInt(GameOptions.get(this, GameOptions.FPS)))
+                .putExtra("widescreen", GameOptions.get(this, GameOptions.WIDESCREEN).equals("on"))
                 .putExtra("widescreenMode", GameOptions.widescreenMode(this))
                 .putExtra("minimapTop", GameOptions.get(this, GameOptions.MINIMAP).equals("top"))
                 .putExtra("backBuffers", 2)        // default latency (hidden option)

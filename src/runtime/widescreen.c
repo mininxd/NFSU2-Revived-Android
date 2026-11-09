@@ -167,11 +167,15 @@ void nfs_widescreen_set_resolution(unsigned width, unsigned height) {
     if (!s_enabled || !width || !height) return;
     s_width = (float)width; s_height = (float)height;
     s_aspect = s_width / s_height;
-    float hud_aspect = s_aspect;
-    if (s_hud_safe_area && hud_aspect > (16.0f / 9.0f)) {
+    float hud_w = s_width, hud_aspect = s_aspect;
+    if (s_screen_mode == 2) {
+        /* Widescreen HUD OFF: world/FOV stay widescreen, HUD is kept in 4:3 original ratio */
+        hud_aspect = 4.0f / 3.0f;
+        hud_w = s_height * (4.0f / 3.0f);
+    } else if (s_hud_safe_area && hud_aspect > (16.0f / 9.0f)) {
         hud_aspect = 16.0f / 9.0f;
     }
-    hud_scale_x = (1.0f / s_width * (s_height / 480.0f)) * 2.0f;
+    hud_scale_x = (1.0f / hud_w * (s_height / 480.0f)) * 2.0f;
     s_hud_pos_x = 640.0f / (640.0f * hud_scale_x);
     s_hud_offset = -((640.0f / 2.0f) - (480.0f / 2.0f) * hud_aspect);
     wrf(HUD_SCALE_X, hud_scale_x);              /* fld [fHudScaleX] */

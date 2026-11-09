@@ -1806,6 +1806,46 @@ JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeForwardCulling(
     Java_com_nfsu2_androidevolved_GameActivity_nativeForwardCulling(env, clazz, enabled);
 }
 
+JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeWidescreen(
+        JNIEnv *env, jclass clazz, jboolean enabled) {
+    (void)env; (void)clazz;
+    typedef void (*fn_set_ws)(bool);
+    static fn_set_ws s_set_ws = NULL;
+    static int s_resolved = 0;
+    if (!s_resolved) {
+        s_resolved = 1;
+        s_set_ws = (fn_set_ws)dlsym(RTLD_DEFAULT, "setGuestWidescreen");
+    }
+    if (s_set_ws) {
+        s_set_ws(enabled == JNI_TRUE);
+    }
+}
+
+JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeWidescreen(
+        JNIEnv *env, jclass clazz, jboolean enabled) {
+    Java_com_nfsu2_androidevolved_GameActivity_nativeWidescreen(env, clazz, enabled);
+}
+
+JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeScreenMode(
+        JNIEnv *env, jclass clazz, jint mode) {
+    (void)env; (void)clazz;
+    typedef void (*fn_set_sm)(int);
+    static fn_set_sm s_set_sm = NULL;
+    static int s_resolved = 0;
+    if (!s_resolved) {
+        s_resolved = 1;
+        s_set_sm = (fn_set_sm)dlsym(RTLD_DEFAULT, "setGuestScreenMode");
+    }
+    if (s_set_sm) {
+        s_set_sm((int)mode);
+    }
+}
+
+JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeScreenMode(
+        JNIEnv *env, jclass clazz, jint mode) {
+    Java_com_nfsu2_androidevolved_GameActivity_nativeScreenMode(env, clazz, mode);
+}
+
 JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeMinimapTop(
         JNIEnv *env, jclass clazz, jboolean top) {
     (void)env; (void)clazz;

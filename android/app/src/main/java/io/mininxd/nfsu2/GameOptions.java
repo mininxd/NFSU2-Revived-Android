@@ -46,7 +46,7 @@ public final class GameOptions {
             new Option(DISPLAY_LOGS, "Display Logs", "off",
                     new String[] {"off", "compact", "full"},
                     new String[] {"Off", "Compact", "Full"}),
-            new Option(WIDESCREEN, "Widescreen HUD", "off",
+            new Option(WIDESCREEN, "Widescreen HUD", "on",
                     new String[] {"on", "off"},
                     new String[] {"On", "Off"}),
             new Option(MINIMAP, "Minimap", "top",

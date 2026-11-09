@@ -284,7 +284,7 @@ public final class GameActivity extends NativeActivity {
         if (hudForGamepad != null && hudForGamepad == gamepad) return;
         hudForGamepad = gamepad;
         nativeSpeedometerPosition(gamepad ? 0 : speedometerPosition);
-        nativeMinimapTop(minimapTop && !gamepad);
+        nativeMinimapTop(minimapTop);
     }
     private static void nativeBackBuffers(int count) { com.nfsu2.androidevolved.GameActivity.nativeBackBuffers(count); }
     private static void nativeCpuTextures(boolean enabled) { com.nfsu2.androidevolved.GameActivity.nativeCpuTextures(enabled); }
@@ -475,9 +475,9 @@ public final class GameActivity extends NativeActivity {
         }
         nativeLanguage(language);
         nativeFrameLimit(launch.getIntExtra("frameCap", Integer.parseInt(GameOptions.get(this, GameOptions.FPS))));
-        int screenMode = launch.getIntExtra("widescreenMode", GameOptions.widescreenMode(this));
-        nativeWidescreen(true);             // always full screen, never stretched
-        nativeScreenMode(screenMode);       // 0=Widescreen HUD edges, 2=4:3 HUD centre
+        boolean widescreen = launch.getBooleanExtra("widescreen", "on".equalsIgnoreCase(GameOptions.get(this, GameOptions.WIDESCREEN)));
+        nativeWidescreen(widescreen);
+        nativeScreenMode(widescreen ? 0 : 2);
         nativeDrawDistance(distVal);
         nativeForwardCulling(true);
         String server = launch.getStringExtra("onlineServer");
@@ -493,8 +493,9 @@ public final class GameActivity extends NativeActivity {
             nativeOnlineServer(eaNationServer);
         }
         io.mininxd.nfsu2.net.EahubClassicOnline.logStartup(this, configuredServer, !useLocalBridge);
-        minimapTop = launch.getBooleanExtra("minimapTop", GameOptions.get(this, GameOptions.MINIMAP).equals("top"));
+        minimapTop = launch.getBooleanExtra("minimapTop", "top".equalsIgnoreCase(GameOptions.get(this, GameOptions.MINIMAP)));
         speedometerPosition = launch.getIntExtra("speedometer", GameOptions.speedometerPosition(this));
+        nativeMinimapTop(minimapTop);
         updateHudForGamepad(false);
         nativeGamepadLayout(launch.getBooleanExtra("consolePad", GameOptions.isConsolePad(this)));
         nativeBackBuffers(launch.getIntExtra("backBuffers", 2));

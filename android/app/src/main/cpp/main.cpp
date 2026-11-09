@@ -368,7 +368,9 @@ extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nat
     Java_io_mininxd_nfsu2_GameActivity_nativeGamepadDevices(env,cls,ids);
 }
 extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeWidescreen(JNIEnv*,jclass,jboolean enabled){setGuestWidescreen(enabled==JNI_TRUE);}
+extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeWidescreen(JNIEnv*,jclass,jboolean enabled){setGuestWidescreen(enabled==JNI_TRUE);}
 extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeScreenMode(JNIEnv*,jclass,jint mode){setGuestScreenMode(int(mode));}
+extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeScreenMode(JNIEnv*,jclass,jint mode){setGuestScreenMode(int(mode));}
 extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeDrawDistance(JNIEnv*,jclass,jfloat distance){
     nfs_widescreen_set_draw_distance(float(distance));
 }
