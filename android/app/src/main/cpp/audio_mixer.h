@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <dlfcn.h>
 #include "audio_resampler.h"
+#include "graphics_cache.h"
 struct PcmVoice {
     std::vector<uint8_t> samples;
     unsigned channels=2,bits=16,rate=48000,frequency=48000;
@@ -62,6 +63,33 @@ public:
                 continue;
             }
             voice->staleFrames+=step*frames;
+            static auto s_render_voice = reinterpret_cast<int(*)(
+                float*, uint32_t, const VoiceDesc*, const float*, uint32_t, uint32_t, double*
+            )>(dlsym(RTLD_DEFAULT, "nfs_audio_mixer_render_voice"));
+            if(s_render_voice){
+                VoiceDesc desc;
+                desc.samples = voice->samples.data();
+                desc.bits = voice->bits;
+                desc.channels = voice->channels;
+                desc.total_frames = count;
+                desc.position = voice->position;
+                desc.step = step;
+                desc.loop_mode = voice->loop ? 1 : 0;
+                desc.gain_l = voice->left;
+                desc.gain_r = voice->right;
+
+                double next_pos = voice->position;
+                int still = s_render_voice(
+                    output, frames, &desc,
+                    kernel.weights[0].data(),
+                    nfs_audio::UpsampleKernel::phases,
+                    nfs_audio::UpsampleKernel::taps,
+                    &next_pos
+                );
+                voice->position = next_pos;
+                if(!still) { voice->playing = false; }
+                continue;
+            }
             for(unsigned frame=0;frame<frames;++frame){
                 if(voice->position>=count){if(voice->loop)voice->position=std::fmod(voice->position,double(count));else{voice->playing=false;voice->position=0;break;}}
                 size_t a=size_t(voice->position),b=a+1;float fraction=float(voice->position-a);

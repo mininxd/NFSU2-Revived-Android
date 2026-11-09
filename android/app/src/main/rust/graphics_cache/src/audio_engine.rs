@@ -20,6 +20,150 @@ unsafe fn read_pcm_sample(samples: *const u8, block_stride: usize, bits: u32, fr
     }
 }
 
+/// Voice parameters descriptor for the audio mixing engine.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct VoiceDesc {
+    pub samples: *const u8,
+    pub bits: u32,
+    pub channels: u32,
+    pub total_frames: usize,
+    pub position: f64,
+    pub step: f64,
+    pub loop_mode: i32,
+    pub gain_l: f32,
+    pub gain_r: f32,
+}
+
+/// Renders and accumulates a voice's audio into the stereo output buffer.
+///
+/// Dispatches to ARM64 NEON 16-tap sinc kernel upsampling if step < 1.0,
+/// or high-throughput linear interpolation if step >= 1.0.
+///
+/// Returns 1 if the voice is still playing, or 0 if it has completed.
+#[no_mangle]
+pub unsafe extern "C" fn nfs_audio_mixer_render_voice(
+    output: *mut f32,
+    frames: u32,
+    desc: *const VoiceDesc,
+    kernel_weights: *const f32,
+    num_phases: u32,
+    num_taps: u32,
+    pos_out: *mut f64,
+) -> i32 {
+    if output.is_null() || desc.is_null() || frames == 0 {
+        return 0;
+    }
+
+    let d = &*desc;
+    if d.samples.is_null() || d.total_frames == 0 || d.channels == 0 || (d.bits != 8 && d.bits != 16) {
+        if !pos_out.is_null() {
+            *pos_out = d.position;
+        }
+        return 0;
+    }
+
+    if d.step >= 1.0 || kernel_weights.is_null() || num_taps != 16 || num_phases == 0 {
+        return nfs_audio_mixer_render_linear(
+            output,
+            frames,
+            d.samples,
+            d.bits,
+            d.channels,
+            d.total_frames,
+            d.position,
+            d.step,
+            d.loop_mode,
+            d.gain_l,
+            d.gain_r,
+            pos_out,
+        );
+    }
+
+    let block_stride = (d.channels * (d.bits / 8)) as usize;
+    let total_frames = d.total_frames;
+    let count_i64 = total_frames as i64;
+    let mut pos = d.position;
+    let step = d.step;
+    let loop_mode = d.loop_mode != 0;
+    let gain_l = d.gain_l;
+    let gain_r = d.gain_r;
+    let samples = d.samples;
+    let bits = d.bits;
+    let ch1_idx = if d.channels > 1 { 1 } else { 0 };
+    let mut still_playing = 1;
+
+    for frame in 0..frames as usize {
+        if pos >= total_frames as f64 {
+            if loop_mode {
+                pos %= total_frames as f64;
+            } else {
+                still_playing = 0;
+                pos = 0.0;
+                break;
+            }
+        }
+
+        let a = pos as usize;
+        let fraction = (pos - a as f64) as f32;
+        let phase = fraction * num_phases as f32;
+        let index = (phase as usize).min(num_phases as usize - 1);
+        let blend = phase - index as f32;
+
+        let weights_curr = kernel_weights.add(index * 16);
+        let weights_next = kernel_weights.add((index + 1) * 16);
+
+        let mut samples_l = [0.0f32; 16];
+        let mut samples_r = [0.0f32; 16];
+
+        if a >= 7 && a + 8 < total_frames {
+            let start_src = a - 7;
+            for tap in 0..16 {
+                let src = start_src + tap;
+                samples_l[tap] = read_pcm_sample(samples, block_stride, bits, src, 0);
+                samples_r[tap] = read_pcm_sample(samples, block_stride, bits, src, ch1_idx);
+            }
+        } else {
+            for tap in 0..16 {
+                let mut source = a as i64 + tap as i64 - 7;
+                if source < 0 || source >= count_i64 {
+                    if loop_mode {
+                        source %= count_i64;
+                        if source < 0 {
+                            source += count_i64;
+                        }
+                    } else {
+                        source = source.clamp(0, count_i64 - 1);
+                    }
+                }
+                let src = source as usize;
+                samples_l[tap] = read_pcm_sample(samples, block_stride, bits, src, 0);
+                samples_r[tap] = read_pcm_sample(samples, block_stride, bits, src, ch1_idx);
+            }
+        }
+
+        let (l, r) = crate::simd_audio::resample_sinc_16tap_neon(
+            samples_l.as_ptr(),
+            samples_r.as_ptr(),
+            weights_curr,
+            weights_next,
+            blend,
+        );
+
+        let out_idx = frame * 2;
+        *output.add(out_idx) += l * gain_l;
+        *output.add(out_idx + 1) += r * gain_r;
+
+        pos += step;
+    }
+
+    if !pos_out.is_null() {
+        *pos_out = pos;
+    }
+
+    still_playing
+}
+
 /// Renders and accumulates a voice's samples into the stereo output buffer using linear interpolation.
 ///
 /// Returns 1 if the voice is still playing, or 0 if it has completed.

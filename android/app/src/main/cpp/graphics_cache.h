@@ -70,7 +70,29 @@ void nfs_render_queue_drain(void);
 void nfs_render_queue_sync(void);
 void nfs_render_queue_stats(uint64_t* out_pushed, uint64_t* out_executed);
 
-// ARM64 NEON SIMD Audio Resampler
+// ARM64 NEON SIMD Audio Resampler & Vectorized Voice Mixer
+typedef struct VoiceDesc {
+    const uint8_t* samples;
+    uint32_t bits;
+    uint32_t channels;
+    size_t total_frames;
+    double position;
+    double step;
+    int32_t loop_mode;
+    float gain_l;
+    float gain_r;
+} VoiceDesc;
+
+int nfs_audio_mixer_render_voice(
+    float* output,
+    uint32_t frames,
+    const VoiceDesc* desc,
+    const float* kernel_weights,
+    uint32_t num_phases,
+    uint32_t num_taps,
+    double* out_pos
+);
+
 void nfs_audio_resample_sinc_simd(
     const float* samples_left,
     const float* samples_right,
