@@ -1,361 +1,1775 @@
 {
-  "title": "NFSU2 Native Rust Migration & Subsystem Coverage",
-  "subtitle": "Pure Rust Performance Engines, SIMD Pipelines & Driver Shims",
-  "description": "Migration status and conversion coverage from C/C++/Java into high-performance, memory-safe Rust crates.",
-  "last_updated": "2026-11-09 05:29:02Z",
+  "title": "NFSU2 Win32 & DirectX 9 Translation Progress",
+  "subtitle": "SPEED2.EXE ARM64 / Android HLE Surface Coverage",
+  "description": "Library implementation status and function coverage for Need for Speed: Underground 2 recompilation.",
+  "last_updated": "2026-11-08 22:49:43Z",
   "libraries": {
-    "perf_cores": [
+    "kernel32.dll": [
       {
-        "name": "cpu_detect",
+        "name": "VirtualAlloc",
         "status": "implemented",
-        "description": "sysfs cpufreq and capacity auto-detection (Cortex-X / A7xx / A5xx)"
+        "description": "Anonymous mmap heap allocation with 32-bit pointer bounds"
       },
       {
-        "name": "cluster_mask",
+        "name": "VirtualFree",
         "status": "implemented",
-        "description": "64-bit performance core bitmask calculation"
+        "description": "Host munmap address unmapping"
       },
       {
-        "name": "sched_affinity",
+        "name": "VirtualProtect",
         "status": "implemented",
-        "description": "Dynamic thread affinity pinning via SYS_sched_setaffinity"
+        "description": "Configures memory protection flags with modifier stripping"
       },
       {
-        "name": "priority_tune",
+        "name": "VirtualQuery",
         "status": "implemented",
-        "description": "EAS thread priority elevation and -10 nice tuning"
+        "description": "Query memory address space region information"
       },
       {
-        "name": "comm_scanner",
+        "name": "HeapCreate",
         "status": "implemented",
-        "description": "Process task comm scanner prioritizing emu, audio & render threads"
+        "description": "Guest heap manager pool creation"
       },
       {
-        "name": "jni_bindings",
+        "name": "HeapDestroy",
         "status": "implemented",
-        "description": "Zero-overhead JNI bridge for PerformanceCores.java"
+        "description": "Guest heap manager pool destruction"
       },
       {
-        "name": "steer_math",
+        "name": "HeapAlloc",
         "status": "implemented",
-        "description": "Progressive cubic steering curve and deadzone computation"
+        "description": "Dynamic 8-byte aligned heap allocation"
       },
       {
-        "name": "c_abi_export",
+        "name": "HeapFree",
         "status": "implemented",
-        "description": "nfs_perf_cores_bind C ABI export for companion libraries"
+        "description": "Dynamic heap memory deallocation"
+      },
+      {
+        "name": "HeapReAlloc",
+        "status": "implemented",
+        "description": "Dynamic heap buffer resizing"
+      },
+      {
+        "name": "HeapSize",
+        "status": "implemented",
+        "description": "Allocation block size query"
+      },
+      {
+        "name": "GetProcessHeap",
+        "status": "implemented",
+        "description": "Returns process default heap handle (0x70000000)"
+      },
+      {
+        "name": "GlobalAlloc",
+        "status": "implemented",
+        "description": "Fixed/movable global memory allocation"
+      },
+      {
+        "name": "GlobalFree",
+        "status": "implemented",
+        "description": "Global memory block release"
+      },
+      {
+        "name": "IsBadReadPtr",
+        "status": "implemented",
+        "description": "Safe readable virtual address bounds check"
+      },
+      {
+        "name": "IsBadWritePtr",
+        "status": "implemented",
+        "description": "Safe writable virtual address bounds check"
+      },
+      {
+        "name": "IsBadCodePtr",
+        "status": "implemented",
+        "description": "Check code pointer readability"
+      },
+      {
+        "name": "MapViewOfFile",
+        "status": "implemented",
+        "description": "Memory-mapped file view binder"
+      },
+      {
+        "name": "UnmapViewOfFile",
+        "status": "implemented",
+        "description": "Memory-mapped file view release"
+      },
+      {
+        "name": "CreateFileMappingA",
+        "status": "implemented",
+        "description": "File backing or anonymous page file mapping object"
+      },
+      {
+        "name": "CreateFileA",
+        "status": "implemented",
+        "description": "Translates Windows paths to Android root with case-insensitive resolver"
+      },
+      {
+        "name": "CreateFileW",
+        "status": "implemented",
+        "description": "UTF-16 path translation to local file descriptor"
+      },
+      {
+        "name": "ReadFile",
+        "status": "implemented",
+        "description": "Synchronous file block reading"
+      },
+      {
+        "name": "WriteFile",
+        "status": "implemented",
+        "description": "Synchronous file block writing"
+      },
+      {
+        "name": "SetFilePointer",
+        "status": "implemented",
+        "description": "64-bit/32-bit seek with SEEK_SET, SEEK_CUR, SEEK_END"
+      },
+      {
+        "name": "SetEndOfFile",
+        "status": "implemented",
+        "description": "Truncates or extends file to current position"
+      },
+      {
+        "name": "FlushFileBuffers",
+        "status": "implemented",
+        "description": "Host fsync flush"
+      },
+      {
+        "name": "GetFileSize",
+        "status": "implemented",
+        "description": "Stat-based file length query"
+      },
+      {
+        "name": "GetFullPathNameA",
+        "status": "implemented",
+        "description": "Normalizes relative game paths"
+      },
+      {
+        "name": "GetLongPathNameA",
+        "status": "implemented",
+        "description": "Returns standardized long pathname"
+      },
+      {
+        "name": "FindFirstFileA",
+        "status": "implemented",
+        "description": "Directory search traversal with wildcard matching"
+      },
+      {
+        "name": "FindNextFileA",
+        "status": "implemented",
+        "description": "Iterates directory entry enumeration"
+      },
+      {
+        "name": "FindClose",
+        "status": "implemented",
+        "description": "Closes search handle"
+      },
+      {
+        "name": "DeleteFileA",
+        "status": "implemented",
+        "description": "Unlinks target file on storage"
+      },
+      {
+        "name": "MoveFileA",
+        "status": "implemented",
+        "description": "Renames or moves target file atomically"
+      },
+      {
+        "name": "CreateDirectoryA",
+        "status": "implemented",
+        "description": "Creates single or recursive directory path"
+      },
+      {
+        "name": "RemoveDirectoryA",
+        "status": "implemented",
+        "description": "Removes empty directory path"
+      },
+      {
+        "name": "GetCurrentDirectoryA",
+        "status": "implemented",
+        "description": "Returns active game root directory"
+      },
+      {
+        "name": "GetDiskFreeSpaceA",
+        "status": "implemented",
+        "description": "Host statvfs free bytes calculation"
+      },
+      {
+        "name": "GetDiskFreeSpaceExA",
+        "status": "implemented",
+        "description": "64-bit free space for large Android storage volumes"
+      },
+      {
+        "name": "GetDriveTypeA",
+        "status": "implemented",
+        "description": "Returns DRIVE_FIXED (hard drive)"
+      },
+      {
+        "name": "GetLogicalDrives",
+        "status": "implemented",
+        "description": "Bitmask containing drive C: and D:"
+      },
+      {
+        "name": "GetFileType",
+        "status": "implemented",
+        "description": "Returns FILE_TYPE_DISK for regular files"
+      },
+      {
+        "name": "SetStdHandle",
+        "status": "implemented",
+        "description": "Redirects standard handles"
+      },
+      {
+        "name": "GetStdHandle",
+        "status": "implemented",
+        "description": "Returns guest standard input/output/error descriptors"
+      },
+      {
+        "name": "CreateThread",
+        "status": "implemented",
+        "description": "Forks native POSIX host thread with guest stack allocation"
+      },
+      {
+        "name": "ExitThread",
+        "status": "implemented",
+        "description": "Terminates guest worker thread cleanly"
+      },
+      {
+        "name": "TerminateThread",
+        "status": "implemented",
+        "description": "Forces worker thread termination"
+      },
+      {
+        "name": "SuspendThread",
+        "status": "implemented",
+        "description": "Pauses guest worker execution"
+      },
+      {
+        "name": "ResumeThread",
+        "status": "implemented",
+        "description": "Resumes suspended guest worker execution"
+      },
+      {
+        "name": "GetExitCodeThread",
+        "status": "implemented",
+        "description": "Queries thread termination code"
+      },
+      {
+        "name": "GetCurrentThread",
+        "status": "implemented",
+        "description": "Pseudo-handle for current thread"
+      },
+      {
+        "name": "GetCurrentThreadId",
+        "status": "implemented",
+        "description": "Unique guest thread identifier"
+      },
+      {
+        "name": "SetThreadPriority",
+        "status": "implemented",
+        "description": "Maps Win32 priority to nice levels"
+      },
+      {
+        "name": "GetThreadPriority",
+        "status": "implemented",
+        "description": "Returns mapped thread priority"
+      },
+      {
+        "name": "CreateMutexA",
+        "status": "implemented",
+        "description": "Recursive POSIX mutex with named lookup"
+      },
+      {
+        "name": "ReleaseMutex",
+        "status": "implemented",
+        "description": "Releases owned mutex"
+      },
+      {
+        "name": "CreateEventA",
+        "status": "implemented",
+        "description": "Manual/auto-reset conditional variable event"
+      },
+      {
+        "name": "SetEvent",
+        "status": "implemented",
+        "description": "Signals waiting threads on event"
+      },
+      {
+        "name": "ResetEvent",
+        "status": "implemented",
+        "description": "Clears event signal state"
+      },
+      {
+        "name": "WaitForSingleObject",
+        "status": "implemented",
+        "description": "Waits on mutex, event, or thread with timeout"
+      },
+      {
+        "name": "WaitForMultipleObjects",
+        "status": "implemented",
+        "description": "Wait-any or wait-all synchronization barrier"
+      },
+      {
+        "name": "InitializeCriticalSection",
+        "status": "implemented",
+        "description": "Fast user-mode lock structure initialization"
+      },
+      {
+        "name": "InitializeCriticalSectionAndSpinCount",
+        "status": "implemented",
+        "description": "Spin-count user-mode lock initialization"
+      },
+      {
+        "name": "EnterCriticalSection",
+        "status": "implemented",
+        "description": "Exclusive reentrant critical section acquisition"
+      },
+      {
+        "name": "LeaveCriticalSection",
+        "status": "implemented",
+        "description": "Critical section lock release"
+      },
+      {
+        "name": "DeleteCriticalSection",
+        "status": "implemented",
+        "description": "Cleans up critical section resources"
+      },
+      {
+        "name": "InterlockedExchange",
+        "status": "implemented",
+        "description": "Atomic 32-bit exchange"
+      },
+      {
+        "name": "InterlockedIncrement",
+        "status": "implemented",
+        "description": "Atomic 32-bit increment"
+      },
+      {
+        "name": "InterlockedDecrement",
+        "status": "implemented",
+        "description": "Atomic 32-bit decrement"
+      },
+      {
+        "name": "InterlockedCompareExchange",
+        "status": "implemented",
+        "description": "Atomic 32-bit compare-and-swap"
+      },
+      {
+        "name": "Sleep",
+        "status": "implemented",
+        "description": "Yields machine lock and sleeps host thread"
+      },
+      {
+        "name": "SleepEx",
+        "status": "implemented",
+        "description": "Alertable sleep with timeout"
+      },
+      {
+        "name": "GetCurrentProcess",
+        "status": "implemented",
+        "description": "Pseudo-handle for process (0xFFFFFFFF)"
+      },
+      {
+        "name": "GetCurrentProcessId",
+        "status": "implemented",
+        "description": "Process ID query"
+      },
+      {
+        "name": "ExitProcess",
+        "status": "implemented",
+        "description": "Clean shutdown and lifecycle termination"
+      },
+      {
+        "name": "TerminateProcess",
+        "status": "implemented",
+        "description": "Forced process kill"
+      },
+      {
+        "name": "GetPriorityClass",
+        "status": "implemented",
+        "description": "Returns NORMAL_PRIORITY_CLASS"
+      },
+      {
+        "name": "SetPriorityClass",
+        "status": "implemented",
+        "description": "Sets process execution priority"
+      },
+      {
+        "name": "GetProcessAffinityMask",
+        "status": "implemented",
+        "description": "Topology affinity mask query"
+      },
+      {
+        "name": "SetProcessAffinityMask",
+        "status": "implemented",
+        "description": "Tuned CPU cluster affinity configuration"
+      },
+      {
+        "name": "GetCommandLineA",
+        "status": "implemented",
+        "description": "Returns SPEED2.EXE command line arguments"
+      },
+      {
+        "name": "GetStartupInfoA",
+        "status": "implemented",
+        "description": "Supplies STARTUPINFO structure for CRT bring-up"
+      },
+      {
+        "name": "GetModuleHandleA",
+        "status": "implemented",
+        "description": "Returns base address of SPEED2.EXE or loaded DLLs"
+      },
+      {
+        "name": "GetModuleHandleW",
+        "status": "implemented",
+        "description": "Wide-string module lookup"
+      },
+      {
+        "name": "GetModuleFileNameA",
+        "status": "implemented",
+        "description": "Full path to SPEED2.EXE on storage"
+      },
+      {
+        "name": "LoadLibraryA",
+        "status": "implemented",
+        "description": "Dynamic module lookup and lifted DLL binding"
+      },
+      {
+        "name": "FreeLibrary",
+        "status": "implemented",
+        "description": "Decrements module reference count"
+      },
+      {
+        "name": "GetProcAddress",
+        "status": "implemented",
+        "description": "Resolves exported guest symbols and HLE thunks"
+      },
+      {
+        "name": "CreateToolhelp32Snapshot",
+        "status": "implemented",
+        "description": "Captures running process/module list snapshot"
+      },
+      {
+        "name": "Process32First",
+        "status": "implemented",
+        "description": "First process entry in toolhelp snapshot"
+      },
+      {
+        "name": "Process32Next",
+        "status": "implemented",
+        "description": "Next process entry in toolhelp snapshot"
+      },
+      {
+        "name": "Module32First",
+        "status": "implemented",
+        "description": "First module entry in toolhelp snapshot"
+      },
+      {
+        "name": "Module32Next",
+        "status": "implemented",
+        "description": "Next module entry in toolhelp snapshot"
+      },
+      {
+        "name": "DuplicateHandle",
+        "status": "implemented",
+        "description": "Duplicates synchronization or file handle"
+      },
+      {
+        "name": "CloseHandle",
+        "status": "implemented",
+        "description": "Closes kernel handle"
+      },
+      {
+        "name": "SetHandleCount",
+        "status": "implemented",
+        "description": "Obsolete Win32 file limit helper (no-op)"
+      },
+      {
+        "name": "GetTickCount",
+        "status": "implemented",
+        "description": "Millisecond counter since system boot"
+      },
+      {
+        "name": "QueryPerformanceCounter",
+        "status": "implemented",
+        "description": "Nanosecond steady clock performance counter"
+      },
+      {
+        "name": "QueryPerformanceFrequency",
+        "status": "implemented",
+        "description": "High-resolution timer frequency (10 MHz)"
+      },
+      {
+        "name": "GetSystemTimeAsFileTime",
+        "status": "implemented",
+        "description": "64-bit UTC timestamp in 100ns units"
+      },
+      {
+        "name": "FileTimeToSystemTime",
+        "status": "implemented",
+        "description": "Decomposes 64-bit filetime to calendar fields"
+      },
+      {
+        "name": "FileTimeToLocalFileTime",
+        "status": "implemented",
+        "description": "Adjusts UTC filetime to local timezone"
+      },
+      {
+        "name": "GetTimeZoneInformation",
+        "status": "implemented",
+        "description": "Supplies daylight saving and UTC bias"
+      },
+      {
+        "name": "GetSystemInfo",
+        "status": "implemented",
+        "description": "Page size (4KB) and processor architecture (x86)"
+      },
+      {
+        "name": "GetVersion",
+        "status": "implemented",
+        "description": "Windows XP SP2 version tuple (5.1.2600)"
+      },
+      {
+        "name": "GetVersionExA",
+        "status": "implemented",
+        "description": "OSVERSIONINFOA with XP SP2 identifier"
+      },
+      {
+        "name": "IsProcessorFeaturePresent",
+        "status": "implemented",
+        "description": "Reports MMX, SSE, SSE2, and CMPXCHG8B support"
+      },
+      {
+        "name": "IsDebuggerPresent",
+        "status": "implemented",
+        "description": "Returns false to bypass anti-debug assertions"
+      },
+      {
+        "name": "DebugBreak",
+        "status": "implemented",
+        "description": "Hard breakpoint trap"
+      },
+      {
+        "name": "OutputDebugStringA",
+        "status": "implemented",
+        "description": "Redirects guest debug prints to Android logcat"
+      },
+      {
+        "name": "SetErrorMode",
+        "status": "implemented",
+        "description": "Suppresses Windows crash dialogs"
+      },
+      {
+        "name": "GetLastError",
+        "status": "implemented",
+        "description": "Thread-local error code retrieval"
+      },
+      {
+        "name": "SetLastError",
+        "status": "implemented",
+        "description": "Thread-local error code assignment"
+      },
+      {
+        "name": "TlsAlloc",
+        "status": "implemented",
+        "description": "Thread-local storage slot reservation"
+      },
+      {
+        "name": "TlsFree",
+        "status": "implemented",
+        "description": "Thread-local storage slot release"
+      },
+      {
+        "name": "TlsGetValue",
+        "status": "implemented",
+        "description": "Retrieves thread-local slot value"
+      },
+      {
+        "name": "TlsSetValue",
+        "status": "implemented",
+        "description": "Stores thread-local slot value"
+      },
+      {
+        "name": "MultiByteToWideChar",
+        "status": "implemented",
+        "description": "Converts ASCII/CP1252 to UTF-16"
+      },
+      {
+        "name": "WideCharToMultiByte",
+        "status": "implemented",
+        "description": "Converts UTF-16 to ASCII/CP1252"
+      },
+      {
+        "name": "lstrcmpiA",
+        "status": "implemented",
+        "description": "Case-insensitive ASCII string comparison"
+      },
+      {
+        "name": "CompareStringA",
+        "status": "implemented",
+        "description": "Locale-sensitive string comparison"
+      },
+      {
+        "name": "CompareStringW",
+        "status": "implemented",
+        "description": "Locale-sensitive wide string comparison"
+      },
+      {
+        "name": "GetStringTypeA",
+        "status": "implemented",
+        "description": "Character type classification (ANSI)"
+      },
+      {
+        "name": "GetStringTypeW",
+        "status": "implemented",
+        "description": "Character type classification (Unicode)"
+      },
+      {
+        "name": "LCMapStringA",
+        "status": "implemented",
+        "description": "Locale-specific string transformation (ANSI)"
+      },
+      {
+        "name": "LCMapStringW",
+        "status": "implemented",
+        "description": "Locale-specific string transformation (Unicode)"
+      },
+      {
+        "name": "GetCPInfo",
+        "status": "implemented",
+        "description": "Code page character width metrics"
+      },
+      {
+        "name": "GetACP",
+        "status": "implemented",
+        "description": "Active ANSI code page (1252 Latin 1)"
+      },
+      {
+        "name": "GetOEMCP",
+        "status": "implemented",
+        "description": "Active OEM code page (437 US)"
+      },
+      {
+        "name": "IsValidCodePage",
+        "status": "implemented",
+        "description": "Code page validation check"
+      },
+      {
+        "name": "IsValidLocale",
+        "status": "implemented",
+        "description": "Locale validation check"
+      },
+      {
+        "name": "EnumSystemLocalesA",
+        "status": "implemented",
+        "description": "Enumerates installed system locales"
+      },
+      {
+        "name": "GetLocaleInfoA",
+        "status": "implemented",
+        "description": "Retrieves locale attributes (ANSI)"
+      },
+      {
+        "name": "GetLocaleInfoW",
+        "status": "implemented",
+        "description": "Retrieves locale attributes (Unicode)"
+      },
+      {
+        "name": "GetUserDefaultLCID",
+        "status": "implemented",
+        "description": "Default user locale ID"
+      },
+      {
+        "name": "GetThreadLocale",
+        "status": "implemented",
+        "description": "Returns thread locale ID (0x0409 US English)"
+      },
+      {
+        "name": "GetEnvironmentStrings",
+        "status": "implemented",
+        "description": "Retrieves process environment block"
+      },
+      {
+        "name": "GetEnvironmentStringsA",
+        "status": "implemented",
+        "description": "ANSI environment block retrieval"
+      },
+      {
+        "name": "GetEnvironmentStringsW",
+        "status": "implemented",
+        "description": "Unicode environment block retrieval"
+      },
+      {
+        "name": "FreeEnvironmentStringsA",
+        "status": "implemented",
+        "description": "Frees ANSI environment block"
+      },
+      {
+        "name": "FreeEnvironmentStringsW",
+        "status": "implemented",
+        "description": "Frees Unicode environment block"
+      },
+      {
+        "name": "SetEnvironmentVariableA",
+        "status": "implemented",
+        "description": "Sets environment variable"
+      },
+      {
+        "name": "FindResourceA",
+        "status": "implemented",
+        "description": "Locates RT_RCDATA effect files in guest PE resource tree"
+      },
+      {
+        "name": "FindResourceW",
+        "status": "implemented",
+        "description": "Wide resource directory locator"
+      },
+      {
+        "name": "LoadResource",
+        "status": "implemented",
+        "description": "Returns memory pointer to resource payload"
+      },
+      {
+        "name": "LockResource",
+        "status": "implemented",
+        "description": "Accesses resource data buffer in memory"
+      },
+      {
+        "name": "SizeofResource",
+        "status": "implemented",
+        "description": "Returns byte size of resource payload"
+      },
+      {
+        "name": "SetUnhandledExceptionFilter",
+        "status": "implemented",
+        "description": "Installs top-level exception handler"
+      },
+      {
+        "name": "UnhandledExceptionFilter",
+        "status": "implemented",
+        "description": "Default crash handler filter"
+      },
+      {
+        "name": "RaiseException",
+        "status": "implemented",
+        "description": "Invokes software exception"
+      },
+      {
+        "name": "RtlUnwind",
+        "status": "implemented",
+        "description": "Unwinds call stack frames"
+      },
+      {
+        "name": "EncodePointer",
+        "status": "implemented",
+        "description": "Pointer obfuscation identity pass-through"
+      },
+      {
+        "name": "DecodePointer",
+        "status": "implemented",
+        "description": "Pointer deobfuscation identity pass-through"
+      },
+      {
+        "name": "SetupComm",
+        "status": "implemented",
+        "description": "Rust-backed communications device buffer configuration"
+      },
+      {
+        "name": "SetCommState",
+        "status": "implemented",
+        "description": "Rust-backed serial port baud rate and parity setup"
+      },
+      {
+        "name": "GetCommState",
+        "status": "implemented",
+        "description": "Rust-backed serial port configuration query"
+      },
+      {
+        "name": "SetCommConfig",
+        "status": "implemented",
+        "description": "Rust-backed communications configuration setter"
+      },
+      {
+        "name": "GetCommConfig",
+        "status": "implemented",
+        "description": "Rust-backed communications configuration getter"
+      },
+      {
+        "name": "SetCommTimeouts",
+        "status": "implemented",
+        "description": "Rust-backed serial port timeout parameters"
+      },
+      {
+        "name": "SetCommMask",
+        "status": "implemented",
+        "description": "Rust-backed serial event mask configuration"
+      },
+      {
+        "name": "WaitCommEvent",
+        "status": "implemented",
+        "description": "Rust-backed waits for serial port communications event"
+      },
+      {
+        "name": "PurgeComm",
+        "status": "implemented",
+        "description": "Rust-backed discards communications buffer data"
+      },
+      {
+        "name": "GetOverlappedResult",
+        "status": "implemented",
+        "description": "Rust-backed overlapped asynchronous I/O completion status"
       }
     ],
-    "roam_rs": [
+    "user32.dll": [
       {
-        "name": "wire_reader",
+        "name": "CreateWindowExA",
         "status": "implemented",
-        "description": "Bounds-safe zero-copy binary wire decoding (wire.rs)"
+        "description": "Creates game frame window and sets up message queue"
       },
       {
-        "name": "wire_writer",
+        "name": "DestroyWindow",
         "status": "implemented",
-        "description": "Bounds-safe binary wire packet serializer (wire.rs)"
+        "description": "Dispatches WM_DESTROY/WM_NCDESTROY and cleans up window"
       },
       {
-        "name": "crc32_fast",
+        "name": "ShowWindow",
         "status": "implemented",
-        "description": "Hardware-accelerated CRC32 packet integrity hashing (crc.rs)"
+        "description": "Controls window visibility and posts WM_SHOWWINDOW"
       },
       {
-        "name": "fnv1a_hash",
+        "name": "UpdateWindow",
         "status": "implemented",
-        "description": "64-bit FNV-1a room and identifier string hashing (hash.rs)"
+        "description": "Directly dispatches WM_PAINT to window proc"
       },
       {
-        "name": "simd_vector",
+        "name": "SetWindowPos",
         "status": "implemented",
-        "description": "128-bit vector dot, cross, and distance operations (math.rs)"
+        "description": "Positions and sizes window surface with WM_WINDOWPOSCHANGED"
       },
       {
-        "name": "quaternion_lerp",
+        "name": "AdjustWindowRect",
         "status": "implemented",
-        "description": "Rotational spherical linear interpolation and pacing (interp.rs)"
+        "description": "Calculates required client window dimensions"
       },
       {
-        "name": "timestep_lock",
+        "name": "GetWindowRect",
         "status": "implemented",
-        "description": "Locked 60 Hz simulation time-step governor at 0x007875BC (engine.rs)"
+        "description": "Returns window bounding screen coordinates"
       },
       {
-        "name": "high_fps_patch",
+        "name": "GetClientRect",
         "status": "implemented",
-        "description": "90/120 Hz high-refresh rate timing patch at 0x0057A084 (engine.rs)"
+        "description": "Returns inner rendering viewport dimensions"
       },
       {
-        "name": "crowd_filter",
+        "name": "GetWindowLongA",
         "status": "implemented",
-        "description": "Trackside 3D crowd suppression filter at 0x00870CD0 (crowd.rs)"
+        "description": "Queries window procedure, style, exstyle, and user data"
       },
       {
-        "name": "sync_guard",
+        "name": "SetWindowLongA",
         "status": "implemented",
-        "description": "Deadlock and spin-stall resolution watchdog (sync_guard.rs)"
+        "description": "Modifies window procedure, style, or instance data"
       },
       {
-        "name": "car_cfg_sync",
+        "name": "GetDesktopWindow",
         "status": "implemented",
-        "description": "Visual customization and performance part sync (carcfg.rs)"
+        "description": "Returns virtual desktop handle (0xF0000001)"
       },
       {
-        "name": "ws_switch_frame",
+        "name": "IsIconic",
         "status": "implemented",
-        "description": "RFC 6455 WebSocket framing and SIMD XOR mask unmasking (ws_switch.rs)"
+        "description": "Always reports false (game window is never minimized)"
       },
       {
-        "name": "packet_demux",
+        "name": "RegisterClassExA",
         "status": "implemented",
-        "description": "Multiplexed Free Roam UDP and Online TCP frame demuxer (ws_switch.rs)"
+        "description": "Registers WNDCLASSEXA with atom identifier and procedure"
       },
       {
-        "name": "engine_pacing",
+        "name": "UnregisterClassA",
         "status": "implemented",
-        "description": "Anti-slowmotion wall-clock elapsed time filter (engine.rs)"
+        "description": "Unregisters window class atom"
+      },
+      {
+        "name": "DefWindowProcA",
+        "status": "implemented",
+        "description": "Default window message handling (WM_NCCREATE, WM_ERASEBKGND)"
+      },
+      {
+        "name": "GetMessageA",
+        "status": "implemented",
+        "description": "Blocks until message arrives in queue"
+      },
+      {
+        "name": "PeekMessageA",
+        "status": "implemented",
+        "description": "Non-blocking check for queued input or window messages"
+      },
+      {
+        "name": "TranslateMessage",
+        "status": "implemented",
+        "description": "Translates virtual keystrokes to WM_CHAR messages"
+      },
+      {
+        "name": "DispatchMessageA",
+        "status": "implemented",
+        "description": "Passes queued message to registered window procedure"
+      },
+      {
+        "name": "SendMessageA",
+        "status": "implemented",
+        "description": "Synchronously invokes window procedure with message"
+      },
+      {
+        "name": "PostMessageA",
+        "status": "implemented",
+        "description": "Enqueues asynchronous message to target window"
+      },
+      {
+        "name": "PostThreadMessageA",
+        "status": "implemented",
+        "description": "Enqueues message directly to thread queue"
+      },
+      {
+        "name": "PostQuitMessage",
+        "status": "implemented",
+        "description": "Posts WM_QUIT to trigger message loop exit"
+      },
+      {
+        "name": "SetActiveWindow",
+        "status": "implemented",
+        "description": "Activates target window and dispatches WM_ACTIVATE"
+      },
+      {
+        "name": "GetActiveWindow",
+        "status": "implemented",
+        "description": "Returns currently active window handle"
+      },
+      {
+        "name": "SetForegroundWindow",
+        "status": "implemented",
+        "description": "Brings window to front with WM_ACTIVATEAPP"
+      },
+      {
+        "name": "GetForegroundWindow",
+        "status": "implemented",
+        "description": "Returns foreground window handle"
+      },
+      {
+        "name": "SetFocus",
+        "status": "implemented",
+        "description": "Sets keyboard input focus"
+      },
+      {
+        "name": "GetFocus",
+        "status": "implemented",
+        "description": "Returns focused window handle"
+      },
+      {
+        "name": "SetCapture",
+        "status": "implemented",
+        "description": "Directs all mouse input to target window"
+      },
+      {
+        "name": "ReleaseCapture",
+        "status": "implemented",
+        "description": "Releases mouse capture"
+      },
+      {
+        "name": "GetCursorPos",
+        "status": "implemented",
+        "description": "Returns mouse pointer coordinates mapped to touch"
+      },
+      {
+        "name": "SetCursor",
+        "status": "implemented",
+        "description": "Sets active cursor handle"
+      },
+      {
+        "name": "ShowCursor",
+        "status": "implemented",
+        "description": "Adjusts cursor visibility counter"
+      },
+      {
+        "name": "LoadCursorA",
+        "status": "implemented",
+        "description": "Loads standard IDC_ARROW cursor handle"
+      },
+      {
+        "name": "LoadIconA",
+        "status": "implemented",
+        "description": "Loads standard IDI_APPLICATION icon handle"
+      },
+      {
+        "name": "GetSystemMetrics",
+        "status": "implemented",
+        "description": "Screen resolution, SM_CXSCREEN, SM_CYSCREEN, borders"
+      },
+      {
+        "name": "SetRect",
+        "status": "implemented",
+        "description": "Fills RECT structure coordinates"
+      },
+      {
+        "name": "BeginPaint",
+        "status": "implemented",
+        "description": "Prepares window for drawing and returns paint DC"
+      },
+      {
+        "name": "EndPaint",
+        "status": "implemented",
+        "description": "Marks window drawing region as validated"
+      },
+      {
+        "name": "wvsprintfA",
+        "status": "implemented",
+        "description": "Formatted string printing using stdarg list"
+      },
+      {
+        "name": "wsprintfA",
+        "status": "implemented",
+        "description": "Formatted string printing with variable arguments"
+      },
+      {
+        "name": "MessageBoxA",
+        "status": "implemented",
+        "description": "Tester notification; answers IDOK and logs to logcat"
       }
     ],
-    "graphics_cache": [
+    "d3d9.dll": [
       {
-        "name": "async_compiler",
+        "name": "Direct3DCreate9",
         "status": "implemented",
-        "description": "Multi-threaded Vulkan pipeline and shader compilation engine"
+        "description": "Initializes DXVK D3D9 bridge with Vulkan backend"
       },
       {
-        "name": "d3d9_filter_rs",
+        "name": "IDirect3D9::CreateDevice",
         "status": "implemented",
-        "description": "D3D9 SetRenderState redundant call deduplication shadow filter"
+        "description": "Creates native Vulkan swapchain and D3D9 device"
       },
       {
-        "name": "d3d9_filter_tex",
+        "name": "IDirect3D9::GetAdapterCount",
         "status": "implemented",
-        "description": "D3D9 SetTexture & SetTextureStageState state shadow filter"
+        "description": "Enumerates primary graphics adapter"
       },
       {
-        "name": "d3d9_filter_vtx",
+        "name": "IDirect3D9::GetAdapterDisplayMode",
         "status": "implemented",
-        "description": "D3D9 SetFVF & SetStreamSource redundant vertex state filter"
+        "description": "Queries Android display resolution and refresh rate"
       },
       {
-        "name": "d3d9_filter_pipe",
+        "name": "IDirect3D9::GetDeviceCaps",
         "status": "implemented",
-        "description": "D3D9 SetVertexShader & SetPixelShader shadow cache"
+        "description": "Reports shader model 2.0/3.0 capabilities"
       },
       {
-        "name": "d3d9_filter_view",
+        "name": "IDirect3D9::CheckDeviceFormat",
         "status": "implemented",
-        "description": "D3D9 SetViewport & SetScissorRect redundant bounding filter"
+        "description": "Validates D3DFMT texture support on Vulkan"
       },
       {
-        "name": "gles_optimizer",
+        "name": "IDirect3D9::CheckDeviceType",
         "status": "implemented",
-        "description": "GLES driver state shadow filter dropping redundant GL calls"
+        "description": "Confirms HAL hardware acceleration"
       },
       {
-        "name": "dxt1_decoder",
+        "name": "IDirect3D9::CheckDepthStencilMatch",
         "status": "implemented",
-        "description": "Fixed-point fast-path DXT1/BC1 block decompressor"
+        "description": "Verifies D24S8 depth-stencil compatibility"
       },
       {
-        "name": "dxt3_decoder",
+        "name": "IDirect3DDevice9::Present",
         "status": "implemented",
-        "description": "Fast-path explicit 4-bit alpha DXT3/BC2 block decompressor"
+        "description": "VK swapchain presentation with frame pacer and ADPF"
       },
       {
-        "name": "dxt5_decoder",
+        "name": "IDirect3DDevice9::BeginScene",
         "status": "implemented",
-        "description": "Fixed-point fast-path DXT5/BC3 block decompressor"
+        "description": "Opens frame render command buffer"
       },
       {
-        "name": "hor_plus_fov",
+        "name": "IDirect3DDevice9::EndScene",
         "status": "implemented",
-        "description": "Dynamic Hor+ FOV expansion calculation for 20:9 ultra-wide screens"
+        "description": "Submits draw commands to Vulkan queue"
       },
       {
-        "name": "proj_adjust",
+        "name": "IDirect3DDevice9::Clear",
         "status": "implemented",
-        "description": "Perspective projection matrix aspect ratio scaling"
+        "description": "Clears color, depth, and stencil surfaces"
       },
       {
-        "name": "render_queue",
+        "name": "IDirect3DDevice9::SetRenderState",
         "status": "implemented",
-        "description": "Asynchronous lockless ring-buffer render command queue"
+        "description": "Translates D3D9 states (alpha test, blend, cull, z-test)"
       },
       {
-        "name": "dynamic_thunk",
+        "name": "IDirect3DDevice9::GetRenderState",
         "status": "implemented",
-        "description": "Decoded DynamicThunk bytecode cache and JIT bridge"
+        "description": "Retrieves active pipeline state values"
+      },
+      {
+        "name": "IDirect3DDevice9::SetTexture",
+        "status": "implemented",
+        "description": "Binds 2D textures, cubemaps, and volume textures"
+      },
+      {
+        "name": "IDirect3DDevice9::SetSamplerState",
+        "status": "implemented",
+        "description": "Configures anisotropic filtering and texture address modes"
+      },
+      {
+        "name": "IDirect3DDevice9::SetStreamSource",
+        "status": "implemented",
+        "description": "Binds vertex buffer streams to input assembler"
+      },
+      {
+        "name": "IDirect3DDevice9::SetIndices",
+        "status": "implemented",
+        "description": "Binds 16-bit/32-bit index buffers"
+      },
+      {
+        "name": "IDirect3DDevice9::SetFVF",
+        "status": "implemented",
+        "description": "Fixed function vertex layout definition"
+      },
+      {
+        "name": "IDirect3DDevice9::DrawPrimitive",
+        "status": "implemented",
+        "description": "Draws non-indexed primitive lists and strips"
+      },
+      {
+        "name": "IDirect3DDevice9::DrawIndexedPrimitive",
+        "status": "implemented",
+        "description": "Draws indexed triangles and lines"
+      },
+      {
+        "name": "IDirect3DDevice9::DrawPrimitiveUP",
+        "status": "implemented",
+        "description": "Draws user-memory vertices"
+      },
+      {
+        "name": "IDirect3DDevice9::DrawIndexedPrimitiveUP",
+        "status": "implemented",
+        "description": "Draws indexed user-memory geometry"
+      },
+      {
+        "name": "IDirect3DDevice9::CreateTexture",
+        "status": "implemented",
+        "description": "Allocates Vulkan image with BC1/BC2/BC3 compression"
+      },
+      {
+        "name": "IDirect3DDevice9::CreateVertexBuffer",
+        "status": "implemented",
+        "description": "Allocates Vulkan device memory vertex buffer"
+      },
+      {
+        "name": "IDirect3DDevice9::CreateIndexBuffer",
+        "status": "implemented",
+        "description": "Allocates Vulkan device memory index buffer"
+      },
+      {
+        "name": "IDirect3DDevice9::CreateVertexDeclaration",
+        "status": "implemented",
+        "description": "Compiles D3DVERTEXELEMENT9 input layout"
+      },
+      {
+        "name": "IDirect3DDevice9::CreateVertexShader",
+        "status": "implemented",
+        "description": "Translates DXBC vertex shaders via DXVK SPIR-V compiler"
+      },
+      {
+        "name": "IDirect3DDevice9::CreatePixelShader",
+        "status": "implemented",
+        "description": "Translates DXBC pixel shaders via DXVK SPIR-V compiler"
+      },
+      {
+        "name": "IDirect3DDevice9::SetVertexShader",
+        "status": "implemented",
+        "description": "Binds active vertex shader pipeline"
+      },
+      {
+        "name": "IDirect3DDevice9::SetPixelShader",
+        "status": "implemented",
+        "description": "Binds active pixel shader pipeline"
+      },
+      {
+        "name": "IDirect3DDevice9::SetVertexShaderConstantF",
+        "status": "implemented",
+        "description": "Pushes 4-float matrix/vector vertex constants"
+      },
+      {
+        "name": "IDirect3DDevice9::SetPixelShaderConstantF",
+        "status": "implemented",
+        "description": "Pushes 4-float lighting/color pixel constants"
+      },
+      {
+        "name": "IDirect3DDevice9::Reset",
+        "status": "implemented",
+        "description": "Handles surface recreation and resolution changes"
+      },
+      {
+        "name": "IDirect3DDevice9::TestCooperativeLevel",
+        "status": "implemented",
+        "description": "Always reports D3D_OK; ignores device loss"
+      },
+      {
+        "name": "IDirect3DDevice9::GetBackBuffer",
+        "status": "implemented",
+        "description": "Retrieves swapchain color surface"
+      },
+      {
+        "name": "IDirect3DDevice9::SetRenderTarget",
+        "status": "implemented",
+        "description": "Binds off-screen render target for mirrors/glow"
+      },
+      {
+        "name": "IDirect3DDevice9::GetRenderTarget",
+        "status": "implemented",
+        "description": "Retrieves current active render target"
+      },
+      {
+        "name": "IDirect3DDevice9::SetDepthStencilSurface",
+        "status": "implemented",
+        "description": "Binds z-buffer surface"
+      },
+      {
+        "name": "IDirect3DDevice9::GetDepthStencilSurface",
+        "status": "implemented",
+        "description": "Retrieves current depth surface"
+      },
+      {
+        "name": "IDirect3DDevice9::SetViewport",
+        "status": "implemented",
+        "description": "Sets rasterizer viewport rectangle"
+      },
+      {
+        "name": "IDirect3DDevice9::GetViewport",
+        "status": "implemented",
+        "description": "Retrieves active rasterizer viewport"
       }
     ],
-    "simd_audio": [
+    "dsound.dll": [
       {
-        "name": "neon_sinc_16",
+        "name": "DirectSoundCreate",
         "status": "implemented",
-        "description": "ARM64 NEON 128-bit 16-tap sinc kernel resampler (simd_audio.rs)"
+        "description": "Factory method initializing AAudio high-priority stream"
       },
       {
-        "name": "scalar_sinc_16",
+        "name": "#1 (DirectSoundEnumerate)",
         "status": "implemented",
-        "description": "Portable scalar fallback sinc resampler for non-ARM hosts"
+        "description": "Ordinal #1 returning primary sound device"
       },
       {
-        "name": "audio_clamp",
+        "name": "IDirectSound::CreateSoundBuffer",
         "status": "implemented",
-        "description": "SIMD audio buffer clamping, saturation, and peak stats"
+        "description": "Creates primary or secondary PCM audio buffer"
       },
       {
-        "name": "mixer_render",
+        "name": "IDirectSound::SetCooperativeLevel",
         "status": "implemented",
-        "description": "Multi-voice linear mixdown and accumulator engine"
+        "description": "Configures DSSCL_PRIORITY level"
       },
       {
-        "name": "clock_sync",
+        "name": "IDirectSound::GetCaps",
         "status": "implemented",
-        "description": "DirectSound synthetic timing clock synchronizer"
+        "description": "Reports 44.1kHz/48kHz stereo 16-bit PCM capabilities"
       },
       {
-        "name": "watchdog_ping",
+        "name": "IDirectSound::SetSpeakerConfig",
         "status": "implemented",
-        "description": "AAudio stream stall detector and reconnect trigger"
+        "description": "Configures stereo speaker output"
+      },
+      {
+        "name": "IDirectSound::GetSpeakerConfig",
+        "status": "implemented",
+        "description": "Returns DSSPEAKER_STEREO (4)"
+      },
+      {
+        "name": "IDirectSoundBuffer::Play",
+        "status": "implemented",
+        "description": "Starts buffer playback with looping support"
+      },
+      {
+        "name": "IDirectSoundBuffer::Stop",
+        "status": "implemented",
+        "description": "Halts buffer playback and voice mixer"
+      },
+      {
+        "name": "IDirectSoundBuffer::Lock",
+        "status": "implemented",
+        "description": "Locks cyclic ring buffer for writing guest samples"
+      },
+      {
+        "name": "IDirectSoundBuffer::Unlock",
+        "status": "implemented",
+        "description": "Publishes PCM audio data to lockless mixer"
+      },
+      {
+        "name": "IDirectSoundBuffer::SetCurrentPosition",
+        "status": "implemented",
+        "description": "Updates voice read cursor in ring buffer"
+      },
+      {
+        "name": "IDirectSoundBuffer::GetCurrentPosition",
+        "status": "implemented",
+        "description": "Reports accurate play and write cursors"
+      },
+      {
+        "name": "IDirectSoundBuffer::SetVolume",
+        "status": "implemented",
+        "description": "Millibel volume attenuation to linear gain"
+      },
+      {
+        "name": "IDirectSoundBuffer::GetVolume",
+        "status": "implemented",
+        "description": "Returns cached millibel volume level"
+      },
+      {
+        "name": "IDirectSoundBuffer::SetPan",
+        "status": "implemented",
+        "description": "Stereo balance and panning calculation"
+      },
+      {
+        "name": "IDirectSoundBuffer::GetPan",
+        "status": "implemented",
+        "description": "Returns cached stereo pan level"
+      },
+      {
+        "name": "IDirectSoundBuffer::SetFrequency",
+        "status": "implemented",
+        "description": "Resampling frequency adjustments (100Hz - 200kHz)"
+      },
+      {
+        "name": "IDirectSoundBuffer::GetFrequency",
+        "status": "implemented",
+        "description": "Queries playback sample rate"
+      },
+      {
+        "name": "IDirectSoundBuffer::GetStatus",
+        "status": "implemented",
+        "description": "Returns DSBSTATUS_PLAYING / DSBSTATUS_LOOPING"
+      },
+      {
+        "name": "IDirectSoundBuffer::Restore",
+        "status": "implemented",
+        "description": "No-op; software buffers are never lost by driver"
+      },
+      {
+        "name": "IDirectSoundBuffer::GetCaps",
+        "status": "implemented",
+        "description": "Queries buffer capacity and format flags"
+      },
+      {
+        "name": "IDirectSoundBuffer::SetFormat",
+        "status": "implemented",
+        "description": "Updates primary buffer format description"
       }
     ],
-    "win32_dinput": [
+    "dinput8.dll": [
       {
-        "name": "ff_effect_mgr",
+        "name": "DirectInput8Create",
         "status": "implemented",
-        "description": "DirectInput force feedback effect creation and lifecycle manager"
+        "description": "Initializes DirectInput 8 subsystems and hooks"
       },
       {
-        "name": "motor_timing",
+        "name": "IDirectInput8A::CreateDevice",
         "status": "implemented",
-        "description": "Dual-motor vibration timing, gain curve, and frequency modulator"
+        "description": "Instantiates keyboard, mouse, or gamepad device"
       },
       {
-        "name": "pad_remap",
+        "name": "IDirectInput8A::EnumDevices",
         "status": "implemented",
-        "description": "Host Android gamepad button and Z-axis trigger normalization"
+        "description": "Enumerates attached controllers and input pads"
       },
       {
-        "name": "ff_envelope",
+        "name": "IDirectInputDevice8A::SetDataFormat",
         "status": "implemented",
-        "description": "Attack, fade, and sustain envelope generator"
+        "description": "Binds c_dfDIJoystick2, c_dfDIKeyboard, or mouse format"
       },
       {
-        "name": "periodic_wave",
+        "name": "IDirectInputDevice8A::SetCooperativeLevel",
         "status": "implemented",
-        "description": "Sine, square, and triangle periodic vibration waveforms"
+        "description": "DISCL_FOREGROUND | DISCL_NONEXCLUSIVE"
       },
       {
-        "name": "jni_gamepad",
+        "name": "IDirectInputDevice8A::Acquire",
         "status": "implemented",
-        "description": "Fast-path JNI bridge for racing controls and joypad dispatcher"
+        "description": "Acquires input device and enables touch/gamepad stream"
+      },
+      {
+        "name": "IDirectInputDevice8A::Unacquire",
+        "status": "implemented",
+        "description": "Releases device acquisition"
+      },
+      {
+        "name": "IDirectInputDevice8A::GetDeviceState",
+        "status": "implemented",
+        "description": "Polls axes, buttons, and keys into guest memory"
+      },
+      {
+        "name": "IDirectInputDevice8A::GetDeviceData",
+        "status": "implemented",
+        "description": "Buffered input event packet delivery"
+      },
+      {
+        "name": "IDirectInputDevice8A::Poll",
+        "status": "implemented",
+        "description": "Polls gamepad analog sticks, triggers, and D-pad"
+      },
+      {
+        "name": "IDirectInputDevice8A::SetProperty",
+        "status": "implemented",
+        "description": "Configures deadzones, saturation, and buffer size"
+      },
+      {
+        "name": "IDirectInputDevice8A::GetProperty",
+        "status": "implemented",
+        "description": "Queries device range and joystick capabilities"
+      },
+      {
+        "name": "IDirectInputDevice8A::EnumObjects",
+        "status": "implemented",
+        "description": "Enumerates axis and button controls"
+      },
+      {
+        "name": "IDirectInputDevice8A::CreateEffect",
+        "status": "implemented",
+        "description": "Rust-backed DirectInput force feedback effect creation & engine"
+      },
+      {
+        "name": "IDirectInputDevice8A::SendForceFeedbackCommand",
+        "status": "implemented",
+        "description": "Rust-backed DirectInput haptic vibration command dispatcher"
       }
     ],
-    "win32_compat": [
+    "ws2_32.dll": [
       {
-        "name": "fs_cache_lookup",
+        "name": "WSAStartup",
         "status": "implemented",
-        "description": "Case-insensitive in-memory path lookup and directory cache"
+        "description": "Initializes Windows Sockets 2.2 subsystem"
       },
       {
-        "name": "gdi_dc_mgr",
+        "name": "WSACleanup",
         "status": "implemented",
-        "description": "GDI compatible device context and bitmap memory manager"
+        "description": "Terminates Winsock library context"
       },
       {
-        "name": "gdi_font_text",
+        "name": "WSAGetLastError",
         "status": "implemented",
-        "description": "GDI font metrics and ExtTextOutA glyph bounding cache"
+        "description": "Translates POSIX errno to WSA error constants"
       },
       {
-        "name": "netapi_netbios",
+        "name": "WSAIoctl",
         "status": "implemented",
-        "description": "Netbios LANA enumeration and MAC address query emulation"
+        "description": "Socket I/O control command handling"
       },
       {
-        "name": "netapi_wksta",
+        "name": "socket",
         "status": "implemented",
-        "description": "Workstation info and workgroup domain join status shims"
+        "description": "Creates IPv4 TCP (SOCK_STREAM) or UDP (SOCK_DGRAM) socket"
       },
       {
-        "name": "ddraw_modes",
+        "name": "closesocket",
         "status": "implemented",
-        "description": "DirectDraw cooperative level and display mode enumeration"
+        "description": "Closes socket file descriptor"
       },
       {
-        "name": "tapi_line_init",
+        "name": "shutdown",
         "status": "implemented",
-        "description": "Telephony API line initialize, negotiate and device caps"
+        "description": "Halts send and receive operations"
       },
       {
-        "name": "tapi_calls",
+        "name": "bind",
         "status": "implemented",
-        "description": "Telephony line make call, answer, and teardown handlers"
+        "description": "Binds socket to local address and port"
       },
       {
-        "name": "comm_timeouts",
+        "name": "listen",
         "status": "implemented",
-        "description": "Communications port DCB and timeouts emulation"
+        "description": "Places stream socket in listening state for LAN hosting"
       },
       {
-        "name": "shell_exec",
+        "name": "accept",
         "status": "implemented",
-        "description": "ShellExecuteA external launcher and browser URL dispatcher"
+        "description": "Accepts incoming multiplayer client connection"
       },
       {
-        "name": "shfolder_path",
+        "name": "connect",
         "status": "implemented",
-        "description": "SHGetFolderPathA CSIDL directory redirector"
+        "description": "Connects to adhoc roaming peer or classic lobby"
       },
       {
-        "name": "math_neon_mat4",
+        "name": "send",
         "status": "implemented",
-        "description": "128-bit ARM64 NEON 4x4 matrix multiplication (math_simd.rs)"
+        "description": "Sends stream data packet"
       },
       {
-        "name": "physics_aabb",
+        "name": "sendto",
         "status": "implemented",
-        "description": "SIMD axis-aligned bounding box collision overlap test"
+        "description": "Sends UDP datagram to broadcast or peer address"
       },
       {
-        "name": "suspension_ray",
+        "name": "recv",
         "status": "implemented",
-        "description": "Spring and damper suspension raycast collision physics"
+        "description": "Receives stream data from socket"
+      },
+      {
+        "name": "recvfrom",
+        "status": "implemented",
+        "description": "Receives UDP datagram with remote address resolution"
+      },
+      {
+        "name": "select",
+        "status": "implemented",
+        "description": "Non-blocking multiplexed socket polling with timeout"
+      },
+      {
+        "name": "ioctlsocket",
+        "status": "implemented",
+        "description": "FIONBIO non-blocking mode configuration"
+      },
+      {
+        "name": "setsockopt",
+        "status": "implemented",
+        "description": "Configures SO_BROADCAST, SO_REUSEADDR, and TCP_NODELAY"
+      },
+      {
+        "name": "getsockname",
+        "status": "implemented",
+        "description": "Retrieves local socket IP and port"
+      },
+      {
+        "name": "getpeername",
+        "status": "implemented",
+        "description": "Retrieves remote connected peer address"
+      },
+      {
+        "name": "gethostname",
+        "status": "implemented",
+        "description": "Returns local Android hostname"
+      },
+      {
+        "name": "gethostbyname",
+        "status": "implemented",
+        "description": "DNS host resolution and address lookup"
       }
     ],
-    "touch_input": [
+    "winmm.dll": [
       {
-        "name": "zero_alloc_map",
+        "name": "timeGetTime",
         "status": "implemented",
-        "description": "Zero-allocation flat primitive pointer array (0 GC overhead)"
+        "description": "High-precision millisecond multimedia timer"
       },
       {
-        "name": "curve_steer",
+        "name": "timeBeginPeriod",
         "status": "implemented",
-        "description": "Rust progressive steering sensitivity and deadband curve"
+        "description": "Timer resolution adjustment (1ms target)"
       },
       {
-        "name": "pedal_smoothing",
+        "name": "timeEndPeriod",
         "status": "implemented",
-        "description": "Exponential gas/brake pressure response filter"
+        "description": "Restores system timer resolution"
       },
       {
-        "name": "scancode_mirror",
+        "name": "timeSetEvent",
         "status": "implemented",
-        "description": "High-frequency DirectInput keyboard scan code mapper"
+        "description": "Schedules periodic worker timer callback"
       },
       {
-        "name": "tilt_kalman",
-        "status": "stub",
-        "description": "In-progress NEON tilt accelerometer Kalman smoothing filter"
+        "name": "timeKillEvent",
+        "status": "implemented",
+        "description": "Cancels scheduled timer event"
       },
       {
-        "name": "haptic_pulse",
+        "name": "timeGetDevCaps",
         "status": "implemented",
-        "description": "Low-latency touch click and rumble haptic response"
+        "description": "Reports minimum (1ms) and maximum (1000000ms) timer resolution"
+      }
+    ],
+    "advapi32.dll": [
+      {
+        "name": "RegOpenKeyA",
+        "status": "implemented",
+        "description": "Opens registry key for options and career saves"
+      },
+      {
+        "name": "RegOpenKeyExA",
+        "status": "implemented",
+        "description": "Opens registry key with access rights"
+      },
+      {
+        "name": "RegCloseKey",
+        "status": "implemented",
+        "description": "Flushes and closes registry key handle"
+      },
+      {
+        "name": "RegQueryValueExA",
+        "status": "implemented",
+        "description": "Reads profile options, language, and install path"
+      },
+      {
+        "name": "RegSetValueExA",
+        "status": "implemented",
+        "description": "Writes updated game options and resolution preferences"
+      },
+      {
+        "name": "RegCreateKeyA",
+        "status": "implemented",
+        "description": "Creates new registry key entry"
+      }
+    ],
+    "gdi32.dll": [
+      {
+        "name": "DeleteObject",
+        "status": "implemented",
+        "description": "Frees GDI bitmap or font object"
+      },
+      {
+        "name": "SetTextColor",
+        "status": "implemented",
+        "description": "Rust-backed device context text color setter"
+      },
+      {
+        "name": "SetBkColor",
+        "status": "implemented",
+        "description": "Rust-backed device context background color setter"
+      },
+      {
+        "name": "SetBkMode",
+        "status": "implemented",
+        "description": "Rust-backed background mix mode configuration"
+      },
+      {
+        "name": "CreateCompatibleDC",
+        "status": "implemented",
+        "description": "Rust-backed memory device context creation"
+      },
+      {
+        "name": "DeleteDC",
+        "status": "implemented",
+        "description": "Rust-backed device context deletion"
+      },
+      {
+        "name": "CreateFontA",
+        "status": "implemented",
+        "description": "Rust-backed logical font handle creation"
+      },
+      {
+        "name": "CreateBitmap",
+        "status": "implemented",
+        "description": "Rust-backed bitmap surface creation"
+      },
+      {
+        "name": "ExtTextOutA",
+        "status": "implemented",
+        "description": "Rust-backed text rendering using selected font"
+      },
+      {
+        "name": "SelectObject",
+        "status": "implemented",
+        "description": "Rust-backed GDI object selector"
+      },
+      {
+        "name": "BitBlt",
+        "status": "implemented",
+        "description": "Rust-backed bit-block raster transfer"
+      },
+      {
+        "name": "GetPixel",
+        "status": "implemented",
+        "description": "Rust-backed RGB color value query"
+      }
+    ],
+    "tapi32.dll": [
+      {
+        "name": "lineInitialize",
+        "status": "implemented",
+        "description": "Rust-backed Telephony API line initialization"
+      },
+      {
+        "name": "lineShutdown",
+        "status": "implemented",
+        "description": "Rust-backed Telephony API shutdown handler"
+      },
+      {
+        "name": "lineOpen",
+        "status": "implemented",
+        "description": "Rust-backed telephony line device opener"
+      },
+      {
+        "name": "lineClose",
+        "status": "implemented",
+        "description": "Rust-backed telephony line device closer"
+      },
+      {
+        "name": "lineGetDevCaps",
+        "status": "implemented",
+        "description": "Rust-backed telephony device capabilities query"
+      },
+      {
+        "name": "lineGetID",
+        "status": "implemented",
+        "description": "Rust-backed telephony device identifier query"
+      },
+      {
+        "name": "lineNegotiateAPIVersion",
+        "status": "implemented",
+        "description": "Rust-backed telephony version negotiation"
+      },
+      {
+        "name": "lineMakeCall",
+        "status": "implemented",
+        "description": "Rust-backed telephony outgoing call handler"
+      },
+      {
+        "name": "lineAnswer",
+        "status": "implemented",
+        "description": "Rust-backed telephony incoming call answer"
+      }
+    ],
+    "shfolder.dll": [
+      {
+        "name": "SHGetFolderPathA",
+        "status": "implemented",
+        "description": "Maps CSIDL_LOCAL_APPDATA to /sdcard/NFSU2"
+      }
+    ],
+    "shell32.dll": [
+      {
+        "name": "ShellExecuteA",
+        "status": "implemented",
+        "description": "Rust-backed ShellExecute external launcher & URL dispatcher"
+      }
+    ],
+    "netapi32.dll": [
+      {
+        "name": "Netbios",
+        "status": "implemented",
+        "description": "Rust-backed Netbios LANA enumeration and MAC query"
+      },
+      {
+        "name": "NetApiBufferFree",
+        "status": "implemented",
+        "description": "Rust-backed NetApi buffer deallocation"
+      },
+      {
+        "name": "NetWkstaGetInfo",
+        "status": "implemented",
+        "description": "Rust-backed Workstation info query"
+      },
+      {
+        "name": "NetGetJoinInformation",
+        "status": "implemented",
+        "description": "Rust-backed Workgroup join status query"
+      }
+    ],
+    "ddraw.dll": [
+      {
+        "name": "DirectDrawCreate",
+        "status": "implemented",
+        "description": "Rust-backed DirectDraw device & mode enumeration"
       }
     ]
   }

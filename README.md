@@ -159,11 +159,11 @@ The pipeline lifts disassembled 32-bit x86 instructions into platform-independen
 | **Controller / Joypad** | Android | **Complete** | DirectInput pad device enumeration, normalized Z-Axis triggers, button labels. |
 | **Thread Pinning (EAS)** | Android | **Complete** | Automatic binding of worker threads to Big/Prime CPU cores. |
 
-### Native Rust Migration & Subsystem Coverage
+### Win32 & DirectX Library Translation Coverage
 
-![NFSU2 Native Rust Migration Progress](library-progress.svg)
+![NFSU2 Library Progress](library-progress.svg)
 
-The Rust migration surface tracks high-performance native crates, SIMD vectorization pipelines, and zero-allocation execution engines (`perf_cores`, `roam_rs`, `graphics_cache`, `simd_audio`, `win32_compat`) replacing emulated C/Java bottlenecks. Progress can be viewed, updated, and regenerated using `scripts/library_progress.py`.
+The translation surface tracks all Win32 and DirectX 9 functions imported by `SPEED2.EXE` and required by the Android native runtime. Progress can be viewed, updated, and regenerated using `scripts/library_progress.py`.
 
 ---
 
