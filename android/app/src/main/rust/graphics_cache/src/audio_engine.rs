@@ -381,3 +381,49 @@ pub unsafe extern "C" fn nfs_audio_3d_positional_batch(
         *out_gains_lr.add(i * 2 + 1) = gain_r;
     }
 }
+
+#[repr(C)]
+pub struct VoiceAdvanceState {
+    pub position: f64,
+    pub stale_frames: f64,
+    pub step: f64,
+    pub count: usize,
+    pub loop_mode: u32,
+    pub is_streaming: u32,
+    pub is_playing: u32,
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_audio_mixer_advance_voices(
+    voices: *mut VoiceAdvanceState,
+    voice_count: usize,
+    frames: u32,
+) {
+    if voices.is_null() || voice_count == 0 || frames == 0 {
+        return;
+    }
+    let frames_f = frames as f64;
+    for i in 0..voice_count {
+        let v = &mut *voices.add(i);
+        if v.is_playing == 0 || v.count == 0 {
+            continue;
+        }
+        let total_frames = v.count as f64;
+        let delta = v.step * frames_f;
+        if v.is_streaming != 0 && v.stale_frames >= total_frames {
+            v.position = (v.position + delta) % total_frames;
+            continue;
+        }
+        v.stale_frames += delta;
+        v.position += delta;
+        if v.position >= total_frames {
+            if v.loop_mode != 0 {
+                v.position %= total_frames;
+            } else {
+                v.is_playing = 0;
+                v.position = 0.0;
+            }
+        }
+    }
+}
+

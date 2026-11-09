@@ -156,6 +156,40 @@ public:
     void advance(unsigned frames){
         if(!frames) return;
         std::lock_guard<std::mutex> lock(mutex);
+        static auto s_advance_voices = reinterpret_cast<void(*)(VoiceAdvanceState*, size_t, uint32_t)>(
+            dlsym(RTLD_DEFAULT, "nfs_audio_mixer_advance_voices")
+        );
+        if(s_advance_voices){
+            std::array<VoiceAdvanceState, 128> batch{};
+            std::array<PcmVoice*, 128> active_ptrs{};
+            size_t batch_count = 0;
+            for(auto& voice:voices){
+                if(!voice||!voice->playing||voice->samples.empty())continue;
+                size_t count=voice->samples.size()/voice->block();if(!count)continue;
+                auto& st = batch[batch_count];
+                st.position = voice->position;
+                st.stale_frames = voice->staleFrames;
+                st.step = double(voice->frequency)/rate;
+                st.count = count;
+                st.loop_mode = voice->loop ? 1 : 0;
+                st.is_streaming = voice->streaming() ? 1 : 0;
+                st.is_playing = 1;
+                active_ptrs[batch_count] = voice.get();
+                batch_count++;
+            }
+            if(batch_count > 0){
+                s_advance_voices(batch.data(), batch_count, frames);
+                for(size_t i=0; i<batch_count; ++i){
+                    auto* v = active_ptrs[i];
+                    v->position = batch[i].position;
+                    v->staleFrames = batch[i].stale_frames;
+                    if(!batch[i].is_playing){
+                        v->playing = false;
+                    }
+                }
+                return;
+            }
+        }
         for(auto& voice:voices){
             if(!voice||!voice->playing||voice->samples.empty())continue;
             size_t count=voice->samples.size()/voice->block();if(!count)continue;

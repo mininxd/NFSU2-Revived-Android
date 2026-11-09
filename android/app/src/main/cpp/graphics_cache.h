@@ -35,6 +35,33 @@ void nfs_d3d9_filter_forget_shadow(void);
 void nfs_d3d9_filter_notify_retired(void);
 void nfs_d3d9_filter_stats(uint64_t* out_total, uint64_t* out_filtered);
 
+// Direct3D 9 Vertex Declaration & FVF Decomposition
+typedef struct D3DVertexElement9Raw {
+    uint16_t stream;
+    uint16_t offset;
+    uint8_t element_type;
+    uint8_t method;
+    uint8_t usage;
+    uint8_t usage_index;
+} D3DVertexElement9Raw;
+
+uint32_t nfs_d3d9_get_stream_stride(const D3DVertexElement9Raw* elements, uint32_t stream);
+uint64_t nfs_d3d9_hash_vertex_declaration(const D3DVertexElement9Raw* elements);
+uint32_t nfs_d3d9_fvf_to_declaration(uint32_t fvf, D3DVertexElement9Raw* out_elements, uint32_t max_count);
+
+// Audio Engine Batch Voice Advancement
+typedef struct VoiceAdvanceState {
+    double position;
+    double stale_frames;
+    double step;
+    size_t count;
+    uint32_t loop_mode;
+    uint32_t is_streaming;
+    uint32_t is_playing;
+} VoiceAdvanceState;
+
+void nfs_audio_mixer_advance_voices(VoiceAdvanceState* voices, size_t voice_count, uint32_t frames);
+
 // Decoded DynamicThunk Bytecode Cache & JIT
 typedef size_t (*RecompLookupFn)(uint32_t);
 typedef uint32_t (*CallLiftedFn)(size_t, uint32_t);

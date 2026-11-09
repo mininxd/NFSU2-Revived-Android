@@ -6,6 +6,7 @@ pub mod audio_engine;
 pub mod async_compiler;
 pub mod crowd_filter;
 pub mod d3d9_filter;
+pub mod d3d9_vertex_decl;
 pub mod dynamic_thunk;
 pub mod extra_options;
 pub mod gles_optimizer;
@@ -29,6 +30,7 @@ pub mod win32_tapi;
 
 pub use audio_engine::*;
 pub use crowd_filter::*;
+pub use d3d9_vertex_decl::*;
 pub use extra_options::*;
 pub use guest_heap::*;
 pub use headlights::*;

@@ -179,6 +179,14 @@ uint32_t createGuestD3D9(uint32_t sdk){
 // Logs each vertex declaration type the first time the game uses it, flagging the
 // ones this GPU cannot fetch (see vertex_formats.h): the evidence for stretched geometry.
 void noteVertexDeclaration(const D3DVERTEXELEMENT9* elements){
+    if(!elements) return;
+    static auto s_hash_decl = reinterpret_cast<uint64_t(*)(const D3DVertexElement9Raw*)>(dlsym(RTLD_DEFAULT,"nfs_d3d9_hash_vertex_declaration"));
+    static auto s_stride = reinterpret_cast<uint32_t(*)(const D3DVertexElement9Raw*, uint32_t)>(dlsym(RTLD_DEFAULT,"nfs_d3d9_get_stream_stride"));
+    if(s_hash_decl){
+        uint64_t hash = s_hash_decl(reinterpret_cast<const D3DVertexElement9Raw*>(elements));
+        uint32_t stride0 = s_stride ? s_stride(reinterpret_cast<const D3DVertexElement9Raw*>(elements), 0) : 0;
+        NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","D3D9 vertex decl parsed: hash=%016llx stream0_stride=%u", (unsigned long long)hash, stride0);
+    }
     static bool seen[32]{};
     for(unsigned i=0;elements&&i<64&&elements[i].Stream!=0xff;++i){
         unsigned type=elements[i].Type;
