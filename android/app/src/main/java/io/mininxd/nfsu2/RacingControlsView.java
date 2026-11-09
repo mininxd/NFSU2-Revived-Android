@@ -1117,6 +1117,7 @@ final class RacingControlsView extends View {
         String currentSize = layouts.getString("control_size", "auto");
         String sizeLabel = currentSize.equals("auto") ? "Auto" : currentSize + "%";
         Context ctx = getContext();
+        boolean dumbAI = GameOptions.isCheatEnabled(ctx, "dumb_ai");
         new AlertDialog.Builder(ctx, android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle("Control Options")
                 .setItems(new String[]{
                         "Touch Button Size (" + sizeLabel + ")",
@@ -1125,6 +1126,7 @@ final class RacingControlsView extends View {
                         "Tilt steering",
                         "FPS limit",
                         controlsHidden ? "Show Touch Buttons" : "Hide Touch Buttons",
+                        "Dumb AI (AutoDrive): " + (dumbAI ? "ON" : "OFF"),
                         "Save layout preset",
                         "Load layout preset",
                         "Exit to Launcher"
@@ -1135,9 +1137,17 @@ final class RacingControlsView extends View {
                     else if (which == 3) configureTilt.run();
                     else if (which == 4) configureFrameLimit.run();
                     else if (which == 5) toggleControlsVisibility();
-                    else if (which == 6) saveNamedLayout();
-                    else if (which == 7) loadNamedLayout();
-                    else if (which == 8) confirmExitToLauncher();
+                    else if (which == 6) {
+                        boolean nextState = !dumbAI;
+                        GameOptions.setCheatEnabled(ctx, "dumb_ai", nextState);
+                        try {
+                            android.system.Os.setenv("NFSU2_DUMB_AI", nextState ? "1" : "0", true);
+                        } catch (Throwable ignored) {}
+                        android.widget.Toast.makeText(ctx, nextState ? "Dumb AI (AutoDrive) ENABLED" : "Dumb AI (AutoDrive) DISABLED", android.widget.Toast.LENGTH_SHORT).show();
+                    }
+                    else if (which == 7) saveNamedLayout();
+                    else if (which == 8) loadNamedLayout();
+                    else if (which == 9) confirmExitToLauncher();
                 })
                 .setPositiveButton("Close", null)
                 .setNegativeButton("Exit to Launcher", (dialog, which) -> confirmExitToLauncher())

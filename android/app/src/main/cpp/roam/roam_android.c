@@ -582,6 +582,179 @@ static void hiddenraces_frame_tick(void) {
                         n, nr, caps, CAP);
 }
 
+/* Extra Options (ExOpts Team) Memory Patches & Dumb AI (AutoPilot) Hack */
+static void extraoptions_init_patches(void) {
+    if (!rh_mem_committed(0x00400000u, 0x1000)) return;
+
+    // Optical drive / Disc 2 bypass
+    if (rh_mem_committed(0x005C0D3Fu, 1)) MR8(0x005C0D3Fu) = 0x78;
+    if (rh_mem_committed(0x005C0D54u, 1)) MR8(0x005C0D54u) = 0x00;
+
+    // Ground Shadow Alignment Fix (0.015f instead of 0.04f to sit flush with road)
+    if (rh_mem_committed(0x007A66B4u, 4)) MRF32(0x007A66B4u) = 0.015f;
+
+    // Lap Controllers (0 to 127 laps)
+    if (rh_mem_committed(0x004B3D82u, 30)) {
+        MR8(0x004B3D82u) = 0;   // min lap decrement
+        MR8(0x004B3D9Bu) = 0;   // min lap increment
+        MR8(0x004B3D86u) = 127; // max lap decrement
+        MR8(0x004B3D97u) = 127; // max lap increment
+    }
+    if (rh_mem_committed(0x004B407Fu, 1)) MR8(0x004B407Fu) = 5; // KO laps
+
+    // LAN Laps (0 to 127)
+    if (rh_mem_committed(0x004B3E7Au, 1)) MR8(0x004B3E7Au) = 0;
+    if (rh_mem_committed(0x004B3EE4u, 1)) MR8(0x004B3EE4u) = 0;
+    if (rh_mem_committed(0x004B3E9Eu, 1)) MR8(0x004B3E9Eu) = 0;
+    if (rh_mem_committed(0x004B3F30u, 1)) MR8(0x004B3F30u) = 127;
+    if (rh_mem_committed(0x004B3F41u, 1)) MR8(0x004B3F41u) = 127;
+
+    // Opponent Controllers (0 to 5 opponents)
+    if (rh_mem_committed(0x004B382Bu, 70)) {
+        MR32(0x004B382Bu) = 0x90909090u;
+        MR16(0x004B382Fu) = 0x9090u;
+        MR8(0x004B3834u) = 5; // Max CPU
+        MR8(0x004B3863u) = 0; // Min CPU
+        MR32(0x004B3867u) = 0x90909090u;
+    }
+    if (rh_mem_committed(0x004B4075u, 1)) MR8(0x004B4075u) = 5; // KO CPU
+
+    // LAN Players (up to 6)
+    if (rh_mem_committed(0x004B31AAu, 4)) {
+        MR8(0x004B31AAu) = 0xB0;
+        MR8(0x004B31ABu) = 6;
+        MR16(0x004B31ACu) = 0x9090u;
+    }
+
+    // Unfreeze KO (ShowMoreRaceOptions)
+    if (rh_mem_committed(0x004B4068u, 1)) MR8(0x004B4068u) = 0xEB;
+    if (rh_mem_committed(0x004B3E14u, 1)) MR8(0x004B3E14u) = 0xEB;
+    if (rh_mem_committed(0x004B3903u, 1)) MR8(0x004B3903u) = 0xEB;
+
+    // Regional Cars (Peugeot 106 & Opel Corsa unlocked on NTSC)
+    if (rh_mem_committed(0x007F7C48u, 16)) {
+        MR32(0x007F7C48u) = 0xFFFFFFFFu; // CORSA
+        MR32(0x007F7C4Cu) = 0xFFFFFFFFu; // PEUGOT106
+        MR32(0x007F7C50u) = 0xFFFFFFFFu; // CIVIC
+        MR32(0x007F7C54u) = 0xFFFFFFFFu; // RSX
+    }
+    if (rh_mem_committed(0x004FEB9Du, 1)) MR8(0x004FEB9Du) = 0x1C;
+    if (rh_mem_committed(0x007F6DBEu, 2)) {
+        MR8(0x007F6DBEu) = 0x07;
+        MR8(0x007F6DBFu) = 0x06;
+    }
+
+    // Carbon-style 1-Lap race progress ("COMPLETED %X")
+    if (rh_mem_committed(0x004AA27Fu, 8)) {
+        MR8(0x004AA27Fu) = 0xBC;
+        MR8(0x004AA283u) = 0x3C;
+        MR8(0x004AA284u) = 0x01;
+        MR8(0x004AA286u) = 0x85;
+    }
+
+    // Menu: Free Run track select, Outrun in Quick Race, Outrun track select
+    if (rh_mem_committed(0x004B2AE3u, 2)) MR16(0x004B2AE3u) = 0x9090u;
+    if (rh_mem_committed(0x004B2F3Eu, 2)) MR16(0x004B2F3Eu) = 0x9090u;
+    if (rh_mem_committed(0x004B2AA0u, 2)) MR16(0x004B2AA0u) = 0x9090u;
+    if (rh_mem_committed(0x005268F8u, 2)) MR16(0x005268F8u) = 0x9090u;
+
+    // Subtitles
+    if (rh_mem_committed(0x004A8BA0u, 2)) MR16(0x004A8BA0u) = 0x9090u;
+    if (rh_mem_committed(0x00553A65u, 2)) MR16(0x00553A65u) = 0x9090u;
+    if (rh_mem_committed(0x0055B061u, 2)) MR16(0x0055B061u) = 0x9090u;
+
+    // 3D Fixes: damaged cracked glass, disappearing wheels, megalow parts
+    if (rh_mem_committed(0x0059FC13u, 1)) MR8(0x0059FC13u) = 0xEB;
+    if (rh_mem_committed(0x0049B61Eu, 1)) MR8(0x0049B61Eu) = 0xEB;
+    if (rh_mem_committed(0x0054FBD7u, 1)) MR8(0x0054FBD7u) = 0xEB;
+
+    // Drift: show drift as AxB, plus sign, max 9x multiplier
+    if (rh_mem_committed(0x004AB792u, 3)) {
+        MR8(0x004AB792u) = 0xB0;
+        MR8(0x004AB793u) = 0x01;
+        MR8(0x004AB794u) = 0x90;
+    }
+    if (rh_mem_committed(0x004AB7DBu, 1)) MR8(0x004AB7DBu) = 0x74;
+    if (rh_mem_committed(0x0056CC98u, 10)) {
+        MR8(0x0056CC98u) = 0xCF;
+        MR8(0x0056CC9Cu) = 0x00;
+        MR8(0x0056CC9Du) = 0x50;
+        MR8(0x0056CC9Eu) = 0x92;
+        MR8(0x0056CC58u) = 9;
+        MR8(0x0056CC90u) = 9;
+    }
+    if (rh_mem_committed(0x00925004u, 32 * 4)) {
+        static const int thresholds[32] = {
+            350, 1400, 4200, 11200, 22400, 38080, 57120, 85680,
+            300, 1200, 3600, 9600, 19200, 32640, 48960, 73440,
+            250, 1000, 3000, 8000, 16000, 27200, 40800, 61200,
+            200, 800, 2400, 6400, 12800, 21760, 32640, 48960
+        };
+        for (int i = 0; i < 32; i++) {
+            MR32(0x00925004u + (uint32_t)(i * 4)) = (uint32_t)thresholds[i];
+        }
+    }
+
+    __android_log_print(ANDROID_LOG_INFO, "NFSU2-ExtraOptions",
+                        "Extra Options memory patches applied: regional cars, laps (0-127), opponents (0-5), 3D fixes, drift 9x, outrun");
+}
+
+static void extraoptions_frame_tick(void) {
+    static int s_init_done = 0;
+    if (!s_init_done) {
+        if (rh_mem_committed(0x00400000u, 0x1000)) {
+            s_init_done = 1;
+            extraoptions_init_patches();
+        }
+    }
+
+    if (!rh_mem_committed(0x008654A4u, 4) || !rh_mem_committed(0x008900ACu, 4)) return;
+
+    // Dumb AI (AutoDrive) State Machine
+    int dumb_ai = 0;
+    const char *e = getenv("NFSU2_DUMB_AI");
+    if (e && *e && *e != '0' && strcasecmp(e, "off") && strcasecmp(e, "no") && strcasecmp(e, "false")) {
+        dumb_ai = 1;
+    }
+
+    uint32_t flow = MR32(0x008654A4u); // TheGameFlowManager (6 = Gameplay)
+    static uint32_t s_applied_player = 0;
+    static int s_applied_state = -1;
+
+    if (flow != 6) {
+        s_applied_player = 0;
+        s_applied_state = -1;
+        return;
+    }
+
+    uint32_t player = MR32(0x008900ACu); // _PlayersByNumber[0]
+    if (!player) {
+        // Player not ready yet in this race frame; reset state so we apply immediately when player appears
+        s_applied_player = 0;
+        s_applied_state = -1;
+        return;
+    }
+
+    if (s_applied_player != player || s_applied_state != dumb_ai) {
+        if (dumb_ai) {
+            // Player_AutoPilotOn (0x005FAE20) with ecx = player (__thiscall)
+            roam_android_call(0x005FAE20u, player, 0, 0, NULL);
+            __android_log_print(ANDROID_LOG_INFO, "NFSU2-ExtraOptions",
+                                "Dumb AI (AutoPilot) ENABLED on player car 0x%08x", player);
+        } else {
+            // Player_AutoPilotOff (0x005FAF10) with ecx = player
+            roam_android_call(0x005FAF10u, player, 0, 0, NULL);
+            // Player_SetInputMode (0x00605C70) with ecx = player, mode = 2
+            uint32_t arg = 2;
+            roam_android_call(0x00605C70u, player, 0, 1, &arg);
+            __android_log_print(ANDROID_LOG_INFO, "NFSU2-ExtraOptions",
+                                "Dumb AI (AutoPilot) DISABLED on player car 0x%08x", player);
+        }
+        s_applied_player = player;
+        s_applied_state = dumb_ai;
+    }
+}
+
 /* In-game menu button scaling (Help bar and arrows up to 200%) */
 #define O_NEXT    0x04u
 #define O_TYPE    0x18u
@@ -1067,6 +1240,7 @@ __attribute__((visibility("default"))) void nfs_roam_frame_tick(void) {
     }
     g_frame_count++;
     hiddenraces_frame_tick();
+    extraoptions_frame_tick();
     lobby_frame_tick();
     framerate_pacing_fix();
     resolution_frame_tick();

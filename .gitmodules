@@ -7,3 +7,6 @@
 [submodule "ports/dxvk_modules"]
 	path = ports/dxvk_modules
 	url = https://github.com/doitsujin/dxvk
+[submodule "third_party/NFSU2ExOpts"]
+	path = third_party/NFSU2ExOpts
+	url = https://github.com/ExOptsTeam/NFSU2ExOpts.git

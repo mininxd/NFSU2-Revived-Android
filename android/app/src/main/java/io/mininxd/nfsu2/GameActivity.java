@@ -383,6 +383,9 @@ public final class GameActivity extends NativeActivity {
             boolean dumbAI = GameOptions.isCheatEnabled(this, "dumb_ai");
             android.system.Os.setenv("NFSU2_DUMB_AI", dumbAI ? "1" : "0", true);
 
+            boolean extraOptions = GameOptions.isExtraOptionsEnabled(this);
+            android.system.Os.setenv("NFSU2_EXTRA_OPTIONS", extraOptions ? "1" : "0", true);
+
             android.system.Os.setenv("NFSU2_AUTOSAVE", "1", true);
 
             android.system.Os.setenv("NFSU2_INTRO", "original", true);
@@ -479,7 +482,9 @@ public final class GameActivity extends NativeActivity {
         status.setBackgroundColor(0xb0000000);
         status.setTextSize(18);
         status.setPadding(24, 16, 24, 16);
-        status.setText("NFSU2 Revived\nChecking internal storage/nfsu2…");
+        boolean exOpts = GameOptions.isExtraOptionsEnabled(this);
+        String branding = "NFSU2 Revived" + (exOpts ? " + Extra Options" : "");
+        status.setText(branding + "\nChecking internal storage/nfsu2…");
         // NativeActivity gives its main window surface to Vulkan; use a separate
         // non-interactive popup surface for the diagnostic text.
         statusWindow = new PopupWindow(status, ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -581,13 +586,15 @@ public final class GameActivity extends NativeActivity {
         }
         runOnUiThread(() -> {
             if (statusHideTask != null) status.removeCallbacks(statusHideTask);
+            boolean exOpts = GameOptions.isExtraOptionsEnabled(this);
+            String branding = "NFSU2 Revived" + (exOpts ? " + Extra Options" : "");
             if (text != null && (text.contains("Executing game CRT entry") || text.contains("Ejecutando entrada CRT"))) {
-                status.setText("NFSU2 Revived\n" + text);
+                status.setText(branding + "\n" + text);
                 statusHideTask = () -> {statusHidden=true;if(statusWindow.isShowing())statusWindow.dismiss();};
                 status.postDelayed(statusHideTask, 3000);
             } else {
                 statusHidden=false;
-                status.setText("NFSU2 Revived\n" + text);
+                status.setText(branding + "\n" + text);
                 if (!statusWindow.isShowing() && hasWindowFocus())
                     statusWindow.showAtLocation(getWindow().getDecorView(), Gravity.TOP | Gravity.START, 0, 0);
             }

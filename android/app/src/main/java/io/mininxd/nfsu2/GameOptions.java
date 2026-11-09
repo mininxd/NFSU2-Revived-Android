@@ -667,4 +667,112 @@ public final class GameOptions {
             android.util.Log.w("NFSU2", "Failed to synchronize WidescreenFix.dat layout", e);
         }
     }
+
+    // ---- Extra Options (ExOpts Team mod) ----------------------------------------------------
+    public static final String EXTRA_OPTIONS_ENABLED = "extra_options_enabled";
+
+    public static boolean isExtraOptionsEnabled(Context context) {
+        return prefs(context).getBoolean(EXTRA_OPTIONS_ENABLED, true);
+    }
+
+    public static void setExtraOptionsEnabled(Context context, boolean enabled) {
+        prefs(context).edit().putBoolean(EXTRA_OPTIONS_ENABLED, enabled).apply();
+    }
+
+    public static boolean getExtraOption(Context context, String key, boolean defVal) {
+        return prefs(context).getBoolean("exopts_" + key, defVal);
+    }
+
+    public static void setExtraOption(Context context, String key, boolean val) {
+        prefs(context).edit().putBoolean("exopts_" + key, val).apply();
+    }
+
+    public static void resetExtraOptions(Context context) {
+        prefs(context).edit()
+                .putBoolean("exopts_regional_cars", true)
+                .putBoolean("exopts_lap_controller", true)
+                .putBoolean("exopts_opponent_controller", true)
+                .putBoolean("exopts_lap_percent", true)
+                .putBoolean("exopts_drift_tweaks", true)
+                .putBoolean("exopts_fixes_3d", true)
+                .putBoolean("exopts_menu_enhancements", true)
+                .apply();
+    }
+
+    public static void syncExtraOptionsIni(Context context) {
+        try {
+            java.io.File iniFile = new java.io.File(LauncherActivity.gameRoot(),
+                    "scripts/NFSU2ExtraOptionsSettings.ini");
+            if (!iniFile.isFile()) {
+                iniFile = new java.io.File(android.os.Environment.getExternalStorageDirectory(),
+                        "nfsu2/scripts/NFSU2ExtraOptionsSettings.ini");
+                if (!iniFile.isFile()) {
+                    iniFile = new java.io.File(android.os.Environment.getExternalStorageDirectory(),
+                            "cache/scripts/NFSU2ExtraOptionsSettings.ini");
+                }
+            }
+            if (!iniFile.isFile()) {
+                java.io.File target = new java.io.File(LauncherActivity.gameRoot(), "scripts/NFSU2ExtraOptionsSettings.ini");
+                if (target.getParentFile() != null && !target.getParentFile().exists()) target.getParentFile().mkdirs();
+                LauncherActivity.copyAssetFile(context, "scripts/NFSU2ExtraOptionsSettings.ini", target);
+                iniFile = target;
+            }
+            if (!iniFile.isFile()) return;
+
+            java.util.List<String> lines = new java.util.ArrayList<>();
+            try (java.io.BufferedReader br = new java.io.BufferedReader(new java.io.FileReader(iniFile))) {
+                String line;
+                while ((line = br.readLine()) != null) lines.add(line);
+            }
+
+            boolean regional = getExtraOption(context, "regional_cars", true);
+            boolean lapCtrl = getExtraOption(context, "lap_controller", true);
+            boolean oppCtrl = getExtraOption(context, "opponent_controller", true);
+            boolean lapPct = getExtraOption(context, "lap_percent", true);
+            boolean drift = getExtraOption(context, "drift_tweaks", true);
+            boolean fixes = getExtraOption(context, "fixes_3d", true);
+            boolean menu = getExtraOption(context, "menu_enhancements", true);
+
+            java.util.List<String> out = new java.util.ArrayList<>();
+            for (String l : lines) {
+                String trimmed = l.trim();
+                if (trimmed.startsWith("UnlockRegionalCars")) {
+                    out.add("UnlockRegionalCars = " + (regional ? "1" : "0"));
+                } else if (trimmed.startsWith("ShowPercentOn1LapRaces")) {
+                    out.add("ShowPercentOn1LapRaces = " + (lapPct ? "1" : "0"));
+                } else if (trimmed.startsWith("DisappearingWheelsFix")) {
+                    out.add("DisappearingWheelsFix = " + (fixes ? "1" : "0"));
+                } else if (trimmed.startsWith("DamageFix")) {
+                    out.add("DamageFix = " + (fixes ? "1" : "0"));
+                } else if (trimmed.startsWith("MegalowPartsFix")) {
+                    out.add("MegalowPartsFix = " + (fixes ? "1" : "0"));
+                } else if (trimmed.startsWith("ShowOutrun")) {
+                    out.add("ShowOutrun = " + (menu ? "1" : "0"));
+                } else if (trimmed.startsWith("FreeRunTrackSelect")) {
+                    out.add("FreeRunTrackSelect = " + (menu ? "1" : "0"));
+                } else if (trimmed.startsWith("OutrunTrackSelect")) {
+                    out.add("OutrunTrackSelect = " + (menu ? "1" : "0"));
+                } else if (trimmed.startsWith("ShowWithoutMultiplying")) {
+                    out.add("ShowWithoutMultiplying = " + (drift ? "1" : "0"));
+                } else if (trimmed.startsWith("PlusSign")) {
+                    out.add("PlusSign = " + (drift ? "1" : "0"));
+                } else if (trimmed.startsWith("MaximumMultiplier")) {
+                    out.add("MaximumMultiplier = " + (drift ? "9" : "5"));
+                } else if (trimmed.startsWith("Minimum") && !l.contains("OpponentControllers")) {
+                    out.add("Minimum = " + (lapCtrl ? "0" : "1"));
+                } else if (trimmed.startsWith("Maximum") && !l.contains("OpponentControllers")) {
+                    out.add("Maximum = " + (lapCtrl ? "127" : "10"));
+                } else {
+                    out.add(l);
+                }
+            }
+
+            try (java.io.PrintWriter pw = new java.io.PrintWriter(new java.io.FileWriter(iniFile))) {
+                for (String ol : out) pw.println(ol);
+            }
+            android.util.Log.i("NFSU2", "Synchronized Extra Options settings in " + iniFile.getAbsolutePath());
+        } catch (Throwable t) {
+            android.util.Log.w("NFSU2", "Failed to synchronize Extra Options INI", t);
+        }
+    }
 }

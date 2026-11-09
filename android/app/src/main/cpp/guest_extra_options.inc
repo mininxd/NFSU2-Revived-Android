@@ -51,13 +51,25 @@ static inline void updateDumbAIState() {
     // TheGameFlowManager at 0x008654A4 (6 = Gameplay)
     if (!memory->readable(0x008654A4u, 4) || !memory->readable(0x008900ACu, 4)) return;
     uint32_t flow = read32(0x008654A4u);
-    if (flow != 6) return;
 
-    static int s_lastState = -1;
-    if (s_lastState != enabled) {
-        s_lastState = enabled;
-        uint32_t playerThing = read32(0x008900ACu);
-        if (playerThing) {
+    static uint32_t s_appliedPlayer = 0;
+    static int s_appliedState = -1;
+
+    if (flow != 6) {
+        s_appliedPlayer = 0;
+        s_appliedState = -1;
+        return;
+    }
+
+    uint32_t playerThing = read32(0x008900ACu);
+    if (!playerThing) {
+        s_appliedPlayer = 0;
+        s_appliedState = -1;
+        return;
+    }
+
+    if (s_appliedPlayer != playerThing || s_appliedState != enabled) {
+        try {
             if (enabled) {
                 // Call Player_AutoPilotOn (0x005FAE20) with ecx = playerThing (__thiscall)
                 g_ecx = playerThing;
@@ -72,6 +84,10 @@ static inline void updateDumbAIState() {
                 callGuest(0x00605C70u, {2});
                 NFS_RUNTIME_LOG(ANDROID_LOG_INFO, "NFSU2", "Extra Options: Dumb AI (AutoPilot) DISABLED for player 0x%08x", playerThing);
             }
+            s_appliedPlayer = playerThing;
+            s_appliedState = enabled;
+        } catch (...) {
+            NFS_RUNTIME_LOG(ANDROID_LOG_WARN, "NFSU2", "Extra Options: Dumb AI callGuest threw exception");
         }
     }
 }

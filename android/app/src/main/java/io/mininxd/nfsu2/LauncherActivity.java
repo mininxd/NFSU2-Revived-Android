@@ -401,6 +401,28 @@ public final class LauncherActivity extends Activity {
         } catch (Exception e) {
             android.util.Log.w("NFSU2", "Failed to copy widescreen data", e);
         }
+
+        // Install Extra Options settings INI
+        try {
+            File targetIni = new File(scriptsDir, "NFSU2ExtraOptionsSettings.ini");
+            if (!targetIni.exists() || targetIni.length() == 0) {
+                File cacheIni = new File(Environment.getExternalStorageDirectory(), "cache/scripts/NFSU2ExtraOptionsSettings.ini");
+                if (cacheIni.isFile() && cacheIni.length() > 0) {
+                    try (java.io.InputStream in = new java.io.FileInputStream(cacheIni);
+                         java.io.OutputStream out = new java.io.FileOutputStream(targetIni)) {
+                        byte[] buf = new byte[32768];
+                        int r;
+                        while ((r = in.read(buf)) > 0) out.write(buf, 0, r);
+                    }
+                    android.util.Log.i("NFSU2", "Installed Extra Options INI from /sdcard/cache to " + targetIni.getAbsolutePath());
+                } else {
+                    copyAssetFile(this, "scripts/NFSU2ExtraOptionsSettings.ini", targetIni);
+                    android.util.Log.i("NFSU2", "Installed Extra Options INI from assets to " + targetIni.getAbsolutePath());
+                }
+            }
+        } catch (Exception e) {
+            android.util.Log.w("NFSU2", "Failed to copy Extra Options INI", e);
+        }
     }
 
     public static void copyAssetFile(Context context, String assetPath, File destFile) throws Exception {
@@ -425,6 +447,7 @@ public final class LauncherActivity extends Activity {
         for (GameOptions.Option option : GameOptions.ALL)
             optionsList.addView(optionRow(option.title, option.label(GameOptions.get(this, option.key)), () -> chooseOption(option)));
         optionsList.addView(optionRow("Cheat Codes", cheatCodesSummary(), this::chooseCheatCodes));
+        optionsList.addView(optionRow("Extra Options", extraOptionsSummary(), this::chooseExtraOptions));
         // optionsList.addView(optionRow("Freeroam Online (beta)", GameOptions.isRoamEnabled(this) ? "On" : "Off", this::toggleFreeRoam));
         // optionsList.addView(optionRow("Ghost Mode", GameOptions.isGhostModeEnabled(this) ? "On" : "Off", this::toggleGhostMode));
         optionsList.addView(optionRow("Online Server", serverStatusSummary(), this::chooseOnlineServer));
@@ -543,6 +566,58 @@ public final class LauncherActivity extends Activity {
                     for (int i = 0; i < n; i++) {
                         GameOptions.setCheatEnabled(this, GameOptions.CHEATS[i].id, false);
                     }
+                    refreshOptions();
+                })
+                .setOnDismissListener(dialog -> refreshOptions())
+                .show();
+    }
+
+    private String extraOptionsSummary() {
+        boolean enabled = GameOptions.isExtraOptionsEnabled(this);
+        if (!enabled) return "Disabled";
+        return "Active (Regional Cars, Laps 0-127, Opponents 0-5, 3D Fixes)";
+    }
+
+    private void chooseExtraOptions() {
+        boolean enabled = GameOptions.isExtraOptionsEnabled(this);
+        String[] features = new String[] {
+            "Extra Options Active (ExOpts Team mod)",
+            "Regional Cars (Peugeot 106 & Opel Corsa in NTSC)",
+            "Lap Controller (0 - 127 laps in Quick Race & LAN)",
+            "Opponent Controller (0 - 5 opponents in all modes)",
+            "1-Lap Race Progress (COMPLETED %X display)",
+            "Drift Multiplier (AxB format, plus sign, up to 9x)",
+            "3D Fixes (Wheels fix, damaged glass, megalow parts)",
+            "Menu Enhancements (Outrun mode & Free Run track select)"
+        };
+        boolean[] checked = new boolean[] {
+            enabled,
+            GameOptions.getExtraOption(this, "regional_cars", true),
+            GameOptions.getExtraOption(this, "lap_controller", true),
+            GameOptions.getExtraOption(this, "opponent_controller", true),
+            GameOptions.getExtraOption(this, "lap_percent", true),
+            GameOptions.getExtraOption(this, "drift_tweaks", true),
+            GameOptions.getExtraOption(this, "fixes_3d", true),
+            GameOptions.getExtraOption(this, "menu_enhancements", true)
+        };
+
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("NFSU2 Extra Options (ExOpts Team)")
+                .setMultiChoiceItems(features, checked, (dialog, which, isChecked) -> {
+                    checked[which] = isChecked;
+                    if (which == 0) {
+                        GameOptions.setExtraOptionsEnabled(this, isChecked);
+                    } else {
+                        String[] keys = {"", "regional_cars", "lap_controller", "opponent_controller", "lap_percent", "drift_tweaks", "fixes_3d", "menu_enhancements"};
+                        GameOptions.setExtraOption(this, keys[which], isChecked);
+                    }
+                    GameOptions.syncExtraOptionsIni(this);
+                })
+                .setPositiveButton("Done", (dialog, which) -> refreshOptions())
+                .setNeutralButton("Reset Defaults", (dialog, which) -> {
+                    GameOptions.setExtraOptionsEnabled(this, true);
+                    GameOptions.resetExtraOptions(this);
+                    GameOptions.syncExtraOptionsIni(this);
                     refreshOptions();
                 })
                 .setOnDismissListener(dialog -> refreshOptions())
@@ -906,6 +981,7 @@ public final class LauncherActivity extends Activity {
         ensureScriptsInstalled(gameRoot());
         GameOptions.applyWidescreenPatchFile(this);
         GameOptions.syncWidescreenIni(this);
+        GameOptions.syncExtraOptionsIni(this);
         GamePerformanceBooster.apply(this, getWindow());
         PerformanceCores.bindToPerformanceCores();
         boolean logsEnabled = !"off".equals(GameOptions.get(this, GameOptions.DISPLAY_LOGS));
