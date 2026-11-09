@@ -489,16 +489,8 @@ public final class GameOptions {
     }
 
     static final Cheat[] CHEATS = {
-        new Cheat("hidden_races", "Show Hidden Career Races", "Reveal all 33 hidden career races on world map"),
-        new Cheat("districts", "Unlock All Districts", "Explore Coal Harbor, Jackson Heights & all map areas (opendoors)", "opendoors"),
-        new Cheat("cars_parts", "Unlock All Cars & Circuit Parts", "All vehicles & performance parts in Career (ordermebaby)", "ordermebaby"),
-        new Cheat("perf_lv1", "Unlock Performance Parts Lv 1", "Engine, transmission, ECU, nitrous Lv 1 (needperformance1)", "needperformance1"),
-        new Cheat("perf_lv2", "Unlock Performance Parts Lv 2", "Top-tier Level 2 performance upgrades (needperformance2)", "needperformance2"),
-        new Cheat("vis_lv1", "Unlock Visual Upgrades Lv 1", "Body kits, spoilers, hoods, rims Lv 1 (gimmevisual1)", "gimmevisual1"),
-        new Cheat("vis_lv2", "Unlock Visual Upgrades Lv 2", "Level 2 widebody and visual customization (gimmevisual2)", "gimmevisual2"),
-        new Cheat("cash", "Extra Career Cash (+$20,000)", "Starting bank boost in Career mode (regmebaby)", "regmebaby"),
-        new Cheat("sponsors", "Unlock Sponsor Cars", "Snoop Dogg, Chingy, Capone, D3, ShineStreet & David Choe cars", "yodogg", "gimmechingy", "wannacapone", "davidchoeart", "tunejapantuning", "shinestreetbright", "wantmyd3"),
-        new Cheat("vinyls", "Unlock Sponsor Vinyls", "Best Buy, Cingular, Burger King, Edge & Old Spice", "needmybestbuy", "gotmycingular", "gottahavebk", "gottaedge", "goforoldspice")
+        new Cheat("dumb_ai", "Dumb AI (AutoDrive)", "Enable AI autopilot / Drunk Driver to steer and drive player vehicle"),
+        new Cheat("cash", "Starting Cash (+$20,000)", "Starting bank boost in Career mode (regmebaby)", "regmebaby")
     };
 
     static boolean isCheatEnabled(Context context, String id) {

@@ -380,6 +380,9 @@ public final class GameActivity extends NativeActivity {
             boolean hiddenRaces = GameOptions.isCheatEnabled(this, "hidden_races");
             android.system.Os.setenv("NFSU2_SHOW_HIDDEN_RACES", hiddenRaces ? "1" : "0", true);
 
+            boolean dumbAI = GameOptions.isCheatEnabled(this, "dumb_ai");
+            android.system.Os.setenv("NFSU2_DUMB_AI", dumbAI ? "1" : "0", true);
+
             android.system.Os.setenv("NFSU2_AUTOSAVE", "1", true);
 
             android.system.Os.setenv("NFSU2_INTRO", "original", true);

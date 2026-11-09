@@ -195,6 +195,7 @@ struct WaitScope {
 std::atomic<int64_t> lastPresentMs{0};
 int64_t steadyMs(){return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();}
 void startStallWatch();
+static void updateDumbAIState();
 void yieldGuestMachine(unsigned milliseconds=0,std::chrono::steady_clock::time_point deadline={}) {
     if(!machineLease||!machineLease->owns_lock())throw GuestStop("Guest scheduler ownership missing");
     {auto& trace=currentTrace();trace.func=g_cur_func;trace.esp=g_esp;}
@@ -337,6 +338,7 @@ void d3dDispatch(){
             if(!s_roam_tick)s_roam_tick=reinterpret_cast<void(*)()>(dlsym(RTLD_DEFAULT,"nfs_roam_frame_tick"));
         }
         if(s_roam_tick)s_roam_tick();
+        updateDumbAIState();
         serviceGuestSound();
         lastPresentMs=steadyMs();
         startStallWatch();
@@ -427,6 +429,7 @@ inline void syncPreTimestepPacing() {
 #include "guest_win32_comm.inc"
 #include "guest_win32_tapi.inc"
 #include "guest_win32_gdi.inc"
+#include "guest_extra_options.inc"
 
 void notifyHaltToHost(const char* message);
 
@@ -1070,6 +1073,7 @@ std::string connectGuestRuntime(const char* executable) {
             nfs_widescreen_set_hud_safe_area(guestHudSafeArea ? 1 : 0);
             NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Widescreen: %d HUD offsets from scripts/NFSUnderground2.WidescreenFix.dat (safeArea=%d, screenMode=%d)",nfs_widescreen_hud_entries(),int(guestHudSafeArea),guestScreenMode);
         }else NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Widescreen disabled: original 4:3 geometry");
+        applyExtraOptions(hostGameRoot.c_str());
         if(renderWidth.load()&&renderHeight.load())configureAndroidResolutionModes();
         memory->commit(stackBase,stackSize); memory->commit(tib,0x1000);
         State fresh; fresh.esp=stackBase+stackSize-64; fresh.fs=tib; fresh.load();

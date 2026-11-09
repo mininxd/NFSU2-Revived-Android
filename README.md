@@ -259,6 +259,7 @@ This project is **NFSU2 Revived**. Full credit and attribution to the pioneering
 - **[sp00nznet/pcrecomp](https://github.com/sp00nznet/pcrecomp)** — Underlying static binary recompilation engine and x86 lifter framework.
 - **[doitsujin/dxvk](https://github.com/doitsujin/dxvk)** — Vulkan-based Direct3D 9 translation layer.
 - **[ThirteenAG/WidescreenFixesPack](https://github.com/ThirteenAG/WidescreenFixesPack)** — Widescreen display enhancements and aspect ratio scaling.
+- **[ExOptsTeam/NFSU2ExOpts](https://github.com/ExOptsTeam/NFSU2ExOpts)** — Need for Speed: Underground 2 Extra Options mod, quality-of-life enhancements, regional car unlocks, and game bug fixes.
 - **[th0mk/nfsu2-web](https://github.com/th0mk/nfsu2-web)** — Reference web implementation and touch controls layout.
 
 ---

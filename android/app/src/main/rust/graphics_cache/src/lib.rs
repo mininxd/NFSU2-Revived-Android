@@ -7,6 +7,7 @@ pub mod async_compiler;
 pub mod crowd_filter;
 pub mod d3d9_filter;
 pub mod dynamic_thunk;
+pub mod extra_options;
 pub mod gles_optimizer;
 pub mod headlights;
 pub mod math_simd;
@@ -26,6 +27,7 @@ pub mod win32_tapi;
 
 pub use audio_engine::*;
 pub use crowd_filter::*;
+pub use extra_options::*;
 pub use headlights::*;
 pub use math_simd::*;
 pub use physics_simd::*;
