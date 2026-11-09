@@ -3,6 +3,7 @@
 #include <map>
 #include <algorithm>
 #include <vector>
+#include <dlfcn.h>
 
 // Guest heap addresses and opaque handles never depend on host malloc pointers.
 // Calls are serialized by the guest machine lock.
@@ -10,6 +11,37 @@ class GuestHeaps {
     struct Block { uint32_t capacity, requested; };
     struct Heap { uint32_t options, maximum; uint64_t live{}; std::map<uint32_t,Block> blocks; };
     GuestMemory& memory_;
+
+    using RustInitFn = int(*)(uint32_t, uint32_t, uint32_t, uint32_t);
+    using RustCreateFn = uint32_t(*)(uint32_t, uint32_t, uint32_t);
+    using RustDestroyFn = int(*)(uint32_t);
+    using RustAllocFn = uint32_t(*)(uint32_t, uint32_t, uint32_t, uint32_t*, uint32_t*, int*);
+    using RustFreeFn = int(*)(uint32_t, uint32_t);
+    using RustSizeFn = uint32_t(*)(uint32_t, uint32_t);
+    using RustReallocFn = uint32_t(*)(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t*, uint32_t*, uint32_t*, int*);
+
+    bool use_rust_{false};
+    RustInitFn rust_init_{nullptr};
+    RustCreateFn rust_create_{nullptr};
+    RustDestroyFn rust_destroy_{nullptr};
+    RustAllocFn rust_alloc_{nullptr};
+    RustFreeFn rust_free_{nullptr};
+    RustSizeFn rust_size_{nullptr};
+    RustReallocFn rust_realloc_{nullptr};
+
+    void initRustBackend() {
+        rust_init_ = reinterpret_cast<RustInitFn>(dlsym(RTLD_DEFAULT, "rust_guest_heap_init"));
+        rust_create_ = reinterpret_cast<RustCreateFn>(dlsym(RTLD_DEFAULT, "rust_guest_heap_create"));
+        rust_destroy_ = reinterpret_cast<RustDestroyFn>(dlsym(RTLD_DEFAULT, "rust_guest_heap_destroy"));
+        rust_alloc_ = reinterpret_cast<RustAllocFn>(dlsym(RTLD_DEFAULT, "rust_guest_heap_alloc"));
+        rust_free_ = reinterpret_cast<RustFreeFn>(dlsym(RTLD_DEFAULT, "rust_guest_heap_free"));
+        rust_size_ = reinterpret_cast<RustSizeFn>(dlsym(RTLD_DEFAULT, "rust_guest_heap_size"));
+        rust_realloc_ = reinterpret_cast<RustReallocFn>(dlsym(RTLD_DEFAULT, "rust_guest_heap_realloc"));
+        if (rust_init_ && rust_alloc_ && rust_free_ && rust_realloc_) {
+            rust_init_(firstArena, firstArenaEnd - firstArena, secondArena, secondArenaSize);
+            use_rust_ = true;
+        }
+    }
 public:
 #if UINTPTR_MAX > 0xffffffffu
     static constexpr uint32_t firstArena=0x10000000u,firstArenaEnd=0x1f000000u,secondArena=0x30000000u,secondArenaSize=0x40000000u;
@@ -38,17 +70,37 @@ private:
     }
 public:
     static constexpr uint32_t process=0xf0000100u;
-    explicit GuestHeaps(GuestMemory& memory):memory_(memory) { heaps_.emplace(process,Heap{0,0,0,{}}); }
+    explicit GuestHeaps(GuestMemory& memory):memory_(memory) {
+        heaps_.emplace(process,Heap{0,0,0,{}});
+        initRustBackend();
+    }
     uint32_t create(uint32_t options,uint32_t initial,uint32_t maximum) {
+        if (use_rust_ && rust_create_) {
+            return rust_create_(options, initial, maximum);
+        }
         if (maximum && initial>maximum) return 0;
         uint32_t id=next_; next_+=4; heaps_.emplace(id,Heap{options,maximum,0,{}}); return id;
     }
     bool destroy(uint32_t heap) {
+        if (use_rust_ && rust_destroy_) {
+            return rust_destroy_(heap) != 0;
+        }
         auto h=heaps_.find(heap); if (h==heaps_.end() || heap==process) return false;
         for (auto& b:h->second.blocks) release(b.first,b.second.capacity);
         heaps_.erase(h); return true;
     }
     uint32_t alloc(uint32_t heap,uint32_t flags,uint32_t bytes) {
+        if (use_rust_ && rust_alloc_) {
+            uint32_t cap = 0, slack = 0;
+            int exc = 0;
+            uint32_t addr = rust_alloc_(heap, flags, bytes, &cap, &slack, &exc);
+            if (exc) throw std::bad_alloc();
+            if (addr) {
+                memory_.commit(addr, cap + slack);
+                std::memset(memory_.address(addr, cap), 0, cap);
+            }
+            return addr;
+        }
         auto h=heaps_.find(heap); if(h==heaps_.end()) return 0;
         uint64_t capacity=(uint64_t(std::max(bytes,1u))+15)&~uint64_t(15);
         if (capacity>UINT32_MAX || (h->second.maximum &&
@@ -70,16 +122,42 @@ public:
         return address;
     }
     bool free(uint32_t heap,uint32_t address) {
+        if (use_rust_ && rust_free_) {
+            return rust_free_(heap, address) != 0;
+        }
         auto h=heaps_.find(heap); if(h==heaps_.end()) return false;
         if(!address) return true;
         auto b=h->second.blocks.find(address); if(b==h->second.blocks.end()) return false;
         release(address,b->second.capacity); h->second.live-=b->second.capacity; h->second.blocks.erase(b); return true;
     }
     uint32_t size(uint32_t heap,uint32_t address) const {
+        if (use_rust_ && rust_size_) {
+            return rust_size_(heap, address);
+        }
         auto h=heaps_.find(heap); if(h==heaps_.end()) return UINT32_MAX;
         auto b=h->second.blocks.find(address); return b==h->second.blocks.end()?UINT32_MAX:b->second.capacity;
     }
     uint32_t realloc(uint32_t heap,uint32_t flags,uint32_t address,uint32_t bytes) {
+        if (use_rust_ && rust_realloc_) {
+            uint32_t cap = 0, slack = 0, old_req = 0;
+            int in_place = 0;
+            uint32_t new_addr = rust_realloc_(heap, flags, address, bytes, &cap, &slack, &old_req, &in_place);
+            if (!new_addr) return 0;
+            if (in_place) {
+                memory_.commit(address, cap + slack);
+                if ((flags & 8) && bytes > old_req) {
+                    std::memset(memory_.address(address + old_req, bytes - old_req), 0, bytes - old_req);
+                }
+                return address;
+            } else {
+                memory_.commit(new_addr, cap + slack);
+                std::memcpy(memory_.address(new_addr, bytes), memory_.address(address, old_req), std::min(old_req, bytes));
+                if ((flags & 8) && bytes > old_req) {
+                    std::memset(memory_.address(new_addr + old_req, bytes - old_req), 0, bytes - old_req);
+                }
+                return new_addr;
+            }
+        }
         auto h=heaps_.find(heap); if(h==heaps_.end()) return 0;
         auto b=h->second.blocks.find(address); if(b==h->second.blocks.end()) return 0;
         auto old=b->second;

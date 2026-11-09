@@ -108,6 +108,15 @@ void nfs_gl_program_cache_free_buffer(uint8_t* buf, size_t size);
 int nfs_gl_vbo_ring_alloc(size_t bytes, size_t* out_offset);
 void nfs_gl_vbo_ring_reset(void);
 
+// High-Performance Rust Guest Memory Heap Manager
+int rust_guest_heap_init(uint32_t first_arena, uint32_t first_arena_size, uint32_t second_arena, uint32_t second_arena_size);
+uint32_t rust_guest_heap_create(uint32_t options, uint32_t initial, uint32_t maximum);
+int rust_guest_heap_destroy(uint32_t heap_id);
+uint32_t rust_guest_heap_alloc(uint32_t heap_id, uint32_t flags, uint32_t bytes, uint32_t* out_commit_cap, uint32_t* out_commit_slack, int* out_exception);
+int rust_guest_heap_free(uint32_t heap_id, uint32_t address);
+uint32_t rust_guest_heap_size(uint32_t heap_id, uint32_t address);
+uint32_t rust_guest_heap_realloc(uint32_t heap_id, uint32_t flags, uint32_t address, uint32_t bytes, uint32_t* out_commit_cap, uint32_t* out_commit_slack, uint32_t* out_old_requested, int* out_is_in_place);
+
 #ifdef __cplusplus
 }
 #endif
