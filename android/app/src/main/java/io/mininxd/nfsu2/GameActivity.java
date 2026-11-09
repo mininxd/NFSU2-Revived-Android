@@ -30,6 +30,7 @@ import android.util.Log;
 /** Storage permission gateway for the fixed Internal storage/nfsu2 directory. */
 public final class GameActivity extends NativeActivity {
     private static volatile GameActivity s_instance = null;
+    private static volatile String s_cachedNews = null;
     private static final String DEFAULT_NEWS_CONTENT =
         " %{START CMD=news TITLE=\"NFSU2 Revived Core\" BTN1=\"OK\" BTN1-GOTO=\"$exit=0\" %}\r\n" +
         "Welcome to Need for Speed Underground 2 Revived.\r\n\r\n" +
@@ -339,6 +340,7 @@ public final class GameActivity extends NativeActivity {
     @Override protected void onCreate(Bundle saved) {
         super.onCreate(saved);
         s_instance = this;
+        refreshNewsAsync();
         GameOptions.syncWidescreenIni(this);
         GamePerformanceBooster.apply(this, getWindow());
         PerformanceCores.bindToPerformanceCores();
@@ -756,6 +758,39 @@ public final class GameActivity extends NativeActivity {
     }
 
     public static String fetchNewsContent() {
+        if (s_cachedNews != null && !s_cachedNews.trim().isEmpty()) {
+            refreshNewsAsync();
+            return s_cachedNews;
+        }
+
+        String news = fetchNewsNetwork();
+        if (news != null && !news.trim().isEmpty()) {
+            s_cachedNews = news;
+            return news;
+        }
+
+        // Offline fallback: read bundled assets/news.txt inside the APK
+        try {
+            if (s_instance != null) {
+                java.io.InputStream in = s_instance.getAssets().open("news.txt");
+                java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+                byte[] buf = new byte[1024];
+                int n;
+                while ((n = in.read(buf)) != -1) {
+                    baos.write(buf, 0, n);
+                }
+                in.close();
+                String res = baos.toString("UTF-8").trim();
+                if (!res.isEmpty()) {
+                    return res;
+                }
+            }
+        } catch (Throwable ignored) {}
+
+        return DEFAULT_NEWS_CONTENT;
+    }
+
+    private static String fetchNewsNetwork() {
         String customUrl = "https://api.mininxd.tech/nfsu2_news";
         try {
             String envUrl = System.getenv("NFSU2_NEWS_URL");
@@ -764,8 +799,8 @@ public final class GameActivity extends NativeActivity {
             }
             java.net.URL url = new java.net.URL(customUrl);
             java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
-            conn.setConnectTimeout(3000);
-            conn.setReadTimeout(3000);
+            conn.setConnectTimeout(5000);
+            conn.setReadTimeout(5000);
             conn.setRequestProperty("User-Agent", "NFSU2-Revived-Android/1.0");
             conn.setRequestProperty("Accept", "text/plain, */*");
             int code = conn.getResponseCode();
@@ -791,26 +826,18 @@ public final class GameActivity extends NativeActivity {
         } catch (Throwable t) {
             Log.w("NFSU2News", "Failed fetching custom news (" + t.getMessage() + "), falling back to bundled news.txt");
         }
+        return null;
+    }
 
-        // Offline fallback: read bundled assets/news.txt inside the APK
-        try {
-            if (s_instance != null) {
-                java.io.InputStream in = s_instance.getAssets().open("news.txt");
-                java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
-                byte[] buf = new byte[1024];
-                int n;
-                while ((n = in.read(buf)) != -1) {
-                    baos.write(buf, 0, n);
+    private static void refreshNewsAsync() {
+        new Thread(() -> {
+            try {
+                String fresh = fetchNewsNetwork();
+                if (fresh != null && !fresh.trim().isEmpty()) {
+                    s_cachedNews = fresh;
                 }
-                in.close();
-                String res = baos.toString("UTF-8").trim();
-                if (!res.isEmpty()) {
-                    return res;
-                }
-            }
-        } catch (Throwable ignored) {}
-
-        return DEFAULT_NEWS_CONTENT;
+            } catch (Throwable ignored) {}
+        }, "NewsRefresher").start();
     }
 
     @Override
