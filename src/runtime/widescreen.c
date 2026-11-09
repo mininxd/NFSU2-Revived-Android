@@ -51,6 +51,11 @@ static void wrf(uint32_t va, float f) { uint32_t v; memcpy(&v, &f, 4); MEM32(va)
 
 static void load_dat(const char* path) {
     FILE* f = fopen(path, "r");
+    if (!f) {
+        char hold[1024];
+        snprintf(hold, sizeof hold, "%s.hold", path);
+        f = fopen(hold, "r");
+    }
     char line[256];
     if (!f) return;
     while (fgets(line, sizeof line, f) && s_hud_count < sizeof s_hud / sizeof s_hud[0]) {
@@ -83,12 +88,18 @@ static int is_sms_or_nav(const hud_entry* e) {
 
 /* The mod's WidescreenHud(): move a known HUD element by its .dat offset. */
 static void widescreen_hud(float* x, float* y) {
+    int ix = (int)floorf(*x), iy = (int)floorf(*y);
+    int is_mm = (ix == -223 && (iy == 70 || iy == 71 || iy == 142 || iy == 143)) || (ix == -143 && iy == 196);
+    if (is_mm && s_minimap_dy != 0.0f) {
+        *y += s_minimap_dy;
+    }
+
     if (s_screen_mode == 2) {
-        /* Mode 2 (4:3): world/FOV stay widescreen; HUD remains in 4:3 centre without being offset to edges. */
+        /* Mode 2 (4:3): world/FOV stay widescreen; HUD remains in 4:3 centre without being offset to edges.
+         * Minimap offset is applied above even in 4:3 mode. */
         return;
     }
     const float base_offset = (480.0f * (16.0f / 9.0f) - 640.0f) / 2.0f;
-    int ix = (int)floorf(*x), iy = (int)floorf(*y);
     for (unsigned i = 0; i < s_hud_count; i++) {
         const hud_entry* e = &s_hud[i];
         if ((int)e->pos_x != ix || (int)e->pos_y != iy) continue;
@@ -99,7 +110,7 @@ static void widescreen_hud(float* x, float* y) {
             else *x -= s_hud_offset - (e->offset_x + base_offset);
         }
         *y += e->offset_y;
-        if (is_minimap(e)) *y += s_minimap_dy;
+        if (is_minimap(e) && !is_mm && s_minimap_dy != 0.0f) *y += s_minimap_dy;
         if (s_sms_nav_dy != 0.0f && is_sms_or_nav(e)) *y += s_sms_nav_dy;
         return;
     }

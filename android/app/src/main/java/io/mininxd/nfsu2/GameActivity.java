@@ -479,8 +479,7 @@ public final class GameActivity extends NativeActivity {
         nativeWidescreen(true);             // always full screen, never stretched
         nativeScreenMode(screenMode);       // 0=Widescreen HUD edges, 2=4:3 HUD centre
         nativeDrawDistance(distVal);
-        boolean forwardCull = !"off".equalsIgnoreCase(GameOptions.get(this, GameOptions.FORWARD_CULLING));
-        nativeForwardCulling(forwardCull);
+        nativeForwardCulling(true);
         String server = launch.getStringExtra("onlineServer");
         String configuredServer = GameOptions.validServer(server) ? server : GameOptions.onlineServer(this);
         boolean useLocalBridge = io.mininxd.nfsu2.net.EahubClassicOnline.shouldUseLocalBridge(configuredServer);

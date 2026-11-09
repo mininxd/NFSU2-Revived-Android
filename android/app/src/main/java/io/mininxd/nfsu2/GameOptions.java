@@ -27,7 +27,7 @@ public final class GameOptions {
             AUTOSAVE = "autosave", SHOW_HIDDEN_RACES = "show_hidden_races",
             STARTUP_MOVIES = "intro", CUTSCENE_BORDERS = "cutscene_borders",
             ROAM_CARS_LIMIT = "roam_max_cars", ROAM_CREW = "roam_crew",
-            GRAPHICS_BACKEND = "graphics_backend", DRAW_DISTANCE = "draw_distance", FORWARD_CULLING = "forward_culling",
+            GRAPHICS_BACKEND = "graphics_backend", DRAW_DISTANCE = "draw_distance",
             TRACKSIDE_CROWDS = "trackside_crowds", REGION = "region", SPEEDOMETER = "speedometer", PAD_LAYOUT = "pad_layout";
 
     static final Option[] ALL = {
@@ -40,9 +40,6 @@ public final class GameOptions {
             new Option(DRAW_DISTANCE, "Draw Distance", "performance",
                     new String[] {"ultra_performance", "performance", "balanced", "extended", "original"},
                     new String[] {"Ultra Performance", "Performance", "Balanced", "Extended", "Original"}),
-            new Option(FORWARD_CULLING, "Forward-Only Rendering", "on",
-                    new String[] {"on", "off"},
-                    new String[] {"On (Hide Rear)", "Off (Full)"}),
             new Option(FPS, "FPS Limit", "30",
                     new String[] {"30", "60", "90", "120", "0"},
                     new String[] {"30 FPS", "60 FPS", "90 FPS", "120 FPS", "Uncapped"}),
@@ -93,31 +90,21 @@ public final class GameOptions {
     }
 
     /**
-     * Applies the correct HUD layout file based on the Widescreen HUD option.
-     * On: ensures scripts/NFSUnderground2.WidescreenFix.dat is present so elements are placed at display edges.
-     * Off: parks the .dat file as .hold so the game keeps full-screen 3D widescreen and aspect correction,
-     * but without .dat offsets the HUD stays centered in a 4:3 box.
+     * Ensures scripts/NFSUnderground2.WidescreenFix.dat is present and not parked,
+     * allowing widescreen.c to parse HUD element anchors (minimap, bank, sms, etc.).
      */
     static void applyWidescreenPatchFile(Context context) {
         java.io.File scripts = new java.io.File(LauncherActivity.gameRoot(), "scripts");
         if (!scripts.isDirectory()) scripts.mkdirs();
         java.io.File dat = new java.io.File(scripts, "NFSUnderground2.WidescreenFix.dat");
         java.io.File held = new java.io.File(scripts, "NFSUnderground2.WidescreenFix.dat.hold");
-        boolean widescreen = usesWidescreenPatch(context);
         try {
-            if (widescreen) {
-                if (held.isFile()) {
-                    if (dat.isFile()) dat.delete();
-                    held.renameTo(dat);
-                }
-                if (!dat.isFile() || dat.length() == 0) {
-                    LauncherActivity.copyAssetFile(context, "scripts/NFSUnderground2.WidescreenFix.dat", dat);
-                }
-            } else {
-                if (dat.isFile()) {
-                    if (held.isFile()) held.delete();
-                    dat.renameTo(held);
-                }
+            if (held.isFile()) {
+                if (dat.isFile()) dat.delete();
+                held.renameTo(dat);
+            }
+            if (!dat.isFile() || dat.length() == 0) {
+                LauncherActivity.copyAssetFile(context, "scripts/NFSUnderground2.WidescreenFix.dat", dat);
             }
         } catch (Throwable t) {
             android.util.Log.w("NFSU2", "WidescreenFix.dat: " + t.getMessage());
