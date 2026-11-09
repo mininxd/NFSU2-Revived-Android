@@ -41,7 +41,7 @@ static int s_bank_left = 0;
 static float s_sms_nav_dy = 0.0f;
 /* Game frame time for FPSLimit (0 = the game's own 1/60 s). */
 static float s_frame_time = 0.0f;
-static float s_draw_distance = 450.0f;
+static float s_draw_distance = 200.0f;
 /* FOV multipliers chosen per view at 0x5C7F64 and applied at its three
  * reads of the 1.0/0.5/1.0 constants (the mod repoints those operands). */
 static double s_fov_scale[3] = {1.0, 1.0, 1.0};
@@ -233,7 +233,7 @@ static void set_esp_float(uint32_t offset, float value) { wrf(g_esp + offset, va
 void recomp_hook(uint32_t va) {
     int site = 0;
     while (site < SITE_COUNT && k_sites[site] != va) ++site;
-    if (!s_enabled && site != FRAME_TIME) return;
+    if (!s_enabled && site != FRAME_TIME && site != FOV_SCALE) return;
     { static int trace = -1; static uint32_t seen[SITE_COUNT]; static int count;
       if (trace < 0) trace = getenv("NFSU2_WS_TRACE") != NULL;   /* first hit of each site */
       if (trace) { int k; for (k = 0; k < count && seen[k] != va; ++k) ;
@@ -288,16 +288,25 @@ void recomp_hook(uint32_t va) {
     /* FixFOV: ST0 was viewport height/width; the mod loads a per-view scale
      * and picks the constants of the three later reads by view id (ecx). */
     case FOV_SCALE: {
-        uint32_t view = g_ecx;
+        uint32_t view = (g_ebp >= 0x10000u && g_ebp <= 0x7FFFF000u) ? MEM32(g_ebp + 4u) : g_ecx;
+        if (view == 0) view = g_ecx;
         double hor = 1.0 / (s_aspect / (4.0 / 3.0));
-        if (view == 1 || view == 4) { s_fov_scale[0] = hor; s_fov_scale[1] = 0.43511; s_fov_scale[2] = 1.22; }
-        else { s_fov_scale[0] = 1.0; s_fov_scale[1] = 0.5; s_fov_scale[2] = 1.0; }
+        if (view == 1 || view == 2 || view == 4 || view == 5) {
+            s_fov_scale[0] = hor; s_fov_scale[1] = 0.43511; s_fov_scale[2] = 1.22;
+        } else {
+            s_fov_scale[0] = 1.0; s_fov_scale[1] = 0.5; s_fov_scale[2] = 1.0;
+        }
         g_st[0] = view == 3 ? 0.45 : 1.0;   /* rear-view mirror */
-        if (s_draw_distance > 0.0f && (view == 1 || view == 4) && g_ebp >= 0x10000u && g_ebp <= 0x7FFFF000u) {
+        if (s_draw_distance > 0.0f && g_ebp >= 0x10000u && g_ebp <= 0x7FFFF000u) {
             uint32_t cam = MEM32(g_ebp + 0x40u);
             if (cam >= 0x10000u && cam <= 0x7FFFF000u) {
                 float far_z = rdf(cam + 0xC0u);
-                float max_far = (view == 4) ? (s_draw_distance * 0.65f) : s_draw_distance;
+                float max_far = s_draw_distance;
+                if (view == 3) {
+                    /* Rear-view mirror: clamp to 75% of draw distance (min 150m) to save fillrate and drawcalls */
+                    max_far = s_draw_distance * 0.75f;
+                    if (max_far < 150.0f) max_far = 150.0f;
+                }
                 if (far_z > max_far && max_far >= 50.0f) {
                     wrf(cam + 0xC0u, max_far);
                 }

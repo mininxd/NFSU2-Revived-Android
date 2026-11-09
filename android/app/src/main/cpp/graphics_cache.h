@@ -62,6 +62,11 @@ typedef struct VoiceAdvanceState {
 
 void nfs_audio_mixer_advance_voices(VoiceAdvanceState* voices, size_t voice_count, uint32_t frames);
 
+// DirectSound Buffer Cursor & Lock Calculations
+void nfs_dsound_calc_cursors(double position_frames, uint32_t block_align, uint32_t total_bytes, uint32_t sample_rate, uint32_t* out_play, uint32_t* out_write);
+int nfs_dsound_calc_lock_slices(uint32_t total_bytes, uint32_t offset, uint32_t length, uint32_t flags, uint32_t current_play_bytes, uint32_t sample_rate, uint32_t block_align, uint32_t* out_offset, uint32_t* out_first_bytes, uint32_t* out_second_bytes);
+void nfs_dsound_calc_volume_pan_gains(int32_t volume_m_b, int32_t pan_m_b, float* out_left, float* out_right);
+
 // Decoded DynamicThunk Bytecode Cache & JIT
 typedef size_t (*RecompLookupFn)(uint32_t);
 typedef uint32_t (*CallLiftedFn)(size_t, uint32_t);

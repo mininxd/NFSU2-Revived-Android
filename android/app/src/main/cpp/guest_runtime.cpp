@@ -1071,12 +1071,15 @@ std::string connectGuestRuntime(const char* executable) {
                 NFS_RUNTIME_LOG(ANDROID_LOG_INFO, "NFSU2", "Patched EventHandlerSlotPool capacity at 0x005d7b07 to 128");
             }
         }
+        nfs_widescreen_init(hostGameRoot.c_str());
         if(guestWidescreen){
-            nfs_widescreen_init(hostGameRoot.c_str());
             nfs_widescreen_set_screen_mode(guestScreenMode);
             nfs_widescreen_set_hud_safe_area(guestHudSafeArea ? 1 : 0);
             NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Widescreen: %d HUD offsets from scripts/NFSUnderground2.WidescreenFix.dat (safeArea=%d, screenMode=%d)",nfs_widescreen_hud_entries(),int(guestHudSafeArea),guestScreenMode);
-        }else NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Widescreen disabled: original 4:3 geometry");
+        }else{
+            nfs_widescreen_set_screen_mode(2);
+            NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Widescreen disabled: original 4:3 geometry");
+        }
         applyExtraOptions(hostGameRoot.c_str());
         if(renderWidth.load()&&renderHeight.load())configureAndroidResolutionModes();
         memory->commit(stackBase,stackSize); memory->commit(tib,0x1000);

@@ -405,10 +405,11 @@ public final class GameActivity extends NativeActivity {
             android.system.Os.setenv("NFSU2_RENDERER", backend, true);
 
             String drawDist = GameOptions.get(this, GameOptions.DRAW_DISTANCE);
-            distVal = 450.0f;
-            if ("performance".equals(drawDist)) distVal = 320.0f;
-            else if ("extended".equals(drawDist)) distVal = 650.0f;
+            distVal = 200.0f;
+            if ("balanced".equals(drawDist)) distVal = 350.0f;
+            else if ("extended".equals(drawDist)) distVal = 500.0f;
             else if ("original".equals(drawDist)) distVal = 0.0f;
+            else if ("performance".equals(drawDist)) distVal = 200.0f;
             android.system.Os.setenv("NFSU2_DRAW_DISTANCE", String.valueOf((int)distVal), true);
 
             android.system.Os.setenv("NFSU2_CROWD", "0", true);
