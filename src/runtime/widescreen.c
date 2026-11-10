@@ -51,11 +51,6 @@ static void wrf(uint32_t va, float f) { uint32_t v; memcpy(&v, &f, 4); MEM32(va)
 
 static void load_dat(const char* path) {
     FILE* f = fopen(path, "r");
-    if (!f) {
-        char hold[1024];
-        snprintf(hold, sizeof hold, "%s.hold", path);
-        f = fopen(hold, "r");
-    }
     char line[256];
     if (!f) return;
     while (fgets(line, sizeof line, f) && s_hud_count < sizeof s_hud / sizeof s_hud[0]) {
@@ -110,7 +105,6 @@ static void widescreen_hud(float* x, float* y) {
             else *x -= s_hud_offset - (e->offset_x + base_offset);
         }
         *y += e->offset_y;
-        if (is_minimap(e) && !is_mm && s_minimap_dy != 0.0f) *y += s_minimap_dy;
         if (s_sms_nav_dy != 0.0f && is_sms_or_nav(e)) *y += s_sms_nav_dy;
         return;
     }

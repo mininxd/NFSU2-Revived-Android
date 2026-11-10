@@ -46,7 +46,7 @@ public final class GameOptions {
             new Option(DISPLAY_LOGS, "Display Logs", "off",
                     new String[] {"off", "compact", "full"},
                     new String[] {"Off", "Compact", "Full"}),
-            new Option(WIDESCREEN, "Widescreen HUD", "on",
+            new Option(WIDESCREEN, "Widescreen HUD", "off",
                     new String[] {"on", "off"},
                     new String[] {"On", "Off"}),
             new Option(MINIMAP, "Minimap", "top",
@@ -89,21 +89,11 @@ public final class GameOptions {
         return "on".equals(get(context, WIDESCREEN));
     }
 
-    private static final String MINIMAP_HUD_DAT =
-            "# Minimap anchor entries for 4:3 HUD (offset -106.666664 so with s_hud_offset=0 it stays at 4:3 X position)\n" +
-            "MiniMap_Pos_1                       -223.0   70.0                 -106.666664  0.0\n" +
-            "MiniMap_Pos_2                       -223.0   142.0                -106.666664  0.0\n" +
-            "MiniMap_Pos_3                       -223.0   71.0                 -106.666664  0.0\n" +
-            "MiniMap_Pos_4                       -223.0   143.0                -106.666664  0.0\n" +
-            "MiniMap_Filter_Pos                  -143.0   196.0                -106.666664  0.0\n";
-
     /**
      * Applies the correct HUD layout file based on the Widescreen HUD option.
-     * On: writes the full scripts/NFSUnderground2.WidescreenFix.dat so all HUD elements (tachometer,
-     *     gauges, bank, leaderboard) are placed at widescreen display edges.
-     * Off (4:3 HUD): writes scripts/NFSUnderground2.WidescreenFix.dat with ONLY the minimap anchor
-     *     entries. This keeps all other HUD elements centered in 4:3, while ensuring s_hud_count > 0
-     *     so that nativeMinimapTop (-230.0f) properly positions the minimap at top-left!
+     * On: ensures scripts/NFSUnderground2.WidescreenFix.dat is present so elements are placed at display edges.
+     * Off: parks the .dat file as .hold so the game keeps full-screen 3D widescreen and aspect correction,
+     * but without .dat offsets the HUD stays centered in a 4:3 box.
      */
     static void applyWidescreenPatchFile(Context context) {
         java.io.File[] roots = new java.io.File[] {
@@ -119,14 +109,18 @@ public final class GameOptions {
             java.io.File dat = new java.io.File(scripts, "NFSUnderground2.WidescreenFix.dat");
             java.io.File held = new java.io.File(scripts, "NFSUnderground2.WidescreenFix.dat.hold");
             try {
-                if (held.isFile()) {
-                    held.delete();
-                }
                 if (widescreen) {
-                    LauncherActivity.copyAssetFile(context, "scripts/NFSUnderground2.WidescreenFix.dat", dat);
+                    if (held.isFile()) {
+                        if (dat.isFile()) dat.delete();
+                        held.renameTo(dat);
+                    }
+                    if (!dat.isFile() || dat.length() == 0) {
+                        LauncherActivity.copyAssetFile(context, "scripts/NFSUnderground2.WidescreenFix.dat", dat);
+                    }
                 } else {
-                    try (java.io.FileOutputStream fos = new java.io.FileOutputStream(dat)) {
-                        fos.write(MINIMAP_HUD_DAT.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    if (dat.isFile()) {
+                        if (held.isFile()) held.delete();
+                        dat.renameTo(held);
                     }
                 }
             } catch (Throwable t) {
