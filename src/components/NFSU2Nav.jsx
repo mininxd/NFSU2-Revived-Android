@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function NFSU2Nav({ activePage, onNavigate, onOpenEATrax }) {
+export default function NFSU2Nav({ activePage, onNavigate }) {
   const navItems = [
     { key: 'home', label: 'HOME' },
     { key: 'features', label: 'FEATURES' },
@@ -23,12 +23,12 @@ export default function NFSU2Nav({ activePage, onNavigate, onOpenEATrax }) {
         borderTop: '1px solid #333333',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'space-between',
+        justifyContent: 'center',
         padding: '0 8px',
         boxShadow: '0 2px 8px rgba(0,0,0,0.6)'
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
         {navItems.map((item) => {
           const isActive = activePage === item.key;
           return (
@@ -43,7 +43,7 @@ export default function NFSU2Nav({ activePage, onNavigate, onOpenEATrax }) {
                 fontStyle: 'italic',
                 fontSize: 11,
                 letterSpacing: 1,
-                padding: '4px 8px',
+                padding: '4px 9px',
                 cursor: 'pointer',
                 transition: 'all 0.15s ease',
                 textShadow: isActive ? 'none' : '0 1px 2px #000'
@@ -64,29 +64,6 @@ export default function NFSU2Nav({ activePage, onNavigate, onOpenEATrax }) {
           );
         })}
       </div>
-
-      {onOpenEATrax && (
-        <button
-          onClick={onOpenEATrax}
-          style={{
-            background: '#121e12',
-            border: '1px solid #a1d464',
-            color: '#a1d464',
-            fontFamily: 'Impact, Arial Black, sans-serif',
-            fontStyle: 'italic',
-            fontSize: 10,
-            letterSpacing: 1,
-            padding: '2px 8px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4
-          }}
-          title="Open EA TRAX 2004 Music List & Videos"
-        >
-          <span>&#9835;</span> EA TRAX
-        </button>
-      )}
     </div>
   );
 }

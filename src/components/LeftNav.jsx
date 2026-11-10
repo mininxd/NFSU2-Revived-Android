@@ -44,7 +44,7 @@ function RolloverButton({ normalSrc, hoverSrc, alt, onClick, active }) {
   );
 }
 
-export default function LeftNav({ activePage, onNavigate, edition, onOpenNewsletter, onOpenPreorder, onOpenEATrax }) {
+export default function LeftNav({ activePage, onNavigate, edition, onOpenNewsletter, onOpenPreorder }) {
   const isDecEdition = edition === 'dec2004';
 
   return (
@@ -107,9 +107,7 @@ export default function LeftNav({ activePage, onNavigate, edition, onOpenNewslet
             src="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/soundtrack_gray.gif"
             width="150"
             alt="EA Trax Soundtrack"
-            style={{ display: 'block', cursor: onOpenEATrax ? 'pointer' : 'default' }}
-            onClick={onOpenEATrax}
-            title="Open EA TRAX 2004 Music List & Videos"
+            style={{ display: 'block' }}
           />
           <img
             src="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/hdr_community.gif"
