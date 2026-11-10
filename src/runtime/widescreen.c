@@ -27,16 +27,16 @@ static hud_entry s_hud[256];
 static unsigned s_hud_count;
 static int s_enabled;
 static float s_aspect = 4.0f / 3.0f;
-/* Screen mode: 0 = widescreen, 1 = 4:3 original (bars), 2 = 4:3 stretched */
-static int s_screen_mode = 0;
+/* Screen mode: 0 = widescreen, 1 = 4:3 original (bars), 2 = 4:3 stretched (default 4:3) */
+static int s_screen_mode = 2;
 static float s_hud_pos_x = 320.0f;      /* the mod's fHudPosX */
 static float s_hud_offset = 0.0f;       /* fWidescreenHudOffset */
 static float s_width = 640.0f, s_height = 480.0f;
 static const int s_disable_cutscene_borders = 1;
 static int s_hud_safe_area = 1;
 /* Extra vertical move of the minimap (mobile layout: top-left instead of
- * bottom-left, clear of the thumbs). 0 keeps the mod's position. */
-static float s_minimap_dy = 0.0f;
+ * bottom-left, clear of the thumbs). Default -230.0f for top-left. */
+static float s_minimap_dy = -230.0f;
 static int s_bank_left = 0;
 static float s_sms_nav_dy = 0.0f;
 /* Game frame time for FPSLimit (0 = the game's own 1/60 s). */
@@ -83,15 +83,16 @@ static int is_sms_or_nav(const hud_entry* e) {
 
 /* The mod's WidescreenHud(): move a known HUD element by its .dat offset. */
 static void widescreen_hud(float* x, float* y) {
-    int ix = (int)floorf(*x), iy = (int)floorf(*y);
-    int is_mm = (ix == -223 && (iy == 70 || iy == 71 || iy == 142 || iy == 143)) || (ix == -143 && iy == 196);
+    int ix = (int)lroundf(*x), iy = (int)lroundf(*y);
+    int is_mm = ((ix >= -224 && ix <= -222) && ((iy >= 69 && iy <= 72) || (iy >= 141 && iy <= 144))) ||
+                ((ix >= -144 && ix <= -142) && (iy >= 195 && iy <= 197));
     if (is_mm && s_minimap_dy != 0.0f) {
         *y += s_minimap_dy;
     }
 
     if (s_screen_mode == 2) {
         /* Mode 2 (4:3): world/FOV stay widescreen; HUD remains in 4:3 centre without being offset to edges.
-         * Minimap offset is applied above even in 4:3 mode. */
+         * Minimap offset is applied above even in 4:3 mode without modifying X. */
         return;
     }
     const float base_offset = (480.0f * (16.0f / 9.0f) - 640.0f) / 2.0f;

@@ -94,46 +94,7 @@ extern int nfs_rust_apply_engine_pacing(uint8_t *mem_base, float real_elapsed);
 
 static int g_carpool_patched = 0;
 static _Atomic int s_null_page_protected = 0;
-static int s_current_screen_mode = 0;
 
-static float* get_guest_hud_offset_ptr(void) {
-    static float *s_p_hud_offset = NULL;
-    if (s_p_hud_offset) return s_p_hud_offset;
-
-    void *h = dlopen("libnfsu2_android.so", RTLD_NOLOAD | RTLD_GLOBAL);
-    if (!h) h = dlopen("libnfsu2_android.so", RTLD_LAZY | RTLD_GLOBAL);
-    if (!h) h = RTLD_DEFAULT;
-
-    void *fn = dlsym(h, "nfs_widescreen_set_minimap_offset");
-    if (fn) {
-        const uint32_t *code = (const uint32_t *)fn;
-        uint32_t ins0 = code[0];
-        uint32_t ins1 = code[1];
-        if ((ins0 & 0x9f000000) == 0x90000000 && (ins1 & 0xffc00000) == 0xbd000000) {
-            int64_t immhi = (ins0 >> 5) & 0x7ffff;
-            int64_t immlo = (ins0 >> 29) & 0x3;
-            int64_t imm = (immhi << 2) | immlo;
-            if (imm & (1 << 20)) imm -= (1 << 21);
-            uintptr_t page = ((uintptr_t)code & ~0xfffULL) + (imm << 12);
-            uint32_t offset = ((ins1 >> 10) & 0xfff) * 4;
-            float *p_minimap_dy = (float *)(page + offset);
-            s_p_hud_offset = p_minimap_dy - 1; /* 0x97f7308 - 4 = 0x97f7304 (s_hud_offset) */
-            __android_log_print(ANDROID_LOG_INFO, "NFSU2",
-                "Resolved s_hud_offset pointer at %p (p_minimap_dy=%p)",
-                (void *)s_p_hud_offset, (void *)p_minimap_dy);
-        }
-    }
-    return s_p_hud_offset;
-}
-
-static inline void apply_43_hud_offset_if_needed(void) {
-    if (s_current_screen_mode == 2) {
-        float *p = get_guest_hud_offset_ptr();
-        if (p) {
-            *p = 106.666664f; /* base_offset: ensures dx == 0 in 4:3 mode */
-        }
-    }
-}
 
 static void roam_android_protect_guest_null_page(void) {
     if (atomic_load(&s_null_page_protected) || !g_p_mem_base || !*g_p_mem_base) return;
@@ -161,11 +122,6 @@ static void *guest_null_page_guard_worker(void *arg) {
             if (atomic_load(&s_null_page_protected)) break;
         }
         usleep(5000); // 5 ms
-    }
-
-    while (1) {
-        apply_43_hud_offset_if_needed();
-        usleep(50000); // 50 ms
     }
     return NULL;
 }
@@ -1811,109 +1767,7 @@ JNIEXPORT jstring JNICALL Java_io_mininxd_nfsu2_PerformanceCores_nativeGetSummar
     return (*env)->NewStringUTF(env, buf);
 }
 
-JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeDrawDistance(
-        JNIEnv *env, jclass clazz, jfloat distance) {
-    (void)env; (void)clazz;
-    typedef void (*fn_set_dd)(float);
-    static fn_set_dd s_set_dd = NULL;
-    static int s_resolved = 0;
-    if (!s_resolved) {
-        s_resolved = 1;
-        s_set_dd = (fn_set_dd)dlsym(RTLD_DEFAULT, "nfs_widescreen_set_draw_distance");
-    }
-    if (s_set_dd) {
-        s_set_dd((float)distance);
-    }
-}
 
-JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeDrawDistance(
-        JNIEnv *env, jclass clazz, jfloat distance) {
-    Java_com_nfsu2_androidevolved_GameActivity_nativeDrawDistance(env, clazz, distance);
-}
-
-JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeForwardCulling(
-        JNIEnv *env, jclass clazz, jboolean enabled) {
-    (void)env; (void)clazz;
-    typedef void (*fn_set_fc)(int);
-    static fn_set_fc s_set_fc = NULL;
-    static int s_resolved = 0;
-    if (!s_resolved) {
-        s_resolved = 1;
-        s_set_fc = (fn_set_fc)dlsym(RTLD_DEFAULT, "nfs_widescreen_set_forward_culling");
-    }
-    if (s_set_fc) {
-        s_set_fc(enabled ? 1 : 0);
-    }
-}
-
-JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeForwardCulling(
-        JNIEnv *env, jclass clazz, jboolean enabled) {
-    Java_com_nfsu2_androidevolved_GameActivity_nativeForwardCulling(env, clazz, enabled);
-}
-
-JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeWidescreen(
-        JNIEnv *env, jclass clazz, jboolean enabled) {
-    (void)env; (void)clazz;
-    typedef void (*fn_set_ws)(bool);
-    static fn_set_ws s_set_ws = NULL;
-    static int s_resolved = 0;
-    if (!s_resolved) {
-        s_resolved = 1;
-        s_set_ws = (fn_set_ws)dlsym(RTLD_DEFAULT, "_Z18setGuestWidescreenb");
-        if (!s_set_ws) s_set_ws = (fn_set_ws)dlsym(RTLD_DEFAULT, "setGuestWidescreen");
-    }
-    if (s_set_ws) {
-        s_set_ws(enabled == JNI_TRUE);
-    }
-}
-
-JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeWidescreen(
-        JNIEnv *env, jclass clazz, jboolean enabled) {
-    Java_com_nfsu2_androidevolved_GameActivity_nativeWidescreen(env, clazz, enabled);
-}
-
-JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeScreenMode(
-        JNIEnv *env, jclass clazz, jint mode) {
-    (void)env; (void)clazz;
-    s_current_screen_mode = (int)mode;
-    typedef void (*fn_set_sm)(int);
-    static fn_set_sm s_set_sm = NULL;
-    static int s_resolved = 0;
-    if (!s_resolved) {
-        s_resolved = 1;
-        s_set_sm = (fn_set_sm)dlsym(RTLD_DEFAULT, "setGuestScreenMode");
-    }
-    if (s_set_sm) {
-        s_set_sm((int)mode);
-    }
-    apply_43_hud_offset_if_needed();
-}
-
-JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeScreenMode(
-        JNIEnv *env, jclass clazz, jint mode) {
-    Java_com_nfsu2_androidevolved_GameActivity_nativeScreenMode(env, clazz, mode);
-}
-
-JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeMinimapTop(
-        JNIEnv *env, jclass clazz, jboolean top) {
-    (void)env; (void)clazz;
-    typedef void (*fn_set_mm)(float);
-    static fn_set_mm s_set_mm = NULL;
-    static int s_resolved = 0;
-    if (!s_resolved) {
-        s_resolved = 1;
-        s_set_mm = (fn_set_mm)dlsym(RTLD_DEFAULT, "nfs_widescreen_set_minimap_offset");
-    }
-    if (s_set_mm) {
-        s_set_mm(top ? -230.0f : 0.0f);
-    }
-    apply_43_hud_offset_if_needed();
-}
-
-JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeMinimapTop(
-        JNIEnv *env, jclass clazz, jboolean top) {
-    Java_com_nfsu2_androidevolved_GameActivity_nativeMinimapTop(env, clazz, top);
-}
 
 /* ========================================================================= */
 /* PowerVR / IMG BXM Vulkan Pipeline Creation Fault Guard                    */

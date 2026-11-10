@@ -162,7 +162,7 @@ uint32_t lastImport{};
 std::string hostGameRoot;
 std::string guestLanguage="English UK";
 bool guestWidescreen=true;
-int guestScreenMode=0;  /* 0=widescreen, 1=4:3 original, 2=4:3 stretched */
+int guestScreenMode=2;  /* 0=widescreen, 1=4:3 original, 2=4:3 stretched (default: 4:3) */
 bool guestHudSafeArea=false;
 std::atomic<bool> stopRequested{false};
 std::atomic<bool> guestPaused{false};
