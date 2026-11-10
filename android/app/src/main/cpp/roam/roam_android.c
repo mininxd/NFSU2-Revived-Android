@@ -94,6 +94,8 @@ extern int nfs_rust_apply_engine_pacing(uint8_t *mem_base, float real_elapsed);
 
 static int g_carpool_patched = 0;
 static _Atomic int s_null_page_protected = 0;
+static int g_hooks_installed = 0;
+static void roam_android_install_hooks(void);
 
 
 static void roam_android_protect_guest_null_page(void) {
@@ -211,7 +213,6 @@ int roam_android_init_symbols(void) {
         roam_android_protect_guest_null_page();
     }
 
-    static void roam_android_install_hooks(void);
     if (!g_hooks_installed && g_p_recomp_lookup) {
         roam_android_install_hooks();
     }
@@ -1443,17 +1444,9 @@ static void hook_sub_005c7ec0(void) {
     }
 }
 
-void look_eye(float *e, float *f) {
-    if (!s_look_active || s_num_cams_turned > 0) return;
-    turn_cam_xy(e, 1);
-    turn_cam_xy(f, 0);
-}
-
 static void look_camera_frame_tick(void) {
     restore_turned_cameras();
 }
-
-static int g_hooks_installed = 0;
 
 static void roam_android_install_hooks(void) {
     if (g_hooks_installed || !g_p_recomp_lookup) return;
