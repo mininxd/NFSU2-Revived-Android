@@ -1,0 +1,61 @@
+<%@ include file="/webcore/include/napd_include.jsp" %>
+.networknav{
+	font-family:arial,helvetica;
+	font-size:10px;
+	color:#ffffff;
+}
+.networknav a{
+	color:#ffffff;
+	text-decoration:none;
+}
+.networknav a:visited{
+	color:#FFFFFF;
+}
+.networknav a:hover{
+	color:#FFCC00;
+}
+.networknav a:active{
+	color:#000000;
+}
+
+.networknav, .pipes { color:#ffffff;font-family:arial;font-size:10px; } 
+.networknav a { color:#ffffff;text-decoration:none; } 
+.networknav a:visited { color:#ffffff; } 
+.networknav a:hover { color:#ffcc00; } 
+.networknav a:active { color:#000000; } 
+.currentpage{
+font-family:arial,helvetica;
+font-size:10px;
+color:#00ff00;}
+.currentpage a{
+color:#00ff00;
+text-decoration:none;}
+.currentpage a:visited{
+color:#00ff00;}
+.currentpage a:active{
+color:#000000;}
+.separator{
+font-family:arial,helvetica;
+font-size:10px;
+color:#666666;}
+
+/*
+     FILE ARCHIVED ON 11:45:30 Jul 09, 2004 AND RETRIEVED FROM THE
+     INTERNET ARCHIVE ON 09:56:39 Nov 10, 2026.
+     JAVASCRIPT APPENDED BY WAYBACK MACHINE, COPYRIGHT INTERNET ARCHIVE.
+
+     ALL OTHER CONTENT MAY ALSO BE PROTECTED BY COPYRIGHT (17 U.S.C.
+     SECTION 108(a)(3)).
+*/
+/*
+playback timings (ms):
+  captures_list: 0.489
+  exclusion.robots: 0.059
+  exclusion.robots.policy: 0.049
+  esindex: 0.007
+  cdx.remote: 13.741
+  LoadShardBlock: 101.09 (3)
+  PetaboxLoader3.datanode: 126.442 (4)
+  PetaboxLoader3.resolve: 77.653 (2)
+  load_resource: 119.676
+*/

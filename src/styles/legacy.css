@@ -1,0 +1,198 @@
+/* Authentic 2004 EA Games NFS Underground 2 Stylesheet */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #000000;
+  color: #333333;
+  font-family: verdana, arial, helvetica, sans-serif;
+  font-size: 10px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Network Top Nav */
+.networknav-wrapper {
+  background-color: #333333;
+  width: 100%;
+  border-bottom: 1px solid #111111;
+}
+
+.networknav {
+  font-family: arial, helvetica, sans-serif;
+  font-size: 10px;
+  color: #ffffff;
+  font-weight: normal;
+}
+
+.networknav a {
+  color: #ffffff;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.networknav a:hover {
+  color: #ffcc00;
+}
+
+.networknav-pipe {
+  font-size: 11px;
+  font-family: Arial, Helvetica, sans-serif;
+  font-weight: normal;
+  color: #999999;
+  margin: 0 4px;
+}
+
+/* Game Finder & Top Subnav */
+.find-bar {
+  width: 765px;
+  height: 25px;
+  background: url('/assets/images.ea.com/eagames/redesign/common/head/find_bar.gif') repeat-x;
+  display: flex;
+  align-items: center;
+  position: relative;
+  z-index: 50;
+}
+
+.find-corner {
+  width: 11px;
+  height: 25px;
+  background: url('/assets/images.ea.com/eagames/redesign/common/head/find_corner.gif') no-repeat;
+}
+
+/* Typography from original site */
+.default {
+  font-family: verdana, arial, sans-serif;
+  font-size: 10px;
+  color: #333333;
+  line-height: 1.35;
+}
+
+.default b {
+  font-weight: bold;
+}
+
+.default i {
+  font-style: italic;
+}
+
+.default a {
+  color: #000000;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.default a:hover {
+  color: #333333;
+}
+
+.sshotnav {
+  font-family: verdana, arial, sans-serif;
+  font-size: 9px;
+  color: #cccccc;
+  text-decoration: none;
+}
+
+a.sshotnav:hover {
+  font-family: verdana, arial, sans-serif;
+  font-weight: bold;
+  font-size: 9px;
+  color: #a1d464;
+  text-decoration: none;
+}
+
+.legal {
+  font-family: arial, helvetica, sans-serif;
+  font-size: 9px;
+  color: #9b9b9b;
+  text-decoration: none;
+}
+
+.legal a {
+  color: #9b9b9b;
+  text-decoration: none;
+}
+
+.legal a:hover {
+  color: #cccccc;
+  text-decoration: underline;
+}
+
+.storelocator {
+  font-family: arial, helvetica, sans-serif;
+  font-size: 10px;
+  color: #ffffff;
+}
+
+/* Center stage container */
+.stage-container {
+  width: 765px;
+  margin: 0 auto;
+  background-color: #d8d8d8;
+  text-align: left;
+  box-shadow: 0 0 25px rgba(0, 255, 120, 0.08);
+}
+
+/* Left Navigation Sidebar */
+.leftnav-td {
+  width: 150px;
+  min-width: 150px;
+  max-width: 150px;
+  vertical-align: top;
+  background: url('/assets/www.ea.com/downloads/eagames/official/nfs/underground2/us/leftnav_background.jpg') repeat-y #e4e4e4;
+}
+
+/* Main Content Stage */
+.mainstage-td {
+  width: 615px;
+  vertical-align: top;
+  background-color: #d8d8d8;
+}
+
+/* Modals & Popups styled in 2004 style */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-window {
+  background: #333333;
+  border: 2px solid #555555;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.8);
+  color: #ffffff;
+  padding: 15px;
+  font-family: verdana, arial, sans-serif;
+  font-size: 11px;
+}
+
+/* Version switcher badge */
+.version-badge {
+  background: #1a1a1a;
+  border: 1px solid #444444;
+  color: #a1d464;
+  font-family: verdana;
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.version-badge:hover {
+  background: #2a2a2a;
+  color: #ffffff;
+  border-color: #a1d464;
+}
