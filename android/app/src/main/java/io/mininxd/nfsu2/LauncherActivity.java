@@ -389,7 +389,7 @@ public final class LauncherActivity extends Activity {
         try {
             File targetDat = new File(scriptsDir, "NFSUnderground2.WidescreenFix.dat");
             File held = new File(scriptsDir, "NFSUnderground2.WidescreenFix.dat.hold");
-            if (!targetDat.exists() || targetDat.length() == 0) {
+            if ((!targetDat.exists() && !held.exists()) || (targetDat.exists() && targetDat.length() == 0)) {
                 copyAssetFile(this, "scripts/NFSUnderground2.WidescreenFix.dat", targetDat);
                 android.util.Log.i("NFSU2", "Installed widescreen data to " + targetDat.getAbsolutePath());
             }
@@ -519,7 +519,7 @@ public final class LauncherActivity extends Activity {
                     if (GameOptions.MENU_BUTTON_SIZE.equals(option.key)) {
                         GameOptions.syncWidescreenIni(this);
                     }
-                    if (GameOptions.WIDESCREEN.equals(option.key)) {
+                    if (GameOptions.WIDESCREEN.equals(option.key) || GameOptions.MINIMAP.equals(option.key)) {
                         GameOptions.applyWidescreenPatchFile(this);
                     }
                     dialog.dismiss(); refreshOptions();

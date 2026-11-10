@@ -32,141 +32,8 @@ uint32_t  *g_p_esp = NULL;
 uint32_t  *g_p_eax = NULL;
 uint32_t  *g_p_ecx = NULL;
 uint32_t  *g_p_edx = NULL;
-uint32_t  *g_p_ebx = NULL;
-uint32_t  *g_p_esi = NULL;
 recomp_func_t (*g_p_recomp_lookup)(uint32_t va) = NULL;
 int (*g_p_guest_is_readable)(uint32_t va, uint32_t bytes) = NULL;
-
-static void (*s_orig_recomp_hook)(uint32_t va) = NULL;
-static float *s_p_minimap_dy = NULL;
-static float s_roam_minimap_dy = 0.0f;
-static int s_recomp_hooked = 0;
-
-static inline float guest_rdf(uint32_t va) {
-    if (!g_p_mem_base || !*g_p_mem_base) return 0.0f;
-    float f = 0.0f;
-    memcpy(&f, GPTR(va), 4);
-    return f;
-}
-
-static inline void guest_wrf(uint32_t va, float f) {
-    if (!g_p_mem_base || !*g_p_mem_base) return;
-    memcpy(GPTR(va), &f, 4);
-}
-
-static inline uint32_t guest_rd32(uint32_t va) {
-    if (!g_p_mem_base || !*g_p_mem_base) return 0;
-    uint32_t v = 0;
-    memcpy(&v, GPTR(va), 4);
-    return v;
-}
-
-static inline int is_minimap_coord(float x, float y) {
-    int ix = (int)roundf(x);
-    int iy = (int)roundf(y);
-    return (ix >= -225 && ix <= -221 && ((iy >= 68 && iy <= 73) || (iy >= 140 && iy <= 145))) ||
-           (ix >= -145 && ix <= -141 && (iy >= 194 && iy <= 198));
-}
-
-static void roam_recomp_hook(uint32_t va) {
-    if (s_orig_recomp_hook) {
-        s_orig_recomp_hook(va);
-    }
-
-    float dy = s_roam_minimap_dy;
-    if (dy == 0.0f && s_p_minimap_dy) {
-        dy = *s_p_minimap_dy;
-    }
-
-    if (dy != 0.0f) {
-        if (va == 0x0051B198u || va == 0x0051AE28u) { /* HUD_HOOK */
-            if (g_p_esp && *g_p_esp) {
-                float x = guest_rdf(*g_p_esp + 0x60u);
-                float y = guest_rdf(*g_p_esp + 0x64u);
-                if (is_minimap_coord(x, y) && y > 0.0f) {
-                    guest_wrf(*g_p_esp + 0x64u, y + dy);
-                }
-            }
-        } else if (va == 0x0051D655u || va == 0x0051D2E5u) { /* BLIPS_HOOK */
-            if (g_p_ebx && *g_p_ebx) {
-                float x = guest_rdf(*g_p_ebx + 0x1Cu);
-                float y = guest_rdf(*g_p_ebx + 0x20u);
-                if (is_minimap_coord(x, y) && y > 0.0f) {
-                    guest_wrf(*g_p_ebx + 0x20u, y + dy);
-                }
-                if (g_p_ecx) {
-                    *g_p_ecx = guest_rd32(*g_p_ebx + 0x1Cu);
-                }
-            }
-        } else if (va == 0x004C6759u || va == 0x004C6589u) { /* HUD_HOOK2 */
-            if (g_p_esi && *g_p_esi) {
-                float x = 0.0f;
-                if (g_p_ecx) memcpy(&x, g_p_ecx, 4);
-                float y = guest_rdf(*g_p_esi + 0x20u);
-                if (is_minimap_coord(x, y) && y > 0.0f) {
-                    guest_wrf(*g_p_esi + 0x20u, y + dy);
-                }
-            }
-        }
-    }
-}
-
-static void roam_install_recomp_hook(void *h) {
-    if (s_recomp_hooked) return;
-    void *p_recomp_hook = dlsym(h, "recomp_hook");
-    if (!p_recomp_hook) return;
-
-    if (!s_p_minimap_dy) {
-        void *fn = dlsym(h, "nfs_widescreen_set_minimap_offset");
-        if (fn) {
-            const uint32_t *code = (const uint32_t *)fn;
-            uint32_t ins0 = code[0];
-            uint32_t ins1 = code[1];
-            if ((ins0 & 0x9f000000) == 0x90000000 && (ins1 & 0xffc00000) == 0xbd000000) {
-                int64_t immhi = (ins0 >> 5) & 0x7ffff;
-                int64_t immlo = (ins0 >> 29) & 0x3;
-                int64_t imm = (immhi << 2) | immlo;
-                if (imm & (1 << 20)) imm -= (1 << 21);
-                uintptr_t page = ((uintptr_t)code & ~0xfffULL) + (imm << 12);
-                uint32_t offset = ((ins1 >> 10) & 0xfff) * 4;
-                s_p_minimap_dy = (float *)(page + offset);
-            }
-        }
-    }
-
-    void *tramp_page = mmap(NULL, 4096, PROT_READ | PROT_WRITE,
-                            MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-    if (tramp_page == MAP_FAILED || !tramp_page) return;
-
-    uint32_t *tramp = (uint32_t *)tramp_page;
-    memcpy(tramp, p_recomp_hook, 16);
-    tramp[4] = 0x58000050; /* ldr x16, #8 */
-    tramp[5] = 0xd61f0200; /* br x16 */
-    uint64_t ret_target = (uint64_t)((uintptr_t)p_recomp_hook + 16);
-    memcpy(&tramp[6], &ret_target, 8);
-    mprotect(tramp_page, 4096, PROT_READ | PROT_EXEC);
-    __builtin___clear_cache((char *)tramp_page, (char *)tramp_page + 32);
-    s_orig_recomp_hook = (void (*)(uint32_t))(uintptr_t)tramp_page;
-
-    uintptr_t hook_addr = (uintptr_t)p_recomp_hook;
-    long page_size = sysconf(_SC_PAGESIZE);
-    if (page_size <= 0) page_size = 4096;
-    uintptr_t hook_page = hook_addr & ~(page_size - 1);
-    if (mprotect((void *)hook_page, page_size * 2, PROT_READ | PROT_WRITE) == 0) {
-        uint32_t jump[4];
-        jump[0] = 0x58000050; /* ldr x16, #8 */
-        jump[1] = 0xd61f0200; /* br x16 */
-        uint64_t target = (uint64_t)(uintptr_t)roam_recomp_hook;
-        memcpy(&jump[2], &target, 8);
-        memcpy((void *)hook_addr, jump, 16);
-        mprotect((void *)hook_page, page_size * 2, PROT_READ | PROT_EXEC);
-        __builtin___clear_cache((char *)hook_addr, (char *)hook_addr + 16);
-        s_recomp_hooked = 1;
-        __android_log_print(ANDROID_LOG_INFO, "NFSU2",
-            "Installed roam_recomp_hook: 4:3 minimap will be placed at top when selected (s_roam_minimap_dy=%.1f)",
-            s_roam_minimap_dy);
-    }
-}
 
 static int s_probe_pipe[2] = { -1, -1 };
 static pthread_mutex_t s_probe_mu = PTHREAD_MUTEX_INITIALIZER;
@@ -336,10 +203,7 @@ int roam_android_init_symbols(void) {
         g_p_eax = (uint32_t *)dlsym(h, "g_eax");
         g_p_ecx = (uint32_t *)dlsym(h, "g_ecx");
         g_p_edx = (uint32_t *)dlsym(h, "g_edx");
-        g_p_ebx = (uint32_t *)dlsym(h, "g_ebx");
-        g_p_esi = (uint32_t *)dlsym(h, "g_esi");
         g_p_guest_is_readable = (int (*)(uint32_t, uint32_t))dlsym(h, "guest_is_readable");
-        roam_install_recomp_hook(h);
     }
 
     if (g_p_mem_base && *g_p_mem_base != 0) {
@@ -348,12 +212,6 @@ int roam_android_init_symbols(void) {
 
     if (g_p_mem_base && *g_p_mem_base != 0 && g_p_esp && *g_p_esp != 0) {
         if (!g_carpool_patched) roam_android_patch_carpool();
-        if (!s_recomp_hooked) {
-            void *h = dlopen("libnfsu2_android.so", RTLD_NOLOAD | RTLD_GLOBAL);
-            if (!h) h = dlopen("libnfsu2_android.so", RTLD_LAZY | RTLD_GLOBAL);
-            if (!h) h = RTLD_DEFAULT;
-            roam_install_recomp_hook(h);
-        }
         return 1;
     }
     return 0;
@@ -1928,23 +1786,80 @@ JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeDrawDistance(
     Java_com_nfsu2_androidevolved_GameActivity_nativeDrawDistance(env, clazz, distance);
 }
 
+JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeForwardCulling(
+        JNIEnv *env, jclass clazz, jboolean enabled) {
+    (void)env; (void)clazz;
+    typedef void (*fn_set_fc)(int);
+    static fn_set_fc s_set_fc = NULL;
+    static int s_resolved = 0;
+    if (!s_resolved) {
+        s_resolved = 1;
+        s_set_fc = (fn_set_fc)dlsym(RTLD_DEFAULT, "nfs_widescreen_set_forward_culling");
+    }
+    if (s_set_fc) {
+        s_set_fc(enabled ? 1 : 0);
+    }
+}
+
+JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeForwardCulling(
+        JNIEnv *env, jclass clazz, jboolean enabled) {
+    Java_com_nfsu2_androidevolved_GameActivity_nativeForwardCulling(env, clazz, enabled);
+}
+
+JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeWidescreen(
+        JNIEnv *env, jclass clazz, jboolean enabled) {
+    (void)env; (void)clazz;
+    typedef void (*fn_set_ws)(bool);
+    static fn_set_ws s_set_ws = NULL;
+    static int s_resolved = 0;
+    if (!s_resolved) {
+        s_resolved = 1;
+        s_set_ws = (fn_set_ws)dlsym(RTLD_DEFAULT, "_Z18setGuestWidescreenb");
+        if (!s_set_ws) s_set_ws = (fn_set_ws)dlsym(RTLD_DEFAULT, "setGuestWidescreen");
+    }
+    if (s_set_ws) {
+        s_set_ws(enabled == JNI_TRUE);
+    }
+}
+
+JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeWidescreen(
+        JNIEnv *env, jclass clazz, jboolean enabled) {
+    Java_com_nfsu2_androidevolved_GameActivity_nativeWidescreen(env, clazz, enabled);
+}
+
+JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeScreenMode(
+        JNIEnv *env, jclass clazz, jint mode) {
+    (void)env; (void)clazz;
+    typedef void (*fn_set_sm)(int);
+    static fn_set_sm s_set_sm = NULL;
+    static int s_resolved = 0;
+    if (!s_resolved) {
+        s_resolved = 1;
+        s_set_sm = (fn_set_sm)dlsym(RTLD_DEFAULT, "setGuestScreenMode");
+    }
+    if (s_set_sm) {
+        s_set_sm((int)mode);
+    }
+}
+
+JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeScreenMode(
+        JNIEnv *env, jclass clazz, jint mode) {
+    Java_com_nfsu2_androidevolved_GameActivity_nativeScreenMode(env, clazz, mode);
+}
+
 JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeMinimapTop(
         JNIEnv *env, jclass clazz, jboolean top) {
     (void)env; (void)clazz;
-    s_roam_minimap_dy = top ? -230.0f : 0.0f;
-    if (s_p_minimap_dy) {
-        *s_p_minimap_dy = s_roam_minimap_dy;
-    }
     typedef void (*fn_set_mm)(float);
     static fn_set_mm s_set_mm = NULL;
-    if (!s_set_mm) {
+    static int s_resolved = 0;
+    if (!s_resolved) {
+        s_resolved = 1;
         s_set_mm = (fn_set_mm)dlsym(RTLD_DEFAULT, "nfs_widescreen_set_minimap_offset");
     }
     if (s_set_mm) {
-        s_set_mm(s_roam_minimap_dy);
+        s_set_mm(top ? -230.0f : 0.0f);
     }
-    __android_log_print(ANDROID_LOG_INFO, "NFSU2",
-        "nativeMinimapTop called: top=%d, offset=%.1f", top ? 1 : 0, s_roam_minimap_dy);
 }
 
 JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeMinimapTop(

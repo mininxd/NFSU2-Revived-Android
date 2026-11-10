@@ -89,11 +89,29 @@ public final class GameOptions {
         return "on".equals(get(context, WIDESCREEN));
     }
 
+    private static final String MINIMAP_43_TOP_DAT =
+            "# 4:3 Top-Left Minimap (offset_x=0.0 preserves 4:3 X position, s_minimap_dy moves Y to top)\n" +
+            "MiniMap_Pos_1                       -223.0   70.0                    0.0  0.0\n" +
+            "MiniMap_Pos_2                       -223.0   142.0                   0.0  0.0\n" +
+            "MiniMap_Pos_3                       -223.0   71.0                    0.0  0.0\n" +
+            "MiniMap_Pos_4                       -223.0   143.0                   0.0  0.0\n" +
+            "MiniMap_Filter_Pos                  -143.0   196.0                   0.0  0.0\n";
+
+    private static void writeDatFile(java.io.File file, String content) {
+        try (java.io.FileOutputStream fos = new java.io.FileOutputStream(file)) {
+            fos.write(content.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        } catch (Throwable t) {
+            android.util.Log.w("NFSU2", "Failed to write " + file + ": " + t.getMessage());
+        }
+    }
+
     /**
-     * Applies the correct HUD layout file based on the Widescreen HUD option.
-     * On: ensures scripts/NFSUnderground2.WidescreenFix.dat is present so elements are placed at display edges.
-     * Off: parks the .dat file as .hold so the game keeps full-screen 3D widescreen and aspect correction,
-     * but without .dat offsets the HUD stays centered in a 4:3 box.
+     * Applies the correct HUD layout file based on the Widescreen HUD and Minimap options.
+     * Widescreen ON: ensures full scripts/NFSUnderground2.WidescreenFix.dat is present so elements are placed at display edges.
+     * Widescreen OFF:
+     *   - Minimap Top: writes MINIMAP_43_TOP_DAT (offset_x=0.0 retains 4:3 horizontal position; s_minimap_dy moves Y to top).
+     *                  All other HUD elements (Speedometer, Bank, etc.) are omitted and remain centered in 4:3.
+     *   - Minimap Bottom: parks the .dat file as .hold so no offsets are applied and the entire HUD stays in original 4:3 layout.
      */
     static void applyWidescreenPatchFile(Context context) {
         java.io.File[] roots = new java.io.File[] {
@@ -102,6 +120,7 @@ public final class GameOptions {
                 new java.io.File(android.os.Environment.getExternalStorageDirectory(), "NFSU2")
         };
         boolean widescreen = usesWidescreenPatch(context);
+        boolean minimapTop = "top".equalsIgnoreCase(get(context, MINIMAP));
         for (java.io.File root : roots) {
             if (root == null) continue;
             java.io.File scripts = new java.io.File(root, "scripts");
@@ -110,17 +129,30 @@ public final class GameOptions {
             java.io.File held = new java.io.File(scripts, "NFSUnderground2.WidescreenFix.dat.hold");
             try {
                 if (widescreen) {
-                    if (held.isFile()) {
+                    if (held.isFile() && held.length() > 1000) {
                         if (dat.isFile()) dat.delete();
                         held.renameTo(dat);
                     }
-                    if (!dat.isFile() || dat.length() == 0) {
+                    if (!dat.isFile() || dat.length() < 1000) {
+                        if (dat.isFile()) dat.delete();
                         LauncherActivity.copyAssetFile(context, "scripts/NFSUnderground2.WidescreenFix.dat", dat);
                     }
                 } else {
-                    if (dat.isFile()) {
-                        if (held.isFile()) held.delete();
-                        dat.renameTo(held);
+                    if (minimapTop) {
+                        if (dat.isFile() && dat.length() > 1000) {
+                            if (held.isFile()) held.delete();
+                            dat.renameTo(held);
+                        }
+                        writeDatFile(dat, MINIMAP_43_TOP_DAT);
+                    } else {
+                        if (dat.isFile()) {
+                            if (dat.length() > 1000) {
+                                if (held.isFile()) held.delete();
+                                dat.renameTo(held);
+                            } else {
+                                dat.delete();
+                            }
+                        }
                     }
                 }
             } catch (Throwable t) {
