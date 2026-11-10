@@ -33,7 +33,19 @@ int nfs_d3d9_filter_transform(uint32_t state, const float* matrix);
 int nfs_d3d9_filter_viewport(const uint32_t* viewport);
 void nfs_d3d9_filter_forget_shadow(void);
 void nfs_d3d9_filter_notify_retired(void);
+void nfs_d3d9_filter_notify_render_target(void);
+void nfs_d3d9_filter_notify_stretch_rect(void);
 void nfs_d3d9_filter_stats(uint64_t* out_total, uint64_t* out_filtered);
+
+// Rain Splatter & Screen Effects Synchronization Engine (Issue #67)
+void nfs_rain_splatter_notify_render_target(uint32_t target_surface);
+void nfs_rain_splatter_notify_stretch_rect(uint32_t src, uint32_t dst);
+int nfs_rain_splatter_should_filter_viewport(const uint32_t* viewport);
+void nfs_rain_splatter_stats(uint64_t* out_rt, uint64_t* out_stretch, uint64_t* out_protected_vp);
+
+// DXVK & Wine Driver Performance Tuning Engine
+int nfs_dxvk_tuner_generate_config(const char* output_dir);
+int nfs_dxvk_tuner_apply_environment(void);
 
 // Dynamic Camera Forward-Only Back-Culling Engine
 void nfs_camera_cull_set_enabled(int enabled);

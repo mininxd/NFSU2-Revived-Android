@@ -25,12 +25,21 @@ case 30:{*argumentCount=5;return device->UpdateSurface(nativeObject<IDirect3DSur
 case 31:{*argumentCount=3;return device->UpdateTexture(nativeObject<IDirect3DBaseTexture9>(args[1]),nativeObject<IDirect3DBaseTexture9>(args[2]));}
 case 32:{*argumentCount=3;return device->GetRenderTargetData(nativeObject<IDirect3DSurface9>(args[1]),nativeObject<IDirect3DSurface9>(args[2]));}
 case 33:{*argumentCount=3;return device->GetFrontBufferData(static_cast<UINT>(args[1]),nativeObject<IDirect3DSurface9>(args[2]));}
-case 34:{*argumentCount=6;return device->StretchRect(nativeObject<IDirect3DSurface9>(args[1]),static_cast<const RECT*>(pointer(args[2])),nativeObject<IDirect3DSurface9>(args[3]),static_cast<const RECT*>(pointer(args[4])),static_cast<D3DTEXTUREFILTERTYPE>(args[5]));}
+case 34:{*argumentCount=6;
+    static auto s_rs_stretch = reinterpret_cast<void(*)(uint32_t,uint32_t)>(dlsym(RTLD_DEFAULT,"nfs_rain_splatter_notify_stretch_rect"));
+    if(s_rs_stretch) s_rs_stretch(args[1], args[3]);
+    return device->StretchRect(nativeObject<IDirect3DSurface9>(args[1]),static_cast<const RECT*>(pointer(args[2])),nativeObject<IDirect3DSurface9>(args[3]),static_cast<const RECT*>(pointer(args[4])),static_cast<D3DTEXTUREFILTERTYPE>(args[5]));}
 case 35:{*argumentCount=4;return device->ColorFill(nativeObject<IDirect3DSurface9>(args[1]),static_cast<const RECT*>(pointer(args[2])),static_cast<D3DCOLOR>(args[3]));}
 case 36:{*argumentCount=7;IDirect3DSurface9* object5=nullptr;if(args[6])throw std::runtime_error("D3D9 shared resource handles pending");HRESULT status=device->CreateOffscreenPlainSurface(static_cast<UINT>(args[1]),static_cast<UINT>(args[2]),static_cast<D3DFORMAT>(args[3]),static_cast<D3DPOOL>(args[4]),args[5]?&object5:nullptr,nullptr);if(args[5])write(args[5],SUCCEEDED(status)?wrap(object5,Kind::Surface):0);return status;}
-case 37:{*argumentCount=3;return device->SetRenderTarget(static_cast<DWORD>(args[1]),nativeObject<IDirect3DSurface9>(args[2]));}
+case 37:{*argumentCount=3;
+    static auto s_rs_rt = reinterpret_cast<void(*)(uint32_t)>(dlsym(RTLD_DEFAULT,"nfs_rain_splatter_notify_render_target"));
+    if(s_rs_rt) s_rs_rt(args[2]);
+    return device->SetRenderTarget(static_cast<DWORD>(args[1]),nativeObject<IDirect3DSurface9>(args[2]));}
 case 38:{*argumentCount=3;IDirect3DSurface9* object2=nullptr;HRESULT status=device->GetRenderTarget(static_cast<DWORD>(args[1]),args[2]?&object2:nullptr);if(args[2])write(args[2],SUCCEEDED(status)?wrap(object2,Kind::Surface):0);return status;}
-case 39:{*argumentCount=2;return device->SetDepthStencilSurface(nativeObject<IDirect3DSurface9>(args[1]));}
+case 39:{*argumentCount=2;
+    static auto s_rs_rt = reinterpret_cast<void(*)(uint32_t)>(dlsym(RTLD_DEFAULT,"nfs_rain_splatter_notify_render_target"));
+    if(s_rs_rt) s_rs_rt(args[1]);
+    return device->SetDepthStencilSurface(nativeObject<IDirect3DSurface9>(args[1]));}
 case 40:{*argumentCount=2;IDirect3DSurface9* object1=nullptr;HRESULT status=device->GetDepthStencilSurface(args[1]?&object1:nullptr);if(args[1]){uint32_t address=SUCCEEDED(status)?wrap(object1,Kind::Surface):0;write(args[1],address);retainInitialDepthDescriptor(args[1],address);}return status;}
 case 41:{*argumentCount=1;return device->BeginScene();}
 case 42:{*argumentCount=1;return device->EndScene();}

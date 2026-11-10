@@ -145,6 +145,8 @@ void setD3D9Compatibility(bool cpuTextures,unsigned backBuffers){
 }
 void configureD3D9Bridge(void* base,uint32_t (*allocator)(uint32_t),void (*deallocator)(uint32_t)){
     guestBase=base;allocateGuest=allocator;freeGuest=deallocator;
+    static auto s_tuner_env = reinterpret_cast<int(*)()>(dlsym(RTLD_DEFAULT,"nfs_dxvk_tuner_apply_environment"));
+    if(s_tuner_env) s_tuner_env();
 #ifdef __ANDROID__
     // android_main provides a writable private cache before creating DXVK.
     // Other bring-up callers can still run without a writable working directory.

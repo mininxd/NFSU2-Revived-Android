@@ -109,9 +109,19 @@ impl D3D9ShadowState {
         self.transforms_valid = [false; 264];
         self.viewport_valid = false;
     }
-    }
 
     pub fn notify_retired(&mut self) {
+        self.epoch = self.epoch.wrapping_add(1);
+    }
+
+    pub fn notify_render_target_change(&mut self) {
+        self.viewport_valid = false;
+        self.tex_valid = [false; 16];
+        self.epoch = self.epoch.wrapping_add(1);
+    }
+
+    pub fn notify_stretch_rect(&mut self) {
+        self.tex_valid = [false; 16];
         self.epoch = self.epoch.wrapping_add(1);
     }
 
@@ -386,9 +396,17 @@ pub unsafe extern "C" fn nfs_d3d9_filter_transform(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn nfs_d3d9_filter_viewport(
-    viewport_ptr: *const u32,
-) -> i32 {
+pub unsafe extern "C" fn nfs_d3d9_filter_notify_render_target() {
+    GLOBAL_SHADOW.notify_render_target_change();
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_d3d9_filter_notify_stretch_rect() {
+    GLOBAL_SHADOW.notify_stretch_rect();
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_d3d9_filter_viewport_check(viewport_ptr: *const u32) -> i32 {
     if viewport_ptr.is_null() {
         return 0;
     }
@@ -403,4 +421,11 @@ pub unsafe extern "C" fn nfs_d3d9_filter_viewport(
     GLOBAL_SHADOW.viewport.copy_from_slice(incoming);
     GLOBAL_SHADOW.viewport_valid = true;
     0
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_d3d9_filter_viewport(
+    viewport_ptr: *const u32,
+) -> i32 {
+    crate::rain_splatter::nfs_rain_splatter_should_filter_viewport(viewport_ptr)
 }

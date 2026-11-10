@@ -170,6 +170,10 @@ public final class GamePerformanceBooster {
                 pw.println("d3d9.evictManagedOnUnlock = True");
                 pw.println("d3d9.memoryTrackTest = False");
                 pw.println("d3d9.maxAvailableMemory = 4096");
+                pw.println("d3d9.generalHazards = True");
+                pw.println("d3d9.invariantPosition = True");
+                pw.println("d3d9.forceSamplerTypeSpecConstants = True");
+                pw.println("d3d9.strictConstantCopies = False");
                 pw.println("dxgi.deferSurfaceCreation = True");
                 pw.println("dxgi.maxDeviceMemory = 4096");
                 pw.println("dxgi.maxSharedMemory = 2048");
