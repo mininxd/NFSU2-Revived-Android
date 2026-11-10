@@ -266,6 +266,16 @@ static void publishPad(){
     // Rz (axes[5]) provides right trigger independently for custom remapping.
     const float axes[6]={state.leftX,state.leftY,state.leftTrigger-state.rightTrigger,state.rightX,state.rightY,state.rightTrigger*2.f-1.f};
     setGuestPad(axes,state.buttons,state.hatX,state.hatY);
+
+    static auto s_stick_cam = reinterpret_cast<void(*)(float,float)>(dlsym(RTLD_DEFAULT,"nfs_camera_stick_input"));
+    if(s_stick_cam) s_stick_cam(state.rightX, state.rightY);
+    static void (*s_roam_stick)(float, float) = nullptr;
+    if(!s_roam_stick){
+        void* h=dlopen("libnfsu2_roam.so",RTLD_NOW|RTLD_GLOBAL);
+        if(h) s_roam_stick=reinterpret_cast<void(*)(float,float)>(dlsym(h,"roam_stick_input"));
+        if(!s_roam_stick) s_roam_stick=reinterpret_cast<void(*)(float,float)>(dlsym(RTLD_DEFAULT,"roam_stick_input"));
+    }
+    if(s_roam_stick) s_roam_stick(state.rightX, state.rightY);
 }
 static void onCommand(android_app* app, int32_t command) {
     auto& h = *static_cast<Host*>(app->userData);

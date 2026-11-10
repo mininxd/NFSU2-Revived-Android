@@ -47,6 +47,14 @@ void nfs_rain_splatter_stats(uint64_t* out_rt, uint64_t* out_stretch, uint64_t* 
 int nfs_dxvk_tuner_generate_config(const char* output_dir);
 int nfs_dxvk_tuner_apply_environment(void);
 
+// Right Stick Camera Orbit & PS2 Camera Rotation Engine
+void nfs_camera_stick_input(float x, float y);
+void nfs_camera_stick_apply_frame(void* guest_base);
+void nfs_camera_stick_restore_frame(void* guest_base);
+int nfs_camera_stick_transform_view_matrix(float* matrix, const void* guest_base);
+void nfs_camera_stick_set_enabled(int enabled);
+float nfs_camera_stick_get_yaw(void);
+
 // Dynamic Camera Forward-Only Back-Culling Engine
 void nfs_camera_cull_set_enabled(int enabled);
 int nfs_camera_cull_is_enabled(void);

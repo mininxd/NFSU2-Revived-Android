@@ -353,8 +353,8 @@ uint32_t roam_plat_name(char out[33]) { (void)out; return 0; }
 
 void look_eye(float *e, float *f) {
     if (g_p_mem_base && *g_p_mem_base && g_p_esp && *g_p_esp) {
-        if (!rh_mem_committed(0x008709a0u, 4)) return;
-        uint32_t pl = MR32(0x008709a0u);
+        if (!rh_mem_committed(SPLIT_PLAYERS_INDEX, 4)) return;
+        uint32_t pl = MR32(SPLIT_PLAYERS_INDEX);
         uint32_t mover = (pl && rh_mem_committed(pl + 0x238u, 4)) ? MR32(pl + 0x238u) : 0;
         uint32_t cam = (mover && rh_mem_committed(mover + 0x40u, 4)) ? MR32(mover + 0x40u) : 0;
         if (cam && rh_mem_committed(cam + 0x40u, 32)) {
@@ -1174,11 +1174,12 @@ static void look_camera_frame_tick(void) {
     if (fabsf(g_look_yaw) < 0.001f && fabsf(target_yaw) < 0.001f) g_look_yaw = 0.f;
 
     if (fabsf(g_look_yaw) > 0.005f && g_p_mem_base && *g_p_mem_base) {
-        if (!rh_mem_committed(0x008709a0u, 4)) return;
-        uint32_t pl = MR32(0x008709a0u); // G_PLAYER1
+        if (!rh_mem_committed(SPLIT_PLAYERS_INDEX, 4)) return;
+        uint32_t pl = MR32(SPLIT_PLAYERS_INDEX); // G_PLAYER1
         if (pl && rh_mem_committed(pl + 0x238u, 4) && rh_mem_committed(pl + 4u, 4)) {
             uint32_t mover = MR32(pl + 0x238u);
             uint32_t cam = (mover && rh_mem_committed(mover + 0x40u, 4)) ? MR32(mover + 0x40u) : 0;
+            if (!cam && rh_mem_committed(0x00832e50u + 0x40u, 4)) cam = MR32(0x00832e50u + 0x40u); // G_VIEW1
             uint32_t car = MR32(pl + 4u);
             if (cam && car && rh_mem_committed(cam, sizeof(g_keep_cam)) && rh_mem_committed(car + 0x60u, 16)) {
                 float *car_pos = (float *)GPTR(car + 0x60u);
@@ -1237,8 +1238,8 @@ static void update_resolution_slots_in_memory(void) {
 
 void roam_resolution_nav(int dir) {
     if (!g_p_mem_base || !*g_p_mem_base || !rh_mem_committed(0x870d1cu, 4)) return;
-    // Only navigate resolution in menus (MR32(0x008709a0u) == 0 means not in race/world)
-    if (rh_mem_committed(0x008709a0u, 4) && MR32(0x008709a0u) != 0) return;
+    // Only navigate resolution in menus (MR32(SPLIT_PLAYERS_INDEX) == 0 means not in race/world)
+    if (rh_mem_committed(SPLIT_PLAYERS_INDEX, 4) && MR32(SPLIT_PLAYERS_INDEX) != 0) return;
 
     uint32_t cur = MR32(0x870d1cu);
 
@@ -1346,6 +1347,9 @@ __attribute__((visibility("default"))) void nfs_roam_frame_tick(void) {
 void roam_stick_input(float x, float y) {
     g_stick_x = x;
     g_stick_y = y;
+    static void (*s_cam_stick)(float, float) = NULL;
+    if (!s_cam_stick) s_cam_stick = (void (*)(float, float))dlsym(RTLD_DEFAULT, "nfs_camera_stick_input");
+    if (s_cam_stick) s_cam_stick(x, y);
     float r = sqrtf(x * x + y * y);
     if (r < 0.35f) {
         g_qc_armed = 1;
