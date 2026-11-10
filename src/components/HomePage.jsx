@@ -6,7 +6,8 @@ export default function HomePage({
   onNavigate,
   onOpenImageModal,
   onOpenNewsletter,
-  onOpenCarContest
+  onOpenCarContest,
+  onOpenEATrax
 }) {
   const isDec = edition === 'dec2004';
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
@@ -135,6 +136,21 @@ export default function HomePage({
                   </div>
 
                   <div className="default">
+                    {onOpenEATrax && (
+                      <>
+                        <a
+                          href="#eatrax"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            onOpenEATrax();
+                          }}
+                          style={{ color: '#006600' }}
+                        >
+                          <b>EA TRAX Jukebox</b>
+                        </a>
+                        <br />
+                      </>
+                    )}
                     <a
                       href="#demo"
                       onClick={(e) => {

@@ -167,6 +167,10 @@ a.sshotnav:hover {
   padding: 15px;
   font-family: verdana, arial, sans-serif;
   font-size: 11px;
+  max-width: 95vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-sizing: border-box;
 }
 
 .version-badge {
@@ -393,4 +397,11 @@ a.sshotnav:hover {
   letter-spacing: 0.6px;
   margin-top: 2px;
   text-shadow: 0 1px 2px #000000;
+}
+
+@media (max-width: 780px) {
+  body {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 }
