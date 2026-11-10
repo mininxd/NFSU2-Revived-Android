@@ -211,6 +211,11 @@ int roam_android_init_symbols(void) {
         roam_android_protect_guest_null_page();
     }
 
+    static void roam_android_install_hooks(void);
+    if (!g_hooks_installed && g_p_recomp_lookup) {
+        roam_android_install_hooks();
+    }
+
     if (g_p_mem_base && *g_p_mem_base != 0 && g_p_esp && *g_p_esp != 0) {
         if (!g_carpool_patched) roam_android_patch_carpool();
         return 1;
@@ -1124,26 +1129,206 @@ static void pace_frame(void) {
      * Avoid blocking nanosleep here which double-waits and starves guest background threads. */
 }
 
-static float g_look_yaw = 0.f;
 static float g_stick_x = 0.f;
 static float g_stick_y = 0.f;
-static uint32_t g_turned_cam = 0;
-static uint8_t g_keep_cam[0x70];
-static uint8_t g_made_cam[0x70];
-static int g_cam_turned = 0;
 
-static void look_turn_xy(float *p, int pt, float ox, float oy, float yaw) {
-    float c = cosf(yaw), s = sinf(yaw);
-    float px = pt ? ox : 0.f, py = pt ? oy : 0.f;
-    float x = p[0] - px, y = p[1] - py;
-    p[0] = px + x * c + y * s;
-    p[1] = py - x * s + y * c;
+/* =========================================================================
+ * ARM64 Runtime Inline Hooking & Right Stick Camera / Garage Viewer Engine
+ * ========================================================================= */
+
+typedef void (*recomp_void_func_t)(void);
+
+static recomp_void_func_t s_orig_4a5d90 = NULL;
+static recomp_void_func_t s_orig_5c7ec0 = NULL;
+
+static recomp_void_func_t arm64_inline_hook(void *target_func, void *hook_func) {
+    if (!target_func || !hook_func) return NULL;
+    uint32_t *target = (uint32_t *)target_func;
+
+    static uint8_t *s_tramp_page = NULL;
+    static size_t s_tramp_offset = 0;
+    if (!s_tramp_page) {
+        s_tramp_page = (uint8_t *)mmap(NULL, 4096, PROT_READ | PROT_WRITE | PROT_EXEC,
+                                       MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+        if (s_tramp_page == MAP_FAILED) {
+            s_tramp_page = NULL;
+            __android_log_print(ANDROID_LOG_ERROR, "NFSU2-Hook", "mmap trampoline page failed");
+            return NULL;
+        }
+    }
+
+    uint8_t *tramp = s_tramp_page + s_tramp_offset;
+    s_tramp_offset += 64;
+
+    // 1. Copy first 4 instructions (16 bytes) to trampoline
+    memcpy(tramp, target, 16);
+
+    // 2. Append branch to target + 16 (4 instructions)
+    uint32_t *t_code = (uint32_t *)(tramp + 16);
+    t_code[0] = 0x58000050; // ldr x16, [pc, #8]
+    t_code[1] = 0xd61f0200; // br x16
+    *(uint64_t *)(tramp + 24) = (uint64_t)((uintptr_t)target + 16);
+
+    __builtin___clear_cache((char *)tramp, (char *)tramp + 32);
+
+    // 3. Make target code page writable
+    long page_sz = sysconf(_SC_PAGESIZE);
+    if (page_sz <= 0) page_sz = 16384;
+    uintptr_t page_start = (uintptr_t)target & ~((uintptr_t)page_sz - 1);
+    if (mprotect((void *)page_start, page_sz * 2, PROT_READ | PROT_WRITE | PROT_EXEC) != 0) {
+        __android_log_print(ANDROID_LOG_ERROR, "NFSU2-Hook", "mprotect failed for target %p", target);
+        return NULL;
+    }
+
+    // 4. Overwrite target with jump to hook_func
+    target[0] = 0x58000050; // ldr x16, [pc, #8]
+    target[1] = 0xd61f0200; // br x16
+    *(uint64_t *)(&target[2]) = (uint64_t)((uintptr_t)hook_func);
+
+    __builtin___clear_cache((char *)target, (char *)target + 16);
+
+    return (recomp_void_func_t)tramp;
 }
 
-static void look_turn_matrix(uint32_t cam, float ox, float oy, float yaw) {
-    float c = cosf(yaw), s = -sinf(yaw);
+#define VW_TURN      0x248u        /* float: the viewer's turn speed (60 deg/sec at 1.0) */
+#define VW_TILT      0x24cu        /* float: its camera's tilt speed */
+#define VW_ANGLE     0x274u        /* float: the car's angle, degrees */
+#define G_FE_BUSY    0x00838578u   /* the front end takes no input now */
+#define G_MOUSE_MID  0x008763f7u   /* byte: the mouse's middle button is down */
+#define G_SHOWCASE   0x008363fcu   /* byte: the showcase turns the car */
+#define G_VIEW_IDLE  0x00837aa0u   /* when the viewer was last turned */
+#define G_REALTIMER  0x008651acu
+
+static void hook_sub_004a5d90(void) {
+    static uint32_t turning = 0;
+    uint32_t v = (g_p_ecx && g_p_mem_base && *g_p_mem_base) ? *g_p_ecx : 0;
+
+    if (s_orig_4a5d90) {
+        s_orig_4a5d90();
+    }
+
+    if (!g_p_mem_base || !*g_p_mem_base || !v) return;
+    if (!rh_mem_committed(v, 0x280)) return;
+
+    if (rh_mem_committed(G_MOUSE_MID, 1) && MR8(G_MOUSE_MID)) {
+        turning = 0;
+        return;
+    }
+
+    float x = g_stick_x;
+    float y = g_stick_y;
+    float r = sqrtf(x * x + y * y);
+    if (r < 0.15f) {
+        x = 0.f;
+        y = 0.f;
+    }
+
+    int busy = (rh_mem_committed(G_FE_BUSY, 4) && MR32(G_FE_BUSY) != 0);
+
+    if ((x == 0.f && y == 0.f) || busy) {
+        if (turning == v) {
+            MRF32(v + VW_TURN) = 0.f;
+            MRF32(v + VW_TILT) = 0.f;
+        }
+        turning = 0;
+        return;
+    }
+
+    MRF32(v + VW_TURN) = x;
+    MRF32(v + VW_TILT) = y;
+    if (rh_mem_committed(G_SHOWCASE, 1)) {
+        MR8(G_SHOWCASE) = 0;
+    }
+    if (rh_mem_committed(G_VIEW_IDLE, 4) && rh_mem_committed(G_REALTIMER, 4)) {
+        MR32(G_VIEW_IDLE) = MR32(G_REALTIMER);
+    }
+    turning = v;
+}
+
+#define CAR_POS      0x60u         /* the car's centre, world */
+#define CAM_POS      0x40u         /* the camera's eye, world */
+#define CAM_FWD      0x50u         /* its forward */
+#define CAM_TARGET   0x60u         /* the point it looks at */
+#define CAM_TURNED   0x70u         /* its bytes the turn changes: the matrix, those three */
+#define NCAM         2
+
+#define STICK_ON     0.20f
+#define STICK_FULL   0.85f
+#define TAU_S        0.09f
+#define BACK_RAD     2.4f
+#define SNAP_IN      0.44f
+#define SNAP_OUT     0.61f
+#define SNAP_R       0.50f
+#define SNAP_R_OFF   0.40f
+#define IN_CAR_M     3.0f
+#define REST_RAD     0.0005f
+#define PI_F         3.14159265358979323846f
+
+static float    s_look_yaw = 0.f;
+static int      s_look_back = 0;
+static double   s_look_last_t = 0.0;
+static int      s_look_active = 0;
+static float    s_pivot_x = 0.f, s_pivot_y = 0.f;
+static uint32_t s_turned_cams[NCAM] = {0};
+static uint8_t  s_keep_cam[NCAM][CAM_TURNED];
+static uint8_t  s_made_cam[NCAM][CAM_TURNED];
+static int      s_num_cams_turned = 0;
+
+static uint32_t get_driving_car(void) {
+    if (!g_p_mem_base || !*g_p_mem_base) return 0;
+    if (!rh_mem_committed(0x008900ac, 4)) return 0; // SPLIT_PLAYERS_INDEX
+    uint32_t pl = MR32(0x008900ac);
+    if (!pl || pl >= 0x7fffffff || !rh_mem_committed(pl + 4, 4)) return 0;
+    uint32_t car = MR32(pl + 4);
+    if (!car || car >= 0x7fffffff || !rh_mem_committed(car + CAR_POS, 16)) return 0;
+
+    // Check mover type (pl + 0x238 is mover; mover + 0xc is type, 1 = MOVER_DRIVE)
+    if (rh_mem_committed(pl + 0x238, 4)) {
+        uint32_t mv = MR32(pl + 0x238);
+        if (mv && mv < 0x7fffffff && rh_mem_committed(mv + 0x0c, 4)) {
+            uint32_t mv_type = MR32(mv + 0x0c);
+            if (mv_type != 1) return 0;
+        }
+    }
+    return car;
+}
+
+static float compute_stick_yaw(int can, int *back) {
+    *back = 0;
+    if (!can) return 0.f;
+    float x = g_stick_x, y = g_stick_y;
+    float r = hypotf(x, y);
+    if (r < STICK_ON) return 0.f;
+
+    float off = PI_F - fabsf(atan2f(x, -y));
+    if (s_look_back ? (off < SNAP_OUT && r > SNAP_R_OFF) : (off < SNAP_IN && r > SNAP_R)) {
+        *back = 1;
+        return 0.f;
+    }
+    if (off < (s_look_back ? SNAP_OUT : SNAP_IN)) return 0.f;
+
+    float k = fminf(1.f, (r - STICK_ON) / (STICK_FULL - STICK_ON));
+    float dir = atan2f(x, -y);
+    int side = (fabsf(s_look_yaw) > 0.05f) ? (s_look_yaw > 0.f ? 1 : -1) : (x >= 0.f ? 1 : -1);
+    if (fabsf(dir) > BACK_RAD && (dir > 0.f ? 1 : -1) != side) {
+        dir += side * 2.f * PI_F;
+    }
+    return dir * k;
+}
+
+static void turn_cam_xy(float *p, int pt) {
+    float c = cosf(s_look_yaw), s = sinf(s_look_yaw);
+    float ox = pt ? s_pivot_x : 0.f, oy = pt ? s_pivot_y : 0.f;
+    float x = p[0] - ox, y = p[1] - oy;
+    p[0] = ox + x * c + y * s;
+    p[1] = oy - x * s + y * c;
+}
+
+static void turn_cam_matrix(uint32_t cam) {
+    float c = cosf(s_look_yaw), s = -sinf(s_look_yaw);
     float *M = (float *)GPTR(cam);
-    float tx = ox - (ox * c + oy * s), ty = oy - (-ox * s + oy * c);
+    float tx = s_pivot_x - (s_pivot_x * c + s_pivot_y * s);
+    float ty = s_pivot_y - (-s_pivot_x * s + s_pivot_y * c);
     float r0[4], r1[4];
     for (int k = 0; k < 4; k++) {
         r0[k] = c * M[k] - s * M[4 + k];
@@ -1151,13 +1336,187 @@ static void look_turn_matrix(uint32_t cam, float ox, float oy, float yaw) {
     }
     for (int k = 0; k < 4; k++) {
         M[12 + k] += tx * M[k] + ty * M[4 + k];
-        M[k] = r0[k]; M[4 + k] = r1[k];
+        M[k] = r0[k];
+        M[4 + k] = r1[k];
     }
 }
 
+static void restore_turned_cameras(void) {
+    for (int i = 0; i < s_num_cams_turned; i++) {
+        uint32_t cam = s_turned_cams[i];
+        if (cam && rh_mem_committed(cam, CAM_TURNED)) {
+            if (memcmp(GPTR(cam), s_made_cam[i], CAM_TURNED) == 0) {
+                memcpy(GPTR(cam), s_keep_cam[i], CAM_TURNED);
+            }
+        }
+    }
+    s_num_cams_turned = 0;
+}
+
+static void turn_one_camera(uint32_t cam) {
+    if (!cam || !rh_mem_committed(cam, CAM_TURNED) || s_num_cams_turned >= NCAM) return;
+    for (int i = 0; i < s_num_cams_turned; i++) {
+        if (s_turned_cams[i] == cam) return;
+    }
+    memcpy(s_keep_cam[s_num_cams_turned], GPTR(cam), CAM_TURNED);
+    turn_cam_matrix(cam);
+    turn_cam_xy((float *)GPTR(cam + CAM_POS), 1);
+    turn_cam_xy((float *)GPTR(cam + CAM_FWD), 0);
+    turn_cam_xy((float *)GPTR(cam + CAM_TARGET), 1);
+    memcpy(s_made_cam[s_num_cams_turned], GPTR(cam), CAM_TURNED);
+    s_turned_cams[s_num_cams_turned++] = cam;
+}
+
+static void look_process_view(uint32_t view_id, uint32_t cam) {
+    if (view_id != 1u) {
+        if (s_look_active && cam) turn_one_camera(cam);
+        return;
+    }
+
+    restore_turned_cameras();
+
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    double t = ts.tv_sec + ts.tv_nsec * 1e-9;
+    float dt = (s_look_last_t > 0.0) ? (float)(t - s_look_last_t) : 0.016f;
+    s_look_last_t = t;
+    if (dt > 0.25f) dt = 0.25f;
+
+    uint32_t car = get_driving_car();
+    int back = 0;
+    float want = compute_stick_yaw(car != 0, &back);
+
+    if (back) {
+        if (!s_look_back) s_look_yaw = (s_look_yaw < -0.05f) ? -PI_F : PI_F;
+        s_look_back = 1;
+        s_look_active = 1;
+    } else {
+        if (s_look_back) {
+            s_look_back = 0;
+            if (want == 0.f) s_look_yaw = 0.f;
+        }
+        float d = want - s_look_yaw;
+        while (d > PI_F) d -= 2.f * PI_F;
+        while (d < -PI_F) d += 2.f * PI_F;
+        s_look_yaw += d * (1.f - expf(-dt / TAU_S));
+        while (s_look_yaw > PI_F) s_look_yaw -= 2.f * PI_F;
+        while (s_look_yaw < -PI_F) s_look_yaw += 2.f * PI_F;
+    }
+
+    if (!car || (want == 0.f && !s_look_back && fabsf(s_look_yaw) < REST_RAD)) {
+        s_look_yaw = 0.f;
+        s_look_active = 0;
+        return;
+    }
+
+    float cx = MRF32(car + CAR_POS), cy = MRF32(car + CAR_POS + 4u);
+    if (cam && rh_mem_committed(cam + CAM_POS, 12)) {
+        float ex = MRF32(cam + CAM_POS), ey = MRF32(cam + CAM_POS + 4u);
+        if (hypotf(ex - cx, ey - cy) < IN_CAR_M) {
+            cx = ex;
+            cy = ey;
+        }
+    }
+    s_pivot_x = cx;
+    s_pivot_y = cy;
+    s_look_active = 1;
+    turn_one_camera(cam);
+}
+
+static void hook_sub_005c7ec0(void) {
+    if (g_p_mem_base && *g_p_mem_base && g_p_esp && *g_p_esp) {
+        uint32_t esp = *g_p_esp;
+        if (rh_mem_committed(esp + 4, 4)) {
+            uint32_t view = MR32(esp + 4);
+            if (view && rh_mem_committed(view + 4, 0x40)) {
+                uint32_t view_id = MR32(view + 4);
+                uint32_t cam = MR32(view + 0x40);
+                if (view_id == 1u || view_id == 4u) {
+                    look_process_view(view_id, cam);
+                }
+            }
+        }
+    }
+
+    if (s_orig_5c7ec0) {
+        s_orig_5c7ec0();
+    }
+}
+
+void look_eye(float *e, float *f) {
+    if (!s_look_active || s_num_cams_turned > 0) return;
+    turn_cam_xy(e, 1);
+    turn_cam_xy(f, 0);
+}
+
 static void look_camera_frame_tick(void) {
-    /* Camera rotation is handled cleanly and synchronously per-frame in
-     * libgraphics_cache.so (camera_stick.rs) at BeginScene -> Present. */
+    restore_turned_cameras();
+}
+
+static int g_hooks_installed = 0;
+
+static void roam_android_install_hooks(void) {
+    if (g_hooks_installed || !g_p_recomp_lookup) return;
+
+    Dl_info dlinfo;
+    if (!dladdr((void *)g_p_recomp_lookup, &dlinfo) || !dlinfo.dli_fbase) {
+        __android_log_print(ANDROID_LOG_ERROR, "NFSU2-Hook", "Failed to resolve lib base via dladdr");
+        return;
+    }
+
+    uintptr_t lib_base = (uintptr_t)dlinfo.dli_fbase;
+    long page_sz = sysconf(_SC_PAGESIZE);
+    if (page_sz <= 0) page_sz = 16384;
+
+    static const uint8_t EXPECTED_4A[16] = {
+        0xff, 0xc3, 0x01, 0xd1, 0xfd, 0x7b, 0x01, 0xa9,
+        0xfc, 0x6f, 0x02, 0xa9, 0xfa, 0x67, 0x03, 0xa9
+    };
+    static const uint8_t EXPECTED_5C[16] = {
+        0xff, 0x03, 0x02, 0xd1, 0xfd, 0x7b, 0x02, 0xa9,
+        0xfc, 0x6f, 0x03, 0xa9, 0xfa, 0x67, 0x04, 0xa9
+    };
+
+    void *target_4a = (void *)(lib_base + 0x1464be0);
+    if (memcmp(target_4a, EXPECTED_4A, 16) == 0) {
+        s_orig_4a5d90 = arm64_inline_hook(target_4a, (void *)hook_sub_004a5d90);
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook",
+                            "Hooked sub_004a5d90 (garage car viewer) at %p (orig: %p)",
+                            target_4a, s_orig_4a5d90);
+    } else {
+        __android_log_print(ANDROID_LOG_WARN, "NFSU2-Hook",
+                            "sub_004a5d90 prefix mismatch at %p", target_4a);
+    }
+
+    void *target_5c = (void *)(lib_base + 0x2d762b0);
+    if (memcmp(target_5c, EXPECTED_5C, 16) == 0) {
+        s_orig_5c7ec0 = arm64_inline_hook(target_5c, (void *)hook_sub_005c7ec0);
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook",
+                            "Hooked sub_005c7ec0 (camera setup) at %p (orig: %p)",
+                            target_5c, s_orig_5c7ec0);
+    } else {
+        __android_log_print(ANDROID_LOG_WARN, "NFSU2-Hook",
+                            "sub_005c7ec0 prefix mismatch at %p", target_5c);
+    }
+
+    // Also update k_functions dispatch table
+    uintptr_t k_4a = lib_base + 0x977c160;
+    if (*(uint32_t *)k_4a == 0x004a5d90) {
+        uintptr_t page = k_4a & ~((uintptr_t)page_sz - 1);
+        mprotect((void *)page, page_sz * 2, PROT_READ | PROT_WRITE);
+        *(void **)(k_4a + 8) = (void *)hook_sub_004a5d90;
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Updated k_functions[0x004a5d90]");
+    }
+
+    uintptr_t k_5c = lib_base + 0x9797cd0;
+    if (*(uint32_t *)k_5c == 0x005c7ec0) {
+        uintptr_t page = k_5c & ~((uintptr_t)page_sz - 1);
+        mprotect((void *)page, page_sz * 2, PROT_READ | PROT_WRITE);
+        *(void **)(k_5c + 8) = (void *)hook_sub_005c7ec0;
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Updated k_functions[0x005c7ec0]");
+    }
+
+    g_hooks_installed = 1;
 }
 
 static const uint32_t kAllResolutionPercents[] = {
@@ -1310,6 +1669,10 @@ __attribute__((visibility("default"))) void nfs_roam_frame_tick(void) {
 void roam_stick_input(float x, float y) {
     g_stick_x = x;
     g_stick_y = y;
+    if (!g_hooks_installed) {
+        roam_android_init_symbols();
+        roam_android_install_hooks();
+    }
     static void (*s_cam_stick)(float, float) = NULL;
     if (!s_cam_stick) s_cam_stick = (void (*)(float, float))dlsym(RTLD_DEFAULT, "nfs_camera_stick_input");
     if (s_cam_stick) s_cam_stick(x, y);
@@ -1350,6 +1713,7 @@ jint JNI_OnLoad(JavaVM *vm, void *reserved) {
         }
     }
     roam_android_patch_carpool();
+    roam_android_install_hooks();
     return JNI_VERSION_1_6;
 }
 
