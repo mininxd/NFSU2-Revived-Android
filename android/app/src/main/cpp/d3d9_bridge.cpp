@@ -229,6 +229,12 @@ void* getGraphicsCacheHandle() {
     }
     return s_handle;
 }
+void* resolveGraphicsCacheSymbol(const char* name) {
+    void* h = getGraphicsCacheHandle();
+    void* sym = h ? dlsym(h, name) : nullptr;
+    if (!sym) sym = dlsym(RTLD_DEFAULT, name);
+    return sym;
+}
 uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumentCount){
     getGraphicsCacheHandle();
     uint32_t kind=(token-methodBase)/4096,method=((token-methodBase)%4096)/16;

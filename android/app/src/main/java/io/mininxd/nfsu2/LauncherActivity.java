@@ -70,29 +70,18 @@ public final class LauncherActivity extends Activity {
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
 
-    private void applyWindowMode() {
-        android.view.Window window = getWindow();
-        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON |
-                android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
-        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS |
-                android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
-        window.setStatusBarColor(android.graphics.Color.TRANSPARENT);
-        window.setNavigationBarColor(android.graphics.Color.TRANSPARENT);
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            android.view.WindowManager.LayoutParams lp = window.getAttributes();
-            lp.layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
-            window.setAttributes(lp);
-        }
-
-        // Configure high-refresh rate display mode (HyperOS / OEM smooth UI)
-        android.view.Display display = getWindowManager().getDefaultDisplay();
-        if (display != null) {
+    private void applyDisplayRefreshRate() {
+        try {
+            android.view.Display display = getWindowManager().getDefaultDisplay();
+            if (display == null) return;
             android.view.Display.Mode current = display.getMode();
+            if (current == null) return;
+            android.view.Display.Mode[] modes = display.getSupportedModes();
+            if (modes == null) return;
             float refresh = 60f;
             android.view.Display.Mode bestMode = null;
-            for (android.view.Display.Mode mode : display.getSupportedModes()) {
-                if (mode.getPhysicalWidth() == current.getPhysicalWidth() &&
+            for (android.view.Display.Mode mode : modes) {
+                if (mode != null && mode.getPhysicalWidth() == current.getPhysicalWidth() &&
                         mode.getPhysicalHeight() == current.getPhysicalHeight()) {
                     refresh = Math.max(refresh, mode.getRefreshRate());
                     if (bestMode == null || mode.getRefreshRate() > bestMode.getRefreshRate()) {
@@ -100,7 +89,7 @@ public final class LauncherActivity extends Activity {
                     }
                 }
             }
-            android.view.WindowManager.LayoutParams lp = window.getAttributes();
+            android.view.WindowManager.LayoutParams lp = getWindow().getAttributes();
             lp.preferredRefreshRate = Math.min(120f, refresh);
             if (Build.VERSION.SDK_INT >= 23 && bestMode != null) {
                 lp.preferredDisplayModeId = bestMode.getModeId();
@@ -111,38 +100,37 @@ public final class LauncherActivity extends Activity {
                 java.lang.reflect.Field maxField = lp.getClass().getField("preferredMaxDisplayRefreshRate");
                 maxField.setFloat(lp, Math.min(120.0f, refresh));
             } catch (Throwable ignored) {}
-            window.setAttributes(lp);
-        }
-
-        if (Build.VERSION.SDK_INT >= 30) {
-            window.setDecorFitsSystemWindows(false);
-            android.view.WindowInsetsController controller = window.getInsetsController();
-            if (controller != null) {
-                controller.hide(android.view.WindowInsets.Type.systemBars());
-                controller.setSystemBarsBehavior(android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
-            }
-        } else {
-            window.getDecorView().setSystemUiVisibility(
-                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY |
-                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
-                    View.SYSTEM_UI_FLAG_FULLSCREEN |
-                    View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION |
-                    View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN |
-                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
-        }
+            getWindow().setAttributes(lp);
+        } catch (Throwable ignored) {}
     }
 
     @Override public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus) {
-            applyWindowMode();
+            try {
+                getWindow().getDecorView().setSystemUiVisibility(
+                        View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY |
+                        View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
+                        View.SYSTEM_UI_FLAG_FULLSCREEN |
+                        View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION |
+                        View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
+                applyDisplayRefreshRate();
+            } catch (Throwable ignored) {}
         }
     }
 
     @Override protected void onCreate(Bundle saved) {
         super.onCreate(saved);
-        applyWindowMode();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            android.view.WindowManager.LayoutParams lp = getWindow().getAttributes();
+            lp.layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+            getWindow().setAttributes(lp);
+        }
+        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY |
+                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_FULLSCREEN |
+                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
         setContentView(buildScreen());
+        applyDisplayRefreshRate();
         checkUpdates(false);
         String updated = ReleaseUpdates.pendingWhatsNew(this);
         if (updated != null) showWhatsNew(updated);

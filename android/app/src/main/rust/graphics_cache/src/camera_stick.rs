@@ -357,6 +357,15 @@ impl CameraStickEngine {
             return false;
         }
 
+        // If apply_frame already rotated this camera matrix in guest memory, do not double-rotate
+        let turned_cam = self.turned_cam_addr.load(Ordering::Acquire);
+        if turned_cam != 0 && self.is_applied.load(Ordering::Acquire) {
+            let turned_ptr = guest_base.add(turned_cam as usize) as *const f32;
+            if matrix as *const f32 == turned_ptr {
+                return false;
+            }
+        }
+
         let yaw = self.get_yaw();
         if yaw.abs() < REST_YAW_THRESHOLD {
             return false;

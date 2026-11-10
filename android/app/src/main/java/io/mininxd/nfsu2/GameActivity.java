@@ -362,15 +362,17 @@ public final class GameActivity extends NativeActivity {
         android.content.SharedPreferences options=getSharedPreferences("touch_layouts_v1",MODE_PRIVATE);
         tiltEnabled=options.getBoolean("tilt.enabled",false);tiltInvert=options.getBoolean("tilt.invert",false);
         tiltSensitivity=options.getFloat("tilt.sensitivity",1);
-        getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON |
-                android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
-        getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS |
-                android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
-        getWindow().setStatusBarColor(android.graphics.Color.TRANSPARENT);
-        getWindow().setNavigationBarColor(android.graphics.Color.TRANSPARENT);
-        if (Build.VERSION.SDK_INT >= 30) {
-            getWindow().setDecorFitsSystemWindows(false);
-        }
+        getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        try {
+            getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+            getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS |
+                    android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
+            getWindow().setStatusBarColor(android.graphics.Color.TRANSPARENT);
+            getWindow().setNavigationBarColor(android.graphics.Color.TRANSPARENT);
+            if (Build.VERSION.SDK_INT >= 30) {
+                getWindow().setDecorFitsSystemWindows(false);
+            }
+        } catch (Throwable ignored) {}
         applyDisplayRefreshRate();
         Intent launch = getIntent();
         float distVal = 450.0f;
@@ -624,31 +626,36 @@ public final class GameActivity extends NativeActivity {
     private boolean wasBackgrounded = false;
 
     private void applyDisplayRefreshRate() {
-        android.view.Display display = getWindowManager().getDefaultDisplay();
-        if (display == null) return;
-        android.view.Display.Mode current = display.getMode();
-        float refresh = 60f;
-        android.view.Display.Mode bestMode = null;
-        for (android.view.Display.Mode mode : display.getSupportedModes()) {
-            if (mode.getPhysicalWidth() == current.getPhysicalWidth() && mode.getPhysicalHeight() == current.getPhysicalHeight()) {
-                refresh = Math.max(refresh, mode.getRefreshRate());
-                if (bestMode == null || mode.getRefreshRate() > bestMode.getRefreshRate()) {
-                    bestMode = mode;
+        try {
+            android.view.Display display = getWindowManager().getDefaultDisplay();
+            if (display == null) return;
+            android.view.Display.Mode current = display.getMode();
+            if (current == null) return;
+            android.view.Display.Mode[] modes = display.getSupportedModes();
+            if (modes == null) return;
+            float refresh = 60f;
+            android.view.Display.Mode bestMode = null;
+            for (android.view.Display.Mode mode : modes) {
+                if (mode != null && mode.getPhysicalWidth() == current.getPhysicalWidth() && mode.getPhysicalHeight() == current.getPhysicalHeight()) {
+                    refresh = Math.max(refresh, mode.getRefreshRate());
+                    if (bestMode == null || mode.getRefreshRate() > bestMode.getRefreshRate()) {
+                        bestMode = mode;
+                    }
                 }
             }
-        }
-        android.view.WindowManager.LayoutParams windowParams = getWindow().getAttributes();
-        windowParams.preferredRefreshRate = Math.min(120f, refresh);
-        if (Build.VERSION.SDK_INT >= 23 && bestMode != null) {
-            windowParams.preferredDisplayModeId = bestMode.getModeId();
-        }
-        try {
-            java.lang.reflect.Field minField = windowParams.getClass().getField("preferredMinDisplayRefreshRate");
-            minField.setFloat(windowParams, Math.min(60.0f, refresh));
-            java.lang.reflect.Field maxField = windowParams.getClass().getField("preferredMaxDisplayRefreshRate");
-            maxField.setFloat(windowParams, Math.min(120.0f, refresh));
+            android.view.WindowManager.LayoutParams windowParams = getWindow().getAttributes();
+            windowParams.preferredRefreshRate = Math.min(120f, refresh);
+            if (Build.VERSION.SDK_INT >= 23 && bestMode != null) {
+                windowParams.preferredDisplayModeId = bestMode.getModeId();
+            }
+            try {
+                java.lang.reflect.Field minField = windowParams.getClass().getField("preferredMinDisplayRefreshRate");
+                minField.setFloat(windowParams, Math.min(60.0f, refresh));
+                java.lang.reflect.Field maxField = windowParams.getClass().getField("preferredMaxDisplayRefreshRate");
+                maxField.setFloat(windowParams, Math.min(120.0f, refresh));
+            } catch (Throwable ignored) {}
+            getWindow().setAttributes(windowParams);
         } catch (Throwable ignored) {}
-        getWindow().setAttributes(windowParams);
     }
 
     @Override public void onWindowFocusChanged(boolean focused) {

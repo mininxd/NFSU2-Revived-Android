@@ -171,7 +171,7 @@ pub unsafe extern "C" fn nfs_tex_dxt3_decode_fast(
                     let x = bx * 4 + px;
                     if x >= width { continue; }
 
-                    let linear_pixel = py * 4 + px;
+                    let linear_pixel = (py * 4 + px) as usize;
                     let alpha_byte = alpha_bytes[linear_pixel / 2];
                     let alpha_nibble = if (linear_pixel & 1) == 0 {
                         alpha_byte & 0x0F

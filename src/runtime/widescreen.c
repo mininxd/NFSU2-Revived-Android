@@ -417,16 +417,18 @@ void recomp_hook(uint32_t va) {
                             wrf(cam + 0xC0u, max_far);
                         }
                         if (view == 1 && s_forward_culling) {
-                            float fx = rdf(cam + 0x20u);
-                            float fy = rdf(cam + 0x24u);
-                            float fz = rdf(cam + 0x28u);
-                            float px = rdf(cam + 0x30u);
-                            float py = rdf(cam + 0x34u);
-                            float pz = rdf(cam + 0x38u);
+                            float px = rdf(cam + 0x40u);
+                            float py = rdf(cam + 0x44u);
+                            float pz = rdf(cam + 0x48u);
+                            float fx = rdf(cam + 0x50u);
+                            float fy = rdf(cam + 0x54u);
+                            float fz = rdf(cam + 0x58u);
 #if !defined(_WIN32)
-                            extern void nfs_camera_cull_update_camera(float, float, float, float, float, float) __attribute__((weak));
-                            if (nfs_camera_cull_update_camera) {
-                                nfs_camera_cull_update_camera(px, py, pz, fx, fy, fz);
+                            void* h = get_graphics_cache_lib();
+                            void (*fn)(float, float, float, float, float, float) = h ?
+                                (void (*)(float, float, float, float, float, float))dlsym(h, "nfs_camera_cull_update_camera") : NULL;
+                            if (fn) {
+                                fn(px, py, pz, fx, fy, fz);
                             }
 #endif
                         }
