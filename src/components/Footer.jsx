@@ -117,6 +117,19 @@ export default function Footer({ edition, onSelectEdition, onOpenLegal }) {
           </tr>
         </tbody>
       </table>
+
+      <div
+        style={{
+          textAlign: 'center',
+          color: '#888888',
+          fontSize: 9,
+          fontFamily: 'arial, helvetica, sans-serif',
+          marginTop: 6,
+          marginBottom: 16
+        }}
+      >
+        Not affiliated with or endorsed by Electronic Arts.
+      </div>
     </div>
   );
 }

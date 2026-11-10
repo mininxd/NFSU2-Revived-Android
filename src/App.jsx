@@ -25,7 +25,7 @@ export default function App() {
   };
 
   const handleOpenLegal = (type) => {
-    alert(`Need for Speed Underground 2 Legal Notice: ${type.toUpperCase()}`);
+    alert(`Need for Speed Underground 2 Legal Notice: ${type.toUpperCase()}\n\nNot affiliated with or endorsed by Electronic Arts.`);
   };
 
   return (
