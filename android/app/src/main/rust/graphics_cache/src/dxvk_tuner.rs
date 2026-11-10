@@ -88,6 +88,10 @@ impl DxvkProfileConfig {
         s.push_str(&format!("dxgi.deferSurfaceCreation = {}\n", if self.defer_surface_creation { "True" } else { "False" }));
         s.push_str(&format!("dxgi.maxDeviceMemory = {}\n", self.max_device_memory_mb));
         s.push_str(&format!("dxgi.maxSharedMemory = {}\n", self.max_shared_memory_mb));
+
+        // Disable swapchain multisampling to prevent tile-based MSAA resolve corruption on Adreno (Issue #67)
+        s.push_str("d3d9.forceSwapchainMSAA = False\n");
+        s.push_str("dxvk.enableMemoryDefrag = False\n");
         s
     }
 
@@ -120,6 +124,22 @@ pub fn apply_driver_environment() {
 
     for &(k, v) in vars {
         std::env::set_var(k, v);
+    }
+
+    // Auto-generate dxvk.conf in game folders if accessible
+    let candidate_dirs = ["/sdcard/nfsu2", "/storage/emulated/0/nfsu2", "."];
+    let config = DxvkProfileConfig::default();
+    for dir in &candidate_dirs {
+        let p = Path::new(dir);
+        if p.is_dir() {
+            let conf_path = p.join("dxvk.conf");
+            if config.write_to_file(&conf_path).is_ok() {
+                if std::env::var("DXVK_CONFIG_FILE").is_err() {
+                    std::env::set_var("DXVK_CONFIG_FILE", conf_path.to_string_lossy().as_ref());
+                }
+                break;
+            }
+        }
     }
 }
 
@@ -165,5 +185,7 @@ mod tests {
         assert!(formatted.contains("d3d9.invariantPosition = True"));
         assert!(formatted.contains("d3d9.forceSamplerTypeSpecConstants = True"));
         assert!(formatted.contains("d3d9.strictConstantCopies = False"));
+        assert!(formatted.contains("d3d9.forceSwapchainMSAA = False"));
+        assert!(formatted.contains("dxvk.enableMemoryDefrag = False"));
     }
 }

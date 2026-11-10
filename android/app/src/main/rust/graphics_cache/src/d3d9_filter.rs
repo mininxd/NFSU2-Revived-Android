@@ -117,11 +117,16 @@ impl D3D9ShadowState {
     pub fn notify_render_target_change(&mut self) {
         self.viewport_valid = false;
         self.tex_valid = [false; 16];
+        self.ss_valid = [[false; 16]; 16];
+        self.tss_valid = [[false; 33]; 8];
         self.epoch = self.epoch.wrapping_add(1);
     }
 
     pub fn notify_stretch_rect(&mut self) {
+        self.viewport_valid = false;
         self.tex_valid = [false; 16];
+        self.ss_valid = [[false; 16]; 16];
+        self.tss_valid = [[false; 33]; 8];
         self.epoch = self.epoch.wrapping_add(1);
     }
 

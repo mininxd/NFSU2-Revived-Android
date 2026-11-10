@@ -41,6 +41,7 @@ void nfs_d3d9_filter_stats(uint64_t* out_total, uint64_t* out_filtered);
 void nfs_rain_splatter_notify_render_target(uint32_t target_surface);
 void nfs_rain_splatter_notify_stretch_rect(uint32_t src, uint32_t dst);
 int nfs_rain_splatter_should_filter_viewport(const uint32_t* viewport);
+void nfs_rain_splatter_reset(void);
 void nfs_rain_splatter_stats(uint64_t* out_rt, uint64_t* out_stretch, uint64_t* out_protected_vp);
 
 // DXVK & Wine Driver Performance Tuning Engine

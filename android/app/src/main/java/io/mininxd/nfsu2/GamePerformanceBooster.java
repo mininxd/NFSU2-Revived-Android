@@ -174,10 +174,26 @@ public final class GamePerformanceBooster {
                 pw.println("d3d9.invariantPosition = True");
                 pw.println("d3d9.forceSamplerTypeSpecConstants = True");
                 pw.println("d3d9.strictConstantCopies = False");
+                pw.println("d3d9.forceSwapchainMSAA = False");
+                pw.println("dxvk.enableMemoryDefrag = False");
                 pw.println("dxgi.deferSurfaceCreation = True");
                 pw.println("dxgi.maxDeviceMemory = 4096");
                 pw.println("dxgi.maxSharedMemory = 2048");
             }
+
+            try {
+                File sdcardDir = new File("/sdcard/nfsu2");
+                if (sdcardDir.exists() && sdcardDir.isDirectory()) {
+                    File sdcardConf = new File(sdcardDir, "dxvk.conf");
+                    try (PrintWriter pw = new PrintWriter(new FileWriter(sdcardConf))) {
+                        pw.println("d3d9.generalHazards = True");
+                        pw.println("d3d9.invariantPosition = True");
+                        pw.println("d3d9.forceSamplerTypeSpecConstants = True");
+                        pw.println("d3d9.forceSwapchainMSAA = False");
+                        pw.println("dxvk.enableMemoryDefrag = False");
+                    }
+                }
+            } catch (Throwable ignored) {}
 
             Os.setenv("DXVK_CONFIG_FILE", confFile.getAbsolutePath(), true);
             Os.setenv("DXVK_STATE_CACHE_PATH", cacheDir.getAbsolutePath(), true);

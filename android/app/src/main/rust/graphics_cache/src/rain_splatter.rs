@@ -75,25 +75,21 @@ impl RainSplatterEngine {
     }
 
     /// Evaluates whether a SetViewport call should be filtered.
-    /// Returns true if redundant, false if it MUST be forwarded to DXVK.
+    /// Always returns false to guarantee that every viewport update reaches DXVK,
+    /// ensuring zero desynchronization across rain splatter and post-processing passes.
+    #[inline]
     pub fn should_filter_viewport(&self, viewport: &[u32; 6]) -> bool {
-        if !self.is_enabled() {
-            return false;
-        }
-
-        // If a render target or stretch rect recently occurred, force the viewport update
-        // through to DXVK so the device viewport matches the game's intended dimensions.
-        if self.in_post_process.swap(false, Ordering::AcqRel) {
-            self.protected_viewports.fetch_add(1, Ordering::Relaxed);
-            unsafe {
-                crate::d3d9_filter::nfs_d3d9_filter_viewport_check(viewport.as_ptr());
-            }
-            return false;
-        }
-
+        self.protected_viewports.fetch_add(1, Ordering::Relaxed);
         unsafe {
-            crate::d3d9_filter::nfs_d3d9_filter_viewport_check(viewport.as_ptr()) != 0
+            crate::d3d9_filter::nfs_d3d9_filter_viewport_check(viewport.as_ptr());
         }
+        false
+    }
+
+    /// Resets internal tracking state upon device Reset.
+    pub fn reset(&self) {
+        self.last_render_target.store(0, Ordering::Release);
+        self.in_post_process.store(false, Ordering::Release);
     }
 
     pub fn stats(&self, out_rt: *mut u64, out_stretch: *mut u64, out_protected_vp: *mut u64) {
@@ -141,6 +137,11 @@ pub unsafe extern "C" fn nfs_rain_splatter_should_filter_viewport(viewport_ptr: 
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn nfs_rain_splatter_reset() {
+    GLOBAL_RAIN_SPLATTER.reset();
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn nfs_rain_splatter_stats(
     out_rt: *mut u64,
     out_stretch: *mut u64,
@@ -158,16 +159,15 @@ mod tests {
         let engine = RainSplatterEngine::new();
         let vp = [0, 0, 1280, 720, 0, 1];
 
-        // Before any RT change
-        assert!(!engine.in_post_process.load(Ordering::Relaxed));
-
-        // When RT changes, post process flag is raised
-        engine.notify_render_target(0x1000);
-        assert!(engine.in_post_process.load(Ordering::Relaxed));
-
-        // Next viewport check must NOT be filtered, protecting the game's viewport
+        // Viewports are always forwarded to protect post-processing and backbuffer integrity
         let filtered = engine.should_filter_viewport(&vp);
         assert!(!filtered);
-        assert!(!engine.in_post_process.load(Ordering::Relaxed));
+
+        engine.notify_render_target(0x1000);
+        let filtered2 = engine.should_filter_viewport(&vp);
+        assert!(!filtered2);
+
+        engine.reset();
+        assert_eq!(engine.last_render_target.load(Ordering::Relaxed), 0);
     }
 }
