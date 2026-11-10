@@ -436,9 +436,10 @@ public final class GameActivity extends NativeActivity {
                     .edit().putString("control_size", touchSize).apply();
         } catch (Throwable ignored) {}
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            windowParams.layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+            android.view.WindowManager.LayoutParams lp = getWindow().getAttributes();
+            lp.layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+            getWindow().setAttributes(lp);
         }
-        getWindow().setAttributes(windowParams);
         // Launcher options travel as extras; a direct start (adb, recents) falls back to the saved ones.
         DisplayMetrics metrics = new DisplayMetrics(); getWindowManager().getDefaultDisplay().getRealMetrics(metrics);
         int dispW = Math.max(metrics.widthPixels, metrics.heightPixels);
