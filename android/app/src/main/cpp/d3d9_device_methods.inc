@@ -49,10 +49,7 @@ case 41:{*argumentCount=1;
     if(s_cam_apply) s_cam_apply(guestBase);
     return device->BeginScene();}
 case 42:{*argumentCount=1;
-    HRESULT status = device->EndScene();
-    static auto s_cam_restore = reinterpret_cast<void(*)(void*)>(dlsym(RTLD_DEFAULT,"nfs_camera_stick_restore_frame"));
-    if(s_cam_restore) s_cam_restore(guestBase);
-    return status;}
+    return device->EndScene();}
 case 43:{*argumentCount=7;return device->Clear(static_cast<DWORD>(args[1]),static_cast<const D3DRECT*>(pointer(args[2])),static_cast<DWORD>(args[3]),static_cast<D3DCOLOR>(args[4]),floatValue(args[5]),static_cast<DWORD>(args[6]));}
 case 44:{*argumentCount=3;
     static auto s_filter_tf = reinterpret_cast<int(*)(uint32_t,const float*)>(dlsym(RTLD_DEFAULT,"nfs_d3d9_filter_transform"));

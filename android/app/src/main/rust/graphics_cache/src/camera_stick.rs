@@ -234,6 +234,11 @@ impl CameraStickEngine {
             return;
         }
 
+        // Prevent double-applying across multiple BeginScene passes of the same frame
+        if self.is_applied.load(Ordering::Acquire) {
+            return;
+        }
+
         let yaw = self.update_yaw();
         if yaw.abs() < REST_YAW_THRESHOLD {
             return;
@@ -242,13 +247,13 @@ impl CameraStickEngine {
         // Check player car at SPLIT_PLAYERS_INDEX
         let pl_ptr = guest_base.add(SPLIT_PLAYERS_INDEX as usize) as *const u32;
         let pl = *pl_ptr;
-        if pl == 0 {
+        if pl == 0 || pl >= 0x7fffffff {
             return; // In menus, not in race/world
         }
 
         let car_ptr = guest_base.add((pl + 4) as usize) as *const u32;
         let car = *car_ptr;
-        if car == 0 {
+        if car == 0 || car >= 0x7fffffff {
             return;
         }
 
@@ -257,19 +262,26 @@ impl CameraStickEngine {
         let mut ox = *car_pos;
         let mut oy = *car_pos.add(1);
 
-        // Find camera: prefer G_VIEW1 camera, fallback to mover camera
-        let view_cam_ptr = guest_base.add((G_VIEW1 + 0x40) as usize) as *const u32;
-        let mut cam = *view_cam_ptr;
+        // Find camera: prefer active mover camera, fallback to G_VIEW1 camera
+        let mut cam = 0u32;
+        let mover_ptr = guest_base.add((pl + 0x238) as usize) as *const u32;
+        let mover = *mover_ptr;
+        if mover != 0 && mover < 0x7fffffff {
+            let mover_cam_ptr = guest_base.add((mover + 0x40) as usize) as *const u32;
+            let c = *mover_cam_ptr;
+            if c != 0 && c < 0x7fffffff {
+                cam = c;
+            }
+        }
         if cam == 0 {
-            let mover_ptr = guest_base.add((pl + 0x238) as usize) as *const u32;
-            let mover = *mover_ptr;
-            if mover != 0 {
-                let mover_cam_ptr = guest_base.add((mover + 0x40) as usize) as *const u32;
-                cam = *mover_cam_ptr;
+            let view_cam_ptr = guest_base.add((G_VIEW1 + 0x40) as usize) as *const u32;
+            let c = *view_cam_ptr;
+            if c != 0 && c < 0x7fffffff {
+                cam = c;
             }
         }
 
-        if cam == 0 {
+        if cam == 0 || cam >= 0x7fffffff {
             return;
         }
 

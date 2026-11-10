@@ -43,17 +43,32 @@ public:
         auto axis=[&](int32_t which){return AMotionEvent_getAxisValue(event,which,0);};
         stickX_=axis(AMOTION_EVENT_AXIS_X);stickY_=axis(AMOTION_EVENT_AXIS_Y);
         hatX_=axis(AMOTION_EVENT_AXIS_HAT_X);hatY_=axis(AMOTION_EVENT_AXIS_HAT_Y);
-        // Android right stick: AXIS_Z / AXIS_RZ (standard) or AXIS_RX / AXIS_RY (PlayStation/8BitDo/custom)
-        float z_x=axis(AMOTION_EVENT_AXIS_Z), z_y=axis(AMOTION_EVENT_AXIS_RZ);
-        float rx_x=axis(AMOTION_EVENT_AXIS_RX), rx_y=axis(AMOTION_EVENT_AXIS_RY);
-        if(std::fabs(z_x)>0.01f || std::fabs(z_y)>0.01f){
-            rightX_=z_x; rightY_=z_y;
-        } else {
-            rightX_=rx_x; rightY_=rx_y;
+        // Android right stick: AXIS_RX/AXIS_RY ("X/Y-Rotation") or AXIS_Z/AXIS_RZ
+        float rx_cand = axis(AMOTION_EVENT_AXIS_RX);
+        float z_cand = axis(AMOTION_EVENT_AXIS_Z);
+        if(z_cand < -0.85f) z_cand = 0.f; // resting trigger
+        rightX_ = (std::fabs(rx_cand) >= std::fabs(z_cand)) ? rx_cand : z_cand;
+
+        float ry_cand = axis(AMOTION_EVENT_AXIS_RY);
+        float rz_cand = axis(AMOTION_EVENT_AXIS_RZ);
+        if(rz_cand < -0.85f) rz_cand = 0.f; // resting trigger
+        rightY_ = (std::fabs(ry_cand) >= std::fabs(rz_cand)) ? ry_cand : rz_cand;
+
+        // Pads report triggers as LTRIGGER/RTRIGGER, BRAKE/GAS or fallback to Z/RZ
+        float lt = std::fmax(axis(AMOTION_EVENT_AXIS_LTRIGGER), axis(AMOTION_EVENT_AXIS_BRAKE));
+        float rt = std::fmax(axis(AMOTION_EVENT_AXIS_RTRIGGER), axis(AMOTION_EVENT_AXIS_GAS));
+        if (lt <= 0.01f && (std::fabs(rx_cand) > 0.02f || std::fabs(ry_cand) > 0.02f)) {
+            float z_val = axis(AMOTION_EVENT_AXIS_Z);
+            if (z_val > 0.01f) lt = z_val;
+            else if (z_val > -0.9f && z_val < 0.0f) lt = (z_val + 1.0f) * 0.5f;
         }
-        // Pads report triggers as LTRIGGER/RTRIGGER, BRAKE/GAS or both.
-        leftTrigger_=std::fmax(axis(AMOTION_EVENT_AXIS_LTRIGGER),axis(AMOTION_EVENT_AXIS_BRAKE));
-        rightTrigger_=std::fmax(axis(AMOTION_EVENT_AXIS_RTRIGGER),axis(AMOTION_EVENT_AXIS_GAS));
+        if (rt <= 0.01f && (std::fabs(rx_cand) > 0.02f || std::fabs(ry_cand) > 0.02f)) {
+            float rz_val = axis(AMOTION_EVENT_AXIS_RZ);
+            if (rz_val > 0.01f) rt = rz_val;
+            else if (rz_val > -0.9f && rz_val < 0.0f) rt = (rz_val + 1.0f) * 0.5f;
+        }
+        leftTrigger_ = lt;
+        rightTrigger_ = rt;
         apply(driving,setKey);return true;
     }
     // The game switched between menus and driving, or started/stopped reading

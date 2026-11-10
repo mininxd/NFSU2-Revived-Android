@@ -1156,45 +1156,8 @@ static void look_turn_matrix(uint32_t cam, float ox, float oy, float yaw) {
 }
 
 static void look_camera_frame_tick(void) {
-    if (!g_p_esp || !*g_p_esp || !g_p_mem_base || !*g_p_mem_base) return;
-    if (g_cam_turned && g_turned_cam && rh_mem_committed(g_turned_cam, sizeof(g_made_cam))) {
-        if (!memcmp(GPTR(g_turned_cam), g_made_cam, sizeof(g_made_cam))) {
-            memcpy(GPTR(g_turned_cam), g_keep_cam, sizeof(g_keep_cam));
-        }
-        g_cam_turned = 0;
-    }
-
-    float r = hypotf(g_stick_x, g_stick_y);
-    float target_yaw = 0.f;
-    if (r > 0.25f && g_qc_open < 0) {
-        float k = fminf(1.f, (r - 0.25f) / 0.60f);
-        target_yaw = atan2f(g_stick_x, -g_stick_y) * k;
-    }
-    g_look_yaw += (target_yaw - g_look_yaw) * 0.25f;
-    if (fabsf(g_look_yaw) < 0.001f && fabsf(target_yaw) < 0.001f) g_look_yaw = 0.f;
-
-    if (fabsf(g_look_yaw) > 0.005f && g_p_mem_base && *g_p_mem_base) {
-        if (!rh_mem_committed(SPLIT_PLAYERS_INDEX, 4)) return;
-        uint32_t pl = MR32(SPLIT_PLAYERS_INDEX); // G_PLAYER1
-        if (pl && rh_mem_committed(pl + 0x238u, 4) && rh_mem_committed(pl + 4u, 4)) {
-            uint32_t mover = MR32(pl + 0x238u);
-            uint32_t cam = (mover && rh_mem_committed(mover + 0x40u, 4)) ? MR32(mover + 0x40u) : 0;
-            if (!cam && rh_mem_committed(0x00832e50u + 0x40u, 4)) cam = MR32(0x00832e50u + 0x40u); // G_VIEW1
-            uint32_t car = MR32(pl + 4u);
-            if (cam && car && rh_mem_committed(cam, sizeof(g_keep_cam)) && rh_mem_committed(car + 0x60u, 16)) {
-                float *car_pos = (float *)GPTR(car + 0x60u);
-                float ox = car_pos[0], oy = car_pos[1];
-                memcpy(g_keep_cam, GPTR(cam), sizeof(g_keep_cam));
-                look_turn_matrix(cam, ox, oy, g_look_yaw);
-                look_turn_xy((float *)GPTR(cam + 0x40u), 1, ox, oy, g_look_yaw);
-                look_turn_xy((float *)GPTR(cam + 0x50u), 0, ox, oy, g_look_yaw);
-                look_turn_xy((float *)GPTR(cam + 0x60u), 1, ox, oy, g_look_yaw);
-                memcpy(g_made_cam, GPTR(cam), sizeof(g_made_cam));
-                g_turned_cam = cam;
-                g_cam_turned = 1;
-            }
-        }
-    }
+    /* Camera rotation is handled cleanly and synchronously per-frame in
+     * libgraphics_cache.so (camera_stick.rs) at BeginScene -> Present. */
 }
 
 static const uint32_t kAllResolutionPercents[] = {
@@ -1350,29 +1313,19 @@ void roam_stick_input(float x, float y) {
     static void (*s_cam_stick)(float, float) = NULL;
     if (!s_cam_stick) s_cam_stick = (void (*)(float, float))dlsym(RTLD_DEFAULT, "nfs_camera_stick_input");
     if (s_cam_stick) s_cam_stick(x, y);
+
+    // Only process quickchat phrase selection if quickchat menu is ALREADY open.
+    // Moving the right stick while driving MUST rotate camera, NOT open quick chat!
+    if (g_qc_open < 0) return;
+
     float r = sqrtf(x * x + y * y);
-    if (r < 0.35f) {
-        g_qc_armed = 1;
-        return;
-    }
-    if (r < 0.8f || !g_qc_armed) return;
-    g_qc_armed = 0;
+    if (r < 0.60f) return;
 
     int dir = (fabsf(x) > fabsf(y)) ? (x > 0.f ? 1 : 3) : (y < 0.f ? 0 : 2);
-    int64_t now = roam_plat_now_us();
-
-    if (g_qc_open < 0 || now > g_qc_open_until) {
-        g_qc_open = dir;
-        g_qc_open_until = now + 4000000; // 4 seconds open
-        char b[64];
-        snprintf(b, sizeof b, "{\"group\":%d}", dir);
-        roam_plat_said(b);
-    } else {
-        int phrase = g_qc_open * 4 + dir;
-        g_qc_open = -1;
-        g_qc_open_until = 0;
-        atomic_store(&g_say_pick, phrase);
-    }
+    int phrase = g_qc_open * 4 + dir;
+    g_qc_open = -1;
+    g_qc_open_until = 0;
+    atomic_store(&g_say_pick, phrase);
 }
 
 /* JNI Interface */
