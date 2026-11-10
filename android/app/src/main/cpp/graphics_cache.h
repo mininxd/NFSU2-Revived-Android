@@ -69,6 +69,7 @@ void nfs_camera_cull_update_world(const float* world_ptr);
 void nfs_camera_cull_set_screen_space(int is_screen_space);
 int nfs_camera_cull_test_draw(void);
 void nfs_camera_cull_stats(uint64_t* out_total, uint64_t* out_culled);
+int nfs_camera_cull_get_camera(float* out_pos, float* out_fwd);
 
 // Direct3D 9 Vertex Declaration & FVF Decomposition
 typedef struct D3DVertexElement9Raw {

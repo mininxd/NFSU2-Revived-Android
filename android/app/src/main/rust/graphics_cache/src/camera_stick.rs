@@ -262,26 +262,23 @@ impl CameraStickEngine {
         let mut ox = *car_pos;
         let mut oy = *car_pos.add(1);
 
-        // Find camera: prefer active mover camera, fallback to G_VIEW1 camera
-        let mut cam = 0u32;
+        // Find active drive camera:
+        // In SPEED2.EXE, Player + 0x238 is the camera mover. Mover + 0xC is mover type (1 = MOVER_DRIVE).
+        // eView 1 is at G_VIEW1 (0x00832e50). eView + 0x40 (0x00832e90) holds the active Camera* pointer.
         let mover_ptr = guest_base.add((pl + 0x238) as usize) as *const u32;
         let mover = *mover_ptr;
-        if mover != 0 && mover < 0x7fffffff {
-            let mover_cam_ptr = guest_base.add((mover + 0x40) as usize) as *const u32;
-            let c = *mover_cam_ptr;
-            if c != 0 && c < 0x7fffffff {
-                cam = c;
-            }
-        }
-        if cam == 0 {
-            let view_cam_ptr = guest_base.add((G_VIEW1 + 0x40) as usize) as *const u32;
-            let c = *view_cam_ptr;
-            if c != 0 && c < 0x7fffffff {
-                cam = c;
+        if mover != 0 && mover < 0x7ffff000 {
+            let mover_type_ptr = guest_base.add((mover + 0x0c) as usize) as *const u32;
+            let mv_type = *mover_type_ptr;
+            // Only orbit when driving (type 1). Other types are debug camera (2), cutscene, etc.
+            if mv_type != 1 {
+                return;
             }
         }
 
-        if cam == 0 || cam >= 0x7fffffff {
+        let view_cam_ptr = guest_base.add((G_VIEW1 + 0x40) as usize) as *const u32;
+        let cam = *view_cam_ptr;
+        if cam < 0x10000 || cam >= 0x7ffff000 {
             return;
         }
 

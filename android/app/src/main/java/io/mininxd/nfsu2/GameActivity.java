@@ -44,6 +44,9 @@ public final class GameActivity extends NativeActivity {
         "%{%}";
 
     static {
+        try {
+            System.loadLibrary("graphics_cache");
+        } catch (Throwable ignored) {}
         System.loadLibrary("nfsu2_android");
         try {
             System.loadLibrary("nfsu2_roam");
@@ -179,7 +182,9 @@ public final class GameActivity extends NativeActivity {
             boolean keys=(sources&android.view.InputDevice.SOURCE_KEYBOARD)==android.view.InputDevice.SOURCE_KEYBOARD&&
                     device.getKeyboardType()!=android.view.InputDevice.KEYBOARD_TYPE_ALPHABETIC&&
                     device.hasKeys(android.view.KeyEvent.KEYCODE_BUTTON_A)[0];
-            boolean pad=device.isExternal()&&(buttons||stick||keys);
+            // Accept external controllers as well as built-in handhelds (Retroid, Odin, etc.)
+            // and USB controllers that report isExternal() == false on Xiaomi / HyperOS.
+            boolean pad=(device.isExternal()||buttons||stick)&&(buttons||stick||keys);
             seen.append(seen.length()==0?"":"; ").append(device.getName()).append(" [").append(Integer.toHexString(sources))
                     .append(device.isExternal()?" external":" internal").append(pad?" pad":"").append(']');
             if(pad){connected=true;accepted.add(id);}
@@ -357,30 +362,16 @@ public final class GameActivity extends NativeActivity {
         android.content.SharedPreferences options=getSharedPreferences("touch_layouts_v1",MODE_PRIVATE);
         tiltEnabled=options.getBoolean("tilt.enabled",false);tiltInvert=options.getBoolean("tilt.invert",false);
         tiltSensitivity=options.getFloat("tilt.sensitivity",1);
-        getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        android.view.Display display=getWindowManager().getDefaultDisplay();
-        android.view.Display.Mode current=display.getMode();float refresh=60;
-        android.view.Display.Mode bestMode=null;
-        for(android.view.Display.Mode mode:display.getSupportedModes()) {
-            if(mode.getPhysicalWidth()==current.getPhysicalWidth()&&mode.getPhysicalHeight()==current.getPhysicalHeight()) {
-                refresh=Math.max(refresh,mode.getRefreshRate());
-                if(bestMode==null||mode.getRefreshRate()>bestMode.getRefreshRate()) {
-                    bestMode=mode;
-                }
-            }
+        getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON |
+                android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+        getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS |
+                android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
+        getWindow().setStatusBarColor(android.graphics.Color.TRANSPARENT);
+        getWindow().setNavigationBarColor(android.graphics.Color.TRANSPARENT);
+        if (Build.VERSION.SDK_INT >= 30) {
+            getWindow().setDecorFitsSystemWindows(false);
         }
-        android.view.WindowManager.LayoutParams windowParams=getWindow().getAttributes();
-        windowParams.preferredRefreshRate=Math.min(120,refresh);
-        if(Build.VERSION.SDK_INT>=23&&bestMode!=null) {
-            windowParams.preferredDisplayModeId=bestMode.getModeId();
-        }
-        try {
-            java.lang.reflect.Field minField = windowParams.getClass().getField("preferredMinDisplayRefreshRate");
-            minField.setFloat(windowParams, Math.min(60.0f, refresh));
-            java.lang.reflect.Field maxField = windowParams.getClass().getField("preferredMaxDisplayRefreshRate");
-            maxField.setFloat(windowParams, Math.min(120.0f, refresh));
-        } catch (Throwable ignored) {}
-        getWindow().setAttributes(windowParams);
+        applyDisplayRefreshRate();
         Intent launch = getIntent();
         float distVal = 450.0f;
         try {
@@ -631,6 +622,34 @@ public final class GameActivity extends NativeActivity {
     }
     private boolean wasBackgrounded = false;
 
+    private void applyDisplayRefreshRate() {
+        android.view.Display display = getWindowManager().getDefaultDisplay();
+        if (display == null) return;
+        android.view.Display.Mode current = display.getMode();
+        float refresh = 60f;
+        android.view.Display.Mode bestMode = null;
+        for (android.view.Display.Mode mode : display.getSupportedModes()) {
+            if (mode.getPhysicalWidth() == current.getPhysicalWidth() && mode.getPhysicalHeight() == current.getPhysicalHeight()) {
+                refresh = Math.max(refresh, mode.getRefreshRate());
+                if (bestMode == null || mode.getRefreshRate() > bestMode.getRefreshRate()) {
+                    bestMode = mode;
+                }
+            }
+        }
+        android.view.WindowManager.LayoutParams windowParams = getWindow().getAttributes();
+        windowParams.preferredRefreshRate = Math.min(120f, refresh);
+        if (Build.VERSION.SDK_INT >= 23 && bestMode != null) {
+            windowParams.preferredDisplayModeId = bestMode.getModeId();
+        }
+        try {
+            java.lang.reflect.Field minField = windowParams.getClass().getField("preferredMinDisplayRefreshRate");
+            minField.setFloat(windowParams, Math.min(60.0f, refresh));
+            java.lang.reflect.Field maxField = windowParams.getClass().getField("preferredMaxDisplayRefreshRate");
+            maxField.setFloat(windowParams, Math.min(120.0f, refresh));
+        } catch (Throwable ignored) {}
+        getWindow().setAttributes(windowParams);
+    }
+
     @Override public void onWindowFocusChanged(boolean focused) {
         super.onWindowFocusChanged(focused);
         if(!focused) {
@@ -639,10 +658,14 @@ public final class GameActivity extends NativeActivity {
             if(diagnosticOverlay!=null)diagnosticOverlay.hide();
         }
         if(focused){
+            applyDisplayRefreshRate();
             if(Build.VERSION.SDK_INT>=30){
+                getWindow().setDecorFitsSystemWindows(false);
                 android.view.WindowInsetsController insets=getWindow().getInsetsController();
-                if(insets!=null){insets.hide(android.view.WindowInsets.Type.systemBars());
-                    insets.setSystemBarsBehavior(android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);}
+                if(insets!=null){
+                    insets.hide(android.view.WindowInsets.Type.systemBars());
+                    insets.setSystemBarsBehavior(android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                }
             }else getWindow().getDecorView().setSystemUiVisibility(android.view.View.SYSTEM_UI_FLAG_FULLSCREEN |
                     android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY |
                     android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION |

@@ -11,8 +11,41 @@ case 12:{*argumentCount=2;return device->ShowCursor(static_cast<WINBOOL>(args[1]
 case 14:{*argumentCount=3;IDirect3DSwapChain9* object2=nullptr;HRESULT status=device->GetSwapChain(static_cast<UINT>(args[1]),args[2]?&object2:nullptr);if(args[2])write(args[2],SUCCEEDED(status)?wrap(object2,Kind::SwapChain):0);return status;}
 case 15:{*argumentCount=1;return device->GetNumberOfSwapChains();}
 case 17:{*argumentCount=5;
-    static auto s_cam_restore = reinterpret_cast<void(*)(void*)>(dlsym(RTLD_DEFAULT,"nfs_camera_stick_restore_frame"));
+    static auto s_cam_restore = []() -> void(*)(void*) {
+        void* h = getGraphicsCacheHandle();
+        auto fn = h ? reinterpret_cast<void(*)(void*)>(dlsym(h,"nfs_camera_stick_restore_frame")) : nullptr;
+        if(!fn) fn = reinterpret_cast<void(*)(void*)>(dlsym(RTLD_DEFAULT,"nfs_camera_stick_restore_frame"));
+        return fn;
+    }();
     if(s_cam_restore) s_cam_restore(guestBase);
+    static uint32_t s_cull_log_frame = 0;
+    if (++s_cull_log_frame % 300 == 0) {
+        static auto s_cull_stats = []() -> void(*)(uint64_t*, uint64_t*) {
+            void* h = getGraphicsCacheHandle();
+            auto fn = h ? reinterpret_cast<void(*)(uint64_t*, uint64_t*)>(dlsym(h, "nfs_camera_cull_stats")) : nullptr;
+            if(!fn) fn = reinterpret_cast<void(*)(uint64_t*, uint64_t*)>(dlsym(RTLD_DEFAULT, "nfs_camera_cull_stats"));
+            return fn;
+        }();
+        static auto s_cull_get_cam = []() -> int(*)(float*, float*) {
+            void* h = getGraphicsCacheHandle();
+            auto fn = h ? reinterpret_cast<int(*)(float*, float*)>(dlsym(h, "nfs_camera_cull_get_camera")) : nullptr;
+            if(!fn) fn = reinterpret_cast<int(*)(float*, float*)>(dlsym(RTLD_DEFAULT, "nfs_camera_cull_get_camera"));
+            return fn;
+        }();
+        if (s_cull_stats) {
+            uint64_t tot = 0, cul = 0;
+            s_cull_stats(&tot, &cul);
+            float cpos[3] = {0}, cfwd[3] = {0};
+            int has_cam = s_cull_get_cam ? s_cull_get_cam(cpos, cfwd) : 0;
+            if (tot > 0) {
+                NFS_RUNTIME_LOG(ANDROID_LOG_INFO, "NFSU2-CameraCull",
+                    "Stats: %llu total draws, %llu culled (%.2f%%) [cam_valid=%d pos=(%.1f,%.1f,%.1f) fwd=(%.2f,%.2f,%.2f)]",
+                    (unsigned long long)tot, (unsigned long long)cul,
+                    tot > 0 ? ((double)cul * 100.0 / (double)tot) : 0.0,
+                    has_cam, cpos[0], cpos[1], cpos[2], cfwd[0], cfwd[1], cfwd[2]);
+            }
+        }
+    }
     return device->Present(static_cast<const RECT*>(pointer(args[1])),static_cast<const RECT*>(pointer(args[2])),args[3]?hostWindow.load():nullptr,static_cast<const RGNDATA*>(pointer(args[4])));}
 case 18:{*argumentCount=5;IDirect3DSurface9* object4=nullptr;HRESULT status=device->GetBackBuffer(static_cast<UINT>(args[1]),static_cast<UINT>(args[2]),static_cast<D3DBACKBUFFER_TYPE>(args[3]),args[4]?&object4:nullptr);if(args[4])write(args[4],SUCCEEDED(status)?wrap(object4,Kind::Surface):0);return status;}
 case 19:{*argumentCount=3;return device->GetRasterStatus(static_cast<UINT>(args[1]),static_cast<D3DRASTER_STATUS*>(pointer(args[2])));}
@@ -45,19 +78,34 @@ case 39:{*argumentCount=2;
     return device->SetDepthStencilSurface(nativeObject<IDirect3DSurface9>(args[1]));}
 case 40:{*argumentCount=2;IDirect3DSurface9* object1=nullptr;HRESULT status=device->GetDepthStencilSurface(args[1]?&object1:nullptr);if(args[1]){uint32_t address=SUCCEEDED(status)?wrap(object1,Kind::Surface):0;write(args[1],address);retainInitialDepthDescriptor(args[1],address);}return status;}
 case 41:{*argumentCount=1;
-    static auto s_cam_apply = reinterpret_cast<void(*)(void*)>(dlsym(RTLD_DEFAULT,"nfs_camera_stick_apply_frame"));
+    static auto s_cam_apply = []() -> void(*)(void*) {
+        void* h = getGraphicsCacheHandle();
+        auto fn = h ? reinterpret_cast<void(*)(void*)>(dlsym(h,"nfs_camera_stick_apply_frame")) : nullptr;
+        if(!fn) fn = reinterpret_cast<void(*)(void*)>(dlsym(RTLD_DEFAULT,"nfs_camera_stick_apply_frame"));
+        return fn;
+    }();
     if(s_cam_apply) s_cam_apply(guestBase);
     return device->BeginScene();}
 case 42:{*argumentCount=1;
     return device->EndScene();}
 case 43:{*argumentCount=7;return device->Clear(static_cast<DWORD>(args[1]),static_cast<const D3DRECT*>(pointer(args[2])),static_cast<DWORD>(args[3]),static_cast<D3DCOLOR>(args[4]),floatValue(args[5]),static_cast<DWORD>(args[6]));}
 case 44:{*argumentCount=3;
-    static auto s_filter_tf = reinterpret_cast<int(*)(uint32_t,const float*)>(dlsym(RTLD_DEFAULT,"nfs_d3d9_filter_transform"));
+    static auto s_filter_tf = []() -> int(*)(uint32_t,const float*) {
+        void* h = getGraphicsCacheHandle();
+        auto fn = h ? reinterpret_cast<int(*)(uint32_t,const float*)>(dlsym(h,"nfs_d3d9_filter_transform")) : nullptr;
+        if(!fn) fn = reinterpret_cast<int(*)(uint32_t,const float*)>(dlsym(RTLD_DEFAULT,"nfs_d3d9_filter_transform"));
+        return fn;
+    }();
     auto matrix=static_cast<const D3DMATRIX*>(pointer(args[2]));
     D3DMATRIX tf_copy;
     if(args[1]==2 && matrix){ // D3DTS_VIEW = 2
         tf_copy = *matrix;
-        static auto s_cam_tf = reinterpret_cast<int(*)(float*,const void*)>(dlsym(RTLD_DEFAULT,"nfs_camera_stick_transform_view_matrix"));
+        static auto s_cam_tf = []() -> int(*)(float*,const void*) {
+            void* h = getGraphicsCacheHandle();
+            auto fn = h ? reinterpret_cast<int(*)(float*,const void*)>(dlsym(h,"nfs_camera_stick_transform_view_matrix")) : nullptr;
+            if(!fn) fn = reinterpret_cast<int(*)(float*,const void*)>(dlsym(RTLD_DEFAULT,"nfs_camera_stick_transform_view_matrix"));
+            return fn;
+        }();
         if(s_cam_tf && s_cam_tf(reinterpret_cast<float*>(&tf_copy), guestBase)){
             matrix = &tf_copy;
         }
@@ -109,11 +157,21 @@ case 78:{*argumentCount=1;return device->GetSoftwareVertexProcessing();}
 case 79:{*argumentCount=2;return device->SetNPatchMode(floatValue(args[1]));}
 case 80:{*argumentCount=1;return floatBits(device->GetNPatchMode());}
 case 81:{*argumentCount=4;
-    static auto s_cull_test = reinterpret_cast<int(*)()>(dlsym(RTLD_DEFAULT, "nfs_camera_cull_test_draw"));
+    static auto s_cull_test = []() -> int(*)() {
+        void* h = getGraphicsCacheHandle();
+        auto fn = h ? reinterpret_cast<int(*)()>(dlsym(h, "nfs_camera_cull_test_draw")) : nullptr;
+        if(!fn) fn = reinterpret_cast<int(*)()>(dlsym(RTLD_DEFAULT, "nfs_camera_cull_test_draw"));
+        return fn;
+    }();
     if (s_cull_test && s_cull_test()) return D3D_OK;
     return device->DrawPrimitive(static_cast<D3DPRIMITIVETYPE>(args[1]),static_cast<UINT>(args[2]),static_cast<UINT>(args[3]));}
 case 82:{*argumentCount=7;
-    static auto s_cull_test = reinterpret_cast<int(*)()>(dlsym(RTLD_DEFAULT, "nfs_camera_cull_test_draw"));
+    static auto s_cull_test = []() -> int(*)() {
+        void* h = getGraphicsCacheHandle();
+        auto fn = h ? reinterpret_cast<int(*)()>(dlsym(h, "nfs_camera_cull_test_draw")) : nullptr;
+        if(!fn) fn = reinterpret_cast<int(*)()>(dlsym(RTLD_DEFAULT, "nfs_camera_cull_test_draw"));
+        return fn;
+    }();
     if (s_cull_test && s_cull_test()) return D3D_OK;
     return device->DrawIndexedPrimitive(static_cast<D3DPRIMITIVETYPE>(args[1]),static_cast<INT>(args[2]),static_cast<UINT>(args[3]),static_cast<UINT>(args[4]),static_cast<UINT>(args[5]),static_cast<UINT>(args[6]));}
 case 83:{*argumentCount=5;return device->DrawPrimitiveUP(static_cast<D3DPRIMITIVETYPE>(args[1]),static_cast<UINT>(args[2]),static_cast<const void*>(pointer(args[3])),static_cast<UINT>(args[4]));}

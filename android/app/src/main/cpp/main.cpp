@@ -267,7 +267,13 @@ static void publishPad(){
     const float axes[6]={state.leftX,state.leftY,state.leftTrigger-state.rightTrigger,state.rightX,state.rightY,state.rightTrigger*2.f-1.f};
     setGuestPad(axes,state.buttons,state.hatX,state.hatY);
 
-    static auto s_stick_cam = reinterpret_cast<void(*)(float,float)>(dlsym(RTLD_DEFAULT,"nfs_camera_stick_input"));
+    static void (*s_stick_cam)(float,float) = nullptr;
+    if(!s_stick_cam){
+        void* h=dlopen("libgraphics_cache.so",RTLD_NOLOAD);
+        if(!h) h=dlopen("libgraphics_cache.so",RTLD_NOW|RTLD_GLOBAL);
+        if(h) s_stick_cam=reinterpret_cast<void(*)(float,float)>(dlsym(h,"nfs_camera_stick_input"));
+        if(!s_stick_cam) s_stick_cam=reinterpret_cast<void(*)(float,float)>(dlsym(RTLD_DEFAULT,"nfs_camera_stick_input"));
+    }
     if(s_stick_cam) s_stick_cam(state.rightX, state.rightY);
     static void (*s_roam_stick)(float, float) = nullptr;
     if(!s_roam_stick){

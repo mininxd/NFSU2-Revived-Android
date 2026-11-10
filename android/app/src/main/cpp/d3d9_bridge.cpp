@@ -171,7 +171,19 @@ void shutdownD3D9Bridge(){
     if(std::getenv("NFS_D3D9_TEST_DISPLAY")){auto window=hostWindow.load();setD3D9HostWindow(nullptr);dxvkDestroyTestWindow(window);}
 #endif
 }
-void setD3D9HostWindow(ANativeWindow* window){hostWindow=window;dxvkAndroidSetWindow(window);}
+void setD3D9HostWindow(ANativeWindow* window){
+    hostWindow=window;
+#ifdef __ANDROID__
+    if(window){
+        typedef int32_t (*PFN_ANativeWindow_setFrameRate)(ANativeWindow*, float, int8_t);
+        static auto pfnSetFrameRate = reinterpret_cast<PFN_ANativeWindow_setFrameRate>(dlsym(RTLD_DEFAULT, "ANativeWindow_setFrameRate"));
+        if(pfnSetFrameRate){
+            pfnSetFrameRate(window, 60.0f, 0);
+        }
+    }
+#endif
+    dxvkAndroidSetWindow(window);
+}
 bool d3d9RequestsSurface(){return surfaceRequested;}
 void acknowledgeD3D9Surface(bool available){surfaceAvailable=available;}
 uint32_t createGuestD3D9(uint32_t sdk){
@@ -204,7 +216,21 @@ void noteVertexDeclaration(const D3DVERTEXELEMENT9* elements){
 // crash (null dereference, Mali reports); until a Reset succeeds the device reads as
 // lost and needing a reset, which the game handles as on Windows.
 bool deviceResetPending=false;
+void* getGraphicsCacheHandle() {
+    static void* s_handle = nullptr;
+    if (!s_handle) {
+        s_handle = dlopen("libgraphics_cache.so", RTLD_NOLOAD);
+        if (!s_handle) s_handle = dlopen("libgraphics_cache.so", RTLD_NOW | RTLD_GLOBAL);
+        if (s_handle) {
+            NFS_RUNTIME_LOG(ANDROID_LOG_INFO, "NFSU2", "Loaded libgraphics_cache.so successfully with RTLD_GLOBAL");
+        } else {
+            NFS_RUNTIME_LOG(ANDROID_LOG_WARN, "NFSU2", "dlopen libgraphics_cache.so: %s", dlerror());
+        }
+    }
+    return s_handle;
+}
 uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumentCount){
+    getGraphicsCacheHandle();
     uint32_t kind=(token-methodBase)/4096,method=((token-methodBase)%4096)/16;
     Object* entry=findObject(args[0]);
     if(!entry||static_cast<uint32_t>(entry->kind)!=kind){
@@ -310,7 +336,12 @@ uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumen
         }
     }
     if(kind==2){
-        static auto s_filter_state = reinterpret_cast<int(*)(uint32_t,const uint32_t*,uint32_t*)>(dlsym(RTLD_DEFAULT,"nfs_d3d9_filter_state"));
+        static auto s_filter_state = []() -> int(*)(uint32_t,const uint32_t*,uint32_t*) {
+            void* h = getGraphicsCacheHandle();
+            auto fn = h ? reinterpret_cast<int(*)(uint32_t,const uint32_t*,uint32_t*)>(dlsym(h,"nfs_d3d9_filter_state")) : nullptr;
+            if(!fn) fn = reinterpret_cast<int(*)(uint32_t,const uint32_t*,uint32_t*)>(dlsym(RTLD_DEFAULT,"nfs_d3d9_filter_state"));
+            return fn;
+        }();
         if(s_filter_state && s_filter_state(method, args, argumentCount)){
             return D3D_OK;
         }

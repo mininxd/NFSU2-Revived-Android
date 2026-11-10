@@ -297,6 +297,24 @@ pub unsafe extern "C" fn nfs_camera_cull_stats(out_total: *mut u64, out_culled: 
     GLOBAL_CAMERA_CULL.stats(out_total, out_culled);
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn nfs_camera_cull_get_camera(out_pos: *mut f32, out_fwd: *mut f32) -> i32 {
+    if !GLOBAL_CAMERA_CULL.cam_valid.load(Ordering::Relaxed) {
+        return 0;
+    }
+    if !out_pos.is_null() {
+        *out_pos = f32::from_bits(GLOBAL_CAMERA_CULL.cam_pos[0].load(Ordering::Relaxed));
+        *out_pos.add(1) = f32::from_bits(GLOBAL_CAMERA_CULL.cam_pos[1].load(Ordering::Relaxed));
+        *out_pos.add(2) = f32::from_bits(GLOBAL_CAMERA_CULL.cam_pos[2].load(Ordering::Relaxed));
+    }
+    if !out_fwd.is_null() {
+        *out_fwd = f32::from_bits(GLOBAL_CAMERA_CULL.cam_fwd[0].load(Ordering::Relaxed));
+        *out_fwd.add(1) = f32::from_bits(GLOBAL_CAMERA_CULL.cam_fwd[1].load(Ordering::Relaxed));
+        *out_fwd.add(2) = f32::from_bits(GLOBAL_CAMERA_CULL.cam_fwd[2].load(Ordering::Relaxed));
+    }
+    1
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

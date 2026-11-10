@@ -21,6 +21,17 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#if !defined(_WIN32)
+#include <dlfcn.h>
+static void* get_graphics_cache_lib(void) {
+    static void* s_lib = NULL;
+    if (!s_lib) {
+        s_lib = dlopen("libgraphics_cache.so", RTLD_NOLOAD);
+        if (!s_lib) s_lib = dlopen("libgraphics_cache.so", RTLD_NOW | RTLD_GLOBAL);
+    }
+    return s_lib;
+}
+#endif
 
 typedef struct { float pos_x, pos_y, offset_x, offset_y; } hud_entry;
 static hud_entry s_hud[256];
@@ -197,8 +208,9 @@ void nfs_widescreen_set_hud_safe_area(int enabled) {
 void nfs_widescreen_set_draw_distance(float distance) {
     s_draw_distance = distance;
 #if !defined(_WIN32)
-    extern void nfs_camera_cull_set_far_distance(float) __attribute__((weak));
-    if (nfs_camera_cull_set_far_distance) nfs_camera_cull_set_far_distance(distance);
+    void* h = get_graphics_cache_lib();
+    void (*fn)(float) = h ? (void (*)(float))dlsym(h, "nfs_camera_cull_set_far_distance") : NULL;
+    if (fn) fn(distance);
 #endif
 }
 
@@ -207,8 +219,9 @@ static int s_forward_culling = 1;
 void nfs_widescreen_set_forward_culling(int enabled) {
     s_forward_culling = enabled;
 #if !defined(_WIN32)
-    extern void nfs_camera_cull_set_enabled(int) __attribute__((weak));
-    if (nfs_camera_cull_set_enabled) nfs_camera_cull_set_enabled(enabled);
+    void* h = get_graphics_cache_lib();
+    void (*fn)(int) = h ? (void (*)(int))dlsym(h, "nfs_camera_cull_set_enabled") : NULL;
+    if (fn) fn(enabled);
 #endif
 }
 
@@ -297,17 +310,17 @@ void nfs_widescreen_apply_frame_rate(void) {
         if (view1 >= 0x10000u && view1 <= 0x7FFFF000u) {
             uint32_t cam1 = MEM32(view1 + 0x40u);
             if (cam1 >= 0x10000u && cam1 <= 0x7FFFF000u) {
-                float fx = rdf(cam1 + 0x20u);
-                float fy = rdf(cam1 + 0x24u);
-                float fz = rdf(cam1 + 0x28u);
-                float px = rdf(cam1 + 0x30u);
-                float py = rdf(cam1 + 0x34u);
-                float pz = rdf(cam1 + 0x38u);
+                float px = rdf(cam1 + 0x40u);
+                float py = rdf(cam1 + 0x44u);
+                float pz = rdf(cam1 + 0x48u);
+                float fx = rdf(cam1 + 0x50u);
+                float fy = rdf(cam1 + 0x54u);
+                float fz = rdf(cam1 + 0x58u);
 #if !defined(_WIN32)
-                extern void nfs_camera_cull_update_camera(float, float, float, float, float, float) __attribute__((weak));
-                if (nfs_camera_cull_update_camera) {
-                    nfs_camera_cull_update_camera(px, py, pz, fx, fy, fz);
-                }
+                void* h = get_graphics_cache_lib();
+                void (*fn)(float, float, float, float, float, float) = h ?
+                    (void (*)(float, float, float, float, float, float))dlsym(h, "nfs_camera_cull_update_camera") : NULL;
+                if (fn) fn(px, py, pz, fx, fy, fz);
 #endif
             }
         }
