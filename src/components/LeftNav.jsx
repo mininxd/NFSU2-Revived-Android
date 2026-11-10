@@ -109,7 +109,7 @@ export default function LeftNav({ activePage, onNavigate, edition, onOpenNewslet
             alt="EA Trax Soundtrack"
             style={{ display: 'block', cursor: onOpenEATrax ? 'pointer' : 'default' }}
             onClick={onOpenEATrax}
-            title="Open EA TRAX 2004 Soundtrack Jukebox"
+            title="Open EA TRAX 2004 Music List & Videos"
           />
           <img
             src="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/hdr_community.gif"

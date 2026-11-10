@@ -29,7 +29,7 @@ export default function Footer({ edition, onSelectEdition, onOpenLegal }) {
               }}
               className="legal"
             >
-              &copy;2004 Electronic Arts Inc. Need for Speed is a trademark of Electronic Arts Inc.
+              Not affiliated with or endorsed by Electronic Arts.
             </a>
             &nbsp;|&nbsp;
             <a
@@ -117,19 +117,6 @@ export default function Footer({ edition, onSelectEdition, onOpenLegal }) {
           </tr>
         </tbody>
       </table>
-
-      <div
-        style={{
-          textAlign: 'center',
-          color: '#888888',
-          fontSize: 9,
-          fontFamily: 'arial, helvetica, sans-serif',
-          marginTop: 6,
-          marginBottom: 16
-        }}
-      >
-        Not affiliated with or endorsed by Electronic Arts.
-      </div>
     </div>
   );
 }

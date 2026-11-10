@@ -146,7 +146,7 @@ export default function HomePage({
                           }}
                           style={{ color: '#006600' }}
                         >
-                          <b>EA TRAX Jukebox</b>
+                          <b>EA TRAX Music List</b>
                         </a>
                         <br />
                       </>

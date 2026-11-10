@@ -82,7 +82,7 @@ export default function NFSU2Nav({ activePage, onNavigate, onOpenEATrax }) {
             alignItems: 'center',
             gap: 4
           }}
-          title="Open EA TRAX 2004 Soundtrack Jukebox"
+          title="Open EA TRAX 2004 Music List & Videos"
         >
           <span>&#9835;</span> EA TRAX
         </button>
