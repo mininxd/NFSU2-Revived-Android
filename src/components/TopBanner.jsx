@@ -21,8 +21,6 @@ export default function TopBanner({ onNavigate }) {
       }}
       onClick={() => onNavigate('home')}
       title="EA GAMES | Need for Speed Underground 2 - Return to Home"
-    >
-      {/* Clickable overlay */}
-    </div>
+    />
   );
 }

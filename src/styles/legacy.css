@@ -1,4 +1,4 @@
-/* Authentic 2004 EA Games NFS Underground 2 Stylesheet */
+/* 2004 EA Games NFS Underground 2 layout and typography */
 
 * {
   box-sizing: border-box;
@@ -14,7 +14,6 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Network Top Nav */
 .networknav-wrapper {
   background-color: #333333;
   width: 100%;
@@ -46,7 +45,6 @@ body {
   margin: 0 4px;
 }
 
-/* Game Finder & Top Subnav */
 .find-bar {
   width: 765px;
   height: 25px;
@@ -63,7 +61,6 @@ body {
   background: url('/assets/images.ea.com/eagames/redesign/common/head/find_corner.gif') no-repeat;
 }
 
-/* Typography from original site */
 .default {
   font-family: verdana, arial, sans-serif;
   font-size: 10px;
@@ -127,7 +124,6 @@ a.sshotnav:hover {
   color: #ffffff;
 }
 
-/* Center stage container */
 .stage-container {
   width: 765px;
   margin: 0 auto;
@@ -136,7 +132,6 @@ a.sshotnav:hover {
   box-shadow: 0 0 25px rgba(0, 255, 120, 0.08);
 }
 
-/* Left Navigation Sidebar */
 .leftnav-td {
   width: 150px;
   min-width: 150px;
@@ -145,14 +140,12 @@ a.sshotnav:hover {
   background: url('/assets/www.ea.com/downloads/eagames/official/nfs/underground2/us/leftnav_background.jpg') repeat-y #e4e4e4;
 }
 
-/* Main Content Stage */
 .mainstage-td {
   width: 615px;
   vertical-align: top;
   background-color: #d8d8d8;
 }
 
-/* Modals & Popups styled in 2004 style */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -176,7 +169,6 @@ a.sshotnav:hover {
   font-size: 11px;
 }
 
-/* Version switcher badge */
 .version-badge {
   background: #1a1a1a;
   border: 1px solid #444444;
@@ -195,4 +187,210 @@ a.sshotnav:hover {
   background: #2a2a2a;
   color: #ffffff;
   border-color: #a1d464;
+}
+
+.nfsu2-play-container {
+  display: inline-block;
+  text-decoration: none;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.nfsu2-play-container:hover {
+  transform: scale(1.04) translateY(-1px);
+  filter: brightness(1.15);
+}
+
+.nfsu2-play-container:active {
+  transform: scale(0.98) translateY(1px);
+}
+
+.nfsu2-hero-play-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 18px 8px 14px;
+  background: linear-gradient(135deg, #1b261b 0%, #0c140c 50%, #050a05 100%);
+  border: 2px solid #a1d464;
+  border-radius: 2px;
+  box-shadow:
+    0 0 16px rgba(161, 212, 100, 0.65),
+    inset 0 1px 1px rgba(255, 255, 255, 0.4),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.8),
+    0 4px 12px rgba(0, 0, 0, 0.9);
+  transform: skewX(-12deg);
+  position: relative;
+  overflow: hidden;
+}
+
+.nfsu2-hero-play-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -50%;
+  width: 200%;
+  height: 45%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.0) 100%);
+  pointer-events: none;
+}
+
+.nfsu2-play-content-unskew {
+  transform: skewX(12deg);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.nfsu2-play-icon {
+  width: 28px;
+  height: 28px;
+  background: linear-gradient(180deg, #a1d464 0%, #689b2e 100%);
+  border: 1px solid #d4f794;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 10px rgba(161, 212, 100, 0.8), inset 0 1px 2px rgba(255, 255, 255, 0.8);
+}
+
+.nfsu2-play-triangle {
+  width: 0;
+  height: 0;
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
+  border-left: 10px solid #000000;
+  margin-left: 2px;
+}
+
+.nfsu2-play-title {
+  font-family: 'Impact', 'Arial Black', sans-serif;
+  font-size: 18px;
+  letter-spacing: 1.5px;
+  font-style: italic;
+  color: #ffffff;
+  text-shadow:
+    0 0 6px rgba(161, 212, 100, 0.9),
+    1px 2px 3px rgba(0, 0, 0, 0.9);
+  line-height: 1;
+}
+
+.nfsu2-play-subtitle {
+  font-family: 'Verdana', sans-serif;
+  font-size: 8px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  color: #a1d464;
+  text-transform: uppercase;
+  margin-top: 2px;
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+}
+
+/* Left navigation play button replacing preorder slot */
+.nfsu2-leftnav-play-banner {
+  width: 150px;
+  height: 72px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-decoration: none;
+  background:
+    repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.3) 0px, rgba(0, 0, 0, 0.3) 2px, transparent 2px, transparent 4px),
+    radial-gradient(ellipse at 50% 0%, rgba(161, 212, 100, 0.3) 0%, transparent 75%),
+    linear-gradient(180deg, #1b261b 0%, #0b120b 55%, #050805 100%);
+  border-top: 1px solid #7da84a;
+  border-bottom: 2px solid #00ff66;
+  border-left: 1px solid #23341b;
+  border-right: 1px solid #23341b;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: all 0.18s ease;
+}
+
+.nfsu2-leftnav-play-banner::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 34px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0%, transparent 100%);
+  pointer-events: none;
+}
+
+.nfsu2-leftnav-play-banner:hover {
+  background:
+    repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.25) 0px, rgba(0, 0, 0, 0.25) 2px, transparent 2px, transparent 4px),
+    radial-gradient(ellipse at 50% 0%, rgba(161, 212, 100, 0.5) 0%, transparent 75%),
+    linear-gradient(180deg, #243424 0%, #101c10 55%, #080d08 100%);
+  border-top-color: #9fe258;
+  border-bottom-color: #00ff66;
+  box-shadow:
+    inset 0 0 14px rgba(0, 255, 100, 0.35),
+    0 0 12px rgba(161, 212, 100, 0.7);
+  filter: brightness(1.1);
+}
+
+.nfsu2-leftnav-play-badge {
+  font-family: 'Verdana', sans-serif;
+  font-size: 7.5px;
+  font-weight: bold;
+  letter-spacing: 0.8px;
+  color: #a1d464;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.nfsu2-leftnav-play-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #00ff66;
+  box-shadow: 0 0 5px #00ff66;
+  display: inline-block;
+}
+
+.nfsu2-leftnav-play-main {
+  font-family: 'Impact', 'Arial Black', sans-serif;
+  font-size: 20px;
+  font-style: italic;
+  letter-spacing: 1.5px;
+  color: #ffffff;
+  line-height: 1;
+  text-shadow:
+    0 0 8px rgba(161, 212, 100, 0.9),
+    1px 2px 2px #000000;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.nfsu2-leftnav-play-arrow {
+  color: #a1d464;
+  font-size: 13px;
+  line-height: 1;
+  text-shadow: 0 0 6px #a1d464;
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+
+.nfsu2-leftnav-play-banner:hover .nfsu2-leftnav-play-arrow {
+  color: #00ff66;
+  transform: translateX(2px);
+  text-shadow: 0 0 8px #00ff66;
+}
+
+.nfsu2-leftnav-play-sub {
+  font-family: 'Verdana', sans-serif;
+  font-size: 7px;
+  font-weight: bold;
+  color: #9ecc5e;
+  letter-spacing: 0.6px;
+  margin-top: 2px;
+  text-shadow: 0 1px 2px #000000;
 }

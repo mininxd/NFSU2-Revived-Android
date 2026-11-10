@@ -111,7 +111,6 @@ export default function GameFinderBar({ onSelectGame, onSelectRegion, currentReg
       }}
       ref={menuRef}
     >
-      {/* Corner */}
       <img
         src="/assets/images.ea.com/eagames/redesign/common/head/find_corner.gif"
         width="11"
@@ -120,7 +119,6 @@ export default function GameFinderBar({ onSelectGame, onSelectRegion, currentReg
         style={{ display: 'block' }}
       />
 
-      {/* Game Finder Dropdown Button */}
       <div style={{ position: 'relative', width: 225, height: 21 }}>
         <img
           src="/assets/images.ea.com/eagames/redesign/components/gamefinder/gamefinder.gif"
@@ -131,7 +129,6 @@ export default function GameFinderBar({ onSelectGame, onSelectRegion, currentReg
           onClick={() => setMenuOpen(!menuOpen)}
         />
 
-        {/* Dropdown Menu Popup */}
         {menuOpen && (
           <div
             style={{
@@ -147,7 +144,6 @@ export default function GameFinderBar({ onSelectGame, onSelectRegion, currentReg
               fontFamily: 'verdana, arial, sans-serif'
             }}
           >
-            {/* Platforms Column */}
             <div
               style={{
                 width: 140,
@@ -190,7 +186,6 @@ export default function GameFinderBar({ onSelectGame, onSelectRegion, currentReg
               })}
             </div>
 
-            {/* Games Column */}
             <div style={{ width: 230, maxHeight: 320, overflowY: 'auto', background: '#f5f5f5' }}>
               <div
                 style={{
@@ -228,7 +223,6 @@ export default function GameFinderBar({ onSelectGame, onSelectRegion, currentReg
         )}
       </div>
 
-      {/* Search Input Form */}
       <form onSubmit={handleSearchSubmit} style={{ display: 'flex', alignItems: 'center', margin: 0, paddingLeft: 6 }}>
         <input
           type="text"
@@ -259,7 +253,6 @@ export default function GameFinderBar({ onSelectGame, onSelectRegion, currentReg
         />
       </form>
 
-      {/* Register & Support buttons */}
       <div style={{ display: 'flex', alignItems: 'center', marginLeft: 8 }}>
         <a
           href="#register"
@@ -292,7 +285,6 @@ export default function GameFinderBar({ onSelectGame, onSelectRegion, currentReg
         </a>
       </div>
 
-      {/* Region / Language Dropdown */}
       <div style={{ marginLeft: 'auto', marginRight: 8 }}>
         <select
           value={currentRegion}

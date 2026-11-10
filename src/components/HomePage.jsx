@@ -13,49 +13,14 @@ export default function HomePage({
 
   return (
     <div style={{ width: 615 }}>
-      {/* Hero 615x395 Stage */}
-      <div
-        style={{
-          width: 615,
-          height: 395,
-          position: 'relative',
-          background: `url('/assets/images.ea.com/eagames/official/nfs/underground2/us/home/mainimage.jpg') no-repeat #000000`,
-          backgroundSize: '615px 395px'
-        }}
-      >
-        {/* Subtle interactive badge to view full art or toggle soundtrack vibe */}
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 10,
-            right: 10,
-            display: 'flex',
-            gap: 6
-          }}
-        >
-          <button
-            onClick={() =>
-              onOpenImageModal({
-                title: 'Need for Speed Underground 2 - Rachel & 350Z Hero Art',
-                src: '/assets/images.ea.com/eagames/official/nfs/underground2/us/home/mainimage.jpg'
-              })
-            }
-            style={{
-              background: 'rgba(0,0,0,0.65)',
-              border: '1px solid #a1d464',
-              color: '#a1d464',
-              fontFamily: 'verdana',
-              fontSize: 9,
-              padding: '3px 7px',
-              cursor: 'pointer'
-            }}
-          >
-            Zoom Art
-          </button>
-        </div>
-      </div>
+      <img
+        src="/assets/images.ea.com/eagames/official/nfs/underground2/us/home/mainimage.jpg"
+        width="615"
+        height="395"
+        alt="Need for Speed Underground 2"
+        style={{ display: 'block' }}
+      />
 
-      {/* 3 Columns Section (614px + 1px border) */}
       <table
         cellPadding="0"
         cellSpacing="0"
@@ -66,7 +31,6 @@ export default function HomePage({
       >
         <tbody>
           <tr>
-            {/* Column 1 (152px) */}
             <td
               width="152"
               valign="top"
@@ -273,7 +237,6 @@ export default function HomePage({
               )}
             </td>
 
-            {/* Divider 1 */}
             <td
               width="2"
               valign="top"
@@ -292,7 +255,6 @@ export default function HomePage({
               />
             </td>
 
-            {/* Column 2 (306px) */}
             <td
               width="306"
               valign="top"
@@ -414,7 +376,6 @@ export default function HomePage({
               )}
             </td>
 
-            {/* Divider 2 */}
             <td
               width="2"
               valign="top"
@@ -433,7 +394,6 @@ export default function HomePage({
               />
             </td>
 
-            {/* Column 3 (152px) */}
             <td
               width="152"
               valign="top"
@@ -444,12 +404,10 @@ export default function HomePage({
                 padding: '12px 6px'
               }}
             >
-              {/* Poll Widget */}
               <PollWidget edition={edition} />
 
               <div style={{ height: 16 }} />
 
-              {/* Community Spotlight */}
               <div className="default" style={{ padding: '0 4px' }}>
                 <b>{isDec ? '11.18.04' : '06/24/04'}</b>
                 <br />
@@ -486,7 +444,6 @@ export default function HomePage({
               </div>
             </td>
 
-            {/* Right edge border */}
             <td
               width="1"
               bgcolor="#d8d8d8"

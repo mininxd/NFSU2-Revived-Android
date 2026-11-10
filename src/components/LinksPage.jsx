@@ -36,7 +36,6 @@ const COMMUNITY_LINKS = [
 export default function LinksPage({ onNavigate }) {
   return (
     <div style={{ width: 615, background: '#d8d8d8', minHeight: 520 }}>
-      {/* Header */}
       <div style={{ width: 615, height: 100, overflow: 'hidden' }}>
         <img
           src="/assets/images.ea.com/eagames/official/nfs/underground2/us/universal/hdr_links.jpg"

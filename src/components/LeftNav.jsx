@@ -1,5 +1,27 @@
 import React, { useState } from 'react';
 
+function LeftNavPlayBanner() {
+  return (
+    <a
+      href="https://nfsu2.xyz"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="nfsu2-leftnav-play-banner"
+      title="Play Need for Speed Underground 2 Online"
+    >
+      <div className="nfsu2-leftnav-play-badge">
+        <span className="nfsu2-leftnav-play-dot" />
+        <span>ONLINE REVIVAL</span>
+      </div>
+      <div className="nfsu2-leftnav-play-main">
+        <span className="nfsu2-leftnav-play-arrow">&#9658;</span>
+        <span>PLAY NOW</span>
+      </div>
+      <div className="nfsu2-leftnav-play-sub">NFSU2.XYZ</div>
+    </a>
+  );
+}
+
 function RolloverButton({ normalSrc, hoverSrc, alt, onClick, active }) {
   const [hovered, setHovered] = useState(false);
   const currentSrc = (hovered || active) && hoverSrc ? hoverSrc : normalSrc;
@@ -33,14 +55,9 @@ export default function LeftNav({ activePage, onNavigate, edition, onOpenNewslet
         minHeight: 620
       }}
     >
-      {/* Pre-Order & Newsletter / Retailer locator */}
       {isDecEdition ? (
         <>
-          <RolloverButton
-            normalSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/preorder.jpg"
-            alt="Order Now"
-            onClick={onOpenPreorder}
-          />
+          <LeftNavPlayBanner />
           <RolloverButton
             normalSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/locator.jpg"
             alt="Retailer Locator"
@@ -112,44 +129,10 @@ export default function LeftNav({ activePage, onNavigate, edition, onOpenNewslet
             active={activePage === 'news'}
             onClick={() => onNavigate('news')}
           />
-          <RolloverButton
-            normalSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/boards.gif"
-            hoverSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/boards_over.gif"
-            alt="Message Boards"
-            onClick={() => alert('Official EA Games Message Boards (Archived)')}
-          />
-          <img
-            src="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/hdr_garage.gif"
-            width="150"
-            alt="The Garage"
-            style={{ display: 'block' }}
-          />
-          <RolloverButton
-            normalSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/nfs1.gif"
-            hoverSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/nfs1_over.gif"
-            alt="Need for Speed Underground"
-            onClick={() => alert('Need for Speed Underground (2003)')}
-          />
-          <RolloverButton
-            normalSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/nfs2.gif"
-            hoverSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/nfs2_over.gif"
-            alt="Hot Pursuit 2"
-            onClick={() => alert('Need for Speed: Hot Pursuit 2 (2002)')}
-          />
-          <img
-            src="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/hdr_partners.gif"
-            width="150"
-            alt="Partners"
-            style={{ display: 'block' }}
-          />
         </>
       ) : (
         <>
-          <RolloverButton
-            normalSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav/preorder.jpg"
-            alt="Pre-Order Now"
-            onClick={onOpenPreorder}
-          />
+          <LeftNavPlayBanner />
           <RolloverButton
             normalSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav/newsletter.jpg"
             alt="Newsletter"
@@ -204,37 +187,10 @@ export default function LeftNav({ activePage, onNavigate, edition, onOpenNewslet
             active={activePage === 'links'}
             onClick={() => onNavigate('links')}
           />
-          <img
-            src="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav/leftnav_8.gif"
-            width="150"
-            height="24"
-            alt="Other NFS Games"
-            style={{ display: 'block' }}
-          />
-          <RolloverButton
-            normalSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav/leftnav_9.gif"
-            hoverSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav/leftnav_9-over.gif"
-            alt="Need for Speed Underground"
-            onClick={() => alert('Need for Speed Underground (2003)')}
-          />
-          <RolloverButton
-            normalSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav/leftnav_10.gif"
-            hoverSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav/leftnav_10-over.gif"
-            alt="Need for Speed Hot Pursuit 2"
-            onClick={() => alert('Need for Speed: Hot Pursuit 2 (2002)')}
-          />
-          <img
-            src="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav/leftnav_11.gif"
-            width="150"
-            height="55"
-            alt="Partners"
-            style={{ display: 'block' }}
-          />
         </>
       )}
 
-      {/* Promotion Formula D banner */}
-      <a href="http://www.formulad.com" target="_blank" rel="noreferrer" style={{ lineHeight: 0, display: 'block' }}>
+      <a href="http://www.formulad.com" target="_blank" rel="noreferrer" style={{ lineHeight: 0, display: 'block', marginTop: 4 }}>
         <img
           src="/assets/images.ea.com/eagames/official/nfs/underground2/us/home/promotion.jpg"
           border="0"
@@ -244,7 +200,6 @@ export default function LeftNav({ activePage, onNavigate, edition, onOpenNewslet
         />
       </a>
 
-      {/* Platforms Box */}
       <table
         width="150"
         cellPadding="10"
@@ -259,7 +214,7 @@ export default function LeftNav({ activePage, onNavigate, edition, onOpenNewslet
           <tr>
             <td align="center" width="150">
               <span style={{ color: 'white', fontSize: '7pt', fontFamily: 'Verdana', lineHeight: 1.3 }}>
-                Coming soon for PlayStation&reg;2, Xbox&reg;, Nintendo GameCube&#153;, Game Boy&reg; Advance &amp; PC.
+                Available for PlayStation&reg;2, Xbox&reg;, Nintendo GameCube&#153;, Game Boy&reg; Advance &amp; PC.
               </span>
             </td>
           </tr>

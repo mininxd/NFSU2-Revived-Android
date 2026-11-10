@@ -1,11 +1,8 @@
 import React from 'react';
 
-export default function Footer({ edition, onOpenLegal }) {
-  const isDec = edition === 'dec2004';
-
+export default function Footer({ edition, onSelectEdition, onOpenLegal }) {
   return (
     <div style={{ width: 765, margin: '0 auto', background: '#000000', paddingTop: 10 }}>
-      {/* 765x77 Background Footer Strip */}
       <div
         style={{
           width: 765,
@@ -32,7 +29,7 @@ export default function Footer({ edition, onOpenLegal }) {
               }}
               className="legal"
             >
-              &copy;2004 Electronic Arts Inc. All Rights Reserved
+              &copy;2004 Electronic Arts Inc. Need for Speed is a trademark of Electronic Arts Inc.
             </a>
             &nbsp;|&nbsp;
             <a
@@ -55,60 +52,67 @@ export default function Footer({ edition, onOpenLegal }) {
               className="legal"
             >
               Terms of Service
-            </a>{' '}
-            |{' '}
-            <a href="mailto:eagamesonline@ea.com?subject=Need for Speed Underground 2" className="legal">
-              Feedback
-            </a>{' '}
-            |{' '}
-            <a
-              href="#piracy"
-              onClick={(e) => {
-                e.preventDefault();
-                onOpenLegal('piracy');
-              }}
-              className="legal"
-            >
-              Piracy
             </a>
           </span>
         </div>
       </div>
 
-      {/* Badges bar */}
       <table cellPadding="0" cellSpacing="0" border="0" width="765" style={{ marginTop: 12, marginBottom: 20 }}>
         <tbody>
           <tr>
             <td align="left">
-              <a href="https://www.esrb.org" target="_blank" rel="noreferrer">
-                <img
-                  src={
-                    isDec
-                      ? '/assets/images.ea.com/eagames/official/nfs/underground2/us/e_nfsug2.gif'
-                      : '/assets/images.ea.com/eagames/official/defjam/fightforny/us/universal/RP_AD.gif'
-                  }
-                  border="0"
-                  alt={isDec ? 'ESRB Rating Everyone' : 'Rating Pending'}
-                  style={{ verticalAlign: 'middle' }}
-                />
-              </a>
-              &nbsp;
-              <a href="https://www.esrb.org" target="_blank" rel="noreferrer">
-                <img
-                  src="/assets/images.ea.com/esrb/privacycertified.jpg"
-                  border="0"
-                  alt="ESRB Privacy Certified"
-                  style={{ verticalAlign: 'middle', marginLeft: 6 }}
-                />
-              </a>
-            </td>
-            <td align="right">
               <img
-                src="/assets/images.ea.com/eagames/official/goldeneye/rogueagent/us/common/xboxlive.jpg"
+                src="/assets/images.ea.com/eagames/official/nfs/underground2/us/e_nfsug2.gif"
                 border="0"
-                alt="Xbox Live"
+                alt="ESRB Rating Everyone - Need for Speed Underground 2"
                 style={{ verticalAlign: 'middle' }}
               />
+              &nbsp;
+              <img
+                src="/assets/images.ea.com/esrb/privacycertified.jpg"
+                border="0"
+                alt="ESRB Privacy Certified"
+                style={{ verticalAlign: 'middle', marginLeft: 6 }}
+              />
+            </td>
+            <td align="right">
+              {onSelectEdition && (
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ color: '#777777', fontFamily: 'verdana', fontSize: 9 }}>
+                    Archive Edition:
+                  </span>
+                  <button
+                    onClick={() => onSelectEdition('july2004')}
+                    style={{
+                      background: edition === 'july2004' ? '#a1d464' : '#1e241e',
+                      color: edition === 'july2004' ? '#000000' : '#cccccc',
+                      border: '1px solid #3a4a3a',
+                      fontFamily: 'verdana',
+                      fontSize: 9,
+                      fontWeight: edition === 'july2004' ? 'bold' : 'normal',
+                      padding: '2px 8px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    July 2004 (Pre-Release)
+                  </button>
+                  <button
+                    onClick={() => onSelectEdition('dec2004')}
+                    style={{
+                      background: edition === 'dec2004' ? '#a1d464' : '#1e241e',
+                      color: edition === 'dec2004' ? '#000000' : '#cccccc',
+                      border: '1px solid #3a4a3a',
+                      fontFamily: 'verdana',
+                      fontSize: 9,
+                      fontWeight: edition === 'dec2004' ? 'bold' : 'normal',
+                      padding: '2px 8px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Dec 2004 (Launch)
+                  </button>
+                </div>
+              )}
             </td>
           </tr>
         </tbody>

@@ -50,7 +50,6 @@ export default function ScreenshotsPage({ onNavigate, onOpenImageModal }) {
 
   return (
     <div style={{ width: 615, background: '#d8d8d8', minHeight: 520 }}>
-      {/* Header Banner */}
       <div style={{ width: 615, height: 100, overflow: 'hidden' }}>
         <img
           src="/assets/images.ea.com/eagames/official/nfs/underground2/us/screenshots/hdr_screenshots.jpg"
@@ -60,7 +59,6 @@ export default function ScreenshotsPage({ onNavigate, onOpenImageModal }) {
         />
       </div>
 
-      {/* Platform & Set Title Bar */}
       <div
         style={{
           display: 'flex',
@@ -89,7 +87,6 @@ export default function ScreenshotsPage({ onNavigate, onOpenImageModal }) {
         </div>
       </div>
 
-      {/* Main Slideshow Stage */}
       <div style={{ padding: '15px 0', textAlign: 'center', background: '#222222' }}>
         <div style={{ display: 'inline-block', position: 'relative' }}>
           <img
@@ -133,7 +130,6 @@ export default function ScreenshotsPage({ onNavigate, onOpenImageModal }) {
             </span>
           </div>
 
-          {/* Navigation Controls */}
           <div
             style={{
               display: 'flex',
@@ -180,7 +176,6 @@ export default function ScreenshotsPage({ onNavigate, onOpenImageModal }) {
         </div>
       </div>
 
-      {/* Set Selector List */}
       <div style={{ padding: '14px 20px', fontFamily: 'verdana', fontSize: 10 }}>
         <div style={{ fontWeight: 'bold', marginBottom: 8, borderBottom: '1px solid #bbbbbb', paddingBottom: 4 }}>
           AVAILABLE SCREENSHOT SETS

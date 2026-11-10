@@ -36,7 +36,6 @@ const NEWS_ARTICLES = [
 export default function NewsPage({ onNavigate }) {
   return (
     <div style={{ width: 615, background: '#d8d8d8', minHeight: 520 }}>
-      {/* Header */}
       <div style={{ width: 615, height: 100, overflow: 'hidden' }}>
         <img
           src="/assets/images.ea.com/eagames/official/nfs/underground2/us/universal/features_news.jpg"
