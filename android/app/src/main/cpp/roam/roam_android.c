@@ -1928,7 +1928,7 @@ int nfs_bind_to_perf_cores(void) {
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
     int count = 0;
-    long threshold = (long)(highest_freq * 0.80);
+    long threshold = (long)(highest_freq * 0.50);
 
     if (highest_freq > 0) {
         for (int i = 0; i < total_cpus; i++) {
@@ -1939,11 +1939,13 @@ int nfs_bind_to_perf_cores(void) {
         }
     }
 
-    if (count == 0) {
-        int start = total_cpus > 1 ? total_cpus / 2 : 0;
+    if (count < 2) {
+        int start = (total_cpus >= 8) ? 4 : (total_cpus > 1 ? total_cpus / 2 : 0);
         for (int i = start; i < total_cpus; i++) {
-            CPU_SET(i, &cpuset);
-            count++;
+            if (!CPU_ISSET(i, &cpuset)) {
+                CPU_SET(i, &cpuset);
+                count++;
+            }
         }
     }
 

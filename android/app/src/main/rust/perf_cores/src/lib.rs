@@ -82,9 +82,10 @@ impl CpuCluster {
             });
         }
 
-        // Performance threshold: cores within 80% of the SoC's highest frequency
+        // Performance threshold: cores within 50% of the SoC's highest frequency or capacity
+        // so all Prime, Big, and Mid performance cores are included
         let threshold = if highest_freq > 0 {
-            (highest_freq as f64 * 0.80) as u64
+            (highest_freq as f64 * 0.50) as u64
         } else {
             0
         };
@@ -100,14 +101,17 @@ impl CpuCluster {
             }
         }
 
-        // Fallback: If frequency detection wasn't readable, treat upper half of cores as performance
-        if perf_cores_mask == 0 && total_cores > 1 {
-            let start = total_cores / 2;
+        // Ensure at least the top half of cores (or at least 4 cores on octa-core) are included
+        // so worker threads and Vulkan can utilize all performance cores without artificial bottle-necking
+        if (perf_core_count < 2 || perf_cores_mask == 0) && total_cores > 1 {
+            let start = if total_cores >= 8 { 4 } else { total_cores / 2 };
             for id in start..total_cores {
-                perf_cores_mask |= 1u64 << id;
-                perf_core_count += 1;
-                if let Some(c) = cores.get_mut(id) {
-                    c.is_performance = true;
+                if (perf_cores_mask & (1u64 << id)) == 0 {
+                    perf_cores_mask |= 1u64 << id;
+                    perf_core_count += 1;
+                    if let Some(c) = cores.get_mut(id) {
+                        c.is_performance = true;
+                    }
                 }
             }
         } else if perf_cores_mask == 0 {
@@ -247,6 +251,15 @@ pub unsafe extern "C" fn Java_io_mininxd_nfsu2_PerformanceCores_nativeGetCoreCou
     _class: JClass,
 ) -> jint {
     nfs_perf_cores_count() as jint
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn Java_io_mininxd_nfsu2_PerformanceCores_nativeGetPerformanceCoreCount(
+    _env: JNIEnv,
+    _class: JClass,
+) -> jint {
+    let cluster = CpuCluster::detect();
+    cluster.perf_core_count as jint
 }
 
 #[no_mangle]

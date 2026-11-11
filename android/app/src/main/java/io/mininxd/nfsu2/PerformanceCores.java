@@ -32,10 +32,22 @@ public final class PerformanceCores {
     public static native int nativeBindToPerformanceCores();
     public static native long nativeGetPerformanceCoresMask();
     public static native int nativeGetCoreCount();
+    public static native int nativeGetPerformanceCoreCount();
     public static native String nativeGetSummary();
     public static native void nativeBoostCallingThread();
     public static native float nativeCalculateSteering(float rawX, float centerX, float halfWidth, float scale);
     public static native float nativeCalculateSteeringProgressive(float rawX, float centerX, float halfWidth, float scale, float deadzone);
+
+    public static int getPerformanceCoreCount() {
+        if (nativeLoaded) {
+            try {
+                int c = nativeGetPerformanceCoreCount();
+                if (c > 0) return c;
+            } catch (Throwable ignored) {}
+        }
+        int total = Runtime.getRuntime().availableProcessors();
+        return Math.max(1, total >= 8 ? 4 : (total >= 4 ? total / 2 : 1));
+    }
 
     /**
      * Immediately boosts the priority and pins the calling thread to performance cores.
@@ -139,7 +151,7 @@ public final class PerformanceCores {
         }
 
         long mask = 0;
-        long threshold = (long) (highestFreq * 0.80);
+        long threshold = (long) (highestFreq * 0.50);
         if (highestFreq > 0) {
             for (int i = 0; i < totalCores; i++) {
                 if (freqs[i] >= threshold) {
@@ -148,9 +160,9 @@ public final class PerformanceCores {
             }
         }
 
-        if (mask == 0) {
-            // Fallback: upper half of cores
-            int start = Math.max(1, totalCores / 2);
+        if (Long.bitCount(mask) < 2) {
+            // Fallback: upper half of cores (or upper 4 cores for octa-core)
+            int start = totalCores >= 8 ? 4 : Math.max(1, totalCores / 2);
             for (int i = start; i < totalCores; i++) {
                 mask |= (1L << i);
             }

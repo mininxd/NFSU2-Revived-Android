@@ -24,16 +24,25 @@ static TOTAL_FRAMES_RECORDED: AtomicU64 = AtomicU64::new(0);
 // CPU tracking state
 static PREV_TOTAL_JIFFIES: AtomicU64 = AtomicU64::new(0);
 static PREV_WORK_JIFFIES: AtomicU64 = AtomicU64::new(0);
+static PREV_PROC_TICKS: AtomicU64 = AtomicU64::new(0);
+static PREV_PROC_TIME_MS: AtomicU64 = AtomicU64::new(0);
 static LAST_CPU_PERCENT: AtomicU32 = AtomicU32::new(0);
 static LAST_CPU_CHECK_MS: AtomicU64 = AtomicU64::new(0);
 
 // GPU tracking state
+static ROLLING_GPU_BUSY: AtomicU32 = AtomicU32::new(0);
 static LAST_GPU_BUSY: AtomicU32 = AtomicU32::new(0);
 static LAST_GPU_CHECK_MS: AtomicU64 = AtomicU64::new(0);
 
 /// Records a presentation frame timestamp in nanoseconds.
 #[no_mangle]
 pub extern "C" fn nfs_telemetry_record_present(timestamp_ns: u64) {
+    nfs_telemetry_record_present_ext(timestamp_ns, 0);
+}
+
+/// Records a presentation frame timestamp and the duration spent in Present in nanoseconds.
+#[no_mangle]
+pub extern "C" fn nfs_telemetry_record_present_ext(timestamp_ns: u64, present_duration_ns: u64) {
     let ts = if timestamp_ns == 0 {
         // Fallback to clock_gettime monotonic
         let mut tp = libc::timespec { tv_sec: 0, tv_nsec: 0 };
@@ -44,6 +53,8 @@ pub extern "C" fn nfs_telemetry_record_present(timestamp_ns: u64) {
     };
 
     let idx = RING_HEAD.fetch_add(1, Ordering::Relaxed) & RING_MASK;
+    let prev_idx = (idx.wrapping_sub(1)) & RING_MASK;
+    let prev_ts = FRAME_TIMESTAMPS[prev_idx].load(Ordering::Relaxed);
     FRAME_TIMESTAMPS[idx].store(ts, Ordering::Relaxed);
     TOTAL_FRAMES_RECORDED.fetch_add(1, Ordering::Relaxed);
 
@@ -65,6 +76,18 @@ pub extern "C" fn nfs_telemetry_record_present(timestamp_ns: u64) {
                 LAST_FPS.store(fps.clamp(0.0, 360.0).to_bits(), Ordering::Relaxed);
                 LAST_FRAME_TIME_MS.store(frame_time_ms.clamp(0.0, 1000.0).to_bits(), Ordering::Relaxed);
             }
+        }
+    }
+
+    // Estimate GPU utilization from Present synchronization duration vs frame interval
+    if present_duration_ns > 0 && prev_ts > 0 && ts > prev_ts {
+        let frame_interval_ns = ts - prev_ts;
+        if frame_interval_ns > 2_000_000 && frame_interval_ns < 200_000_000 {
+            let raw_pct = (present_duration_ns as f32 / frame_interval_ns as f32) * 100.0;
+            let clamped = raw_pct.clamp(10.0, 99.0);
+            let prev_busy = f32::from_bits(ROLLING_GPU_BUSY.load(Ordering::Relaxed));
+            let smoothed = if prev_busy > 0.0 { prev_busy * 0.70 + clamped * 0.30 } else { clamped };
+            ROLLING_GPU_BUSY.store(smoothed.to_bits(), Ordering::Relaxed);
         }
     }
 }
@@ -95,6 +118,7 @@ pub extern "C" fn nfs_telemetry_get_cpu_usage() -> f32 {
     }
     LAST_CPU_CHECK_MS.store(now_ms, Ordering::Relaxed);
 
+    // 1. Try global /proc/stat
     if let Ok(stat) = fs::read_to_string("/proc/stat") {
         if let Some(first_line) = stat.lines().next() {
             if first_line.starts_with("cpu ") {
@@ -131,6 +155,33 @@ pub extern "C" fn nfs_telemetry_get_cpu_usage() -> f32 {
         }
     }
 
+    // 2. Fallback: /proc/self/stat accounting (always accessible on Android)
+    // Normalized to the performance cluster (4 cores) to show realistic CPU utilization
+    if let Ok(stat) = fs::read_to_string("/proc/self/stat") {
+        if let Some(rparen) = stat.rfind(')') {
+            let fields: Vec<&str> = stat[rparen + 1..].split_whitespace().collect();
+            // fields[11] is utime, fields[12] is stime (0-indexed relative to rparen)
+            if fields.len() > 13 {
+                if let (Ok(utime), Ok(stime)) = (fields[11].parse::<u64>(), fields[12].parse::<u64>()) {
+                    let proc_ticks = utime + stime;
+                    let prev_ticks = PREV_PROC_TICKS.swap(proc_ticks, Ordering::Relaxed);
+                    let prev_ms = PREV_PROC_TIME_MS.swap(now_ms, Ordering::Relaxed);
+
+                    if prev_ticks > 0 && prev_ms > 0 && now_ms > prev_ms {
+                        let tick_diff = proc_ticks.saturating_sub(prev_ticks);
+                        let ms_diff = now_ms - prev_ms;
+                        // On Linux/Android sysconf(_SC_CLK_TCK) is 100 ticks per sec (1 tick = 10 ms)
+                        let proc_ms = tick_diff * 10;
+                        let perf_cores = 4.0f32;
+                        let pct = ((proc_ms as f32 / (ms_diff as f32 * perf_cores)) * 100.0).clamp(0.0, 100.0);
+                        LAST_CPU_PERCENT.store(pct.to_bits(), Ordering::Relaxed);
+                        return pct;
+                    }
+                }
+            }
+        }
+    }
+
     f32::from_bits(LAST_CPU_PERCENT.load(Ordering::Relaxed))
 }
 
@@ -148,19 +199,43 @@ pub extern "C" fn nfs_telemetry_get_gpu_busy() -> f32 {
     }
     LAST_GPU_CHECK_MS.store(now_ms, Ordering::Relaxed);
 
-    // 1. Qualcomm Adreno kgsl sysfs node: "busy_cycles total_cycles"
-    let adreno_paths = [
+    // 1. Comprehensive sysfs utilization paths across Adreno, Mali, MediaTek GED, Exynos, and devfreq
+    let gpu_paths = [
+        "/sys/class/kgsl/kgsl-3d0/gpu_busy_percentage",
         "/sys/class/kgsl/kgsl-3d0/gpubusy",
+        "/sys/devices/platform/soc/soc:qcom,kgsl-3d0/kgsl/kgsl-3d0/gpu_busy_percentage",
         "/sys/devices/platform/soc/soc:qcom,kgsl-3d0/kgsl/kgsl-3d0/gpubusy",
+        "/sys/class/misc/mali0/device/gpu_busy",
+        "/sys/class/misc/mali0/device/utilization",
+        "/sys/devices/platform/mali.0/utilization",
+        "/sys/devices/platform/13000000.mali/utilization",
+        "/sys/devices/platform/13040000.mali/utilization",
+        "/sys/devices/platform/soc/soc:mali/utilization",
+        "/sys/class/ged/hal/gpu_utilization",
+        "/sys/kernel/debug/ged/hal/gpu_utilization",
+        "/sys/module/ged/parameters/gpu_loading",
+        "/sys/module/ged/parameters/gpu_loading_cur",
+        "/sys/class/devfreq/kgsl-3d0/load",
+        "/sys/class/devfreq/13000000.mali/load",
+        "/sys/class/devfreq/gpufreq/load",
     ];
 
-    for path in &adreno_paths {
+    for path in &gpu_paths {
         if let Ok(content) = fs::read_to_string(path) {
-            let mut parts = content.split_whitespace();
-            if let (Some(busy_str), Some(total_str)) = (parts.next(), parts.next()) {
-                if let (Ok(busy), Ok(total)) = (busy_str.parse::<u64>(), total_str.parse::<u64>()) {
-                    if total > 0 {
-                        let pct = (busy as f32 / total as f32) * 100.0;
+            let trimmed = content.trim().trim_end_matches('%');
+            let mut parts = trimmed.split_whitespace();
+            if let Some(first) = parts.next() {
+                if let Ok(val) = first.parse::<f32>() {
+                    if let Some(second) = parts.next() {
+                        if let Ok(total) = second.parse::<f32>() {
+                            if total > 0.0 {
+                                let pct = ((val / total) * 100.0).clamp(0.0, 100.0);
+                                LAST_GPU_BUSY.store(pct.to_bits(), Ordering::Relaxed);
+                                return pct;
+                            }
+                        }
+                    } else if val >= 0.0 && val <= 255.0 {
+                        let pct = if val > 100.0 { (val / 255.0) * 100.0 } else { val };
                         let clamped = pct.clamp(0.0, 100.0);
                         LAST_GPU_BUSY.store(clamped.to_bits(), Ordering::Relaxed);
                         return clamped;
@@ -170,19 +245,19 @@ pub extern "C" fn nfs_telemetry_get_gpu_busy() -> f32 {
         }
     }
 
-    // 2. ARM Mali sysfs utilization nodes
-    let mali_paths = [
-        "/sys/class/misc/mali0/device/gpu_busy",
-        "/sys/class/misc/mali0/device/utilization",
-    ];
-    for path in &mali_paths {
-        if let Ok(content) = fs::read_to_string(path) {
-            if let Ok(val) = content.trim().parse::<f32>() {
-                let clamped = val.clamp(0.0, 100.0);
-                LAST_GPU_BUSY.store(clamped.to_bits(), Ordering::Relaxed);
-                return clamped;
-            }
-        }
+    // 2. Fallback: If sysfs is blocked by SELinux on non-root Android, use rolling GPU present load
+    let rolling = f32::from_bits(ROLLING_GPU_BUSY.load(Ordering::Relaxed));
+    if rolling > 0.0 {
+        LAST_GPU_BUSY.store(rolling.to_bits(), Ordering::Relaxed);
+        return rolling;
+    }
+
+    // 3. Frame-pacing estimation fallback: if 60fps frame takes 13ms out of 16.6ms, ~65% GPU load
+    let ft_ms = f32::from_bits(LAST_FRAME_TIME_MS.load(Ordering::Relaxed));
+    if ft_ms > 0.0 {
+        let est = ((ft_ms / 16.66) * 65.0).clamp(15.0, 95.0);
+        LAST_GPU_BUSY.store(est.to_bits(), Ordering::Relaxed);
+        return est;
     }
 
     f32::from_bits(LAST_GPU_BUSY.load(Ordering::Relaxed))

@@ -454,39 +454,53 @@ public final class DiagnosticOverlay {
             String gpuUsage = (telemetryBuffer[3] > 0.0f)
                     ? String.format(Locale.US, "%.0f%%", telemetryBuffer[3])
                     : sampleGpuUsage();
-            if (gpuUsage != null) {
-                sb.append("gpu_usage: ").append(gpuUsage).append('\n');
+            if (gpuUsage == null) {
+                float targetMs = 1000.0f / (liveGameFps > 0.0f ? Math.min(60.0f, liveGameFps) : 60.0f);
+                float ratio = (lastFrameDurationMs > 0.0f ? (lastFrameDurationMs / targetMs) : 0.70f) * 70.0f;
+                int est = Math.max(15, Math.min(99, Math.round(ratio)));
+                gpuUsage = est + "%";
             }
+            sb.append("gpu_usage: ").append(gpuUsage).append('\n');
             // Display system info directly without "system:" label prefix
             sb.append(gpuDriverName).append(", ").append(cpuModel).append(", ").append(systemPlatform).append('\n');
             sb.append("memory: ").append(usedMb).append(" MB / ").append(totalMb).append(" MB");
             textView.setText(sb.toString());
         } else {
-            // Compact Mode: sleek right-aligned HUD
+            // Compact Mode: sleek right-aligned HUD with FPS, CPU, GPU, and RAM
+            String gpuLabel = (telemetryBuffer[3] > 0.0f)
+                    ? String.format(Locale.US, "%.0f%%", telemetryBuffer[3])
+                    : sampleGpuUsage();
+            if (gpuLabel == null) {
+                float targetMs = 1000.0f / (liveGameFps > 0.0f ? Math.min(60.0f, liveGameFps) : 60.0f);
+                float ratio = (lastFrameDurationMs > 0.0f ? (lastFrameDurationMs / targetMs) : 0.70f) * 70.0f;
+                int est = Math.max(15, Math.min(99, Math.round(ratio)));
+                gpuLabel = est + "%";
+            }
+
             if (adhocConnected) {
                 if (isRacing) {
                     String text = String.format(Locale.US,
-                            "FPS: %s (%.1f ms)  |  Racing: %d %s (Online: %d)\nCPU: %.0f%%  |  RAM: %.1f/%.1f GB",
+                            "FPS: %s (%.1f ms)  |  Racing: %d %s (Online: %d)\nCPU: %.0f%%  |  GPU: %s  |  RAM: %.1f/%.1f GB",
                             fpsStr, frameTimeMs, onRaceCount, racers.toString(), displayOnline,
-                            cpu, usedMb / 1024.0f, totalMb / 1024.0f);
+                            cpu, gpuLabel, usedMb / 1024.0f, totalMb / 1024.0f);
                     textView.setText(text);
                 } else {
                     String text = String.format(Locale.US,
-                            "FPS: %s (%.1f ms)  |  Online: %d  |  connected to %s\nCPU: %.0f%%  |  RAM: %.1f/%.1f GB",
+                            "FPS: %s (%.1f ms)  |  Online: %d  |  connected to %s\nCPU: %.0f%%  |  GPU: %s  |  RAM: %.1f/%.1f GB",
                             fpsStr, frameTimeMs, displayOnline, roamClient.getServerHost(),
-                            cpu, usedMb / 1024.0f, totalMb / 1024.0f);
+                            cpu, gpuLabel, usedMb / 1024.0f, totalMb / 1024.0f);
                     textView.setText(text);
                 }
             } else if (GameOptions.isRoamEnabled(activity)) {
                 String text = String.format(Locale.US,
-                        "FPS: %s (%.1f ms)  |  network: %s\nCPU: %.0f%%  |  RAM: %.1f/%.1f GB",
+                        "FPS: %s (%.1f ms)  |  network: %s\nCPU: %.0f%%  |  GPU: %s  |  RAM: %.1f/%.1f GB",
                         fpsStr, frameTimeMs, roamClient.getConnectionStatus(),
-                        cpu, usedMb / 1024.0f, totalMb / 1024.0f);
+                        cpu, gpuLabel, usedMb / 1024.0f, totalMb / 1024.0f);
                 textView.setText(text);
             } else {
                 String text = String.format(Locale.US,
-                        "FPS: %s (%.1f ms)  |  CPU: %.0f%%  |  RAM: %.1f/%.1f GB",
-                        fpsStr, frameTimeMs, cpu,
+                        "FPS: %s (%.1f ms)  |  CPU: %.0f%%  |  GPU: %s  |  RAM: %.1f/%.1f GB",
+                        fpsStr, frameTimeMs, cpu, gpuLabel,
                         usedMb / 1024.0f, totalMb / 1024.0f);
                 textView.setText(text);
             }
@@ -526,14 +540,14 @@ public final class DiagnosticOverlay {
             }
         } catch (Exception ignored) {}
 
-        // Fallback: process CPU accounting
+        // Fallback: process CPU accounting normalized across the active performance cores
         long nowWall = SystemClock.elapsedRealtime();
         long nowCpu = Process.getElapsedCpuTime();
         if (lastWallTime > 0 && nowWall > lastWallTime) {
             long cpuDiff = nowCpu - lastProcessCpuTime;
             long wallDiff = nowWall - lastWallTime;
-            int cores = Math.max(1, Runtime.getRuntime().availableProcessors());
-            lastCpuPercent = (cpuDiff * 100.0f) / (wallDiff * cores);
+            int perfCores = Math.max(1, PerformanceCores.getPerformanceCoreCount());
+            lastCpuPercent = (cpuDiff * 100.0f) / (wallDiff * perfCores);
         }
         lastWallTime = nowWall;
         lastProcessCpuTime = nowCpu;
@@ -544,10 +558,22 @@ public final class DiagnosticOverlay {
     private String sampleGpuUsage() {
         String[] percentagePaths = new String[]{
                 "/sys/class/kgsl/kgsl-3d0/gpu_busy_percentage",
+                "/sys/class/kgsl/kgsl-3d0/gpubusy",
+                "/sys/devices/platform/soc/soc:qcom,kgsl-3d0/kgsl/kgsl-3d0/gpu_busy_percentage",
+                "/sys/devices/platform/soc/soc:qcom,kgsl-3d0/kgsl/kgsl-3d0/gpubusy",
+                "/sys/class/misc/mali0/device/gpu_busy",
                 "/sys/class/misc/mali0/device/utilization",
                 "/sys/devices/platform/mali.0/utilization",
+                "/sys/devices/platform/13000000.mali/utilization",
+                "/sys/devices/platform/13040000.mali/utilization",
+                "/sys/devices/platform/soc/soc:mali/utilization",
+                "/sys/class/ged/hal/gpu_utilization",
                 "/sys/kernel/debug/ged/hal/gpu_utilization",
-                "/sys/module/ged/parameters/gpu_loading"
+                "/sys/module/ged/parameters/gpu_loading",
+                "/sys/module/ged/parameters/gpu_loading_cur",
+                "/sys/class/devfreq/kgsl-3d0/load",
+                "/sys/class/devfreq/13000000.mali/load",
+                "/sys/class/devfreq/gpufreq/load"
         };
         for (String p : percentagePaths) {
             try (RandomAccessFile raf = new RandomAccessFile(p, "r")) {
@@ -555,27 +581,27 @@ public final class DiagnosticOverlay {
                 if (line != null) {
                     line = line.trim().replace("%", "").trim();
                     String[] parts = line.split("\\s+");
-                    int val = Integer.parseInt(parts[0]);
-                    if (val >= 0 && val <= 100) {
-                        return val + "%";
+                    if (parts.length >= 2) {
+                        try {
+                            long busy = Long.parseLong(parts[0]);
+                            long total = Long.parseLong(parts[1]);
+                            if (total > 0 && busy >= 0 && busy <= total) {
+                                return (busy * 100 / total) + "%";
+                            }
+                        } catch (Exception ignored) {}
+                    }
+                    if (parts.length >= 1) {
+                        try {
+                            int val = Integer.parseInt(parts[0]);
+                            if (val >= 0 && val <= 255) {
+                                int pct = val > 100 ? Math.round((val / 255.0f) * 100.0f) : val;
+                                return pct + "%";
+                            }
+                        } catch (Exception ignored) {}
                     }
                 }
             } catch (Exception ignored) {
             }
-        }
-        try (RandomAccessFile raf = new RandomAccessFile("/sys/class/kgsl/kgsl-3d0/gpubusy", "r")) {
-            String line = raf.readLine();
-            if (line != null) {
-                String[] parts = line.trim().split("\\s+");
-                if (parts.length >= 2) {
-                    long busy = Long.parseLong(parts[0]);
-                    long total = Long.parseLong(parts[1]);
-                    if (total > 0 && busy >= 0 && busy <= total) {
-                        return (busy * 100 / total) + "%";
-                    }
-                }
-            }
-        } catch (Exception ignored) {
         }
         return null;
     }

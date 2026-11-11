@@ -287,8 +287,35 @@ uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumen
         if(!window||deviceResetPending)return D3DERR_DEVICELOST;
         auto source=static_cast<const RECT*>(pointer(args[1])),destination=static_cast<const RECT*>(pointer(args[2]));
         auto dirty=static_cast<const RGNDATA*>(pointer(args[4]));
-        return kind==2?static_cast<IDirect3DDevice9*>(object)->Present(source,destination,window,dirty):
+
+        static void(*s_cam_restore)(void*) = nullptr;
+        if(!s_cam_restore) s_cam_restore = reinterpret_cast<void(*)(void*)>(resolveGraphicsCacheSymbol("nfs_camera_stick_restore_frame"));
+        if(s_cam_restore) s_cam_restore(guestBase);
+
+        auto t_before = std::chrono::steady_clock::now();
+
+        HRESULT res = kind==2?static_cast<IDirect3DDevice9*>(object)->Present(source,destination,window,dirty):
             static_cast<IDirect3DSwapChain9*>(object)->Present(source,destination,window,dirty,args[5]);
+
+        auto t_after = std::chrono::steady_clock::now();
+        uint64_t after_ns = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(t_after.time_since_epoch()).count());
+        uint64_t present_dur_ns = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(t_after - t_before).count());
+
+        static void(*s_telemetry_present_ext)(uint64_t, uint64_t) = nullptr;
+        static bool s_tried_ext = false;
+        if(!s_tried_ext) {
+            s_telemetry_present_ext = reinterpret_cast<void(*)(uint64_t, uint64_t)>(resolveGraphicsCacheSymbol("nfs_telemetry_record_present_ext"));
+            s_tried_ext = true;
+        }
+        if(s_telemetry_present_ext) {
+            s_telemetry_present_ext(after_ns, present_dur_ns);
+        } else {
+            static void(*s_telemetry_present)(uint64_t) = nullptr;
+            if(!s_telemetry_present) s_telemetry_present = reinterpret_cast<void(*)(uint64_t)>(resolveGraphicsCacheSymbol("nfs_telemetry_record_present"));
+            if(s_telemetry_present) s_telemetry_present(after_ns);
+        }
+
+        return res;
     }
     // Log the first calls of each method; tokens span 0x7e000000..0x7e00ffff.
     static uint8_t methodCalls[4096];auto& calls=methodCalls[((token-methodBase)/16)&4095];
