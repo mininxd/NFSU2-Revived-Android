@@ -23,25 +23,6 @@ public final class GraphicsCacheManager {
     public static native long nativeGetCompletedCount();
     public static native void nativeSetCrowdSuppression(boolean suppressed);
     public static native boolean nativeIsCrowdSuppressed();
-    public static native void nativeSetContrastMode(int mode);
-    public static native int nativeGetContrastMode();
-
-    public static void setContrastMode(int mode) {
-        if (nativeLoaded) {
-            try {
-                nativeSetContrastMode(mode);
-            } catch (Throwable ignored) {}
-        }
-    }
-
-    public static int getContrastMode() {
-        if (nativeLoaded) {
-            try {
-                return nativeGetContrastMode();
-            } catch (Throwable ignored) {}
-        }
-        return 1;
-    }
 
     public static void setCrowdSuppression(boolean suppressed) {
         if (nativeLoaded) {

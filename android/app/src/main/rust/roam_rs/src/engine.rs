@@ -22,17 +22,120 @@ pub const G_SIM_STEPS_ADDR: usize = 0x00865140;
 
 static HIGH_FPS_PATCHED: AtomicBool = AtomicBool::new(false);
 static PACED_FRAMES: AtomicU32 = AtomicU32::new(0);
+static CONTRAST_INITIALIZED: AtomicBool = AtomicBool::new(false);
 static CONTRAST_MODE: AtomicU32 = AtomicU32::new(1); // 0 = Off, 1 = Optimized, 2 = Original PC
+
+/// Pure Rust parser for Android SharedPreferences XML without any Java runtime.
+pub fn parse_shared_prefs_xml(xml: &str, key: &str) -> Option<String> {
+    let search_tag = format!("<string name=\"{}\">", key);
+    if let Some(start_idx) = xml.find(&search_tag) {
+        let val_start = start_idx + search_tag.len();
+        if let Some(end_idx) = xml[val_start..].find("</string>") {
+            return Some(xml[val_start..val_start + end_idx].trim().to_string());
+        }
+    }
+    None
+}
+
+/// Detects enhanced contrast mode from system environment, SharedPreferences XML,
+/// or game storage INI files purely in Rust.
+pub fn nfs_rust_detect_contrast_mode() -> u32 {
+    // 1. Direct environment variable check
+    if let Ok(env_val) = std::env::var("NFSU2_CONTRAST") {
+        let trimmed = env_val.trim();
+        if trimmed.eq_ignore_ascii_case("off") || trimmed == "0" {
+            return 0;
+        } else if trimmed.eq_ignore_ascii_case("on") || trimmed == "2" || trimmed.eq_ignore_ascii_case("original") {
+            return 2;
+        } else if !trimmed.is_empty() {
+            return 1;
+        }
+    }
+
+    // 2. Direct read from Android SharedPreferences XML on disk
+    let pref_paths = [
+        "/data/data/io.mininxd.nfsu2/shared_prefs/nfsu2_game.xml",
+        "/data/user/0/io.mininxd.nfsu2/shared_prefs/nfsu2_game.xml",
+    ];
+
+    for path in &pref_paths {
+        if let Ok(content) = std::fs::read_to_string(path) {
+            if let Some(val) = parse_shared_prefs_xml(&content, "enhanced_contrast") {
+                if val.eq_ignore_ascii_case("off") || val == "0" {
+                    return 0;
+                } else if val.eq_ignore_ascii_case("on") || val == "2" || val.eq_ignore_ascii_case("original") {
+                    return 2;
+                } else {
+                    return 1;
+                }
+            }
+        }
+    }
+
+    // 3. Fallback: check WidescreenFix.ini or game scripts
+    let ini_paths = [
+        "/sdcard/nfsu2/scripts/NFSUnderground2.WidescreenFix.ini",
+        "/storage/emulated/0/nfsu2/scripts/NFSUnderground2.WidescreenFix.ini",
+        "scripts/NFSUnderground2.WidescreenFix.ini",
+    ];
+    for path in &ini_paths {
+        if let Ok(content) = std::fs::read_to_string(path) {
+            for line in content.lines() {
+                let trimmed = line.trim();
+                if trimmed.starts_with("ConsoleGamma") {
+                    if let Some(eq_idx) = trimmed.find('=') {
+                        let after_eq = trimmed[eq_idx + 1..].trim();
+                        let token = after_eq.split(|c: char| c.is_whitespace() || c == ';').next().unwrap_or("");
+                        if token == "0" {
+                            return 0;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Default: Optimized (1) - Solid 60 FPS on Adreno mobile GPUs
+    1
+}
+
+/// Automatically configures Enhanced Contrast purely in Rust.
+#[no_mangle]
+pub extern "C" fn nfs_rust_auto_configure_contrast() -> u32 {
+    let mode = nfs_rust_detect_contrast_mode();
+    CONTRAST_MODE.store(mode, Ordering::Relaxed);
+    CONTRAST_INITIALIZED.store(true, Ordering::Relaxed);
+
+    // Export to process environment for any native C/C++ or DXVK components
+    let env_str = match mode {
+        0 => b"off\0".as_ptr(),
+        2 => b"on\0".as_ptr(),
+        _ => b"optimized\0".as_ptr(),
+    };
+    unsafe {
+        libc::setenv(
+            b"NFSU2_CONTRAST\0".as_ptr() as *const libc::c_char,
+            env_str as *const libc::c_char,
+            1,
+        );
+    }
+
+    mode
+}
 
 /// Configures runtime Enhanced Contrast regulation mode.
 #[no_mangle]
 pub extern "C" fn nfs_rust_set_contrast_mode(mode: u32) {
     CONTRAST_MODE.store(mode, Ordering::Relaxed);
+    CONTRAST_INITIALIZED.store(true, Ordering::Relaxed);
 }
 
 /// Returns active Enhanced Contrast regulation mode.
 #[no_mangle]
 pub extern "C" fn nfs_rust_get_contrast_mode() -> u32 {
+    if !CONTRAST_INITIALIZED.load(Ordering::Relaxed) {
+        nfs_rust_auto_configure_contrast();
+    }
     CONTRAST_MODE.load(Ordering::Relaxed)
 }
 
@@ -109,6 +212,9 @@ pub unsafe extern "C" fn nfs_rust_apply_engine_pacing(mem_base: *mut u8, real_el
     crate::crowd::nfs_rust_apply_crowd_suppression(mem_base);
 
     // 8. Enhanced Contrast Regulation (Issue #70: Snapdragon 8 Elite / Adreno 840 / 740)
+    if !CONTRAST_INITIALIZED.load(Ordering::Relaxed) {
+        nfs_rust_auto_configure_contrast();
+    }
     // Mode 0 = Off (Fastest): Both passes disabled
     // Mode 1 = Optimized (Smooth 60 FPS): Bleach Bypass enabled for rich contrast,
     //          OverBright bloom disabled to eliminate heavy TBDR tile resolves and frame drops
@@ -174,5 +280,17 @@ mod tests {
         assert_eq!(nfs_rust_get_contrast_mode(), 1);
         nfs_rust_set_contrast_mode(2);
         assert_eq!(nfs_rust_get_contrast_mode(), 2);
+    }
+
+    #[test]
+    fn test_parse_shared_prefs_xml() {
+        let sample = "<?xml version='1.0' encoding='utf-8' standalone='yes' ?>\n\
+                      <map>\n\
+                          <string name=\"enhanced_contrast\">optimized</string>\n\
+                          <string name=\"fps\">60</string>\n\
+                      </map>";
+        assert_eq!(parse_shared_prefs_xml(sample, "enhanced_contrast"), Some("optimized".to_string()));
+        assert_eq!(parse_shared_prefs_xml(sample, "fps"), Some("60".to_string()));
+        assert_eq!(parse_shared_prefs_xml(sample, "non_existent"), None);
     }
 }

@@ -1033,19 +1033,6 @@ static void framerate_pacing_fix(void) {
         const char *env_crowd = getenv("NFSU2_CROWD");
         int allow_crowd = (env_crowd && (strcmp(env_crowd, "1") == 0 || strcasecmp(env_crowd, "on") == 0));
         nfs_rust_set_crowd_suppression(!allow_crowd);
-
-        const char *env_contrast = getenv("NFSU2_CONTRAST");
-        uint32_t c_mode = 1; // default: optimized
-        if (env_contrast) {
-            if (strcmp(env_contrast, "off") == 0 || strcmp(env_contrast, "0") == 0) {
-                c_mode = 0;
-            } else if (strcmp(env_contrast, "on") == 0 || strcmp(env_contrast, "2") == 0 || strcasecmp(env_contrast, "original") == 0) {
-                c_mode = 2;
-            } else {
-                c_mode = 1;
-            }
-        }
-        nfs_rust_set_contrast_mode(c_mode);
     }
     if (g_p_mem_base && *g_p_mem_base) {
         static int64_t s_last_tick_us = 0;
