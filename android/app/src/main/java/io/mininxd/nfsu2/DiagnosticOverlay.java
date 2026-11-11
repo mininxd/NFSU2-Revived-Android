@@ -284,9 +284,16 @@ public final class DiagnosticOverlay {
                 liveGameFps = measured;
             }
 
-            // Cross-validate with native bridge report if available
-            if (measuredNativeFps > 0 && (now - lastNativeLogTime < 5000)) {
+            // Cross-validate with native bridge report if available (keep active for up to 30s)
+            if (measuredNativeFps > 0 && (now - lastNativeLogTime < 30000)) {
                 liveGameFps = measuredNativeFps;
+            } else if (lastFrameDurationMs > 16.6f) {
+                // If frame duration shows lag (>16.6ms), reflect the actual frame duration
+                // instead of sticking to 60Hz window refresh
+                float instantFps = 1000.0f / lastFrameDurationMs;
+                if (liveGameFps <= 0.0f || instantFps < liveGameFps) {
+                    liveGameFps = instantFps;
+                }
             }
 
             // Also check rust native telemetry buffer if active
