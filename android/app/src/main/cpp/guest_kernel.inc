@@ -432,19 +432,7 @@ void registryOpen(uint32_t output,uint32_t argc){
     }
     if(gameRegistry.empty()){
         const char path[]="C:\\nfsu2\\";gameRegistry.emplace("install dir",RegistryValue{1,{std::begin(path),std::end(path)}});
-        auto language=guestLanguage;
-        bool isOfficial = false;
-        for (const char* official : {"English UK","English","Spanish","French","German","Italian","Dutch","Swedish","Danish","Japanese","Korean","Chinese (Traditional)","Thai"}) {
-            if (strcasecmp(official, language.c_str()) == 0) {
-                isOfficial = true;
-                break;
-            }
-        }
-        if (!isOfficial) {
-            language = "English";
-        }
-        language.push_back('\0');
-        gameRegistry.emplace("language",RegistryValue{1,{language.begin(),language.end()}});
+        auto language=guestLanguage;language.push_back('\0');gameRegistry.emplace("language",RegistryValue{1,{language.begin(),language.end()}});
         loadPersistedRegistry();
         if(gameRegistry.find("g_worldlodlevel")==gameRegistry.end()){
             uint32_t val=2;

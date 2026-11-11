@@ -379,7 +379,7 @@ void d3dDispatch(){
         }
         nfs_adpf_begin_frame();
         static unsigned frames=0;static auto since=std::chrono::steady_clock::now();
-        if(++frames==120){serviceGuestSound();auto now=std::chrono::steady_clock::now();double seconds=std::chrono::duration<double>(now-since).count();
+        if(++frames>=30){serviceGuestSound();auto now=std::chrono::steady_clock::now();double seconds=std::chrono::duration<double>(now-since).count();
             NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Guest D3D9 presentation %.1f FPS over %.2f seconds; bridge ~%.2f ms/frame (present %.2f), %.0f calls/frame",
                 frames/seconds,seconds,double(bridgeTime.count())/1e6/frames,double(presentTime.count())/1e6/frames,double(bridgeCalls)/frames);
             std::array<unsigned,5> top{};
@@ -1225,12 +1225,10 @@ void setGuestScreenMode(int mode){std::lock_guard<MachineMutex> lock(machine);gu
 void setGuestHudSafeArea(bool enabled){std::lock_guard<MachineMutex> lock(machine);guestHudSafeArea=enabled;if(memory)nfs_widescreen_set_hud_safe_area(enabled?1:0);}
 void setGuestLanguage(const char* language){
     std::lock_guard<MachineMutex> lock(machine);if(memory)return;
-    for(const char* known:{"English UK","English","Spanish","French","German","Italian","Dutch","Swedish","Danish","Japanese","Korean","Chinese (Traditional)","Thai","Indonesian","Bahasa Indonesia","Russian","Portuguese","Polish","Turkish","Hungarian","Ukrainian","Czech","Slovak","Greek"})
+    for(const char* known:{"English UK","English","Spanish","French","German","Italian","Dutch","Swedish","Danish","Japanese","Korean","Chinese (Traditional)","Thai"})
         if(language&&strcasecmp(known,language)==0){
             guestLanguage=known;
             NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Selected guest language: %s",known);
-            static auto s_set_lang = reinterpret_cast<void(*)(const char*)>(dlsym(RTLD_DEFAULT, "rust_fs_set_language"));
-            if (s_set_lang) s_set_lang(known);
             return;
         }
     guestLanguage="English UK";

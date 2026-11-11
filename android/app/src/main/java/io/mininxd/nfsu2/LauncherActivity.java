@@ -60,7 +60,8 @@ public final class LauncherActivity extends Activity {
         {"繁體中文", "Chinese (Traditional)", "Chinese"}, {"ไทย", "Thai", "Thailand"},
         {"Português (Brasil)", "Portuguese", "Portuguese"}, {"Polski", "Polish", "Polish"},
         {"Русский", "Russian", "Russian"}, {"Türkçe", "Turkish", "Turkish"},
-        {"Magyar", "Hungarian", "Hungarian"}, {"Bahasa Indonesia", "Indonesian", "Indonesian"}
+        {"Magyar", "Hungarian", "Hungarian"}
+        // {"Bahasa Indonesia", "Indonesian", "Indonesian"}
     };
 
     private LinearLayout checksList, optionsList;
@@ -469,30 +470,6 @@ public final class LauncherActivity extends Activity {
         } catch (Exception e) {
             android.util.Log.w("NFSU2", "Failed to copy Extra Options INI", e);
         }
-        // Install Bahasa Indonesia localization if present in assets
-        try {
-            File memcardDir = new File(root, "memcard");
-            if (!memcardDir.exists()) memcardDir.mkdirs();
-            File targetLoc = new File(memcardDir, "bahasa_indonesia.loc");
-            File targetLocaleIndo = new File(memcardDir, "LOCALE_INDONESIAN.loc");
-            if (!targetLoc.exists() || targetLoc.length() == 0) {
-                copyAssetFile(this, "memcard/bahasa_indonesia.loc", targetLoc);
-            }
-            if (!targetLocaleIndo.exists() || targetLocaleIndo.length() == 0) {
-                copyAssetFile(this, "memcard/LOCALE_INDONESIAN.loc", targetLocaleIndo);
-            }
-
-            File langDir = new File(root, "LANGUAGES");
-            if (!langDir.exists()) langDir.mkdirs();
-            File targetBin = new File(langDir, "Indonesian.bin");
-            if (!targetBin.exists() || targetBin.length() == 0) {
-                copyAssetFile(this, "LANGUAGES/Indonesian.bin", targetBin);
-            }
-            File targetAgree = new File(langDir, "agree.ind");
-            if (!targetAgree.exists() || targetAgree.length() == 0) {
-                copyAssetFile(this, "LANGUAGES/agree.ind", targetAgree);
-            }
-        } catch (Exception ignored) {}
     }
 
     public static void copyAssetFile(Context context, String assetPath, File destFile) throws Exception {
@@ -546,28 +523,11 @@ public final class LauncherActivity extends Activity {
     private List<String[]> languages() {
         List<String[]> found = new ArrayList<>();
         File root = gameRoot();
-        for (String[] language : LANGUAGES) {
-            String code = language[2];
-            String codeLower = code.toLowerCase(Locale.US);
-            String nameLower = language[1].toLowerCase(Locale.US);
-            if (new File(root, "LANGUAGES/" + code + ".bin").isFile()
-                    || new File(root, "LANGUAGES/" + codeLower + ".bin").isFile()
-                    || new File(root, "LANGPACKS/" + codeLower).isDirectory()
-                    || new File(root, "LANGPACKS/" + nameLower).isDirectory()
-                    || new File(root, "LANGPACKS/" + code + ".bin").isFile()
-                    || new File(root, "LANGUAGES/" + codeLower + ".loc").isFile()
-                    || new File(root, "memcard/LOCALE_" + code.toUpperCase(Locale.US) + ".loc").isFile()
-                    || new File(root, "memcard/" + codeLower + ".loc").isFile()
-                    || ("Indonesian".equalsIgnoreCase(language[1]) && (
-                        new File(root, "memcard/bahasa_indonesia.loc").isFile()
-                        || new File(root, "memcard/LOCALE_INDONESIAN.loc").isFile()
-                        || new File(root, "LANGUAGES/bahasa_indonesia.loc").isFile()
-                        || new File(root, "LANGUAGES/bahasa_indonesia.bin").isFile()
-                        || new File(root, "LANGUAGES/Indonesian.bin").isFile()
-                    ))) {
-                found.add(language);
-            }
-        }
+        for (String[] language : LANGUAGES)
+            if (new File(root, "LANGUAGES/" + language[2] + ".bin").isFile()
+                    || new File(root, "LANGPACKS/" + language[2].toLowerCase(Locale.ROOT)).isDirectory()
+                    || new File(root, "LANGPACKS/" + language[1].toLowerCase(Locale.ROOT)).isDirectory()
+                    || new File(root, "LANGPACKS/" + language[2] + ".bin").isFile()) found.add(language);
         return found;
     }
 
