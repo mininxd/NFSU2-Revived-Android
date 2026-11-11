@@ -140,7 +140,7 @@ impl GarageViewerEngine {
             // Swiping across the screen rotates the car smoothly and directly in degrees.
             // 270.0 degrees per full screen width drag gives natural responsive tactile feel.
             if dx.abs() > 0.00001 {
-                let delta_deg = -dx * 270.0;
+                let delta_deg = dx * 270.0;
                 let mut ang = *angle_ptr + delta_deg;
                 while ang < 0.0 { ang += 360.0; }
                 while ang >= 360.0 { ang -= 360.0; }
