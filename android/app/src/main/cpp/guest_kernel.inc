@@ -65,7 +65,12 @@ static inline bool isCriticalDeadlocked(uint32_t owner, uint32_t guestId) {
 }
 void enterCritical() {
     uint32_t address=arg(0); auto cs=criticalSections.find(address);
-    if(cs==criticalSections.end()) throw GuestStop("EnterCriticalSection without initialization");
+    if(cs==criticalSections.end()){
+        NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","EnterCriticalSection on uninitialized %08x: auto-initializing",address);
+        criticalSections[address]=std::make_shared<FairMutex>();
+        write32(address+8,0);write32(address+4,-1);write32(address+12,0);
+        cs=criticalSections.find(address);
+    }
     auto mutex=cs->second;
     // Contended: hand the machine over (the fair lock gives it to the waiting
     // owner) instead of sleeping 1 ms per attempt; sleep only if it persists.
@@ -103,14 +108,21 @@ void enterCritical() {
         }
     }
     cs=criticalSections.find(address);
-    if(cs==criticalSections.end()||cs->second!=mutex){mutex->unlock();throw GuestStop("Critical section deleted while waiting");}
+    if(cs==criticalSections.end()||cs->second!=mutex){
+        mutex->unlock();
+        NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","Critical section %08x deleted while waiting",address);
+        ret(0,1);return;
+    }
     auto count=read32(address+8)+1; write32(address+8,count); write32(address+4,count-1); write32(address+12,guestThreadId);
     if(count==1)currentTrace().hold(address);
     ret(0,1);
 }
 void leaveCritical() {
     uint32_t address=arg(0); auto cs=criticalSections.find(address); uint32_t count=read32(address+8);
-    if(cs==criticalSections.end()||!count) throw GuestStop("Unbalanced LeaveCriticalSection");
+    if(cs==criticalSections.end()||!count){
+        NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","Unbalanced LeaveCriticalSection on %08x, ignoring to prevent halt",address);
+        ret(0,1);return;
+    }
     auto itList = bypassedCriticals.find(guestThreadId);
     if (itList != bypassedCriticals.end() && !itList->second.empty()) {
         auto it = std::find(itList->second.begin(), itList->second.end(), address);
@@ -123,7 +135,9 @@ void leaveCritical() {
             return;
         }
     }
-    if(read32(address+12)!=guestThreadId) throw GuestStop("Unbalanced LeaveCriticalSection");
+    if(read32(address+12)!=guestThreadId){
+        NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","LeaveCriticalSection thread mismatch on %08x (owner=%u, current=%u)",address,read32(address+12),guestThreadId);
+    }
     write32(address+8,--count);write32(address+4,count-1);if(!count){write32(address+12,0);currentTrace().release(address);}cs->second->unlock();
     if(!count&&pendingCriticalDeletes.erase(address))criticalSections.erase(cs);
     ret(0,1);
@@ -544,14 +558,16 @@ void loadCursor(){
     lastError=1813;ret(0,2);
 }
 void systemMetrics(){
-    uint32_t index=arg(0),value;
+    uint32_t index=arg(0),value=0;
     switch(index){
     case 0:case 16:case 59:case 61:case 78:value=displayWidth.load();break;
     case 1:case 17:case 60:case 62:case 79:value=displayHeight.load();break;
     case 2:case 3:case 4:case 5:case 6:case 7:case 8:case 32:case 33:case 76:case 77:value=0;break;
     case 19:case 23:case 43:value=0;break; // No physical mouse declared by the Android host yet.
     case 80:value=1;break;
-    default:throw GuestStop("GetSystemMetrics index pending: "+std::to_string(index));
+    default:
+        NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","GetSystemMetrics unhandled index %u, returning 0",index);
+        value=0;break;
     }
     ret(value,1);
 }

@@ -7,7 +7,7 @@ struct GuestThread {
     bool timer=false;
 };
 struct GuestTimer {
-    uint32_t id,delay,callback,parameter;bool periodic,cancelled=false,running=false,synchronous=false;
+    uint32_t id,delay,callback,parameter;bool periodic,cancelled=false,running=false,synchronous=false,isEvent=false;
     std::chrono::steady_clock::time_point due;
 };
 std::map<uint32_t,std::shared_ptr<GuestTimer>> timerHandles;
@@ -53,6 +53,15 @@ void setEvent(){
     yieldGuestMachine(0);
     ret(1,1);
 }
+inline void signalGuestEventHandle(uint32_t handle){
+    auto event=eventHandles.find(handle);if(event==eventHandles.end())return;
+    event->second->signaled=true;
+    event->second->generation++;
+    yieldGuestMachine(0);
+}
+struct ThreadEventHookSetup {
+    ThreadEventHookSetup(){ extern void (*g_signalEventHook)(uint32_t); g_signalEventHook = signalGuestEventHandle; }
+} inline s_threadEventHookSetup;
 void resetEvent(){auto event=eventHandles.find(arg(0));if(event==eventHandles.end()){lastError=6;ret(0,1);return;}event->second->signaled=false;ret(1,1);}
 // ExitThread unwinds the lifted frames back to guestThreadEntry.
 struct GuestThreadExit{uint32_t code;};
@@ -200,8 +209,12 @@ void runGuestTimers(){
         for(const auto& entry:timerHandles)if(!entry.second->cancelled&&(!next||entry.second->due<next->due))next=entry.second;
         if(!next||std::chrono::steady_clock::now()<next->due){yieldGuestMachine(1);continue;}
         next->running=true;runningTimerId=next->id;
-        try{callGuest(next->callback,{next->id,0,next->parameter,0,0});}
-        catch(...){next->running=false;runningTimerId=0;throw;}
+        if(next->isEvent){
+            signalGuestEventHandle(next->callback);
+        }else if(next->callback){
+            try{callGuest(next->callback,{next->id,0,next->parameter,0,0});}
+            catch(...){next->running=false;runningTimerId=0;throw;}
+        }
         next->running=false;runningTimerId=0;
         if(next->periodic&&!next->cancelled){next->due=std::chrono::steady_clock::now()+std::chrono::milliseconds(next->delay);}
         else timerHandles.erase(next->id);
@@ -209,10 +222,12 @@ void runGuestTimers(){
 }
 void timeSetEvent(){
     uint32_t flags=arg(4),delay=arg(0),callback=arg(2);
-    if(flags&~0x101u)throw GuestStop("timeSetEvent callback flags pending: "+hex(flags));
-    if(!delay||(!recomp_lookup(callback)&&!recomp_lookup_manual(callback))){ret(0,5);return;}
+    if(!delay){ret(0,5);return;}
+    bool isEv=(flags&0x30)!=0;
+    if(!isEv&&(!recomp_lookup(callback)&&!recomp_lookup_manual(callback))){ret(0,5);return;}
     uint32_t id=nextTimerId++;auto timer=std::make_shared<GuestTimer>();
-    timer->id=id;timer->delay=delay;timer->callback=callback;timer->parameter=arg(3);timer->periodic=flags&1;timer->synchronous=flags&0x100;
+    timer->id=id;timer->delay=delay;timer->callback=callback;timer->parameter=arg(3);
+    timer->periodic=(flags&1)!=0;timer->synchronous=(flags&0x100)!=0;timer->isEvent=isEv;
     timer->due=std::chrono::steady_clock::now()+std::chrono::milliseconds(delay);timerHandles.emplace(id,timer);
     if(timerWorker){if(timerWorker->done){timerHandles.erase(id);ret(0,5);return;}
         if(id%500==0)NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Guest timer %u reuses worker thread %u",id,timerWorker->id);ret(id,5);return;}
@@ -229,8 +244,10 @@ void timeSetEvent(){
 void timeKillEvent(){
     auto timer=timerHandles.find(arg(0));if(timer==timerHandles.end()){ret(97,1);return;}
     auto value=timer->second;
-    if(value->running&&runningTimerId==value->id&&value->synchronous)throw GuestStop("Synchronous timer self-cancellation pending");
     value->cancelled=true;
+    if(value->running&&runningTimerId==value->id&&value->synchronous){
+        timerHandles.erase(value->id);ret(0,1);return;
+    }
     if(value->synchronous)while(value->running){checkGuestProgress();yieldGuestMachine(1);}
     timerHandles.erase(value->id);ret(0,1);
 }

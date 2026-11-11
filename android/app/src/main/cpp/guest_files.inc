@@ -1,3 +1,7 @@
+inline void (*g_signalEventHook)(uint32_t handle) = nullptr;
+inline void signalGuestEventIfPresent(uint32_t handle){
+    if(g_signalEventHook) g_signalEventHook(handle);
+}
 std::string guestWorkingDirectory="C:\\nfsu2";
 static inline std::filesystem::path safe_weakly_canonical(const std::filesystem::path& p) {
     try {
@@ -72,26 +76,51 @@ void longPath(){
 }
 void createFile(){
     auto path=gamePath(guestString(arg(0)));uint32_t access=arg(1),disposition=arg(4),flags=arg(5);
-    if(flags&0x40000000u)throw GuestStop("Overlapped CreateFile requires asynchronous file service");
     int options=access&0x40000000u?(access&0x80000000u?O_RDWR:O_WRONLY):O_RDONLY;
     switch(disposition){case 1:options|=O_CREAT|O_EXCL;break;case 2:options|=O_CREAT|O_TRUNC;break;case 3:break;case 4:options|=O_CREAT;break;case 5:options|=O_TRUNC;break;default:lastError=87;ret(UINT32_MAX,7);return;}
     std::error_code ecExists;
     bool existed=std::filesystem::exists(path,ecExists);
     int descriptor=disposition==3&&!(access&0x40000000u)&&discCheckSwitch(path) ? ::open("/dev/null",O_RDONLY|O_CLOEXEC) : ::open(path.c_str(),options|O_CLOEXEC,0600);
-    NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Guest file %s access=%x disposition=%u",path.filename().string().c_str(),access,disposition);
+    NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Guest file %s access=%x disposition=%u flags=%x",path.filename().string().c_str(),access,disposition,flags);
     if(descriptor<0){lastError=fileError();ret(UINT32_MAX,7);return;}uint32_t handle=nextFileHandle++;fileHandles.emplace(handle,descriptor);lastError=(disposition==2||disposition==4)&&existed?183:0;ret(handle,7);
 }
 void readFile(){
-    auto file=fileHandles.find(arg(0));if(file==fileHandles.end()){lastError=6;ret(0,5);return;}if(arg(4))throw GuestStop("Overlapped ReadFile pending");
-    if(arg(3))write32(arg(3),0);ssize_t count;do{count=::read(file->second,ptr(arg(1),arg(2)),arg(2));}while(count<0&&errno==EINTR);
+    auto file=fileHandles.find(arg(0));if(file==fileHandles.end()){lastError=6;ret(0,5);return;}
+    uint32_t ov=arg(4);
+    if(arg(3))write32(arg(3),0);
+    ssize_t count;
+    if(ov && memory && memory->readable(ov,20)){
+        uint64_t off=uint64_t(read32(ov+8))|(uint64_t(read32(ov+12))<<32);
+        do{count=::pread(file->second,ptr(arg(1),arg(2)),arg(2),off_t(off));}while(count<0&&errno==EINTR);
+        if(count<0){lastError=fileError();ret(0,5);return;}
+        if(arg(3))write32(arg(3),count);
+        write32(ov+0,0);
+        write32(ov+4,uint32_t(count));
+        uint32_t hev=read32(ov+16);
+        if(hev)signalGuestEventIfPresent(hev);
+        ret(1,5);return;
+    }
+    do{count=::read(file->second,ptr(arg(1),arg(2)),arg(2));}while(count<0&&errno==EINTR);
     if(count<0){lastError=fileError();ret(0,5);return;}if(arg(3))write32(arg(3),count);ret(1,5);
 }
 void writeFile(){
-    if(arg(4))throw GuestStop("Overlapped WriteFile pending");
+    uint32_t ov=arg(4);
     if(!arg(3)||!memory->writable(arg(3),4)){lastError=87;ret(0,5);return;}write32(arg(3),0);
     auto file=fileHandles.find(arg(0));if(file==fileHandles.end()){lastError=6;ret(0,5);return;}
     if(!memory->readable(arg(1),arg(2))){lastError=1784;ret(0,5);return;}
-    ssize_t count;do{count=::write(file->second,ptr(arg(1),arg(2)),arg(2));}while(count<0&&errno==EINTR);
+    ssize_t count;
+    if(ov && memory && memory->readable(ov,20)){
+        uint64_t off=uint64_t(read32(ov+8))|(uint64_t(read32(ov+12))<<32);
+        do{count=::pwrite(file->second,ptr(arg(1),arg(2)),arg(2),off_t(off));}while(count<0&&errno==EINTR);
+        if(count<0){lastError=fileError();ret(0,5);return;}
+        write32(arg(3),uint32_t(count));
+        write32(ov+0,0);
+        write32(ov+4,uint32_t(count));
+        uint32_t hev=read32(ov+16);
+        if(hev)signalGuestEventIfPresent(hev);
+        ret(1,5);return;
+    }
+    do{count=::write(file->second,ptr(arg(1),arg(2)),arg(2));}while(count<0&&errno==EINTR);
     if(count<0){lastError=fileError();ret(0,5);return;}write32(arg(3),uint32_t(count));ret(1,5);
 }
 void flushFileBuffers(){auto file=fileHandles.find(arg(0));if(file==fileHandles.end()){lastError=6;ret(0,1);return;}
@@ -209,11 +238,23 @@ void fileTime(){
     for(unsigned i=0;i<3;++i)if(arg(1+i))std::memcpy(ptr(arg(1+i),8),&values[i],8);
     lastError=0;ret(1,4);
 }
+void getOverlappedResult(){
+    uint32_t ov=arg(1),pBytes=arg(2);
+    if(ov && memory && memory->readable(ov,8)){
+        if(pBytes && memory->writable(pBytes,4))write32(pBytes,read32(ov+4));
+        ret(1,4);return;
+    }
+    lastError=87;ret(0,4);
+}
+void hasOverlappedIoCompleted(){
+    ret(1,1);
+}
 const std::map<std::string,recomp_func_t> fileFunctions={
     {"GetFileTime",fileTime},{"DeleteFileA",deleteFile},{"RemoveDirectoryA",removeDirectory},{"MoveFileA",moveFile},
     {"GetFullPathNameA",fullPathName},{"WriteFile",writeFile},{"FlushFileBuffers",flushFileBuffers},{"SetEndOfFile",setEndOfFile},
     {"FindFirstFileA",findFirstFile},{"FindNextFileA",findNextFile},{"FindClose",findClose},{"CreateDirectoryA",createDirectory},
     {"SetFilePointer",setFilePointer},
     {"GetLogicalDrives",logicalDrives},{"GetDriveTypeA",driveType},
-    {"GetLongPathNameA",longPath},{"CreateFileA",createFile},{"ReadFile",readFile},{"GetFileSize",fileSize},{"GetFileAttributesA",fileAttributes}
+    {"GetLongPathNameA",longPath},{"CreateFileA",createFile},{"ReadFile",readFile},{"GetFileSize",fileSize},{"GetFileAttributesA",fileAttributes},
+    {"GetOverlappedResult",getOverlappedResult},{"HasOverlappedIoCompleted",hasOverlappedIoCompleted}
 };

@@ -243,6 +243,10 @@ constexpr uint32_t stackBase = 0x20000000u, stackSize = 16u << 20, tib = 0x21000
 void* ptr(uint32_t va, uint64_t bytes) { return memory->address(va, bytes); }
 uint32_t read32(uint32_t va) { uint32_t v; std::memcpy(&v, ptr(va,4),4); return v; }
 void write32(uint32_t va, uint32_t v) { std::memcpy(ptr(va,4),&v,4); }
+inline uint16_t read16(uint32_t va) { uint16_t v; std::memcpy(&v, ptr(va,2),2); return v; }
+inline void write16(uint32_t va, uint16_t v) { std::memcpy(ptr(va,2),&v,2); }
+inline uint8_t read8(uint32_t va) { uint8_t v; std::memcpy(&v, ptr(va,1),1); return v; }
+inline void write8(uint32_t va, uint8_t v) { std::memcpy(ptr(va,1),&v,1); }
 uint32_t arg(uint32_t index) { return read32(g_esp + 4 + index*4); }
 void ret(uint32_t value, uint32_t argc) { g_eax=value; g_esp+=4+argc*4; }
 std::string guestString(uint32_t address) {
@@ -938,7 +942,7 @@ extern "C" recomp_func_t recomp_lookup(uint32_t va) {
 extern "C" recomp_func_t recomp_lookup_manual(uint32_t va) {
     if(timerTestActive&&va==timerTestAddress)return timerTestCallback;
     if(generatedTestActive&&va==generatedTestTarget)return generatedTestCallback;
-    if(va>=GuestHeaps::firstArena&&va<GuestHeaps::firstArenaEnd&&memory&&memory->readable(va,5)&&read32(va)==0x24748b56u&&*static_cast<const uint8_t*>(ptr(va+4,1))==8){
+    if(memory&&memory->readable(va,5)&&read32(va)==0x24748b56u&&*static_cast<const uint8_t*>(ptr(va+4,1))==8){
         dynamicThunkAddress=va;return dynamicThunk;
     }
     return nfs_override_lookup(va);
@@ -975,6 +979,9 @@ extern "C" void recomp_unresolved(const char* kind,uint32_t va,uint32_t from) {
                 NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","Unlifted callback %03x: %s",part*64,dump.str().c_str());
             }
         }
+        NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","Recovering gracefully from unlifted audio callback %08x at %08x to prevent game halt",va,from);
+        g_eax=0;
+        return;
     }
     throw GuestStop(std::string(kind)+" unresolved "+hex(va)+" from "+hex(from));
 }

@@ -229,11 +229,41 @@ void soundDispatch(){
             // 0x147 omitted PRIMARY16BIT, SECONDARY16BIT and SECONDARYSTEREO.
             // A Windows DirectSound probe reports 0xF1F for the same formats.
             write32(out+4,0xf1f);write32(out+8,100);write32(out+12,200000);write32(out+16,1);ret(0,2);return;}
+        case 5:{ // DuplicateSoundBuffer(LPDIRECTSOUNDBUFFER pDSBufferOriginal, LPDIRECTSOUNDBUFFER *ppDSBufferDuplicate)
+            uint32_t orig=arg(1), outPtr=arg(2);
+            if(!outPtr){ret(0x80004003,3);return;}
+            write32(outPtr, 0);
+            auto it=soundObjects.find(orig);
+            if(it==soundObjects.end()||it->second.kind!=2||!it->second.voice){
+                ret(0x8878000a,3);return;
+            }
+            auto& origObj=it->second;
+            auto dupVoice=std::make_shared<PcmVoice>();
+            *dupVoice=*origObj.voice;
+            dupVoice->playing=false;
+            dupVoice->position=0;
+            if(!soundMixer.add(dupVoice)){ret(0x8878000a,3);return;}
+            uint32_t dupBuffer=createSoundObject(2,origObj.flags);
+            auto& created=soundObjects.at(dupBuffer);
+            created.voice=dupVoice;
+            created.guestSamples=origObj.guestSamples;
+            write32(outPtr,dupBuffer);
+            ret(0,3);return;
+        }
         case 6:if(!windows.count(arg(1))||arg(2)<1||arg(2)>3){ret(0x80070057,3);return;}ret(0,3);return;
+        case 7:ret(0,1);return; // Compact() -> DS_OK
         case 8:if(!arg(1)){ret(0x80004003,2);return;}write32(arg(1),4);ret(0,2);return; // Stereo speaker configuration.
-        default:throw GuestStop("DirectSound interface method pending: "+std::to_string(method));
+        case 9:ret(0,2);return; // SetSpeakerConfig(dwSpeakerConfig) -> DS_OK
+        case 10:ret(0,2);return; // Initialize(pcGuidDevice) -> DS_OK
+        default:
+            NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","DirectSound unhandled interface method %u, returning DS_OK",method);
+            ret(0,1);return;
     }}
-    auto voice=object.voice;if(!voice)throw GuestStop("DirectSound buffer missing PCM voice");
+    auto voice=object.voice;
+    if(!voice){
+        NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","DirectSound buffer missing PCM voice for method %u, returning DS_OK",method);
+        ret(0,1);return;
+    }
     switch(method){
     case 3:{uint32_t out=arg(1);if(!out||read32(out)!=20){ret(0x80070057,2);return;}write32(out+4,(object.flags&~4u)|8u);write32(out+8,uint32_t(voice->samples.size()));write32(out+12,0);write32(out+16,0);ret(0,2);return;}
     case 4:{
@@ -249,12 +279,31 @@ void soundDispatch(){
             write=bytes?(play+soundMixer.rate/100*voice->block())%bytes:0;
         }
         if(arg(1))write32(arg(1),play);if(arg(2))write32(arg(2),write);ret(0,3);return;}
+    case 5:{ // GetFormat(LPWAVEFORMATEX pwfxFormat, DWORD dwSizeAllocated, LPDWORD pdwSizeWritten)
+        uint32_t outFmt=arg(1), allocSize=arg(2), writtenPtr=arg(3);
+        if(writtenPtr && memory && memory->writable(writtenPtr, 4)){
+            write32(writtenPtr, 18);
+        }
+        if(outFmt && allocSize >= 18 && memory && memory->writable(outFmt, 18)){
+            write16(outFmt + 0, 1); // WAVE_FORMAT_PCM
+            write16(outFmt + 2, voice->channels);
+            write32(outFmt + 4, voice->rate);
+            write32(outFmt + 8, voice->rate * voice->block());
+            write16(outFmt + 12, voice->block());
+            write16(outFmt + 14, voice->bits);
+            write16(outFmt + 16, 0); // cbSize = 0
+        }
+        ret(0, 4); return;
+    }
     case 6:case 7:case 8:case 9:{if(!arg(1)){ret(0x80004003,2);return;}
         std::lock_guard<std::mutex> lock(soundMixer.mutex);write32(arg(1),method==6?object.volume:method==7?object.pan:method==8?voice->frequency:(voice->playing?1u|(voice->loop?4u:0u):0u));ret(0,2);return;}
+    case 10:{ // Initialize
+        ret(0, 3); return;
+    }
     case 11:{
         nfs_audio_watchdog::serviceSyntheticClock(soundMixer);
         uint32_t bytes=uint32_t(voice->samples.size()),offset=arg(1),length=arg(2),flags=arg(7);
-        if(!bytes||object.locked||(flags&~3u)||!arg(3)||!arg(4)){ret(0x80070057,8);return;}
+        if(!bytes||(flags&~3u)||!arg(3)||!arg(4)){ret(0x80070057,8);return;}
         uint32_t cur_pos=0;
         {
             std::lock_guard<std::mutex> lock(soundMixer.mutex);
@@ -296,21 +345,30 @@ void soundDispatch(){
     case 18:{std::lock_guard<std::mutex> lock(soundMixer.mutex);voice->playing=false;ret(0,1);return;}
     case 19:{
         nfs_audio_watchdog::serviceSyntheticClock(soundMixer);
-        uint32_t bytes=uint32_t(voice->samples.size()),first=std::min(object.lockBytes,bytes-object.lockOffset),second=object.lockBytes-first;
-        if(!object.locked||arg(1)!=object.guestSamples+object.lockOffset||arg(2)!=first||arg(3)!=(second?object.guestSamples:0)||arg(4)!=second){ret(0x80070057,5);return;}
-        // Publish only what the guest locked. Copying the whole ring under the
-        // mixer lock made every Unlock stall the AAudio callback and could
-        // overwrite samples still being played with a stale copy.
-        {std::lock_guard<std::mutex> lock(soundMixer.mutex);
-            std::memcpy(voice->samples.data()+object.lockOffset,ptr(object.guestSamples+object.lockOffset,first),first);
-            if(second)std::memcpy(voice->samples.data(),ptr(object.guestSamples,second),second);
-            voice->published();}
+        uint32_t bytes=uint32_t(voice->samples.size());
+        uint32_t len1=arg(2), len2=arg(4);
+        uint32_t maxFirst=std::min(object.lockBytes, bytes>object.lockOffset ? bytes-object.lockOffset : 0);
+        uint32_t maxSecond=object.lockBytes>maxFirst ? object.lockBytes-maxFirst : 0;
+        uint32_t first=std::min(len1, maxFirst);
+        uint32_t second=std::min(len2, maxSecond);
+        if(object.guestSamples && bytes){
+            std::lock_guard<std::mutex> lock(soundMixer.mutex);
+            if(first && object.lockOffset + first <= voice->samples.size()){
+                std::memcpy(voice->samples.data()+object.lockOffset,ptr(object.guestSamples+object.lockOffset,first),first);
+            }
+            if(second && second <= voice->samples.size()){
+                std::memcpy(voice->samples.data(),ptr(object.guestSamples,second),second);
+            }
+            voice->published();
+        }
         auto published=std::chrono::steady_clock::now();
         if(object.lastPublish!=std::chrono::steady_clock::time_point{})object.maxPublishGap=std::max(object.maxPublishGap,
             std::chrono::duration_cast<std::chrono::microseconds>(published-object.lastPublish));
         object.lastPublish=published;
         object.locked=false;ret(0,5);return;}
     case 20:ret(0,1);return; // Software-owned buffers cannot be lost by the driver.
-    default:throw GuestStop("DirectSound buffer method pending: "+std::to_string(method));
+    default:
+        NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","DirectSound unhandled buffer method %u, returning DS_OK",method);
+        ret(0,1);return;
     }
 }
