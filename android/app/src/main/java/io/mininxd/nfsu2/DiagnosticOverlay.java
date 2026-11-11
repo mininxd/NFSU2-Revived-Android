@@ -265,17 +265,10 @@ public final class DiagnosticOverlay {
         attached = false;
     }
 
-    private int perfBindCount = 0;
     private final Runnable ticker = new Runnable() {
         @Override
         public void run() {
             if (!running) return;
-
-            // Ensure background worker threads are pinned to perf cores
-            if (perfBindCount < 10) {
-                PerformanceCores.bindToPerformanceCores();
-                perfBindCount++;
-            }
 
             long now = SystemClock.elapsedRealtime();
             long elapsed = now - lastFrameCalcTime;

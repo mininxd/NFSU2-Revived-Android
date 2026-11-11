@@ -1925,34 +1925,20 @@ int nfs_bind_to_perf_cores(void) {
         }
     }
 
+    // Unconstrain affinity across all available cores: let Linux EAS dynamically
+    // schedule, migrate threads, and prevent stuttering
+    int total_cpus = sysconf(_SC_NPROCESSORS_CONF);
+    if (total_cpus <= 0 || total_cpus > 64) total_cpus = 8;
+
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
-    int count = 0;
-    long threshold = (long)(highest_freq * 0.50);
-
-    if (highest_freq > 0) {
-        for (int i = 0; i < total_cpus; i++) {
-            if (freqs[i] >= threshold) {
-                CPU_SET(i, &cpuset);
-                count++;
-            }
-        }
-    }
-
-    if (count < 2) {
-        int start = (total_cpus >= 8) ? 4 : (total_cpus > 1 ? total_cpus / 2 : 0);
-        for (int i = start; i < total_cpus; i++) {
-            if (!CPU_ISSET(i, &cpuset)) {
-                CPU_SET(i, &cpuset);
-                count++;
-            }
-        }
+    for (int i = 0; i < total_cpus; i++) {
+        CPU_SET(i, &cpuset);
     }
 
     sched_setaffinity(getpid(), sizeof(cpu_set_t), &cpuset);
     int ret = sched_setaffinity(0, sizeof(cpu_set_t), &cpuset);
 
-    // Apply performance core affinity to all worker threads of the process
     DIR *d = opendir("/proc/self/task");
     if (d) {
         struct dirent *de;
@@ -1964,7 +1950,7 @@ int nfs_bind_to_perf_cores(void) {
         }
         closedir(d);
     }
-    __android_log_print(ANDROID_LOG_INFO, "NFSU2-PerfCores", "Bound process and threads to %d performance cores (ret=%d)", count, ret);
+    __android_log_print(ANDROID_LOG_INFO, "NFSU2-PerfCores", "Affinity unconstrained across %d cores (Linux EAS dynamic scheduling active)", total_cpus);
     return ret;
 }
 

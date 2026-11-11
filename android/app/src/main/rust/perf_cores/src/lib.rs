@@ -139,12 +139,14 @@ impl CpuCluster {
         num_cpus_fallback()
     }
 
-    /// Binds the calling thread, process, and all worker threads to the performance cores.
+    /// Unconstrains thread affinity across all cores (letting Linux EAS dynamic scheduler
+    /// balance thermal load and prevent stuttering), while elevating thread priority (-10 nice).
     pub fn apply_affinity(&self) -> Result<(), i32> {
-        let mask = self.perf_cores_mask;
+        let total = self.total_cores.min(64);
+        let all_mask = if total >= 64 { !0u64 } else { (1u64 << total) - 1 };
         unsafe {
-            // Linux sched_setaffinity: 0 = calling thread, getpid() = main thread
-            let mask_val = mask as c_long;
+            // Unconstrain affinity to all available cores: Linux EAS handles optimal core migration
+            let mask_val = all_mask as c_long;
             let _ = libc::syscall(
                 libc::SYS_sched_setaffinity,
                 libc::getpid() as c_int,
@@ -162,7 +164,7 @@ impl CpuCluster {
             let _ = libc::setpriority(libc::PRIO_PROCESS, libc::getpid() as u32, -10);
             let _ = libc::setpriority(libc::PRIO_PROCESS, 0, -10);
 
-            // Bind every existing thread in /proc/self/task (GuestBootWorker, audio, render, etc.)
+            // Ensure all worker threads can migrate freely across all cores with high priority
             if let Ok(entries) = fs::read_dir("/proc/self/task") {
                 for entry in entries.flatten() {
                     if let Ok(tid) = entry.file_name().to_string_lossy().parse::<i32>() {

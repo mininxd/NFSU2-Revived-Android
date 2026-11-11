@@ -84,10 +84,30 @@ public final class PerformanceCores {
         return clamped < 0f ? -curved : curved;
     }
 
+    private static volatile boolean sAffinityEnabled = false;
+
+    public static boolean isAffinityEnabled() {
+        return sAffinityEnabled;
+    }
+
+    public static void setAffinityEnabled(boolean enabled) {
+        sAffinityEnabled = enabled;
+    }
+
     /**
      * Binds the current process and its worker threads to the SoC's Performance cores.
+     * When affinity control is disabled (default), leaves scheduling to the Linux EAS
+     * governor to prevent thermal throttling traps and stuttering (same as AetherSX2/Dolphin).
      */
     public static void bindToPerformanceCores() {
+        // Boost calling thread priority (-10 nice) without restricting core affinity
+        boostCallingThread();
+
+        if (!sAffinityEnabled) {
+            Log.i(TAG, "CPU affinity pinning disabled: Linux EAS dynamic core scheduling active");
+            return;
+        }
+
         if (nativeLoaded) {
             try {
                 int res = nativeBindToPerformanceCores();
