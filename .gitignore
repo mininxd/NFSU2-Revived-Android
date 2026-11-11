@@ -17,7 +17,6 @@ logs.txt
 *.BIN
 *.BUN
 *.bin
-!android/app/src/main/assets/LANGUAGES/Indonesian.bin
 *.bun
 *.big
 *.BIG

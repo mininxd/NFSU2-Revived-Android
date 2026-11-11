@@ -29,7 +29,6 @@ import android.widget.TextView;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -61,7 +60,6 @@ public final class LauncherActivity extends Activity {
         {"Português (Brasil)", "Portuguese", "Portuguese"}, {"Polski", "Polish", "Polish"},
         {"Русский", "Russian", "Russian"}, {"Türkçe", "Turkish", "Turkish"},
         {"Magyar", "Hungarian", "Hungarian"}
-        // {"Bahasa Indonesia", "Indonesian", "Indonesian"}
     };
 
     private LinearLayout checksList, optionsList;
@@ -525,8 +523,8 @@ public final class LauncherActivity extends Activity {
         File root = gameRoot();
         for (String[] language : LANGUAGES)
             if (new File(root, "LANGUAGES/" + language[2] + ".bin").isFile()
-                    || new File(root, "LANGPACKS/" + language[2].toLowerCase(Locale.ROOT)).isDirectory()
-                    || new File(root, "LANGPACKS/" + language[1].toLowerCase(Locale.ROOT)).isDirectory()
+                    || new File(root, "LANGPACKS/" + language[2].toLowerCase()).isDirectory()
+                    || new File(root, "LANGPACKS/" + language[1].toLowerCase()).isDirectory()
                     || new File(root, "LANGPACKS/" + language[2] + ".bin").isFile()) found.add(language);
         return found;
     }

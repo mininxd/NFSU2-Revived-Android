@@ -74,6 +74,17 @@ pub extern "C" fn nfs_contrast_filter_bleach_bypass(default_val: u32) -> u32 {
     default_val
 }
 
+// Backwards-compatible aliases for C-ABI
+#[no_mangle]
+pub extern "C" fn nfs_gfx_rust_filter_overbright(_default_val: u32) -> u32 {
+    0
+}
+
+#[no_mangle]
+pub extern "C" fn nfs_gfx_rust_filter_bleach_bypass(default_val: u32) -> u32 {
+    default_val
+}
+
 #[no_mangle]
 pub extern "C" fn nfs_contrast_get_mode() -> u32 {
     if INGAME_CONTRAST_ACTIVE.load(Ordering::Relaxed) { 1 } else { 0 }
@@ -164,5 +175,6 @@ mod tests {
     fn test_filter_overbright() {
         assert_eq!(nfs_contrast_filter_overbright(1), 0);
         assert_eq!(nfs_contrast_filter_overbright(0), 0);
+        assert_eq!(nfs_gfx_rust_filter_overbright(1), 0);
     }
 }

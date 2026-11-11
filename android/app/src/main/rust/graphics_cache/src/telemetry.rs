@@ -8,7 +8,7 @@ use std::fs;
 use std::sync::atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering};
 use std::time::Instant;
 
-const RING_SIZE: usize = 256;
+const RING_SIZE: usize = 128;
 const RING_MASK: usize = RING_SIZE - 1;
 
 static FRAME_TIMESTAMPS: [AtomicU64; RING_SIZE] = {
@@ -17,8 +17,7 @@ static FRAME_TIMESTAMPS: [AtomicU64; RING_SIZE] = {
 };
 
 static RING_HEAD: AtomicUsize = AtomicUsize::new(0);
-static LAST_PRESENT_TS_NS: AtomicU64 = AtomicU64::new(0);
-static LAST_FRAME_DURATION_NS: AtomicU64 = AtomicU64::new(0);
+static LAST_FPS: AtomicU32 = AtomicU32::new(0); // stored as f32::to_bits
 static LAST_FRAME_TIME_MS: AtomicU32 = AtomicU32::new(0); // stored as f32::to_bits
 static TOTAL_FRAMES_RECORDED: AtomicU64 = AtomicU64::new(0);
 
@@ -44,113 +43,42 @@ pub extern "C" fn nfs_telemetry_record_present(timestamp_ns: u64) {
         timestamp_ns
     };
 
-    let prev_ts = LAST_PRESENT_TS_NS.swap(ts, Ordering::Relaxed);
-    if prev_ts > 0 && ts > prev_ts {
-        let delta = ts - prev_ts;
-        if delta < 500_000 {
-            // Debounce duplicate present calls within 0.5ms on the same frame
-            return;
-        }
-        LAST_FRAME_DURATION_NS.store(delta, Ordering::Relaxed);
-        let frame_ms = (delta as f32) / 1_000_000.0;
-        LAST_FRAME_TIME_MS.store(frame_ms.clamp(0.0, 5000.0).to_bits(), Ordering::Relaxed);
-    }
-
     let idx = RING_HEAD.fetch_add(1, Ordering::Relaxed) & RING_MASK;
     FRAME_TIMESTAMPS[idx].store(ts, Ordering::Relaxed);
     TOTAL_FRAMES_RECORDED.fetch_add(1, Ordering::Relaxed);
-}
 
-/// Returns the current dynamic presentation FPS calculated over a sliding 1-second monotonic window.
-#[no_mangle]
-pub extern "C" fn nfs_telemetry_get_fps() -> f32 {
-    let mut tp = libc::timespec { tv_sec: 0, tv_nsec: 0 };
-    unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut tp); }
-    let now_ns = (tp.tv_sec as u64) * 1_000_000_000 + (tp.tv_nsec as u64);
-
-    let last_ts = LAST_PRESENT_TS_NS.load(Ordering::Relaxed);
-    if last_ts == 0 {
-        return 0.0;
-    }
-
-    let elapsed_since_last_ns = now_ns.saturating_sub(last_ts);
-    // If no frame has presented for > 1.5 seconds, the game has stalled/paused -> 0 FPS
-    if elapsed_since_last_ns > 1_500_000_000 {
-        return 0.0;
-    }
-
+    // Calculate rolling FPS over the last 60 frames (or available frames)
     let head = RING_HEAD.load(Ordering::Relaxed);
-    if head == 0 {
-        return 0.0;
-    }
+    let window = 60.min(RING_SIZE);
+    if head >= window {
+        let curr_idx = (head - 1) & RING_MASK;
+        let past_idx = (head - window) & RING_MASK;
+        let t_curr = FRAME_TIMESTAMPS[curr_idx].load(Ordering::Relaxed);
+        let t_past = FRAME_TIMESTAMPS[past_idx].load(Ordering::Relaxed);
 
-    // Sliding window: count frames within the last 1.0 second (1_000_000_000 ns)
-    let window_ns = 1_000_000_000u64;
-    let cutoff_ns = now_ns.saturating_sub(window_ns);
-
-    let max_check = RING_SIZE.min(head);
-    let mut count = 0usize;
-    let mut newest_ts = 0u64;
-    let mut oldest_ts = 0u64;
-
-    for i in 0..max_check {
-        let idx = (head.wrapping_sub(1 + i)) & RING_MASK;
-        let ts = FRAME_TIMESTAMPS[idx].load(Ordering::Relaxed);
-        if ts < cutoff_ns || ts == 0 {
-            break;
-        }
-        if count == 0 {
-            newest_ts = ts;
-        }
-        oldest_ts = ts;
-        count += 1;
-    }
-
-    if count >= 2 && newest_ts > oldest_ts {
-        let duration_sec = (newest_ts - oldest_ts) as f64 / 1_000_000_000.0;
-        let mut fps = ((count - 1) as f64 / duration_sec) as f32;
-        // If there has been a lag stall since newest frame (> 100ms), decay FPS to reflect current lag
-        if elapsed_since_last_ns > 100_000_000 {
-            let total_dur = (now_ns - oldest_ts) as f64 / 1_000_000_000.0;
-            if total_dur > 0.0 {
-                let decayed = ((count - 1) as f64 / total_dur) as f32;
-                fps = fps.min(decayed);
+        if t_curr > t_past {
+            let duration_ns = t_curr - t_past;
+            let duration_sec = (duration_ns as f64) / 1_000_000_000.0;
+            if duration_sec > 0.001 {
+                let fps = ((window - 1) as f64 / duration_sec) as f32;
+                let frame_time_ms = (duration_sec * 1000.0 / (window - 1) as f64) as f32;
+                LAST_FPS.store(fps.clamp(0.0, 360.0).to_bits(), Ordering::Relaxed);
+                LAST_FRAME_TIME_MS.store(frame_time_ms.clamp(0.0, 1000.0).to_bits(), Ordering::Relaxed);
             }
         }
-        fps.clamp(0.0, 360.0)
-    } else if count == 1 {
-        let dur_ns = elapsed_since_last_ns.max(LAST_FRAME_DURATION_NS.load(Ordering::Relaxed));
-        if dur_ns > 0 {
-            let fps = (1_000_000_000.0 / dur_ns as f64) as f32;
-            fps.clamp(0.0, 360.0)
-        } else {
-            0.0
-        }
-    } else {
-        0.0
     }
 }
 
-/// Returns the current dynamic frame duration in milliseconds.
+/// Returns the current dynamic presentation FPS.
+#[no_mangle]
+pub extern "C" fn nfs_telemetry_get_fps() -> f32 {
+    f32::from_bits(LAST_FPS.load(Ordering::Relaxed))
+}
+
+/// Returns the current average frame duration in milliseconds.
 #[no_mangle]
 pub extern "C" fn nfs_telemetry_get_frame_time_ms() -> f32 {
-    let mut tp = libc::timespec { tv_sec: 0, tv_nsec: 0 };
-    unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut tp); }
-    let now_ns = (tp.tv_sec as u64) * 1_000_000_000 + (tp.tv_nsec as u64);
-
-    let last_ts = LAST_PRESENT_TS_NS.load(Ordering::Relaxed);
-    if last_ts == 0 {
-        return 0.0;
-    }
-    let elapsed_since_last_ns = now_ns.saturating_sub(last_ts);
-    if elapsed_since_last_ns > 1_500_000_000 {
-        return (elapsed_since_last_ns as f32) / 1_000_000.0;
-    }
-
-    let last_dur_ns = LAST_FRAME_DURATION_NS.load(Ordering::Relaxed);
-    let eff_dur_ns = last_dur_ns.max(elapsed_since_last_ns);
-    let ms = (eff_dur_ns as f32) / 1_000_000.0;
-    ms.clamp(0.0, 5000.0)
+    f32::from_bits(LAST_FRAME_TIME_MS.load(Ordering::Relaxed))
 }
 
 /// Returns the current total CPU utilization percentage (0.0 to 100.0).
@@ -301,22 +229,17 @@ mod tests {
 
     #[test]
     fn test_telemetry_fps_calculation() {
-        let mut tp = libc::timespec { tv_sec: 0, tv_nsec: 0 };
-        unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut tp); }
-        let now_ns = (tp.tv_sec as u64) * 1_000_000_000 + (tp.tv_nsec as u64);
-
+        let base_ns = 1_000_000_000;
         let interval_ns = 16_666_666; // 60 FPS (~16.67ms)
-        let count = 60;
-        let start_ns = now_ns.saturating_sub(count * interval_ns);
 
-        for i in 0..count {
-            nfs_telemetry_record_present(start_ns + i * interval_ns);
+        for i in 0..70 {
+            nfs_telemetry_record_present(base_ns + i * interval_ns);
         }
 
         let fps = nfs_telemetry_get_fps();
         let frame_time = nfs_telemetry_get_frame_time_ms();
 
-        assert!(fps >= 40.0 && fps <= 70.0, "Expected ~60 fps, got {}", fps);
-        assert!(frame_time >= 10.0 && frame_time <= 30.0, "Expected ~16.67ms, got {}", frame_time);
+        assert!((fps - 60.0).abs() < 1.0);
+        assert!((frame_time - 16.67).abs() < 0.5);
     }
 }

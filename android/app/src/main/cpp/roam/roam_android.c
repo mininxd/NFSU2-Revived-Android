@@ -1488,7 +1488,7 @@ static void roam_android_install_hooks(void) {
     };
 
     void *target_4a = (void *)(lib_base + 0x1464be0);
-    if (probe_mem_readable(target_4a, 16) && memcmp(target_4a, EXPECTED_4A, 16) == 0) {
+    if (memcmp(target_4a, EXPECTED_4A, 16) == 0) {
         s_orig_4a5d90 = arm64_inline_hook(target_4a, (void *)hook_sub_004a5d90);
         __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook",
                             "Hooked sub_004a5d90 (garage car viewer) at %p (orig: %p)",
@@ -1499,7 +1499,7 @@ static void roam_android_install_hooks(void) {
     }
 
     void *target_5c = (void *)(lib_base + 0x2d762b0);
-    if (probe_mem_readable(target_5c, 16) && memcmp(target_5c, EXPECTED_5C, 16) == 0) {
+    if (memcmp(target_5c, EXPECTED_5C, 16) == 0) {
         s_orig_5c7ec0 = arm64_inline_hook(target_5c, (void *)hook_sub_005c7ec0);
         __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook",
                             "Hooked sub_005c7ec0 (camera setup) at %p (orig: %p)",
@@ -1511,7 +1511,7 @@ static void roam_android_install_hooks(void) {
 
     // Also update k_functions dispatch table
     uintptr_t k_4a = lib_base + 0x977c160;
-    if (probe_mem_readable((void *)k_4a, 16) && *(uint32_t *)k_4a == 0x004a5d90) {
+    if (*(uint32_t *)k_4a == 0x004a5d90) {
         uintptr_t page = k_4a & ~((uintptr_t)page_sz - 1);
         mprotect((void *)page, page_sz * 2, PROT_READ | PROT_WRITE);
         *(void **)(k_4a + 8) = (void *)hook_sub_004a5d90;
@@ -1519,7 +1519,7 @@ static void roam_android_install_hooks(void) {
     }
 
     uintptr_t k_5c = lib_base + 0x9797cd0;
-    if (probe_mem_readable((void *)k_5c, 16) && *(uint32_t *)k_5c == 0x005c7ec0) {
+    if (*(uint32_t *)k_5c == 0x005c7ec0) {
         uintptr_t page = k_5c & ~((uintptr_t)page_sz - 1);
         mprotect((void *)page, page_sz * 2, PROT_READ | PROT_WRITE);
         *(void **)(k_5c + 8) = (void *)hook_sub_005c7ec0;

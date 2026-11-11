@@ -36,14 +36,6 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Only displays player_racing and player_on_race during an ongoing race; when roaming, they are hidden.
  */
 public final class DiagnosticOverlay {
-    static {
-        try {
-            System.loadLibrary("graphics_cache");
-        } catch (Throwable t) {
-            android.util.Log.w("NFSU2", "DiagnosticOverlay: libgraphics_cache load: " + t.getMessage());
-        }
-    }
-
     private final Activity activity;
     private final String mode; // "compact" or "full"
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -59,11 +51,6 @@ public final class DiagnosticOverlay {
     private float liveGameFps = 0.0f;
     private float lastFrameDurationMs = 0.0f;
     private boolean metricsListenerRegistered = false;
-
-    // Measured presentation FPS from native D3D9 bridge logcat
-    private volatile float measuredNativeFps = 0.0f;
-    private volatile long lastNativeLogTime = 0;
-    private Thread logcatThread;
 
     // Native pure Rust telemetry buffer [fps, frame_time_ms, cpu_percent, gpu_busy]
     private final float[] telemetryBuffer = new float[4];
@@ -165,45 +152,6 @@ public final class DiagnosticOverlay {
                 }
             };
 
-    /**
-     * Reads native D3D9 bridge measurements from libnfsu2_android.so logcat output.
-     */
-    private void startLogcatFpsMonitor() {
-        logcatThread = new Thread(() -> {
-            java.lang.Process process = null;
-            try {
-                process = new ProcessBuilder("logcat", "-v", "brief", "-s", "NFSU2:I")
-                        .redirectErrorStream(true)
-                        .start();
-                BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-                String line;
-                while (running && (line = reader.readLine()) != null) {
-                    int idx = line.indexOf("Guest D3D9 presentation ");
-                    if (idx >= 0) {
-                        String sub = line.substring(idx + 24);
-                        int fpsIdx = sub.indexOf(" FPS");
-                        if (fpsIdx > 0) {
-                            try {
-                                float parsed = Float.parseFloat(sub.substring(0, fpsIdx).trim());
-                                if (parsed > 0 && parsed <= 360) {
-                                    measuredNativeFps = parsed;
-                                    lastNativeLogTime = SystemClock.elapsedRealtime();
-                                }
-                            } catch (Exception ignored) {}
-                        }
-                    }
-                }
-            } catch (Exception ignored) {
-            } finally {
-                if (process != null) {
-                    try { process.destroy(); } catch (Exception ignored) {}
-                }
-            }
-        }, "FpsLogcatMonitor");
-        logcatThread.setDaemon(true);
-        logcatThread.start();
-    }
-
     public void start() {
         if (!isEnabled() || running) return;
         running = true;
@@ -216,8 +164,6 @@ public final class DiagnosticOverlay {
             metricsListenerRegistered = true;
         } catch (Exception ignored) {}
 
-        startLogcatFpsMonitor();
-
         handler.post(ticker);
     }
 
@@ -226,11 +172,6 @@ public final class DiagnosticOverlay {
         running = false;
 
         handler.removeCallbacks(ticker);
-
-        if (logcatThread != null) {
-            try { logcatThread.interrupt(); } catch (Exception ignored) {}
-            logcatThread = null;
-        }
 
         if (metricsListenerRegistered) {
             try {
@@ -274,29 +215,7 @@ public final class DiagnosticOverlay {
                 perfBindCount++;
             }
 
-            long now = SystemClock.elapsedRealtime();
-            long elapsed = now - lastFrameCalcTime;
-            lastFrameCalcTime = now;
-
-            int frames = frameCounter.getAndSet(0);
-            if (elapsed > 0 && frames > 0) {
-                float measured = (frames * 1000.0f) / elapsed;
-                liveGameFps = measured;
-            }
-
-            // Cross-validate with native bridge report if available (keep active for up to 30s)
-            if (measuredNativeFps > 0 && (now - lastNativeLogTime < 30000)) {
-                liveGameFps = measuredNativeFps;
-            } else if (lastFrameDurationMs > 16.6f) {
-                // If frame duration shows lag (>16.6ms), reflect the actual frame duration
-                // instead of sticking to 60Hz window refresh
-                float instantFps = 1000.0f / lastFrameDurationMs;
-                if (liveGameFps <= 0.0f || instantFps < liveGameFps) {
-                    liveGameFps = instantFps;
-                }
-            }
-
-            // Also check rust native telemetry buffer if active
+            // Read pure Rust native frame telemetry
             try {
                 if (nativeGetTelemetry(telemetryBuffer)) {
                     if (telemetryBuffer[0] > 0.0f) {
@@ -327,7 +246,7 @@ public final class DiagnosticOverlay {
                 fps = 60.0f;
             }
         }
-        float frameTimeMs = (lastFrameDurationMs > 0.0f) ? lastFrameDurationMs : ((fps > 0.0f) ? (1000.0f / fps) : 0.0f);
+        float frameTimeMs = (lastFrameDurationMs > 0.0f) ? lastFrameDurationMs : ((fps > 0) ? (1000.0f / fps) : 0.0f);
         String fpsStr = (fps >= 100.0f) ? String.format(Locale.US, "%.0f", fps) : String.format(Locale.US, "%.1f", fps);
 
         float cpu = (telemetryBuffer[2] > 0.0f) ? telemetryBuffer[2] : sampleCpuUsage();

@@ -347,18 +347,6 @@ void d3dDispatch(){
         updateDumbAIState();
         serviceGuestSound();
         lastPresentMs=steadyMs();
-        static void(*s_telemetry_present)(uint64_t) = nullptr;
-        if(!s_telemetry_present) {
-            void* h=dlopen("libgraphics_cache.so", RTLD_NOW|RTLD_GLOBAL);
-            if(h) s_telemetry_present = reinterpret_cast<void(*)(uint64_t)>(dlsym(h, "nfs_telemetry_record_present"));
-            if(!s_telemetry_present) s_telemetry_present = reinterpret_cast<void(*)(uint64_t)>(dlsym(RTLD_DEFAULT, "nfs_telemetry_record_present"));
-        }
-        if(s_telemetry_present) {
-            struct timespec ts;
-            clock_gettime(CLOCK_MONOTONIC, &ts);
-            uint64_t now_ns = (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
-            s_telemetry_present(now_ns);
-        }
         startStallWatch();
     }
     if(token==0x7e002110u){
@@ -379,7 +367,7 @@ void d3dDispatch(){
         }
         nfs_adpf_begin_frame();
         static unsigned frames=0;static auto since=std::chrono::steady_clock::now();
-        if(++frames>=30){serviceGuestSound();auto now=std::chrono::steady_clock::now();double seconds=std::chrono::duration<double>(now-since).count();
+        if(++frames==120){serviceGuestSound();auto now=std::chrono::steady_clock::now();double seconds=std::chrono::duration<double>(now-since).count();
             NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Guest D3D9 presentation %.1f FPS over %.2f seconds; bridge ~%.2f ms/frame (present %.2f), %.0f calls/frame",
                 frames/seconds,seconds,double(bridgeTime.count())/1e6/frames,double(presentTime.count())/1e6/frames,double(bridgeCalls)/frames);
             std::array<unsigned,5> top{};
@@ -1226,11 +1214,7 @@ void setGuestHudSafeArea(bool enabled){std::lock_guard<MachineMutex> lock(machin
 void setGuestLanguage(const char* language){
     std::lock_guard<MachineMutex> lock(machine);if(memory)return;
     for(const char* known:{"English UK","English","Spanish","French","German","Italian","Dutch","Swedish","Danish","Japanese","Korean","Chinese (Traditional)","Thai"})
-        if(language&&strcasecmp(known,language)==0){
-            guestLanguage=known;
-            NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Selected guest language: %s",known);
-            return;
-        }
+        if(language&&std::strcmp(known,language)==0){guestLanguage=known;NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Selected guest language: %s",known);return;}
     guestLanguage="English UK";
 }
 void setGuestAudioMuted(bool muted) {

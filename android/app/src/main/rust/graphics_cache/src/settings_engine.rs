@@ -70,7 +70,7 @@ pub fn update_ini_key(content: &str, key: &str, new_line: &str) -> (String, bool
 }
 
 /// Synchronizes scripts/NFSUnderground2.WidescreenFix.ini purely in Rust.
-pub fn sync_widescreen_ini(game_root: &Path, menu_size: &str, is_console_pad: bool, language: &str) -> bool {
+pub fn sync_widescreen_ini(game_root: &Path, menu_size: &str, is_console_pad: bool) -> bool {
     let ini_candidates = [
         game_root.join("scripts/NFSUnderground2.WidescreenFix.ini"),
         PathBuf::from("/sdcard/nfsu2/scripts/NFSUnderground2.WidescreenFix.ini"),
@@ -122,11 +122,6 @@ pub fn sync_widescreen_ini(game_root: &Path, menu_size: &str, is_console_pad: bo
 
     let (c5, ch5) = update_ini_key(&cur, "ImproveGamepadSupport", &format!("ImproveGamepadSupport = {}                ; 1=Xbox, 2=PS, 3=PC", pad_support));
     cur = c5; any_changed |= ch5;
-
-    if !language.is_empty() {
-        let (c6, ch6) = update_ini_key(&cur, "Language", &format!("Language = {}", language));
-        cur = c6; any_changed |= ch6;
-    }
 
     if any_changed {
         let _ = fs::write(&path, cur);
@@ -304,10 +299,7 @@ pub unsafe extern "C" fn nfs_settings_sync_all(
         .map(|v| v != "off" && v != "0")
         .unwrap_or(false);
 
-    let language = parse_xml_tag_value(&prefs_xml, "string", "language")
-        .unwrap_or_else(|| "English UK".to_string());
-
-    let s1 = sync_widescreen_ini(game_root, &menu_size, is_console_pad, &language);
+    let s1 = sync_widescreen_ini(game_root, &menu_size, is_console_pad);
     let s2 = sync_widescreen_dat(game_root, display_logs);
     let s3 = sync_extra_options_ini(game_root);
 
