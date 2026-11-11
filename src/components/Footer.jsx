@@ -7,7 +7,7 @@ export default function Footer({ edition, onSelectEdition, onOpenLegal }) {
         style={{
           width: 765,
           height: 77,
-          background: `url('/assets/images.ea.com/eagames/official/nfs/underground2/us/universal/footer.jpg') no-repeat`,
+          background: `url('./assets/images.ea.com/eagames/official/nfs/underground2/us/universal/footer.jpg') no-repeat`,
           position: 'relative'
         }}
       >
@@ -62,14 +62,14 @@ export default function Footer({ edition, onSelectEdition, onOpenLegal }) {
           <tr>
             <td align="left">
               <img
-                src="/assets/images.ea.com/eagames/official/nfs/underground2/us/e_nfsug2.gif"
+                src="./assets/images.ea.com/eagames/official/nfs/underground2/us/e_nfsug2.gif"
                 border="0"
                 alt="ESRB Rating Everyone - Need for Speed Underground 2"
                 style={{ verticalAlign: 'middle' }}
               />
               &nbsp;
               <img
-                src="/assets/images.ea.com/esrb/privacycertified.jpg"
+                src="./assets/images.ea.com/esrb/privacycertified.jpg"
                 border="0"
                 alt="ESRB Privacy Certified"
                 style={{ verticalAlign: 'middle', marginLeft: 6 }}

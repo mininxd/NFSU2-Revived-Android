@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 const GAMES_DATA = {
   pc: {
     label: 'PC CD-ROM',
-    icon: '/assets/images.ea.com/eagames/redesign/components/gamefinder/pc-off.gif',
+    icon: './assets/images.ea.com/eagames/redesign/components/gamefinder/pc-off.gif',
     games: [
       'Battlefield 1942',
       'Battlefield 2',
@@ -22,7 +22,7 @@ const GAMES_DATA = {
   },
   ps2: {
     label: 'PlayStation 2',
-    icon: '/assets/images.ea.com/eagames/redesign/components/gamefinder/ps2-off.gif',
+    icon: './assets/images.ea.com/eagames/redesign/components/gamefinder/ps2-off.gif',
     games: [
       'Burnout 3: Takedown',
       'Def Jam: Fight for NY',
@@ -39,7 +39,7 @@ const GAMES_DATA = {
   },
   xbox: {
     label: 'Xbox',
-    icon: '/assets/images.ea.com/eagames/redesign/components/gamefinder/xbox-off.gif',
+    icon: './assets/images.ea.com/eagames/redesign/components/gamefinder/xbox-off.gif',
     games: [
       'Battlefield 2: Modern Combat',
       'Burnout 3: Takedown',
@@ -52,7 +52,7 @@ const GAMES_DATA = {
   },
   gamecube: {
     label: 'Nintendo GameCube',
-    icon: '/assets/images.ea.com/eagames/redesign/components/gamefinder/gamecube-off.gif',
+    icon: './assets/images.ea.com/eagames/redesign/components/gamefinder/gamecube-off.gif',
     games: [
       'Def Jam: Fight for NY',
       'James Bond 007: Everything or Nothing',
@@ -64,7 +64,7 @@ const GAMES_DATA = {
   },
   gba: {
     label: 'Game Boy Advance',
-    icon: '/assets/images.ea.com/eagames/redesign/components/gamefinder/gba-off.gif',
+    icon: './assets/images.ea.com/eagames/redesign/components/gamefinder/gba-off.gif',
     games: [
       'Harry Potter: Quidditch World Cup',
       'Need for Speed Underground',
@@ -103,7 +103,7 @@ export default function GameFinderBar({ onSelectGame, onSelectRegion, currentReg
         width: 765,
         height: 25,
         margin: '0 auto',
-        background: `url('/assets/images.ea.com/eagames/redesign/common/head/find_bar.gif') repeat-x`,
+        background: `url('./assets/images.ea.com/eagames/redesign/common/head/find_bar.gif') repeat-x`,
         display: 'flex',
         alignItems: 'center',
         position: 'relative',
@@ -112,7 +112,7 @@ export default function GameFinderBar({ onSelectGame, onSelectRegion, currentReg
       ref={menuRef}
     >
       <img
-        src="/assets/images.ea.com/eagames/redesign/common/head/find_corner.gif"
+        src="./assets/images.ea.com/eagames/redesign/common/head/find_corner.gif"
         width="11"
         height="25"
         alt=""
@@ -121,7 +121,7 @@ export default function GameFinderBar({ onSelectGame, onSelectRegion, currentReg
 
       <div style={{ position: 'relative', width: 225, height: 21 }}>
         <img
-          src="/assets/images.ea.com/eagames/redesign/components/gamefinder/gamefinder.gif"
+          src="./assets/images.ea.com/eagames/redesign/components/gamefinder/gamefinder.gif"
           width="225"
           height="21"
           alt="Game Finder"
@@ -247,7 +247,7 @@ export default function GameFinderBar({ onSelectGame, onSelectRegion, currentReg
         />
         <input
           type="image"
-          src="/assets/images.ea.com/eagames/redesign/common/buttons/search_go.jpg"
+          src="./assets/images.ea.com/eagames/redesign/common/buttons/search_go.jpg"
           alt="Go"
           style={{ marginLeft: 4, cursor: 'pointer', verticalAlign: 'middle' }}
         />
@@ -262,7 +262,7 @@ export default function GameFinderBar({ onSelectGame, onSelectRegion, currentReg
           }}
         >
           <img
-            src="/assets/images.ea.com/eagames/redesign/common/head/register.gif"
+            src="./assets/images.ea.com/eagames/redesign/common/head/register.gif"
             border="0"
             alt="Register"
             style={{ display: 'block' }}
@@ -277,7 +277,7 @@ export default function GameFinderBar({ onSelectGame, onSelectRegion, currentReg
           style={{ marginLeft: 3 }}
         >
           <img
-            src="/assets/images.ea.com/eagames/redesign/common/head/support.gif"
+            src="./assets/images.ea.com/eagames/redesign/common/head/support.gif"
             border="0"
             alt="Support"
             style={{ display: 'block' }}

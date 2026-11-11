@@ -77,7 +77,7 @@ export default function PollWidget({ edition }) {
           <div style={{ textAlign: 'center', marginTop: 8 }}>
             <input
               type="image"
-              src="/assets/images.ea.com/eagames/official/nfs/underground2/us/home/votebut.gif"
+              src="./assets/images.ea.com/eagames/official/nfs/underground2/us/home/votebut.gif"
               alt="Vote"
               style={{ cursor: 'pointer' }}
             />

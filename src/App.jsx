@@ -66,7 +66,7 @@ export default function App() {
                     onOpenCarContest={() =>
                       setModalImage({
                         title: 'Underground 2 Custom Car Contest Details',
-                        src: '/assets/images.ea.com/eagames/official/nfs/underground2/us/home/vinylcontest_125x72.jpg'
+                        src: './assets/images.ea.com/eagames/official/nfs/underground2/us/home/vinylcontest_125x72.jpg'
                       })
                     }
                   />
@@ -96,7 +96,7 @@ export default function App() {
                   <div style={{ width: 615, background: '#d8d8d8', minHeight: 520, fontFamily: 'verdana, arial, sans-serif' }}>
                     <div style={{ width: 615, height: 100, overflow: 'hidden' }}>
                       <img
-                        src="/assets/images.ea.com/eagames/official/nfs/underground2/us/universal/hdr_features.jpg"
+                        src="./assets/images.ea.com/eagames/official/nfs/underground2/us/universal/hdr_features.jpg"
                         width="615"
                         alt="Online Racing"
                         style={{ display: 'block' }}

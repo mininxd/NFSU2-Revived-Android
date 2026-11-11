@@ -38,7 +38,7 @@ export default function NewsPage({ onNavigate }) {
     <div style={{ width: 615, background: '#d8d8d8', minHeight: 520 }}>
       <div style={{ width: 615, height: 100, overflow: 'hidden' }}>
         <img
-          src="/assets/images.ea.com/eagames/official/nfs/underground2/us/universal/features_news.jpg"
+          src="./assets/images.ea.com/eagames/official/nfs/underground2/us/universal/features_news.jpg"
           width="615"
           alt="News Archives"
           style={{ display: 'block' }}

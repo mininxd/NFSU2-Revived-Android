@@ -5,7 +5,7 @@ export default function TopBanner({ onNavigate }) {
 
   // Flash banner cycle frames (extracted from topbanner.swf)
   const flashFrames = [
-    '/assets/images.ea.com/eagames/official/nfs/underground2/us/home/topbanner.jpg'
+    './assets/images.ea.com/eagames/official/nfs/underground2/us/home/topbanner.jpg'
   ];
 
   return (
@@ -15,7 +15,7 @@ export default function TopBanner({ onNavigate }) {
         height: 76,
         margin: '0 auto',
         position: 'relative',
-        background: `url('/assets/images.ea.com/eagames/official/nfs/underground2/us/home/topbanner.jpg') no-repeat`,
+        background: `url('./assets/images.ea.com/eagames/official/nfs/underground2/us/home/topbanner.jpg') no-repeat`,
         backgroundSize: '765px 76px',
         cursor: 'pointer'
       }}

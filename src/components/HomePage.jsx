@@ -14,7 +14,7 @@ export default function HomePage({
   return (
     <div style={{ width: 615 }}>
       <img
-        src="/assets/images.ea.com/eagames/official/nfs/underground2/us/home/mainimage.jpg"
+        src="./assets/images.ea.com/eagames/official/nfs/underground2/us/home/mainimage.jpg"
         width="615"
         height="395"
         alt="Need for Speed Underground 2"
@@ -36,7 +36,7 @@ export default function HomePage({
               valign="top"
               bgcolor="#d8d8d8"
               style={{
-                background: `url('/assets/images.ea.com/eagames/official/nfs/underground2/us/home/bg_1.jpg') no-repeat`,
+                background: `url('./assets/images.ea.com/eagames/official/nfs/underground2/us/home/bg_1.jpg') no-repeat`,
                 backgroundSize: '152px auto',
                 padding: '12px 10px'
               }}
@@ -49,7 +49,7 @@ export default function HomePage({
                     <b>Wallpaper Contest Update</b>
                     <div style={{ textAlign: 'center', margin: '6px 0' }}>
                       <img
-                        src="/assets/images.ea.com/eagames/official/nfs/underground2/us/home/125x72_wallpaper.jpg"
+                        src="./assets/images.ea.com/eagames/official/nfs/underground2/us/home/125x72_wallpaper.jpg"
                         width="125"
                         height="72"
                         alt="Wallpaper Contest"
@@ -57,7 +57,7 @@ export default function HomePage({
                         onClick={() =>
                           onOpenImageModal({
                             title: 'Wallpaper Contest Finalists',
-                            src: '/assets/images.ea.com/eagames/official/nfs/underground2/us/home/125x72_wallpaper.jpg'
+                            src: './assets/images.ea.com/eagames/official/nfs/underground2/us/home/125x72_wallpaper.jpg'
                           })
                         }
                       />
@@ -83,7 +83,7 @@ export default function HomePage({
                     <b>Get Tips &amp; Tricks</b>
                     <div style={{ textAlign: 'center', margin: '6px 0' }}>
                       <img
-                        src="/assets/images.ea.com/eagames/official/nfs/underground2/us/home/tips_tricks_dec.jpg"
+                        src="./assets/images.ea.com/eagames/official/nfs/underground2/us/home/tips_tricks_dec.jpg"
                         width="125"
                         height="175"
                         alt="Tips & Tricks"
@@ -91,7 +91,7 @@ export default function HomePage({
                         onClick={() =>
                           onOpenImageModal({
                             title: 'Tips & Tricks Magazine December Issue',
-                            src: '/assets/images.ea.com/eagames/official/nfs/underground2/us/home/tips_tricks_dec.jpg'
+                            src: './assets/images.ea.com/eagames/official/nfs/underground2/us/home/tips_tricks_dec.jpg'
                           })
                         }
                       />
@@ -242,12 +242,12 @@ export default function HomePage({
               valign="top"
               bgcolor="#9a9a9a"
               style={{
-                background: `url('/assets/images.ea.com/eagames/official/nfs/underground2/us/home/border_1.jpg') repeat-y`,
+                background: `url('./assets/images.ea.com/eagames/official/nfs/underground2/us/home/border_1.jpg') repeat-y`,
                 width: 2
               }}
             >
               <img
-                src="/assets/images.ea.com/eagames/official/nfs/underground2/us/home/border_1.jpg"
+                src="./assets/images.ea.com/eagames/official/nfs/underground2/us/home/border_1.jpg"
                 width="2"
                 height="1"
                 alt=""
@@ -260,7 +260,7 @@ export default function HomePage({
               valign="top"
               bgcolor="#d8d8d8"
               style={{
-                background: `url('/assets/images.ea.com/eagames/official/nfs/underground2/us/home/bg_2.jpg') no-repeat`,
+                background: `url('./assets/images.ea.com/eagames/official/nfs/underground2/us/home/bg_2.jpg') no-repeat`,
                 backgroundSize: '306px auto',
                 padding: '12px 14px'
               }}
@@ -271,7 +271,7 @@ export default function HomePage({
                     <b>Join the NFSU2 Road Crew</b>
                     <div style={{ textAlign: 'center', margin: '8px 0' }}>
                       <img
-                        src="/assets/www.theroadcrew.net/tools/banners/nfsu2_road_crew_270x202.jpg"
+                        src="./assets/www.theroadcrew.net/tools/banners/nfsu2_road_crew_270x202.jpg"
                         width="270"
                         height="202"
                         alt="NFSU2 Road Crew"
@@ -279,7 +279,7 @@ export default function HomePage({
                         onClick={() =>
                           onOpenImageModal({
                             title: 'Need for Speed Underground 2 - Road Crew',
-                            src: '/assets/www.theroadcrew.net/tools/banners/nfsu2_road_crew_270x202.jpg'
+                            src: './assets/www.theroadcrew.net/tools/banners/nfsu2_road_crew_270x202.jpg'
                           })
                         }
                       />
@@ -354,7 +354,7 @@ export default function HomePage({
 
                   <div style={{ textAlign: 'center', margin: '8px 0' }}>
                     <img
-                      src="/assets/images.ea.com/eagames/official/nfs/underground2/us/home/image_a.jpg"
+                      src="./assets/images.ea.com/eagames/official/nfs/underground2/us/home/image_a.jpg"
                       border="1"
                       width="270"
                       height="202"
@@ -363,7 +363,7 @@ export default function HomePage({
                       onClick={() =>
                         onOpenImageModal({
                           title: 'Underground 2 Exclusive Concept Art',
-                          src: '/assets/images.ea.com/eagames/official/nfs/underground2/us/home/image_a_big.jpg'
+                          src: './assets/images.ea.com/eagames/official/nfs/underground2/us/home/image_a_big.jpg'
                         })
                       }
                       title="Click to view full size 800x600 concept art"
@@ -381,12 +381,12 @@ export default function HomePage({
               valign="top"
               bgcolor="#9a9a9a"
               style={{
-                background: `url('/assets/images.ea.com/eagames/official/nfs/underground2/us/home/border_2.jpg') repeat-y`,
+                background: `url('./assets/images.ea.com/eagames/official/nfs/underground2/us/home/border_2.jpg') repeat-y`,
                 width: 2
               }}
             >
               <img
-                src="/assets/images.ea.com/eagames/official/nfs/underground2/us/home/border_2.jpg"
+                src="./assets/images.ea.com/eagames/official/nfs/underground2/us/home/border_2.jpg"
                 width="2"
                 height="1"
                 alt=""
@@ -399,7 +399,7 @@ export default function HomePage({
               valign="top"
               bgcolor="#d8d8d8"
               style={{
-                background: `url('/assets/images.ea.com/eagames/official/nfs/underground2/us/home/bg_3.jpg') no-repeat`,
+                background: `url('./assets/images.ea.com/eagames/official/nfs/underground2/us/home/bg_3.jpg') no-repeat`,
                 backgroundSize: '152px auto',
                 padding: '12px 6px'
               }}
@@ -414,7 +414,7 @@ export default function HomePage({
                 <b>Community Spotlight</b>
                 <div style={{ textAlign: 'center', margin: '8px 0' }}>
                   <img
-                    src="/assets/images.ea.com/eagames/official/nfs/underground2/us/home/racerplanet.jpg"
+                    src="./assets/images.ea.com/eagames/official/nfs/underground2/us/home/racerplanet.jpg"
                     width="120"
                     height="38"
                     alt="RacerPlanet.com"
@@ -448,12 +448,12 @@ export default function HomePage({
               width="1"
               bgcolor="#d8d8d8"
               style={{
-                background: `url('/assets/images.ea.com/eagames/official/nfs/underground2/us/universal/border_2.jpg') repeat-y`,
+                background: `url('./assets/images.ea.com/eagames/official/nfs/underground2/us/universal/border_2.jpg') repeat-y`,
                 width: 1
               }}
             >
               <img
-                src="/assets/images.ea.com/p.gif"
+                src="./assets/images.ea.com/p.gif"
                 width="1"
                 height="225"
                 alt=""

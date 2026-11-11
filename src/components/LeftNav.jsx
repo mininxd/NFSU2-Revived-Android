@@ -51,7 +51,7 @@ export default function LeftNav({ activePage, onNavigate, edition, onOpenNewslet
     <div
       style={{
         width: 150,
-        background: `url('/assets/www.ea.com/downloads/eagames/official/nfs/underground2/us/leftnav_background.jpg') repeat-y #e4e4e4`,
+        background: `url('./assets/www.ea.com/downloads/eagames/official/nfs/underground2/us/leftnav_background.jpg') repeat-y #e4e4e4`,
         minHeight: 620
       }}
     >
@@ -59,72 +59,72 @@ export default function LeftNav({ activePage, onNavigate, edition, onOpenNewslet
         <>
           <LeftNavPlayBanner />
           <RolloverButton
-            normalSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/locator.jpg"
+            normalSrc="./assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/locator.jpg"
             alt="Retailer Locator"
             onClick={onOpenPreorder}
           />
           <img
-            src="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/game_info.gif"
+            src="./assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/game_info.gif"
             width="150"
             alt="Game Info"
             style={{ display: 'block' }}
           />
           <RolloverButton
-            normalSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/features.gif"
-            hoverSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/features_over.gif"
+            normalSrc="./assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/features.gif"
+            hoverSrc="./assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/features_over.gif"
             alt="Features"
             active={activePage === 'features'}
             onClick={() => onNavigate('features')}
           />
           <RolloverButton
-            normalSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/screens.gif"
-            hoverSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/screens_over.gif"
+            normalSrc="./assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/screens.gif"
+            hoverSrc="./assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/screens_over.gif"
             alt="Screenshots"
             active={activePage === 'screenshots'}
             onClick={() => onNavigate('screenshots')}
           />
           <RolloverButton
-            normalSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/video.gif"
-            hoverSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/video_over.gif"
+            normalSrc="./assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/video.gif"
+            hoverSrc="./assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/video_over.gif"
             alt="Videos"
             active={activePage === 'videos'}
             onClick={() => onNavigate('videos')}
           />
           <img
-            src="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/hdr_go.gif"
+            src="./assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/hdr_go.gif"
             width="150"
             alt="Go Underground"
             style={{ display: 'block' }}
           />
           <RolloverButton
-            normalSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/city.gif"
-            hoverSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/city_over.gif"
+            normalSrc="./assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/city.gif"
+            hoverSrc="./assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/city_over.gif"
             alt="City Life"
             active={activePage === 'citylife'}
             onClick={() => onNavigate('citylife')}
           />
           <img
-            src="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/soundtrack_gray.gif"
+            src="./assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/soundtrack_gray.gif"
             width="150"
             alt="EA Trax Soundtrack"
             style={{ display: 'block' }}
           />
           <img
-            src="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/hdr_community.gif"
+            src="./assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/hdr_community.gif"
             width="150"
             alt="Community"
             style={{ display: 'block' }}
           />
           <RolloverButton
-            normalSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/onlineplay2.gif"
-            hoverSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/onlineplay-over2.gif"
+            normalSrc="./assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/onlineplay2.gif"
+            hoverSrc="./assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/onlineplay-over2.gif"
             alt="Online Play"
             active={activePage === 'online'}
             onClick={() => onNavigate('online')}
           />
           <RolloverButton
-            normalSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/news2.gif"
-            hoverSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/news-over2.gif"
+            normalSrc="./assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/news2.gif"
+            hoverSrc="./assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav2/news-over2.gif"
             alt="News"
             active={activePage === 'news'}
             onClick={() => onNavigate('news')}
@@ -134,55 +134,55 @@ export default function LeftNav({ activePage, onNavigate, edition, onOpenNewslet
         <>
           <LeftNavPlayBanner />
           <RolloverButton
-            normalSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav/newsletter.jpg"
+            normalSrc="./assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav/newsletter.jpg"
             alt="Newsletter"
             onClick={onOpenNewsletter}
           />
           <img
-            src="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav/leftnav_1.gif"
+            src="./assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav/leftnav_1.gif"
             width="150"
             height="29"
             alt="Game Info"
             style={{ display: 'block' }}
           />
           <RolloverButton
-            normalSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav/leftnav_2.gif"
-            hoverSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav/leftnav_2-over.gif"
+            normalSrc="./assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav/leftnav_2.gif"
+            hoverSrc="./assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav/leftnav_2-over.gif"
             alt="Features"
             active={activePage === 'features'}
             onClick={() => onNavigate('features')}
           />
           <RolloverButton
-            normalSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav/leftnav_3.gif"
-            hoverSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav/leftnav_3-over.gif"
+            normalSrc="./assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav/leftnav_3.gif"
+            hoverSrc="./assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav/leftnav_3-over.gif"
             alt="Screenshots"
             active={activePage === 'screenshots'}
             onClick={() => onNavigate('screenshots')}
           />
           <img
-            src="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav/leftnav_4.gif"
+            src="./assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav/leftnav_4.gif"
             width="150"
             height="21"
             alt=""
             style={{ display: 'block' }}
           />
           <img
-            src="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav/leftnav_5.gif"
+            src="./assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav/leftnav_5.gif"
             width="150"
             height="26"
             alt="Community"
             style={{ display: 'block' }}
           />
           <RolloverButton
-            normalSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav/leftnav_6.gif"
-            hoverSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav/leftnav_6-over.gif"
+            normalSrc="./assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav/leftnav_6.gif"
+            hoverSrc="./assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav/leftnav_6-over.gif"
             alt="News"
             active={activePage === 'news'}
             onClick={() => onNavigate('news')}
           />
           <RolloverButton
-            normalSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav/leftnav_7.gif"
-            hoverSrc="/assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav/leftnav_7-over.gif"
+            normalSrc="./assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav/leftnav_7.gif"
+            hoverSrc="./assets/images.ea.com/eagames/official/nfs/underground2/us/leftnav/leftnav_7-over.gif"
             alt="Links"
             active={activePage === 'links'}
             onClick={() => onNavigate('links')}
@@ -192,7 +192,7 @@ export default function LeftNav({ activePage, onNavigate, edition, onOpenNewslet
 
       <a href="http://www.formulad.com" target="_blank" rel="noreferrer" style={{ lineHeight: 0, display: 'block', marginTop: 4 }}>
         <img
-          src="/assets/images.ea.com/eagames/official/nfs/underground2/us/home/promotion.jpg"
+          src="./assets/images.ea.com/eagames/official/nfs/underground2/us/home/promotion.jpg"
           border="0"
           alt="Formula D"
           width="150"
@@ -206,7 +206,7 @@ export default function LeftNav({ activePage, onNavigate, edition, onOpenNewslet
         cellSpacing="0"
         border="0"
         style={{
-          background: `url('/assets/images.ea.com/eagames/official/nfs/underground2/us/home/platform.jpg') no-repeat`,
+          background: `url('./assets/images.ea.com/eagames/official/nfs/underground2/us/home/platform.jpg') no-repeat`,
           backgroundSize: '150px auto'
         }}
       >

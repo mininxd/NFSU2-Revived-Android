@@ -7,26 +7,26 @@ const SCREENSHOT_SETS = {
     screens: [
       {
         id: 1,
-        thumb: '/assets/images.ea.com/eagames/official/nfs/underground2/us/screenshots/320x240/smooth_ride/screen_1.jpg',
-        full: '/assets/images.ea.com/eagames/official/nfs/underground2/us/screenshots/800x600/smooth_ride/screen_1.jpg',
+        thumb: './assets/images.ea.com/eagames/official/nfs/underground2/us/screenshots/320x240/smooth_ride/screen_1.jpg',
+        full: './assets/images.ea.com/eagames/official/nfs/underground2/us/screenshots/800x600/smooth_ride/screen_1.jpg',
         desc: 'Nissan 350Z cruising past city streetlights'
       },
       {
         id: 2,
-        thumb: '/assets/images.ea.com/eagames/official/nfs/underground2/us/screenshots/320x240/smooth_ride/screen_2.jpg',
-        full: '/assets/images.ea.com/eagames/official/nfs/underground2/us/screenshots/800x600/smooth_ride/screen_2.jpg',
+        thumb: './assets/images.ea.com/eagames/official/nfs/underground2/us/screenshots/320x240/smooth_ride/screen_2.jpg',
+        full: './assets/images.ea.com/eagames/official/nfs/underground2/us/screenshots/800x600/smooth_ride/screen_2.jpg',
         desc: 'Custom tuned tuner taking high speed corner'
       },
       {
         id: 3,
-        thumb: '/assets/images.ea.com/eagames/official/nfs/underground2/us/screenshots/320x240/smooth_ride/screen_3.jpg',
-        full: '/assets/images.ea.com/eagames/official/nfs/underground2/us/screenshots/800x600/smooth_ride/screen_3.jpg',
+        thumb: './assets/images.ea.com/eagames/official/nfs/underground2/us/screenshots/320x240/smooth_ride/screen_3.jpg',
+        full: './assets/images.ea.com/eagames/official/nfs/underground2/us/screenshots/800x600/smooth_ride/screen_3.jpg',
         desc: 'Neon glow reflection and nighttime atmosphere'
       },
       {
         id: 4,
-        thumb: '/assets/images.ea.com/eagames/official/nfs/underground2/us/screenshots/320x240/smooth_ride/screen_4.jpg',
-        full: '/assets/images.ea.com/eagames/official/nfs/underground2/us/screenshots/800x600/smooth_ride/screen_4.jpg',
+        thumb: './assets/images.ea.com/eagames/official/nfs/underground2/us/screenshots/320x240/smooth_ride/screen_4.jpg',
+        full: './assets/images.ea.com/eagames/official/nfs/underground2/us/screenshots/800x600/smooth_ride/screen_4.jpg',
         desc: 'Bayview highway drag stretch'
       }
     ]
@@ -52,7 +52,7 @@ export default function ScreenshotsPage({ onNavigate, onOpenImageModal }) {
     <div style={{ width: 615, background: '#d8d8d8', minHeight: 520 }}>
       <div style={{ width: 615, height: 100, overflow: 'hidden' }}>
         <img
-          src="/assets/images.ea.com/eagames/official/nfs/underground2/us/screenshots/hdr_screenshots.jpg"
+          src="./assets/images.ea.com/eagames/official/nfs/underground2/us/screenshots/hdr_screenshots.jpg"
           width="615"
           alt="Screenshots"
           style={{ display: 'block' }}
@@ -73,7 +73,7 @@ export default function ScreenshotsPage({ onNavigate, onOpenImageModal }) {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <img
-            src="/assets/images.ea.com/eagames/official/nfs/underground2/us/screenshots/hdr_ps2.gif"
+            src="./assets/images.ea.com/eagames/official/nfs/underground2/us/screenshots/hdr_ps2.gif"
             alt="PlayStation 2"
             style={{ height: 16 }}
           />

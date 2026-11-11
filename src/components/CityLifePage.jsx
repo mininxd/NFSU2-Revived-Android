@@ -90,7 +90,7 @@ export default function CityLifePage({ onNavigate }) {
     <div style={{ width: 615, background: '#d8d8d8', minHeight: 620, fontFamily: 'verdana, arial, sans-serif' }}>
       <div style={{ width: 615, height: 100, overflow: 'hidden' }}>
         <img
-          src="/assets/images.ea.com/eagames/official/nfs/underground2/us/universal/hdr_features.jpg"
+          src="./assets/images.ea.com/eagames/official/nfs/underground2/us/universal/hdr_features.jpg"
           width="615"
           alt="City Life"
           style={{ display: 'block' }}

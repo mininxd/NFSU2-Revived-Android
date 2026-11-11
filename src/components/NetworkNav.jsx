@@ -12,7 +12,7 @@ export default function NetworkNav({ onOpenStoreFinder, onOpenLogin, onOpenSuppo
                   <td rowSpan="2" style={{ padding: '4px 0' }}>
                     <a href="https://www.ea.com" target="_blank" rel="noreferrer">
                       <img
-                        src="/assets/images.ea.com/eagames/uninav_logo_gray.gif"
+                        src="./assets/images.ea.com/eagames/uninav_logo_gray.gif"
                         border="0"
                         alt="Electronic Arts"
                         style={{ display: 'block' }}

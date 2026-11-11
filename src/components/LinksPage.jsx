@@ -38,7 +38,7 @@ export default function LinksPage({ onNavigate }) {
     <div style={{ width: 615, background: '#d8d8d8', minHeight: 520 }}>
       <div style={{ width: 615, height: 100, overflow: 'hidden' }}>
         <img
-          src="/assets/images.ea.com/eagames/official/nfs/underground2/us/universal/hdr_links.jpg"
+          src="./assets/images.ea.com/eagames/official/nfs/underground2/us/universal/hdr_links.jpg"
           width="615"
           alt="Links"
           style={{ display: 'block' }}
