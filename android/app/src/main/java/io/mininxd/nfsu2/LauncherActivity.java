@@ -1028,6 +1028,7 @@ public final class LauncherActivity extends Activity {
         GameOptions.applyWidescreenPatchFile(this);
         GameOptions.syncWidescreenIni(this);
         GameOptions.syncExtraOptionsIni(this);
+        GameOptions.applyContrastMode(this);
         GamePerformanceBooster.apply(this, getWindow());
         PerformanceCores.bindToPerformanceCores();
         boolean logsEnabled = !"off".equals(GameOptions.get(this, GameOptions.DISPLAY_LOGS));
@@ -1047,6 +1048,7 @@ public final class LauncherActivity extends Activity {
                 .putExtra("consolePad", GameOptions.isConsolePad(this))
                 .putExtra("onlineServer", GameOptions.onlineServer(this))
                 .putExtra("driverLoader", loader)
+                .putExtra("contrast", GameOptions.get(this, GameOptions.ENHANCED_CONTRAST))
                 .putExtra("graphicsBackend", GameOptions.getEffectiveGraphicsBackend(this))
                 .putExtra("displayLogs", GameOptions.get(this, GameOptions.DISPLAY_LOGS))
                 .putExtra("roamEnabled", GameOptions.isRoamEnabled(this))

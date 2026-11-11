@@ -505,7 +505,15 @@ public final class GameActivity extends NativeActivity {
         String[] loader = launch.getStringArrayExtra("driverLoader");
         if (loader == null || loader.length != 4) loader = GpuDrivers.loaderArguments(this);
         nativeGpuDriver(loader[0], loader[1], loader[2], loader[3]);
-        String contrastOption = GameOptions.get(this, GameOptions.ENHANCED_CONTRAST);
+        String contrastOption = launch.getStringExtra("contrast");
+        if (contrastOption == null) contrastOption = GameOptions.get(this, GameOptions.ENHANCED_CONTRAST);
+        int contrastMode = 1;
+        if ("off".equals(contrastOption)) {
+            contrastMode = 0;
+        } else if ("on".equals(contrastOption) || "original".equals(contrastOption)) {
+            contrastMode = 2;
+        }
+        GraphicsCacheManager.setContrastMode(contrastMode);
         try {
             android.system.Os.setenv("NFSU2_CONTRAST", contrastOption != null ? contrastOption : "optimized", true);
         } catch (Throwable ignored) {}

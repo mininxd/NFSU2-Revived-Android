@@ -109,11 +109,24 @@ pub unsafe extern "C" fn nfs_rust_apply_engine_pacing(mem_base: *mut u8, real_el
     crate::crowd::nfs_rust_apply_crowd_suppression(mem_base);
 
     // 8. Enhanced Contrast Regulation (Issue #70: Snapdragon 8 Elite / Adreno 840 / 740)
-    // When mode is 0 (Off), clamp g_OverBrightEnable and g_BleachByPassEnable to 0 to restore solid 60 FPS
+    // Mode 0 = Off (Fastest): Both passes disabled
+    // Mode 1 = Optimized (Smooth 60 FPS): Bleach Bypass enabled for rich contrast,
+    //          OverBright bloom disabled to eliminate heavy TBDR tile resolves and frame drops
+    // Mode 2 = Original (High GPU Load): Both passes enabled
     let cm = CONTRAST_MODE.load(Ordering::Relaxed);
-    if cm == 0 {
-        write_u32(mem_base, G_OVERBRIGHT_ENABLE_ADDR, 0);
-        write_u32(mem_base, G_BLEACH_BYPASS_ENABLE_ADDR, 0);
+    match cm {
+        0 => {
+            write_u32(mem_base, G_OVERBRIGHT_ENABLE_ADDR, 0);
+            write_u32(mem_base, G_BLEACH_BYPASS_ENABLE_ADDR, 0);
+        }
+        1 => {
+            write_u32(mem_base, G_OVERBRIGHT_ENABLE_ADDR, 0);
+            write_u32(mem_base, G_BLEACH_BYPASS_ENABLE_ADDR, 1);
+        }
+        _ => {
+            write_u32(mem_base, G_OVERBRIGHT_ENABLE_ADDR, 1);
+            write_u32(mem_base, G_BLEACH_BYPASS_ENABLE_ADDR, 1);
+        }
     }
 
     // 9. Anti-slowmotion frame pacing
@@ -151,5 +164,15 @@ mod tests {
         assert_eq!(G_OVERBRIGHT_ENABLE_ADDR, 0x00870CFC);
         assert_eq!(G_BLEACH_BYPASS_ENABLE_ADDR, 0x00870D00);
         assert_eq!(G_HIGH_FPS_PATCH_ADDR, 0x0057A084);
+    }
+
+    #[test]
+    fn test_contrast_mode_regulation() {
+        nfs_rust_set_contrast_mode(0);
+        assert_eq!(nfs_rust_get_contrast_mode(), 0);
+        nfs_rust_set_contrast_mode(1);
+        assert_eq!(nfs_rust_get_contrast_mode(), 1);
+        nfs_rust_set_contrast_mode(2);
+        assert_eq!(nfs_rust_get_contrast_mode(), 2);
     }
 }

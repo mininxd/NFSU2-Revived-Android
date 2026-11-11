@@ -86,6 +86,8 @@ extern uint32_t nfs_rust_filter_crowd_setting(uint32_t val);
 extern int nfs_rust_apply_crowd_suppression(uint8_t *mem_base);
 extern uint32_t nfs_rust_crowd_suppressed_frames(void);
 extern int nfs_rust_apply_engine_pacing(uint8_t *mem_base, float real_elapsed);
+extern void nfs_rust_set_contrast_mode(uint32_t mode);
+extern uint32_t nfs_rust_get_contrast_mode(void);
 #endif
 
 #define G_CARPOOL_KB     0x007fa9d4u
@@ -1031,6 +1033,19 @@ static void framerate_pacing_fix(void) {
         const char *env_crowd = getenv("NFSU2_CROWD");
         int allow_crowd = (env_crowd && (strcmp(env_crowd, "1") == 0 || strcasecmp(env_crowd, "on") == 0));
         nfs_rust_set_crowd_suppression(!allow_crowd);
+
+        const char *env_contrast = getenv("NFSU2_CONTRAST");
+        uint32_t c_mode = 1; // default: optimized
+        if (env_contrast) {
+            if (strcmp(env_contrast, "off") == 0 || strcmp(env_contrast, "0") == 0) {
+                c_mode = 0;
+            } else if (strcmp(env_contrast, "on") == 0 || strcmp(env_contrast, "2") == 0 || strcasecmp(env_contrast, "original") == 0) {
+                c_mode = 2;
+            } else {
+                c_mode = 1;
+            }
+        }
+        nfs_rust_set_contrast_mode(c_mode);
     }
     if (g_p_mem_base && *g_p_mem_base) {
         static int64_t s_last_tick_us = 0;
@@ -1092,6 +1107,22 @@ static void framerate_pacing_fix(void) {
         int allow_crowd = (env_crowd && (strcmp(env_crowd, "1") == 0 || strcasecmp(env_crowd, "on") == 0));
         if (!allow_crowd) {
             MR32(0x00870cd0u) = 0;
+        }
+    }
+
+    /* Enhanced Contrast Regulation: clamp OverBright and Bleach Bypass according to NFSU2_CONTRAST */
+    if (rh_mem_committed(0x00870cfcu, 4) && rh_mem_committed(0x00870d00u, 4)) {
+        const char *env_contrast = getenv("NFSU2_CONTRAST");
+        if (env_contrast && (strcmp(env_contrast, "off") == 0 || strcmp(env_contrast, "0") == 0)) {
+            MR32(0x00870cfcu) = 0;
+            MR32(0x00870d00u) = 0;
+        } else if (env_contrast && (strcmp(env_contrast, "on") == 0 || strcmp(env_contrast, "2") == 0 || strcasecmp(env_contrast, "original") == 0)) {
+            MR32(0x00870cfcu) = 1;
+            MR32(0x00870d00u) = 1;
+        } else {
+            // Optimized default: keep Bleach Bypass, disable OverBright bloom
+            MR32(0x00870cfcu) = 0;
+            MR32(0x00870d00u) = 1;
         }
     }
 

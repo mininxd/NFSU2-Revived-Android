@@ -75,6 +75,23 @@ public final class GameOptions {
         return null;
     }
 
+    /** Enhanced Contrast mode: 0 = Off (Fastest), 1 = Optimized (Smooth 60 FPS), 2 = Original (High GPU Load). */
+    static int contrastMode(Context context) {
+        String opt = get(context, ENHANCED_CONTRAST);
+        if ("off".equals(opt)) return 0;
+        if ("on".equals(opt) || "original".equals(opt)) return 2;
+        return 1;
+    }
+
+    /** Applies active Enhanced Contrast configuration to Rust graphics cache engine and runtime environment. */
+    static void applyContrastMode(Context context) {
+        int mode = contrastMode(context);
+        GraphicsCacheManager.setContrastMode(mode);
+        try {
+            android.system.Os.setenv("NFSU2_CONTRAST", mode == 0 ? "off" : mode == 2 ? "on" : "optimized", true);
+        } catch (Throwable ignored) {}
+    }
+
     /** Speedometer for nativeSpeedometerPosition: 0 bottom right (original). */
     static int speedometerPosition(Context context) {
         return 0;
@@ -195,6 +212,9 @@ public final class GameOptions {
 
     static void set(Context context, String key, String value) {
         prefs(context).edit().putString(key, value).apply();
+        if (ENHANCED_CONTRAST.equals(key)) {
+            applyContrastMode(context);
+        }
     }
 
     static final String ONLINE_SERVER = "online_server", DEFAULT_ONLINE_SERVER = "eahub.eu";
