@@ -9,6 +9,17 @@ use std::os::raw::{c_char, c_int};
 use std::sync::RwLock;
 
 static PATH_CACHE: RwLock<Option<HashMap<String, String>>> = RwLock::new(None);
+static CURRENT_LANGUAGE: RwLock<String> = RwLock::new(String::new());
+
+#[no_mangle]
+pub unsafe extern "C" fn rust_fs_set_language(lang_ptr: *const c_char) {
+    if lang_ptr.is_null() { return; }
+    if let Ok(s) = CStr::from_ptr(lang_ptr).to_str() {
+        if let Ok(mut guard) = CURRENT_LANGUAGE.write() {
+            *guard = s.to_string();
+        }
+    }
+}
 
 fn normalize_key(path: &str) -> String {
     let mut s = path.replace('\\', "/").to_ascii_lowercase();

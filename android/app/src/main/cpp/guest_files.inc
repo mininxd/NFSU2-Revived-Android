@@ -28,6 +28,50 @@ std::filesystem::path gamePath(std::string guest){
 
     std::string originalGuest = guest;
     std::replace(guest.begin(),guest.end(),'\\','/');auto normalized=lower(guest);
+
+    // Multi-language redirection for custom / translated languages
+    if (!guestLanguage.empty() && strcasecmp(guestLanguage.c_str(), "English UK") != 0 && strcasecmp(guestLanguage.c_str(), "English") != 0) {
+        std::string langLower = lower(guestLanguage);
+        bool isIndo = (langLower.find("indonesia") != std::string::npos);
+
+        // 1. Memory-card localization (.loc) redirection
+        if (normalized.find("memcard/") != std::string::npos && normalized.length() >= 4 && (normalized.rfind(".loc") == normalized.length() - 4)) {
+            std::vector<std::filesystem::path> customLocCandidates;
+            if (isIndo) {
+                customLocCandidates.push_back(hostGameRoot / "memcard" / "bahasa_indonesia.loc");
+                customLocCandidates.push_back(hostGameRoot / "memcard" / "LOCALE_INDONESIAN.loc");
+                customLocCandidates.push_back(hostGameRoot / "LANGUAGES" / "bahasa_indonesia.loc");
+            }
+            customLocCandidates.push_back(hostGameRoot / "memcard" / ("LOCALE_" + guestLanguage + ".loc"));
+            customLocCandidates.push_back(hostGameRoot / "memcard" / (langLower + ".loc"));
+            for (const auto& cand : customLocCandidates) {
+                std::error_code ec;
+                if (std::filesystem::exists(cand, ec)) {
+                    if (s_insert) s_insert(originalGuest.c_str(), cand.string().c_str());
+                    return cand;
+                }
+            }
+        }
+
+        // 2. Main game text strings (.bin) redirection
+        if (normalized.find("languages/") != std::string::npos && normalized.length() >= 4 && (normalized.rfind(".bin") == normalized.length() - 4)) {
+            std::vector<std::filesystem::path> customBinCandidates;
+            if (isIndo) {
+                customBinCandidates.push_back(hostGameRoot / "LANGUAGES" / "Indonesian.bin");
+                customBinCandidates.push_back(hostGameRoot / "LANGUAGES" / "bahasa_indonesia.bin");
+            }
+            customBinCandidates.push_back(hostGameRoot / "LANGUAGES" / (guestLanguage + ".bin"));
+            customBinCandidates.push_back(hostGameRoot / "LANGUAGES" / (langLower + ".bin"));
+            customBinCandidates.push_back(hostGameRoot / "LANGPACKS" / langLower / "LANGUAGES" / "English.bin");
+            for (const auto& cand : customBinCandidates) {
+                std::error_code ec;
+                if (std::filesystem::exists(cand, ec)) {
+                    if (s_insert) s_insert(originalGuest.c_str(), cand.string().c_str());
+                    return cand;
+                }
+            }
+        }
+    }
     if(normalized=="c:/nfsu2")guest.clear();
     else if(normalized.rfind("c:/nfsu2/",0)==0)guest=guest.substr(9);
     else if(guest.find(':')!=std::string::npos||guest.rfind("//",0)==0)throw GuestStop("Unsupported guest path: "+guest);
