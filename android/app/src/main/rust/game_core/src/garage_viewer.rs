@@ -1,6 +1,6 @@
 //! Garage & Frontend Car Viewer Rotation Engine (Analog Stick & Two-Finger Drag).
 //!
-//! Replicates console (PS2/Xbox) analog stick car viewing and `nfsu2-web` two-finger drag
+//! Replicates console (PS2/Xbox) analog stick car viewing and native 2-finger scroll
 //! inside Need for Speed Underground 2's car showroom, garage, and performance shops.
 //!
 //! Technical architecture:
@@ -41,7 +41,8 @@ pub struct GarageViewerEngine {
     two_finger_active: AtomicBool,
     two_finger_dx: AtomicI32,
     two_finger_dy: AtomicI32,
-    last_two_finger_update: Mutex<Option<Instant>>,
+    angular_momentum: Mutex<f32>, // degrees per second for inertial scroll
+    last_frame_time: Mutex<Option<Instant>>,
     last_viewer_addr: AtomicU32,
 }
 
@@ -53,12 +54,13 @@ impl GarageViewerEngine {
             two_finger_active: AtomicBool::new(false),
             two_finger_dx: AtomicI32::new(0),
             two_finger_dy: AtomicI32::new(0),
-            last_two_finger_update: Mutex::new(None),
+            angular_momentum: Mutex::new(0.0),
+            last_frame_time: Mutex::new(None),
             last_viewer_addr: AtomicU32::new(0),
         }
     }
 
-    /// Sets right analog stick input from gamepad or onscreen controls.
+    /// Sets right analog stick input from gamepad.
     pub fn set_stick_input(&self, x: f32, y: f32) {
         let ix = (x.clamp(-1.0, 1.0) * 10000.0) as i32;
         let iy = (y.clamp(-1.0, 1.0) * 10000.0) as i32;
@@ -75,9 +77,6 @@ impl GarageViewerEngine {
             let idy = (dy * 10000.0) as i32;
             self.two_finger_dx.fetch_add(idx, Ordering::AcqRel);
             self.two_finger_dy.fetch_add(idy, Ordering::AcqRel);
-            if let Ok(mut guard) = self.last_two_finger_update.lock() {
-                *guard = Some(Instant::now());
-            }
         } else {
             self.two_finger_dx.store(0, Ordering::Release);
             self.two_finger_dy.store(0, Ordering::Release);
@@ -101,13 +100,6 @@ impl GarageViewerEngine {
 
         self.last_viewer_addr.store(viewer_va, Ordering::Release);
 
-        // Check if middle mouse button is down in game memory. If PC mouse drag is active,
-        // defer to the game's native drag handler.
-        let mouse_mid_ptr = guest_base.add(G_MOUSE_MID as usize);
-        if *mouse_mid_ptr != 0 {
-            return;
-        }
-
         // Check if frontend is busy (e.g. GenericDialog.fng is up)
         let fe_busy_ptr = guest_base.add(G_FE_BUSY as usize) as *const u32;
         if *fe_busy_ptr != 0 {
@@ -118,51 +110,109 @@ impl GarageViewerEngine {
             return;
         }
 
-        let mut turn_vel = 0.0f32;
-        let mut tilt_vel = 0.0f32;
-
-        // 1. Process two-finger drag
-        if self.two_finger_active.load(Ordering::Acquire) {
-            let idx = self.two_finger_dx.swap(0, Ordering::AcqRel);
-            let idy = self.two_finger_dy.swap(0, Ordering::AcqRel);
-            let dx = idx as f32 / 10000.0;
-            let dy = idy as f32 / 10000.0;
-
-            // Sensitivity multiplier for two-finger drag: fast responsive rotation
-            turn_vel = dx * 15.0;
-            tilt_vel = dy * 15.0;
-        }
-
-        // 2. Process right analog stick if two-finger drag is not dominating
-        if turn_vel.abs() < 0.001 && tilt_vel.abs() < 0.001 {
-            let (sx, sy) = self.get_stick_input();
-            let mag = (sx * sx + sy * sy).sqrt();
-            if mag >= STICK_DEADZONE {
-                turn_vel = sx;
-                tilt_vel = sy;
+        let now = Instant::now();
+        let dt = {
+            if let Ok(mut guard) = self.last_frame_time.lock() {
+                let prev = guard.replace(now);
+                match prev {
+                    Some(p) => now.duration_since(p).as_secs_f32().clamp(0.001, 0.1),
+                    None => 0.016,
+                }
+            } else {
+                0.016
             }
-        }
+        };
 
+        let angle_ptr = guest_base.add((viewer_va + VW_ANGLE) as usize) as *mut f32;
         let turn_ptr = guest_base.add((viewer_va + VW_TURN) as usize) as *mut f32;
         let tilt_ptr = guest_base.add((viewer_va + VW_TILT) as usize) as *mut f32;
 
-        if turn_vel.abs() < 0.001 && tilt_vel.abs() < 0.001 {
+        let active = self.two_finger_active.load(Ordering::Acquire);
+        let idx = self.two_finger_dx.swap(0, Ordering::AcqRel);
+        let idy = self.two_finger_dy.swap(0, Ordering::AcqRel);
+        let dx = idx as f32 / 10000.0;
+        let dy = idy as f32 / 10000.0;
+
+        let mut interacted = false;
+
+        if active {
+            // Native Direct Delta Scroll:
+            // Swiping across the screen rotates the car smoothly and directly in degrees.
+            // 270.0 degrees per full screen width drag gives natural responsive tactile feel.
+            if dx.abs() > 0.00001 {
+                let delta_deg = -dx * 270.0;
+                let mut ang = *angle_ptr + delta_deg;
+                while ang < 0.0 { ang += 360.0; }
+                while ang >= 360.0 { ang -= 360.0; }
+                *angle_ptr = ang;
+
+                // Track inertial fling velocity
+                if let Ok(mut mom) = self.angular_momentum.lock() {
+                    let instant_vel = delta_deg / dt;
+                    *mom = instant_vel.clamp(-540.0, 540.0);
+                }
+                interacted = true;
+            }
+
+            // Camera tilt / height adjustment
+            if dy.abs() > 0.00001 {
+                let cam_ptr = guest_base.add((viewer_va + VW_CAMERA) as usize) as *const u32;
+                let cam = *cam_ptr;
+                if cam >= 0x10000 && cam < 0x7ffff000 {
+                    let h_ptr = guest_base.add((cam + CAM_HEIGHT) as usize) as *mut f32;
+                    let new_h = (*h_ptr - dy * 1.5).clamp(0.2, 2.5);
+                    *h_ptr = new_h;
+                }
+                interacted = true;
+            }
+
             *turn_ptr = 0.0;
             *tilt_ptr = 0.0;
-            return;
+        } else {
+            // Finger released: apply inertial momentum glide with friction decay
+            let mut mom_val = 0.0f32;
+            if let Ok(mut mom) = self.angular_momentum.lock() {
+                if mom.abs() > 2.0 {
+                    mom_val = *mom;
+                    *mom *= 0.90; // 10% deceleration per frame for smooth fling stop
+                    if mom.abs() <= 2.0 {
+                        *mom = 0.0;
+                    }
+                }
+            }
+
+            if mom_val.abs() > 2.0 {
+                let delta_deg = mom_val * dt;
+                let mut ang = *angle_ptr + delta_deg;
+                while ang < 0.0 { ang += 360.0; }
+                while ang >= 360.0 { ang -= 360.0; }
+                *angle_ptr = ang;
+                *turn_ptr = 0.0;
+                *tilt_ptr = 0.0;
+                interacted = true;
+            } else {
+                // Gamepad right analog stick input
+                let (sx, sy) = self.get_stick_input();
+                let mag = (sx * sx + sy * sy).sqrt();
+                if mag >= STICK_DEADZONE {
+                    *turn_ptr = sx.clamp(-2.0, 2.0);
+                    *tilt_ptr = sy.clamp(-2.0, 2.0);
+                    interacted = true;
+                } else {
+                    *turn_ptr = 0.0;
+                    *tilt_ptr = 0.0;
+                }
+            }
         }
 
-        *turn_ptr = turn_vel.clamp(-2.0, 2.0);
-        *tilt_ptr = tilt_vel.clamp(-2.0, 2.0);
+        if interacted {
+            let showcase_ptr = guest_base.add(G_SHOWCASE as usize);
+            *showcase_ptr = 0;
 
-        // Reset idle showcase and update idle clock so the game does not start
-        // auto-rotating the car while the user is actively viewing it
-        let showcase_ptr = guest_base.add(G_SHOWCASE as usize);
-        *showcase_ptr = 0;
-
-        let realtimer_ptr = guest_base.add(G_REALTIMER as usize) as *const u32;
-        let idle_ptr = guest_base.add(G_VIEW_IDLE as usize) as *mut u32;
-        *idle_ptr = *realtimer_ptr;
+            let realtimer_ptr = guest_base.add(G_REALTIMER as usize) as *const u32;
+            let idle_ptr = guest_base.add(G_VIEW_IDLE as usize) as *mut u32;
+            *idle_ptr = *realtimer_ptr;
+        }
     }
 }
 

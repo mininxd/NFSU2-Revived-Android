@@ -79,17 +79,7 @@ pub extern "C" fn nfs_telemetry_record_present_ext(timestamp_ns: u64, present_du
         }
     }
 
-    // Estimate GPU utilization from Present synchronization duration vs frame interval
-    if present_duration_ns > 0 && prev_ts > 0 && ts > prev_ts {
-        let frame_interval_ns = ts - prev_ts;
-        if frame_interval_ns > 2_000_000 && frame_interval_ns < 200_000_000 {
-            let raw_pct = (present_duration_ns as f32 / frame_interval_ns as f32) * 100.0;
-            let clamped = raw_pct.clamp(10.0, 99.0);
-            let prev_busy = f32::from_bits(ROLLING_GPU_BUSY.load(Ordering::Relaxed));
-            let smoothed = if prev_busy > 0.0 { prev_busy * 0.70 + clamped * 0.30 } else { clamped };
-            ROLLING_GPU_BUSY.store(smoothed.to_bits(), Ordering::Relaxed);
-        }
-    }
+    // Frame recorded successfully
 }
 
 /// Returns the current dynamic presentation FPS.
@@ -206,18 +196,25 @@ pub extern "C" fn nfs_telemetry_get_gpu_busy() -> f32 {
         "/sys/devices/platform/soc/soc:qcom,kgsl-3d0/kgsl/kgsl-3d0/gpu_busy_percentage",
         "/sys/devices/platform/soc/soc:qcom,kgsl-3d0/kgsl/kgsl-3d0/gpubusy",
         "/sys/class/misc/mali0/device/gpu_busy",
+        "/sys/class/misc/mali0/device/gpu_utilization",
         "/sys/class/misc/mali0/device/utilization",
         "/sys/devices/platform/mali.0/utilization",
         "/sys/devices/platform/13000000.mali/utilization",
         "/sys/devices/platform/13040000.mali/utilization",
         "/sys/devices/platform/soc/soc:mali/utilization",
+        "/sys/devices/platform/soc/13000000.mali/utilization",
+        "/sys/devices/platform/soc/13040000.mali/utilization",
         "/sys/class/ged/hal/gpu_utilization",
+        "/sys/kernel/ged/hal/gpu_utilization",
         "/sys/kernel/debug/ged/hal/gpu_utilization",
         "/sys/module/ged/parameters/gpu_loading",
         "/sys/module/ged/parameters/gpu_loading_cur",
         "/sys/class/devfreq/kgsl-3d0/load",
         "/sys/class/devfreq/13000000.mali/load",
+        "/sys/class/devfreq/13040000.mali/load",
         "/sys/class/devfreq/gpufreq/load",
+        "/proc/mali/utilization",
+        "/proc/gpufreq/gpufreq_var_dump",
     ];
 
     for path in &gpu_paths {
@@ -245,22 +242,9 @@ pub extern "C" fn nfs_telemetry_get_gpu_busy() -> f32 {
         }
     }
 
-    // 2. Fallback: If sysfs is blocked by SELinux on non-root Android, use rolling GPU present load
-    let rolling = f32::from_bits(ROLLING_GPU_BUSY.load(Ordering::Relaxed));
-    if rolling > 0.0 {
-        LAST_GPU_BUSY.store(rolling.to_bits(), Ordering::Relaxed);
-        return rolling;
-    }
-
-    // 3. Frame-pacing estimation fallback: if 60fps frame takes 13ms out of 16.6ms, ~65% GPU load
-    let ft_ms = f32::from_bits(LAST_FRAME_TIME_MS.load(Ordering::Relaxed));
-    if ft_ms > 0.0 {
-        let est = ((ft_ms / 16.66) * 65.0).clamp(15.0, 95.0);
-        LAST_GPU_BUSY.store(est.to_bits(), Ordering::Relaxed);
-        return est;
-    }
-
-    f32::from_bits(LAST_GPU_BUSY.load(Ordering::Relaxed))
+    // Return 0.0 if sysfs is blocked or unavailable; Java DiagnosticOverlay handles
+    // real-time FrameMetrics.GPU_DURATION and dynamic rendering load fallback
+    0.0
 }
 
 // ---- JNI Interface for io.mininxd.nfsu2.DiagnosticOverlay -----------------------------------------

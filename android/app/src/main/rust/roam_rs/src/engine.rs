@@ -212,11 +212,34 @@ pub unsafe extern "C" fn nfs_rust_apply_engine_pacing(mem_base: *mut u8, real_el
     crate::crowd::nfs_rust_apply_crowd_suppression(mem_base);
 
     // 8. Enhanced Contrast Regulation (Issue #70: Snapdragon 8 Elite / Adreno 840 / 740)
-    // 8. Enhanced Contrast Regulation: clamp OverBright bloom to 0 to prevent TBDR tile stalls,
+    // Clamp OverBright bloom to 0 to prevent TBDR tile stalls,
     // while respecting the player's in-game Enhanced Contrast choice (G_BLEACH_BYPASS_ENABLE_ADDR)
     write_u32(mem_base, G_OVERBRIGHT_ENABLE_ADDR, 0);
 
-    // 9. Anti-slowmotion frame pacing
+    // 9. Rearview Mirror & View 3 Suppression (Disables duplicate world rendering pass)
+    write_u32(mem_base, 0x00870CF0, 0); // g_RearViewMirror = 0
+    if read_u32(mem_base, 0x008707E0) == 2 {
+        write_u32(mem_base, 0x008707E0, 1); // Split mode: Single view
+    }
+    write_u8(mem_base, 0x00832F38, 0); // View 3 active byte = 0
+
+    // 10. URL Race & Multi-racer optimization:
+    let track = read_u32(mem_base, 0x0089E7A0);
+    if track >= 4701 && track <= 4705 {
+        // Bayview Speedway URL tracks: stadium is fully lit, suppress crowd quads & car headlights
+        write_u32(mem_base, G_CROWD_ENABLE_ADDR, 0);
+        write_u32(mem_base, G_HEADLIGHT_ENABLE_ADDR, 0);
+    }
+
+    // Clamp World and Car LOD on mobile
+    if read_u32(mem_base, 0x00870CF4) > 1 {
+        write_u32(mem_base, 0x00870CF4, 1);
+    }
+    if read_u32(mem_base, 0x00870CF8) > 1 {
+        write_u32(mem_base, 0x00870CF8, 1);
+    }
+
+    // 11. Anti-slowmotion frame pacing
     if real_elapsed > 0.010 && real_elapsed < 0.200 {
         let current_wdt = read_f32(mem_base, G_SIM_WDT_ADDR);
         let current_realdt = read_f32(mem_base, G_SIM_REALDT_ADDR);

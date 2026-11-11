@@ -59,6 +59,7 @@ public final class DiagnosticOverlay {
     private long lastNativeFrameCount = -1;
     private float liveGameFps = 0.0f;
     private float lastFrameDurationMs = 0.0f;
+    private float lastGpuPercent = -1.0f;
     private boolean metricsListenerRegistered = false;
 
     // Measured presentation FPS from native D3D9 bridge logcat
@@ -162,6 +163,15 @@ public final class DiagnosticOverlay {
                     long totalNs = frameMetrics.getMetric(FrameMetrics.TOTAL_DURATION);
                     if (totalNs > 0) {
                         lastFrameDurationMs = totalNs / 1_000_000.0f;
+                    }
+                    if (android.os.Build.VERSION.SDK_INT >= 31) {
+                        try {
+                            long gpuNs = frameMetrics.getMetric(FrameMetrics.GPU_DURATION);
+                            if (gpuNs > 0 && totalNs > 0) {
+                                float pct = (gpuNs * 100.0f) / (float)totalNs;
+                                lastGpuPercent = Math.max(5.0f, Math.min(99.0f, pct));
+                            }
+                        } catch (Throwable ignored) {}
                     }
                 }
             };
@@ -448,10 +458,16 @@ public final class DiagnosticOverlay {
                     ? String.format(Locale.US, "%.0f%%", telemetryBuffer[3])
                     : sampleGpuUsage();
             if (gpuUsage == null) {
-                float targetMs = 1000.0f / (liveGameFps > 0.0f ? Math.min(60.0f, liveGameFps) : 60.0f);
-                float ratio = (lastFrameDurationMs > 0.0f ? (lastFrameDurationMs / targetMs) : 0.70f) * 70.0f;
-                int est = Math.max(15, Math.min(99, Math.round(ratio)));
-                gpuUsage = est + "%";
+                if (lastGpuPercent >= 0.0f) {
+                    gpuUsage = Math.round(lastGpuPercent) + "%";
+                } else {
+                    float targetMs = 1000.0f / (liveGameFps > 0.0f ? Math.min(60.0f, liveGameFps) : 60.0f);
+                    float frameTime = (lastFrameDurationMs > 0.0f) ? lastFrameDurationMs : targetMs;
+                    float loadRatio = Math.min(1.5f, frameTime / targetMs);
+                    float base = (liveGameFps >= 58.0f) ? 45.0f : 55.0f;
+                    int est = Math.max(15, Math.min(99, Math.round(base * loadRatio)));
+                    gpuUsage = est + "%";
+                }
             }
             sb.append("gpu_usage: ").append(gpuUsage).append('\n');
             // Display system info directly without "system:" label prefix
@@ -464,10 +480,16 @@ public final class DiagnosticOverlay {
                     ? String.format(Locale.US, "%.0f%%", telemetryBuffer[3])
                     : sampleGpuUsage();
             if (gpuLabel == null) {
-                float targetMs = 1000.0f / (liveGameFps > 0.0f ? Math.min(60.0f, liveGameFps) : 60.0f);
-                float ratio = (lastFrameDurationMs > 0.0f ? (lastFrameDurationMs / targetMs) : 0.70f) * 70.0f;
-                int est = Math.max(15, Math.min(99, Math.round(ratio)));
-                gpuLabel = est + "%";
+                if (lastGpuPercent >= 0.0f) {
+                    gpuLabel = Math.round(lastGpuPercent) + "%";
+                } else {
+                    float targetMs = 1000.0f / (liveGameFps > 0.0f ? Math.min(60.0f, liveGameFps) : 60.0f);
+                    float frameTime = (lastFrameDurationMs > 0.0f) ? lastFrameDurationMs : targetMs;
+                    float loadRatio = Math.min(1.5f, frameTime / targetMs);
+                    float base = (liveGameFps >= 58.0f) ? 45.0f : 55.0f;
+                    int est = Math.max(15, Math.min(99, Math.round(base * loadRatio)));
+                    gpuLabel = est + "%";
+                }
             }
 
             if (adhocConnected) {
@@ -555,18 +577,25 @@ public final class DiagnosticOverlay {
                 "/sys/devices/platform/soc/soc:qcom,kgsl-3d0/kgsl/kgsl-3d0/gpu_busy_percentage",
                 "/sys/devices/platform/soc/soc:qcom,kgsl-3d0/kgsl/kgsl-3d0/gpubusy",
                 "/sys/class/misc/mali0/device/gpu_busy",
+                "/sys/class/misc/mali0/device/gpu_utilization",
                 "/sys/class/misc/mali0/device/utilization",
                 "/sys/devices/platform/mali.0/utilization",
                 "/sys/devices/platform/13000000.mali/utilization",
                 "/sys/devices/platform/13040000.mali/utilization",
                 "/sys/devices/platform/soc/soc:mali/utilization",
+                "/sys/devices/platform/soc/13000000.mali/utilization",
+                "/sys/devices/platform/soc/13040000.mali/utilization",
                 "/sys/class/ged/hal/gpu_utilization",
+                "/sys/kernel/ged/hal/gpu_utilization",
                 "/sys/kernel/debug/ged/hal/gpu_utilization",
                 "/sys/module/ged/parameters/gpu_loading",
                 "/sys/module/ged/parameters/gpu_loading_cur",
                 "/sys/class/devfreq/kgsl-3d0/load",
                 "/sys/class/devfreq/13000000.mali/load",
-                "/sys/class/devfreq/gpufreq/load"
+                "/sys/class/devfreq/13040000.mali/load",
+                "/sys/class/devfreq/gpufreq/load",
+                "/proc/mali/utilization",
+                "/proc/gpufreq/gpufreq_var_dump"
         };
         for (String p : percentagePaths) {
             try (RandomAccessFile raf = new RandomAccessFile(p, "r")) {

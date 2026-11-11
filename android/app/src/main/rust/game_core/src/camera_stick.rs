@@ -327,14 +327,14 @@ impl CameraStickEngine {
         self.saved_blur_weight.store(orig_weight.to_bits(), Ordering::Release);
 
         if orig_mb != 0 {
-            if speed_mps < 20.0 {
-                // Stopped or low speed: turn off blur completely for clean rotation
+            if speed_mps < 25.0 || yaw.abs() > 0.05 {
+                // Stopped, low speed, or actively seeking camera: turn off blur completely
                 *mb_ptr = 0;
                 self.motion_blur_modified.store(true, Ordering::Release);
             } else {
-                // Speed-proportional blur scaling: ramp weight from 0.0 at 20 m/s (72 km/h)
+                // Speed-proportional blur scaling: ramp weight from 0.0 at 25 m/s (90 km/h)
                 // up to normal 0.65 at 90 m/s (324 km/h)
-                let speed_factor = ((speed_mps - 20.0) / (90.0 - 20.0)).clamp(0.0, 1.0);
+                let speed_factor = ((speed_mps - 25.0) / (90.0 - 25.0)).clamp(0.0, 1.0);
                 let dynamic_weight = DEFAULT_BLUR_WEIGHT * speed_factor;
                 if dynamic_weight < 0.01 {
                     *mb_ptr = 0;

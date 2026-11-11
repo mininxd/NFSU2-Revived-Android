@@ -1453,6 +1453,18 @@ static void look_process_view(uint32_t view_id, uint32_t cam) {
     turn_one_camera(cam);
 }
 
+static float get_car_speed_mps(uint32_t car) {
+    if (!car || !rh_mem_committed(car + 0x430, 4)) return 0.0f;
+    float spd = MRF32(car + 0x430);
+    if (spd >= 0.0f && spd < 200.0f) return spd;
+    if (rh_mem_committed(car + 0x70, 12)) {
+        float vx = MRF32(car + 0x70), vy = MRF32(car + 0x74), vz = MRF32(car + 0x78);
+        float len = sqrtf(vx * vx + vy * vy + vz * vz);
+        if (len >= 0.0f && len < 200.0f) return len;
+    }
+    return 0.0f;
+}
+
 static void hook_sub_005c7ec0(void) {
     if (g_p_mem_base && *g_p_mem_base && g_p_esp && *g_p_esp) {
         uint32_t esp = *g_p_esp;
@@ -1464,6 +1476,54 @@ static void hook_sub_005c7ec0(void) {
                 if (view_id == 1u || view_id == 4u) {
                     look_process_view(view_id, cam);
                 }
+
+                // 1. URL Race & World Far Plane Clamping:
+                // Bayview Speedway (4701..4705) and circuits hardcode 15000.0f (15km)
+                // in [esp+0x0C] and cam+0xC0, causing the entire map & stadium to be
+                // rendered simultaneously with zero distance culling.
+                uint32_t track = rh_mem_committed(0x0089e7a0u, 4) ? MR32(0x0089e7a0u) : 0;
+                int is_url = (track >= 4701 && track <= 4705);
+                float max_far = is_url ? 280.0f : 350.0f;
+
+                if (cam && rh_mem_committed(cam + 0xc0, 4)) {
+                    if (MRF32(cam + 0xc0) > max_far) {
+                        MRF32(cam + 0xc0) = max_far;
+                    }
+                }
+                if (rh_mem_committed(esp + 0x0c, 4)) {
+                    if (MRF32(esp + 0x0c) > max_far) {
+                        MRF32(esp + 0x0c) = max_far;
+                    }
+                }
+
+                // 2. Rearview Mirror Suppression:
+                // In races, View 3 renders the entire 3D world a 2nd time every frame.
+                // Disabling View 3 completely eliminates the duplicate world rendering pass.
+                if (rh_mem_committed(0x00870cf0u, 4)) MR32(0x00870cf0u) = 0;
+                if (rh_mem_committed(0x008707e0u, 4) && MR32(0x008707e0u) == 2) MR32(0x008707e0u) = 1;
+                uint32_t view3 = 0x00832de0u + 3u * 0x70u;
+                if (rh_mem_committed(view3 + 8, 1)) *(uint8_t*)GPTR(view3 + 8) = 0;
+
+                // 3. Motion blur suppression:
+                // Disable motion blur completely when car is stopped or moving slow (< 15 m/s)
+                // or when seeking camera left/right/back.
+                uint32_t car = get_driving_car();
+                float spd = car ? get_car_speed_mps(car) : 0.0f;
+                if (s_look_active || spd < 15.0f) {
+                    if (rh_mem_committed(0x00870cdcu, 4)) {
+                        MR32(0x00870cdcu) = 0;
+                    }
+                }
+
+                // 4. URL Race Crowds & Headlight Projectors:
+                if (is_url) {
+                    if (rh_mem_committed(0x00870cd0u, 4)) MR32(0x00870cd0u) = 0; // grandstand crowds
+                    if (rh_mem_committed(0x00870cc4u, 4)) MR32(0x00870cc4u) = 0; // headlights
+                }
+
+                // 5. World & Car LOD optimization on mobile:
+                if (rh_mem_committed(0x00870cf4u, 4) && MR32(0x00870cf4u) > 1) MR32(0x00870cf4u) = 1;
+                if (rh_mem_committed(0x00870cf8u, 4) && MR32(0x00870cf8u) > 1) MR32(0x00870cf8u) = 1;
             }
         }
     }
