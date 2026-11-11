@@ -439,6 +439,12 @@ extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeGpuDr
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeGpuDriver(JNIEnv* env,jclass cls,jstring hooks,jstring temp,jstring directory,jstring library){
     Java_io_mininxd_nfsu2_GameActivity_nativeGpuDriver(env,cls,hooks,temp,directory,library);
 }
+extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeSetAudioMuted(JNIEnv*,jclass,jboolean muted){
+    setGuestAudioMuted(muted == JNI_TRUE);
+}
+extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeRequestAudioRestart(JNIEnv*,jclass){
+    requestGuestAudioRestart();
+}
 static void configurePipelineCache(android_app* app){
     const char* files=app->activity->internalDataPath;
     setenv("DXVK_STATE_CACHE","0",1); // Keep startup usable if cache storage is unavailable.

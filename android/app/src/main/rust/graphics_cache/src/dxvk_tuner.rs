@@ -40,7 +40,7 @@ impl Default for DxvkProfileConfig {
         Self {
             max_device_memory_mb: 4096,
             max_shared_memory_mb: 2048,
-            general_hazards: true,
+            general_hazards: false,
             invariant_position: true,
             force_sampler_spec_constants: true,
             strict_constant_copies: false,
@@ -80,10 +80,13 @@ impl DxvkProfileConfig {
         s.push_str(&format!("d3d9.maxAvailableMemory = {}\n", self.max_device_memory_mb));
 
         // Essential settings discovered from GameHub smali and Proton D3D9 analysis
+        // generalHazards = False eliminates massive pipeline barrier stalls across Enhanced Contrast render passes
         s.push_str(&format!("d3d9.generalHazards = {}\n", if self.general_hazards { "True" } else { "False" }));
         s.push_str(&format!("d3d9.invariantPosition = {}\n", if self.invariant_position { "True" } else { "False" }));
         s.push_str(&format!("d3d9.forceSamplerTypeSpecConstants = {}\n", if self.force_sampler_spec_constants { "True" } else { "False" }));
         s.push_str(&format!("d3d9.strictConstantCopies = {}\n", if self.strict_constant_copies { "True" } else { "False" }));
+        s.push_str("d3d9.samplerAnisotropy = 0\n");
+        s.push_str("d3d9.clampNegativeLodBias = True\n");
 
         s.push_str(&format!("dxgi.deferSurfaceCreation = {}\n", if self.defer_surface_creation { "True" } else { "False" }));
         s.push_str(&format!("dxgi.maxDeviceMemory = {}\n", self.max_device_memory_mb));
@@ -120,6 +123,7 @@ pub fn apply_driver_environment() {
         ("MESA_SHADER_CACHE_DISABLE", "false"),
         ("MESA_SHADER_CACHE_MAX_SIZE", "1024MB"),
         ("mesa_glthread", "true"),
+        ("GALLIUM_DRIVER", "zink"),
     ];
 
     for &(k, v) in vars {
@@ -144,7 +148,7 @@ pub fn apply_driver_environment() {
 }
 
 // ---------------------------------------------------------------------------
-// C-ABI Exports
+// C-ABI & JNI Exports
 // ---------------------------------------------------------------------------
 
 #[no_mangle]
@@ -173,6 +177,38 @@ pub unsafe extern "C" fn nfs_dxvk_tuner_apply_environment() -> i32 {
     0
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn Java_io_mininxd_nfsu2_GamePerformanceBooster_nativeConfigureDxvkAndDriver(
+    mut env: jni::JNIEnv,
+    _class: jni::objects::JClass,
+    cache_dir: jni::objects::JString,
+    sdcard_dir: jni::objects::JString,
+) {
+    apply_driver_environment();
+
+    let config = DxvkProfileConfig::default();
+
+    if let Ok(cache_str) = env.get_string(&cache_dir) {
+        let path_str = cache_str.to_string_lossy();
+        let cache_path = Path::new(path_str.as_ref());
+        let _ = std::fs::create_dir_all(cache_path);
+        let conf_file = cache_path.join("dxvk.conf");
+        if config.write_to_file(&conf_file).is_ok() {
+            std::env::set_var("DXVK_CONFIG_FILE", conf_file.to_string_lossy().as_ref());
+            std::env::set_var("DXVK_STATE_CACHE_PATH", cache_path.to_string_lossy().as_ref());
+        }
+    }
+
+    if let Ok(sdcard_str) = env.get_string(&sdcard_dir) {
+        let path_str = sdcard_str.to_string_lossy();
+        let sdcard_path = Path::new(path_str.as_ref());
+        if sdcard_path.is_dir() {
+            let conf_file = sdcard_path.join("dxvk.conf");
+            let _ = config.write_to_file(&conf_file);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -181,7 +217,7 @@ mod tests {
     fn test_dxvk_conf_formatting() {
         let conf = DxvkProfileConfig::default();
         let formatted = conf.format_conf();
-        assert!(formatted.contains("d3d9.generalHazards = True"));
+        assert!(formatted.contains("d3d9.generalHazards = False"));
         assert!(formatted.contains("d3d9.invariantPosition = True"));
         assert!(formatted.contains("d3d9.forceSamplerTypeSpecConstants = True"));
         assert!(formatted.contains("d3d9.strictConstantCopies = False"));

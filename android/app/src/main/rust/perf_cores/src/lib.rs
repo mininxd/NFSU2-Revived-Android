@@ -296,3 +296,72 @@ pub unsafe extern "C" fn Java_io_mininxd_nfsu2_PerformanceCores_nativeCalculateS
     let curved = abs_val * 0.30 + abs_val * abs_val * abs_val * 0.70;
     if clamped < 0.0 { -curved } else { curved }
 }
+
+// ---- JNI Interface for io.mininxd.nfsu2.GamePerformanceBooster -----------------------------------
+
+#[no_mangle]
+pub unsafe extern "C" fn Java_io_mininxd_nfsu2_GamePerformanceBooster_nativeApplyBooster(
+    mut env: JNIEnv,
+    _class: JClass,
+    _activity: jni::objects::JObject,
+) {
+    // 1. Elevate process and calling thread priority to real-time / urgent display (-16)
+    let _ = libc::setpriority(libc::PRIO_PROCESS, 0, -16);
+    let _ = libc::setpriority(libc::PRIO_PROCESS, libc::getpid() as u32, -16);
+
+    // 2. Bind process and all threads in /proc/self/task to performance CPU cluster
+    let cluster = CpuCluster::detect();
+    let _ = cluster.apply_affinity();
+
+    // 3. Platform-specific OEM booster coordination (Xiaomi HyperOS / Joyose, MediaTek)
+    // Invoked directly from native Rust using JNI reflection with auto-recovery
+    if let Ok(perf_class) = env.find_class("android/os/PerfService") {
+        if let Ok(method_id) = env.get_static_method_id(&perf_class, "boostEnable", "(I)V") {
+            let _ = env.call_static_method_unchecked(
+                &perf_class,
+                method_id,
+                jni::signature::ReturnType::Primitive(jni::signature::Primitive::Void),
+                &[jni::sys::jvalue { i: 1 }],
+            );
+        }
+    }
+    let _ = env.exception_clear();
+
+    if let Ok(joyose_class) = env.find_class("com/xiaomi/joyose/JoyoseManager") {
+        if let Ok(get_method) = env.get_static_method_id(&joyose_class, "getInstance", "()Lcom/xiaomi/joyose/JoyoseManager;") {
+            if let Ok(instance_val) = env.call_static_method_unchecked(
+                &joyose_class,
+                get_method,
+                jni::signature::ReturnType::Object,
+                &[],
+            ) {
+                if let Ok(instance_obj) = instance_val.l() {
+                    if !instance_obj.is_null() {
+                        if let Ok(set_game_method) = env.get_method_id(&joyose_class, "setGameMode", "(Z)V") {
+                            let _ = env.call_method_unchecked(
+                                &instance_obj,
+                                set_game_method,
+                                jni::signature::ReturnType::Primitive(jni::signature::Primitive::Void),
+                                &[jni::sys::jvalue { z: 1 }],
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let _ = env.exception_clear();
+
+    if let Ok(mtk_class) = env.find_class("com/mediatek/perfservice/PerfServiceWrapper") {
+        if let Ok(method_id) = env.get_static_method_id(&mtk_class, "boostEnable", "(I)V") {
+            let _ = env.call_static_method_unchecked(
+                &mtk_class,
+                method_id,
+                jni::signature::ReturnType::Primitive(jni::signature::Primitive::Void),
+                &[jni::sys::jvalue { i: 1 }],
+            );
+        }
+    }
+    let _ = env.exception_clear();
+}
+

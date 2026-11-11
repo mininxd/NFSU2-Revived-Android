@@ -63,11 +63,16 @@ public final class GameActivity extends NativeActivity {
             case android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
             case android.media.AudioManager.AUDIOFOCUS_LOSS:
                 GameLog.w("Audio", "Audio focus lost (" + focusChange + "), incoming call or media switch active");
+                try { nativeSetAudioMuted(true); } catch (Throwable ignored) {}
                 break;
             case android.media.AudioManager.AUDIOFOCUS_GAIN:
             case android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT:
             case android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK:
                 GameLog.i("Audio", "Audio focus restored (" + focusChange + ")");
+                try {
+                    nativeSetAudioMuted(false);
+                    nativeRequestAudioRestart();
+                } catch (Throwable ignored) {}
                 break;
         }
     };
@@ -305,6 +310,8 @@ public final class GameActivity extends NativeActivity {
             android.util.Log.w("GameActivity", "nativeGpuDriver: " + t.getMessage());
         }
     }
+    private static native void nativeSetAudioMuted(boolean muted);
+    private static native void nativeRequestAudioRestart();
     private void showFrameLimitOptions() {
         GameOptions.Option option=GameOptions.find(GameOptions.FPS);
         String saved=GameOptions.get(this,GameOptions.FPS);int selected=0;
@@ -498,6 +505,10 @@ public final class GameActivity extends NativeActivity {
         String[] loader = launch.getStringArrayExtra("driverLoader");
         if (loader == null || loader.length != 4) loader = GpuDrivers.loaderArguments(this);
         nativeGpuDriver(loader[0], loader[1], loader[2], loader[3]);
+        String contrastOption = GameOptions.get(this, GameOptions.ENHANCED_CONTRAST);
+        try {
+            android.system.Os.setenv("NFSU2_CONTRAST", contrastOption != null ? contrastOption : "optimized", true);
+        } catch (Throwable ignored) {}
         status = new TextView(this);
         status.setTextColor(Color.WHITE);
         status.setBackgroundColor(0xb0000000);

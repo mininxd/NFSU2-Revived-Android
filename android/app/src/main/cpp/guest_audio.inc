@@ -18,7 +18,8 @@ uint32_t soundToken{};
 AAudioStream* soundStream=nullptr;
 int32_t soundLastXruns=0;
 std::atomic<uint32_t> soundCallbackPeakUs{0};
-static std::atomic<bool> soundStreamRestartPending{false};
+std::atomic<bool> soundStreamRestartPending{false};
+std::atomic<bool> guestAudioMuted{false};
 
 void soundErrorCallback(AAudioStream*,void*,aaudio_result_t error){
     NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","AAudio error callback: %d (%s)",int(error),AAudio_convertResultToText(error));
@@ -29,7 +30,7 @@ void soundErrorCallback(AAudioStream*,void*,aaudio_result_t error){
 }
 
 aaudio_data_callback_result_t soundCallback(AAudioStream*,void*,void* data,int32_t frames){
-    if(guestPaused.load(std::memory_order_relaxed)){
+    if(guestPaused.load(std::memory_order_relaxed) || guestAudioMuted.load(std::memory_order_relaxed)){
         std::memset(data,0,sizeof(float)*2*frames);
         nfs_audio_watchdog::notifyCallbackRendered();
         return AAUDIO_CALLBACK_RESULT_CONTINUE;

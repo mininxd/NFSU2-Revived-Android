@@ -354,6 +354,12 @@ void d3dDispatch(){
             // machine while this thread waits. Late frames incur no extra delay.
             renderThread=true;
             if(deadline>now)yieldGuestMachine(0,deadline);
+        } else {
+            // Window temporarily unavailable or device lost during incoming call / backgrounding.
+            // Sleep 16ms so the guest doesn't spin at 100% CPU starving audio/compositor threads.
+            std::this_thread::sleep_for(std::chrono::milliseconds(16));
+            lastPresentMs=steadyMs();
+            serviceGuestSound();
         }
         nfs_adpf_begin_frame();
         static unsigned frames=0;static auto since=std::chrono::steady_clock::now();
@@ -1203,4 +1209,10 @@ void setGuestLanguage(const char* language){
     for(const char* known:{"English UK","English","Spanish","French","German","Italian","Dutch","Swedish","Danish","Japanese","Korean","Chinese (Traditional)","Thai"})
         if(language&&std::strcmp(known,language)==0){guestLanguage=known;NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Selected guest language: %s",known);return;}
     guestLanguage="English UK";
+}
+void setGuestAudioMuted(bool muted) {
+    guestAudioMuted.store(muted, std::memory_order_release);
+}
+void requestGuestAudioRestart() {
+    soundStreamRestartPending.store(true, std::memory_order_release);
 }

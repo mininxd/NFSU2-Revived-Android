@@ -451,6 +451,23 @@ void registryOpen(uint32_t output,uint32_t argc){
             const uint8_t* p=reinterpret_cast<const uint8_t*>(&val);
             gameRegistry.emplace("g_crowdenable",RegistryValue{4,{p,p+4}});
         }
+        if(gameRegistry.find("g_overbrightenable")==gameRegistry.end()){
+            const char* envContrast=std::getenv("NFSU2_CONTRAST");
+            uint32_t val=(envContrast&&(!std::strcmp(envContrast,"off")||!std::strcmp(envContrast,"0")))?0:1;
+            const uint8_t* p=reinterpret_cast<const uint8_t*>(&val);
+            gameRegistry.emplace("g_overbrightenable",RegistryValue{4,{p,p+4}});
+        }
+        if(gameRegistry.find("g_bleachbypassenable")==gameRegistry.end()){
+            const char* envContrast=std::getenv("NFSU2_CONTRAST");
+            uint32_t val=(envContrast&&(!std::strcmp(envContrast,"off")||!std::strcmp(envContrast,"0")))?0:1;
+            const uint8_t* p=reinterpret_cast<const uint8_t*>(&val);
+            gameRegistry.emplace("g_bleachbypassenable",RegistryValue{4,{p,p+4}});
+        }
+        if(gameRegistry.find("g_depthoffieldenable")==gameRegistry.end()){
+            uint32_t val=0;
+            const uint8_t* p=reinterpret_cast<const uint8_t*>(&val);
+            gameRegistry.emplace("g_depthoffieldenable",RegistryValue{4,{p,p+4}});
+        }
     }
     uint32_t handle=nextRegistryHandle++;registryHandles.emplace(handle,true);write32(output,handle);ret(0,argc);
 }
@@ -468,6 +485,12 @@ void regQueryValueExA(){
         const char* envCrowd=std::getenv("NFSU2_CROWD");
         bool allowCrowd=(envCrowd&&(std::strcmp(envCrowd,"1")==0||strcasecmp(envCrowd,"on")==0));
         if(!allowCrowd){
+            uint32_t val=0;std::memcpy(const_cast<uint8_t*>(value->second.bytes.data()),&val,4);
+        }
+    }
+    if((name=="g_overbrightenable"||name=="g_bleachbypassenable")&&value->second.bytes.size()>=4){
+        const char* envContrast=std::getenv("NFSU2_CONTRAST");
+        if(envContrast&&(!std::strcmp(envContrast,"off")||!std::strcmp(envContrast,"0"))){
             uint32_t val=0;std::memcpy(const_cast<uint8_t*>(value->second.bytes.data()),&val,4);
         }
     }

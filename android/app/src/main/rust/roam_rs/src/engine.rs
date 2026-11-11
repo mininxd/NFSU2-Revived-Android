@@ -14,12 +14,27 @@ pub const G_MAX_FRAME_DELTA_ADDR: usize = 0x007FB714;
 pub const G_HIGH_FPS_PATCH_ADDR: usize = 0x0057A084;
 pub const G_HEADLIGHT_ENABLE_ADDR: usize = 0x00870CC4;
 pub const G_CROWD_ENABLE_ADDR: usize = 0x00870CD0;
+pub const G_OVERBRIGHT_ENABLE_ADDR: usize = 0x00870CFC;
+pub const G_BLEACH_BYPASS_ENABLE_ADDR: usize = 0x00870D00;
 pub const G_SIM_WDT_ADDR: usize = 0x00865154;
 pub const G_SIM_REALDT_ADDR: usize = 0x00865198;
 pub const G_SIM_STEPS_ADDR: usize = 0x00865140;
 
 static HIGH_FPS_PATCHED: AtomicBool = AtomicBool::new(false);
 static PACED_FRAMES: AtomicU32 = AtomicU32::new(0);
+static CONTRAST_MODE: AtomicU32 = AtomicU32::new(1); // 0 = Off, 1 = Optimized, 2 = Original PC
+
+/// Configures runtime Enhanced Contrast regulation mode.
+#[no_mangle]
+pub extern "C" fn nfs_rust_set_contrast_mode(mode: u32) {
+    CONTRAST_MODE.store(mode, Ordering::Relaxed);
+}
+
+/// Returns active Enhanced Contrast regulation mode.
+#[no_mangle]
+pub extern "C" fn nfs_rust_get_contrast_mode() -> u32 {
+    CONTRAST_MODE.load(Ordering::Relaxed)
+}
 
 #[inline]
 unsafe fn read_f32(mem: *const u8, addr: usize) -> f32 {
@@ -93,7 +108,15 @@ pub unsafe extern "C" fn nfs_rust_apply_engine_pacing(mem_base: *mut u8, real_el
     // 7. Trackside Crowd Suppression (0x00870CD0 = g_CrowdEnable)
     crate::crowd::nfs_rust_apply_crowd_suppression(mem_base);
 
-    // 8. Anti-slowmotion frame pacing
+    // 8. Enhanced Contrast Regulation (Issue #70: Snapdragon 8 Elite / Adreno 840 / 740)
+    // When mode is 0 (Off), clamp g_OverBrightEnable and g_BleachByPassEnable to 0 to restore solid 60 FPS
+    let cm = CONTRAST_MODE.load(Ordering::Relaxed);
+    if cm == 0 {
+        write_u32(mem_base, G_OVERBRIGHT_ENABLE_ADDR, 0);
+        write_u32(mem_base, G_BLEACH_BYPASS_ENABLE_ADDR, 0);
+    }
+
+    // 9. Anti-slowmotion frame pacing
     if real_elapsed > 0.010 && real_elapsed < 0.200 {
         let current_wdt = read_f32(mem_base, G_SIM_WDT_ADDR);
         let current_realdt = read_f32(mem_base, G_SIM_REALDT_ADDR);
@@ -125,6 +148,8 @@ mod tests {
     fn test_memory_layout_offsets() {
         assert_eq!(G_TIMESTEP_ADDR, 0x007875BC);
         assert_eq!(G_CROWD_ENABLE_ADDR, 0x00870CD0);
+        assert_eq!(G_OVERBRIGHT_ENABLE_ADDR, 0x00870CFC);
+        assert_eq!(G_BLEACH_BYPASS_ENABLE_ADDR, 0x00870D00);
         assert_eq!(G_HIGH_FPS_PATCH_ADDR, 0x0057A084);
     }
 }

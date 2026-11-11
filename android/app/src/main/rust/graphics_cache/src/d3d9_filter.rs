@@ -117,16 +117,16 @@ impl D3D9ShadowState {
     pub fn notify_render_target_change(&mut self) {
         self.viewport_valid = false;
         self.tex_valid = [false; 16];
-        self.ss_valid = [[false; 16]; 16];
-        self.tss_valid = [[false; 33]; 8];
+        // Do not invalidate ss_valid or tss_valid across render target swaps!
+        // In Direct3D 9, sampler and texture stage states belong to the pipeline,
+        // not the render target surface. Preserving them avoids thousands of redundant
+        // driver state calls during Enhanced Contrast multi-pass post-processing.
         self.epoch = self.epoch.wrapping_add(1);
     }
 
     pub fn notify_stretch_rect(&mut self) {
         self.viewport_valid = false;
         self.tex_valid = [false; 16];
-        self.ss_valid = [[false; 16]; 16];
-        self.tss_valid = [[false; 33]; 8];
         self.epoch = self.epoch.wrapping_add(1);
     }
 
@@ -184,7 +184,13 @@ impl D3D9ShadowState {
                 *out_count = 4;
                 let sampler = args[1] as usize;
                 let state_type = args[2] as usize;
-                let val = args[3];
+                let mut val = args[3];
+                // For post-processing passes (samplers 0..3), if ADDRESSU (1) or ADDRESSV (2)
+                // is WRAP (1), clamp to CLAMP (3) to prevent screen edge texture wrap artifacts
+                // and boundary cache thrashing on high-resolution widescreen screens (from gpu_web.c).
+                if (state_type == 1 || state_type == 2) && val == 1 && sampler < 4 {
+                    val = 3; // D3DTADDRESS_CLAMP
+                }
                 if sampler < 16 && state_type < 16 {
                     if self.ss_valid[sampler][state_type] && self.ss[sampler][state_type] == val {
                         return true;
