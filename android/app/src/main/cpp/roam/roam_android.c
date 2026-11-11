@@ -1505,13 +1505,14 @@ static void hook_sub_005c7ec0(void) {
                 if (rh_mem_committed(view3 + 8, 1)) *(uint8_t*)GPTR(view3 + 8) = 0;
 
                 // 3. Motion blur suppression:
-                // Disable motion blur completely when car is stopped or moving slow (< 15 m/s)
-                // or when seeking camera left/right/back.
+                // Only remove motion blur when car is stopped (< 1.0 m/s). Keep enabled while driving.
                 uint32_t car = get_driving_car();
                 float spd = car ? get_car_speed_mps(car) : 0.0f;
-                if (s_look_active || spd < 15.0f) {
-                    if (rh_mem_committed(0x00870cdcu, 4)) {
-                        MR32(0x00870cdcu) = 0;
+                if (car && rh_mem_committed(0x00870cdcu, 4)) {
+                    if (spd < 1.0f) {
+                        MR32(0x00870cdcu) = 0; // stopped: disable blur
+                    } else {
+                        MR32(0x00870cdcu) = 1; // driving: keep blur enabled
                     }
                 }
 

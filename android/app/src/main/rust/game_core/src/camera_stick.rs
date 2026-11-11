@@ -326,24 +326,16 @@ impl CameraStickEngine {
         self.saved_motion_blur_val.store(orig_mb, Ordering::Release);
         self.saved_blur_weight.store(orig_weight.to_bits(), Ordering::Release);
 
-        if orig_mb != 0 {
-            if speed_mps < 25.0 || yaw.abs() > 0.05 {
-                // Stopped, low speed, or actively seeking camera: turn off blur completely
+        if speed_mps < 1.0 {
+            // Only remove motion blur when car is stopped (< 1.0 m/s)
+            if orig_mb != 0 {
                 *mb_ptr = 0;
                 self.motion_blur_modified.store(true, Ordering::Release);
             } else {
-                // Speed-proportional blur scaling: ramp weight from 0.0 at 25 m/s (90 km/h)
-                // up to normal 0.65 at 90 m/s (324 km/h)
-                let speed_factor = ((speed_mps - 25.0) / (90.0 - 25.0)).clamp(0.0, 1.0);
-                let dynamic_weight = DEFAULT_BLUR_WEIGHT * speed_factor;
-                if dynamic_weight < 0.01 {
-                    *mb_ptr = 0;
-                } else {
-                    *mb_weight_ptr = dynamic_weight;
-                }
-                self.motion_blur_modified.store(true, Ordering::Release);
+                self.motion_blur_modified.store(false, Ordering::Release);
             }
         } else {
+            // Car is moving: preserve motion blur entirely
             self.motion_blur_modified.store(false, Ordering::Release);
         }
 
