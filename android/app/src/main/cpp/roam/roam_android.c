@@ -1889,44 +1889,8 @@ JNIEXPORT jlong JNICALL Java_io_mininxd_nfsu2_net_RoamNativeBridge_nativeGetFram
 
 /* Performance cores CPU affinity binding */
 int nfs_bind_to_perf_cores(void) {
-    long highest_freq = 0;
-    long freqs[64] = {0};
-    int total_cpus = sysconf(_SC_NPROCESSORS_CONF);
-    if (total_cpus <= 0 || total_cpus > 64) total_cpus = 8;
-
-    for (int i = 0; i < total_cpus; i++) {
-        char path[128];
-        snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq", i);
-        FILE *f = fopen(path, "r");
-        if (!f) {
-            snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_max_freq", i);
-            f = fopen(path, "r");
-        }
-        if (!f) {
-            snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpu_capacity", i);
-            f = fopen(path, "r");
-            if (f) {
-                long cap = 0;
-                if (fscanf(f, "%ld", &cap) == 1 && cap > 0) {
-                    freqs[i] = cap * 1000;
-                    if (freqs[i] > highest_freq) highest_freq = freqs[i];
-                }
-                fclose(f);
-                continue;
-            }
-        }
-        if (f) {
-            long freq = 0;
-            if (fscanf(f, "%ld", &freq) == 1 && freq > 0) {
-                freqs[i] = freq;
-                if (freq > highest_freq) highest_freq = freq;
-            }
-            fclose(f);
-        }
-    }
-
     // Unconstrain affinity across all available cores: let Linux EAS dynamically
-    // schedule, migrate threads, and prevent stuttering
+    // schedule, migrate threads, and prevent stuttering (same as AetherSX2/Dolphin)
     int total_cpus = sysconf(_SC_NPROCESSORS_CONF);
     if (total_cpus <= 0 || total_cpus > 64) total_cpus = 8;
 
