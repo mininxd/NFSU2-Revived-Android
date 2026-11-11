@@ -268,13 +268,20 @@ static void publishPad(){
     setGuestPad(axes,state.buttons,state.hatX,state.hatY);
 
     static void (*s_stick_cam)(float,float) = nullptr;
-    if(!s_stick_cam){
-        void* h=dlopen("libgraphics_cache.so",RTLD_NOLOAD);
+    static void (*s_stick_garage)(float,float) = nullptr;
+    if(!s_stick_cam || !s_stick_garage){
+        void* h=dlopen("libgame_core.so",RTLD_NOLOAD);
+        if(!h) h=dlopen("libgame_core.so",RTLD_NOW|RTLD_GLOBAL);
         if(!h) h=dlopen("libgraphics_cache.so",RTLD_NOW|RTLD_GLOBAL);
-        if(h) s_stick_cam=reinterpret_cast<void(*)(float,float)>(dlsym(h,"nfs_camera_stick_input"));
+        if(h) {
+            if(!s_stick_cam) s_stick_cam=reinterpret_cast<void(*)(float,float)>(dlsym(h,"nfs_camera_stick_input"));
+            if(!s_stick_garage) s_stick_garage=reinterpret_cast<void(*)(float,float)>(dlsym(h,"nfs_garage_stick_input"));
+        }
         if(!s_stick_cam) s_stick_cam=reinterpret_cast<void(*)(float,float)>(dlsym(RTLD_DEFAULT,"nfs_camera_stick_input"));
+        if(!s_stick_garage) s_stick_garage=reinterpret_cast<void(*)(float,float)>(dlsym(RTLD_DEFAULT,"nfs_garage_stick_input"));
     }
     if(s_stick_cam) s_stick_cam(state.rightX, state.rightY);
+    if(s_stick_garage) s_stick_garage(state.rightX, state.rightY);
     static void (*s_roam_stick)(float, float) = nullptr;
     if(!s_roam_stick){
         void* h=dlopen("libnfsu2_roam.so",RTLD_NOW|RTLD_GLOBAL);
@@ -342,6 +349,22 @@ extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeKey(J
 extern "C" JNIEXPORT jboolean JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeDrivingControls(JNIEnv*,jclass){return guestDrivingControls()?JNI_TRUE:JNI_FALSE;}
 extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativePointer(JNIEnv*,jclass,jfloat x,jfloat y,jint phase){
     setGuestPointer(x,y,phase);
+}
+extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativePointerMiddle(JNIEnv*,jclass,jfloat x,jfloat y,jint phase,jfloat dx,jfloat dy){
+    setGuestPointerMiddle(x,y,phase,dx,dy);
+    static void (*s_garage_drag)(float, float, int) = nullptr;
+    if (!s_garage_drag) {
+        void* h = dlopen("libgame_core.so", RTLD_NOLOAD);
+        if (!h) h = dlopen("libgame_core.so", RTLD_NOW | RTLD_GLOBAL);
+        if (h) s_garage_drag = reinterpret_cast<void(*)(float,float,int)>(dlsym(h, "nfs_garage_two_finger_drag"));
+        if (!s_garage_drag) s_garage_drag = reinterpret_cast<void(*)(float,float,int)>(dlsym(RTLD_DEFAULT, "nfs_garage_two_finger_drag"));
+    }
+    if (s_garage_drag) {
+        s_garage_drag(dx, dy, phase != 2 ? 1 : 0);
+    }
+}
+extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativePointerMiddle(JNIEnv* env,jclass clazz,jfloat x,jfloat y,jint phase,jfloat dx,jfloat dy){
+    Java_io_mininxd_nfsu2_GameActivity_nativePointerMiddle(env,clazz,x,y,phase,dx,dy);
 }
 extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeTypeText(JNIEnv* env,jclass,jstring value,jboolean replace){
     if(!value)return;

@@ -55,6 +55,17 @@ final class RacingControlsView extends View {
     private Pointer pointer;
     private int pointerId = -1;
     private float pointerX, pointerY;
+
+    @FunctionalInterface
+    interface PointerMiddle {
+        void touch(float x, float y, int phase, float dx, float dy);
+    }
+    private PointerMiddle pointerMiddle;
+    private boolean twoFingerActive = false;
+    private int twoFingerId1 = -1;
+    private int twoFingerId2 = -1;
+    private float twoFingerLastMidX, twoFingerLastMidY;
+
     private int cameraTouchId = -1;
     private float cameraStartX, cameraStartY;
     private final Runnable textInput;
@@ -1360,6 +1371,10 @@ final class RacingControlsView extends View {
         this.pointer = pointer;
     }
 
+    void setPointerMiddle(PointerMiddle pointerMiddle) {
+        this.pointerMiddle = pointerMiddle;
+    }
+
     private void pointerTouch(float x, float y, int phase) {
         if (pointer == null || getWidth() == 0 || getHeight() == 0) return;
         if (phase == 1 && Math.abs(x - pointerX) < 2f && Math.abs(y - pointerY) < 2f) return;
@@ -1388,9 +1403,16 @@ final class RacingControlsView extends View {
         }
         if (cameraTouchId >= 0 && e.findPointerIndex(cameraTouchId) < 0) {
             cameraTouchId = -1;
-            if (racing) {
-                AdhocRoamClient.handleRightStick(0f, 0f);
+            AdhocRoamClient.handleRightStick(0f, 0f);
+        }
+        if (twoFingerActive && (e.getPointerCount() < 2 || (twoFingerId1 >= 0 && e.findPointerIndex(twoFingerId1) < 0) || (twoFingerId2 >= 0 && e.findPointerIndex(twoFingerId2) < 0))) {
+            twoFingerActive = false;
+            twoFingerId1 = -1;
+            twoFingerId2 = -1;
+            if (pointerMiddle != null && getWidth() > 0 && getHeight() > 0) {
+                pointerMiddle.touch(twoFingerLastMidX / getWidth(), twoFingerLastMidY / getHeight(), 2, 0f, 0f);
             }
+            AdhocRoamClient.handleRightStick(0f, 0f);
         }
     }
 
@@ -1404,9 +1426,16 @@ final class RacingControlsView extends View {
         }
         if (cameraTouchId >= 0) {
             cameraTouchId = -1;
-            if (racing) {
-                AdhocRoamClient.handleRightStick(0f, 0f);
+            AdhocRoamClient.handleRightStick(0f, 0f);
+        }
+        if (twoFingerActive) {
+            twoFingerActive = false;
+            twoFingerId1 = -1;
+            twoFingerId2 = -1;
+            if (pointerMiddle != null && getWidth() > 0 && getHeight() > 0) {
+                pointerMiddle.touch(twoFingerLastMidX / getWidth(), twoFingerLastMidY / getHeight(), 2, 0f, 0f);
             }
+            AdhocRoamClient.handleRightStick(0f, 0f);
         }
         AdhocRoamClient.setHorn(false);
         pointerRelease();
@@ -1428,6 +1457,47 @@ final class RacingControlsView extends View {
                     invalidate();
                     return true;
                 }
+            }
+            if (!racing && e.getPointerCount() >= 2) {
+                float p0x = e.getX(0), p0y = e.getY(0);
+                float p1x = e.getX(1), p1y = e.getY(1);
+                float midX = (p0x + p1x) * 0.5f;
+                float midY = (p0y + p1y) * 0.5f;
+
+                if (!twoFingerActive) {
+                    pointerRelease();
+                    twoFingerActive = true;
+                    twoFingerId1 = e.getPointerId(0);
+                    twoFingerId2 = e.getPointerId(1);
+                    twoFingerLastMidX = midX;
+                    twoFingerLastMidY = midY;
+                    if (pointerMiddle != null && getWidth() > 0 && getHeight() > 0) {
+                        pointerMiddle.touch(midX / getWidth(), midY / getHeight(), 0, 0f, 0f);
+                    }
+                    return true;
+                } else if (action == MotionEvent.ACTION_MOVE) {
+                    float dx = (midX - twoFingerLastMidX) / (float)Math.max(1, getWidth());
+                    float dy = (midY - twoFingerLastMidY) / (float)Math.max(1, getHeight());
+                    twoFingerLastMidX = midX;
+                    twoFingerLastMidY = midY;
+                    if (pointerMiddle != null && getWidth() > 0 && getHeight() > 0) {
+                        pointerMiddle.touch(midX / getWidth(), midY / getHeight(), 1, dx, dy);
+                    }
+                    float stickDx = Math.max(-1.0f, Math.min(1.0f, dx * 25.0f));
+                    float stickDy = Math.max(-1.0f, Math.min(1.0f, dy * 25.0f));
+                    AdhocRoamClient.handleRightStick(stickDx, stickDy);
+                    return true;
+                }
+            }
+            if (twoFingerActive && (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP || action == MotionEvent.ACTION_CANCEL || e.getPointerCount() < 2)) {
+                twoFingerActive = false;
+                twoFingerId1 = -1;
+                twoFingerId2 = -1;
+                if (pointerMiddle != null && getWidth() > 0 && getHeight() > 0) {
+                    pointerMiddle.touch(twoFingerLastMidX / getWidth(), twoFingerLastMidY / getHeight(), 2, 0f, 0f);
+                }
+                AdhocRoamClient.handleRightStick(0f, 0f);
+                return true;
             }
             if (!racing) {
                 if (action == MotionEvent.ACTION_DOWN && pointerId < 0) {
@@ -1458,6 +1528,51 @@ final class RacingControlsView extends View {
             return true;
         }
 
+        // Two-finger car rotation in garage / frontend (matching nfsu2-web)
+        if (!racing && e.getPointerCount() >= 2) {
+            float p0x = e.getX(0), p0y = e.getY(0);
+            float p1x = e.getX(1), p1y = e.getY(1);
+            float midX = (p0x + p1x) * 0.5f;
+            float midY = (p0y + p1y) * 0.5f;
+
+            if (!twoFingerActive) {
+                pointerRelease();
+                twoFingerActive = true;
+                twoFingerId1 = e.getPointerId(0);
+                twoFingerId2 = e.getPointerId(1);
+                twoFingerLastMidX = midX;
+                twoFingerLastMidY = midY;
+                if (pointerMiddle != null && getWidth() > 0 && getHeight() > 0) {
+                    pointerMiddle.touch(midX / getWidth(), midY / getHeight(), 0, 0f, 0f);
+                }
+                return true;
+            } else if (action == MotionEvent.ACTION_MOVE) {
+                float dx = (midX - twoFingerLastMidX) / (float)Math.max(1, getWidth());
+                float dy = (midY - twoFingerLastMidY) / (float)Math.max(1, getHeight());
+                twoFingerLastMidX = midX;
+                twoFingerLastMidY = midY;
+                if (pointerMiddle != null && getWidth() > 0 && getHeight() > 0) {
+                    pointerMiddle.touch(midX / getWidth(), midY / getHeight(), 1, dx, dy);
+                }
+                float stickDx = Math.max(-1.0f, Math.min(1.0f, dx * 25.0f));
+                float stickDy = Math.max(-1.0f, Math.min(1.0f, dy * 25.0f));
+                AdhocRoamClient.handleRightStick(stickDx, stickDy);
+                return true;
+            }
+        }
+
+        if (twoFingerActive && (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP || action == MotionEvent.ACTION_CANCEL || e.getPointerCount() < 2)) {
+            twoFingerActive = false;
+            twoFingerId1 = -1;
+            twoFingerId2 = -1;
+            if (pointerMiddle != null && getWidth() > 0 && getHeight() > 0) {
+                pointerMiddle.touch(twoFingerLastMidX / getWidth(), twoFingerLastMidY / getHeight(), 2, 0f, 0f);
+            }
+            AdhocRoamClient.handleRightStick(0f, 0f);
+            if (action == MotionEvent.ACTION_UP) releaseAll();
+            return true;
+        }
+
         if (action == MotionEvent.ACTION_DOWN) {
             releaseAll();
         } else if (action == MotionEvent.ACTION_POINTER_UP) {
@@ -1469,7 +1584,12 @@ final class RacingControlsView extends View {
             if (c != null && c.scan == STICK && c.held > 0) c = null;
             if (c == null && hit(e.getX(index), e.getY(index)) == null) {
                 if (!racing) {
-                    if (pointerId < 0) {
+                    // Right half of screen drags car camera in garage, left half does pointer tap
+                    if (e.getX(index) > getWidth() * 0.50f && cameraTouchId < 0) {
+                        cameraTouchId = id;
+                        cameraStartX = e.getX(index);
+                        cameraStartY = e.getY(index);
+                    } else if (pointerId < 0) {
                         pointerId = id;
                         pointerTouch(e.getX(index), e.getY(index), 0);
                     }
@@ -1493,13 +1613,11 @@ final class RacingControlsView extends View {
                     continue;
                 }
                 if (pointer == cameraTouchId) {
-                    if (racing) {
-                        float dx = (e.getX(i) - cameraStartX) / (getWidth() * 0.20f);
-                        float dy = (e.getY(i) - cameraStartY) / (getHeight() * 0.20f);
-                        dx = Math.max(-1.0f, Math.min(1.0f, dx));
-                        dy = Math.max(-1.0f, Math.min(1.0f, dy));
-                        AdhocRoamClient.handleRightStick(dx, dy);
-                    }
+                    float dx = (e.getX(i) - cameraStartX) / (getWidth() * 0.20f);
+                    float dy = (e.getY(i) - cameraStartY) / (getHeight() * 0.20f);
+                    dx = Math.max(-1.0f, Math.min(1.0f, dx));
+                    dy = Math.max(-1.0f, Math.min(1.0f, dy));
+                    AdhocRoamClient.handleRightStick(dx, dy);
                     continue;
                 }
                 Control old = getFinger(pointer);
@@ -1532,9 +1650,7 @@ final class RacingControlsView extends View {
             }
             if (id == cameraTouchId) {
                 cameraTouchId = -1;
-                if (racing) {
-                    AdhocRoamClient.handleRightStick(0f, 0f);
-                }
+                AdhocRoamClient.handleRightStick(0f, 0f);
             }
             Control c = removeFinger(id);
             release(c);

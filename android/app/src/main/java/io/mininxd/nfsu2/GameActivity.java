@@ -45,6 +45,9 @@ public final class GameActivity extends NativeActivity {
 
     static {
         try {
+            System.loadLibrary("game_core");
+        } catch (Throwable ignored) {}
+        try {
             System.loadLibrary("graphics_cache");
         } catch (Throwable ignored) {}
         System.loadLibrary("nfsu2_android");
@@ -230,6 +233,7 @@ public final class GameActivity extends NativeActivity {
     private static boolean nativeGamepadUsed() { return com.nfsu2.androidevolved.GameActivity.nativeGamepadUsed(); }
     private static void nativeTypeText(String value, boolean replace) { com.nfsu2.androidevolved.GameActivity.nativeTypeText(value, replace); }
     private static void nativePointer(float x, float y, int phase) { com.nfsu2.androidevolved.GameActivity.nativePointer(x, y, phase); }
+    static void nativePointerMiddle(float x, float y, int phase, float dx, float dy) { com.nfsu2.androidevolved.GameActivity.nativePointerMiddle(x, y, phase, dx, dy); }
     private static void nativeLanguage(String language) { com.nfsu2.androidevolved.GameActivity.nativeLanguage(language); }
     private static void nativeResolution(int width, int height) { com.nfsu2.androidevolved.GameActivity.nativeResolution(width, height); }
     private static void nativeFrameLimit(int framesPerSecond) {
@@ -518,6 +522,7 @@ public final class GameActivity extends NativeActivity {
         statusWindow.setTouchable(false);
         touchControls = new RacingControlsView(this, this::setTouchKey, this::showTextInput,this::showTiltOptions,this::showFrameLimitOptions);
         touchControls.setPointer(GameActivity::nativePointer);
+        touchControls.setPointerMiddle(GameActivity::nativePointerMiddle);
         touchControls.setOnEditingChangeListener(editing -> {
             if (diagnosticOverlay != null) {
                 diagnosticOverlay.setSuspended(editing);
