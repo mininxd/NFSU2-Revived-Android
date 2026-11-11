@@ -28,10 +28,16 @@ use std::time::Instant;
 const SPLIT_PLAYERS_INDEX: u32 = 0x008900ac;
 const G_VIEW1: u32 = 0x00832e50;
 const CAR_POS_OFFSET: u32 = 0x60;
+const CAR_VEL_OFFSET: u32 = 0x70;
+const CAR_SPEED_OFFSET: u32 = 0x430;
 const CAM_POS_OFFSET: u32 = 0x40;
 const CAM_FWD_OFFSET: u32 = 0x50;
 const CAM_TARGET_OFFSET: u32 = 0x60;
 const CAM_SIZE: usize = 0x70;
+
+const G_MOTION_BLUR: u32 = 0x00870cdc;
+const G_MOTION_BLUR_WEIGHT: u32 = 0x007ff7b8;
+const DEFAULT_BLUR_WEIGHT: f32 = 0.65;
 
 const STICK_DEADZONE: f32 = 0.20;
 const STICK_FULL: f32 = 0.85;
@@ -54,6 +60,9 @@ pub struct CameraStickEngine {
     turned_cam_addr: AtomicU32,
     saved_cam_bytes: Mutex<[u8; CAM_SIZE]>,
     last_tick_time: Mutex<Option<Instant>>,
+    motion_blur_modified: AtomicBool,
+    saved_motion_blur_val: AtomicU32,
+    saved_blur_weight: AtomicU32,
 }
 
 impl CameraStickEngine {
@@ -69,6 +78,9 @@ impl CameraStickEngine {
             turned_cam_addr: AtomicU32::new(0),
             saved_cam_bytes: Mutex::new([0u8; CAM_SIZE]),
             last_tick_time: Mutex::new(None),
+            motion_blur_modified: AtomicBool::new(false),
+            saved_motion_blur_val: AtomicU32::new(1),
+            saved_blur_weight: AtomicU32::new(0x3f266666), // 0.65f in IEEE 754
         }
     }
 
@@ -295,6 +307,46 @@ impl CameraStickEngine {
             oy = eye_y;
         }
 
+        // Dynamic Motion Blur Tuning:
+        // When camera is orbiting, high angular velocity causes the game's motion blur
+        // calculation (frustum corner deltas in sub_005a1a90) to produce huge apparent
+        // velocities (> 25 m/s = 90 km/h) even when stationary or moving slowly (e.g. 10 km/h).
+        //
+        // Solution: Read the car's actual physical speed.
+        // - At low speed (< 20.0 m/s / ~72 km/h, covering 0-10 km/h crawl): completely disable
+        //   motion blur for this frame (g_MotionBlurEnable = 0) so the camera orbit is crystal clear.
+        // - At higher speed (>= 20.0 m/s): dynamically scale the max blur weight (0x007ff7b8)
+        //   to match the actual vehicle speed, preventing camera rotation from over-saturating the blur.
+        let speed_mps = Self::get_vehicle_speed_mps(guest_base, car);
+        let mb_ptr = guest_base.add(G_MOTION_BLUR as usize) as *mut u32;
+        let mb_weight_ptr = guest_base.add(G_MOTION_BLUR_WEIGHT as usize) as *mut f32;
+
+        let orig_mb = *mb_ptr;
+        let orig_weight = *mb_weight_ptr;
+        self.saved_motion_blur_val.store(orig_mb, Ordering::Release);
+        self.saved_blur_weight.store(orig_weight.to_bits(), Ordering::Release);
+
+        if orig_mb != 0 {
+            if speed_mps < 20.0 {
+                // Stopped or low speed: turn off blur completely for clean rotation
+                *mb_ptr = 0;
+                self.motion_blur_modified.store(true, Ordering::Release);
+            } else {
+                // Speed-proportional blur scaling: ramp weight from 0.0 at 20 m/s (72 km/h)
+                // up to normal 0.65 at 90 m/s (324 km/h)
+                let speed_factor = ((speed_mps - 20.0) / (90.0 - 20.0)).clamp(0.0, 1.0);
+                let dynamic_weight = DEFAULT_BLUR_WEIGHT * speed_factor;
+                if dynamic_weight < 0.01 {
+                    *mb_ptr = 0;
+                } else {
+                    *mb_weight_ptr = dynamic_weight;
+                }
+                self.motion_blur_modified.store(true, Ordering::Release);
+            }
+        } else {
+            self.motion_blur_modified.store(false, Ordering::Release);
+        }
+
         // Save original camera bytes
         if let Ok(mut guard) = self.saved_cam_bytes.lock() {
             std::ptr::copy_nonoverlapping(cam_raw, guard.as_mut_ptr(), CAM_SIZE);
@@ -334,9 +386,47 @@ impl CameraStickEngine {
         *tgt_pos.add(2) = tgt[2];
     }
 
+    /// Extracts current vehicle speed in meters per second (m/s) from guest memory.
+    pub unsafe fn get_vehicle_speed_mps(guest_base: *const u8, car: u32) -> f32 {
+        if guest_base.is_null() || car < 0x10000 || car >= 0x7ffff000 {
+            return 0.0;
+        }
+        // First try CAR_SPEED (0x430)
+        let spd_ptr = guest_base.add((car + CAR_SPEED_OFFSET) as usize) as *const f32;
+        let raw_spd = *spd_ptr;
+        if raw_spd.is_finite() && raw_spd >= 0.0 && raw_spd < 200.0 {
+            return raw_spd;
+        }
+        // Fallback: magnitude of linear velocity vector (vx, vy, vz) at 0x70
+        let vx = *(guest_base.add((car + CAR_VEL_OFFSET) as usize) as *const f32);
+        let vy = *(guest_base.add((car + CAR_VEL_OFFSET + 4) as usize) as *const f32);
+        let vz = *(guest_base.add((car + CAR_VEL_OFFSET + 8) as usize) as *const f32);
+        if vx.is_finite() && vy.is_finite() && vz.is_finite() {
+            let v_len = (vx * vx + vy * vy + vz * vz).sqrt();
+            if v_len.is_finite() && v_len < 200.0 {
+                return v_len;
+            }
+        }
+        0.0
+    }
+
     /// Restores original camera bytes in guest memory after frame rendering completes.
     pub unsafe fn restore_frame(&self, guest_base: *mut u8) {
-        if !self.is_applied.swap(false, Ordering::AcqRel) || guest_base.is_null() {
+        if guest_base.is_null() {
+            return;
+        }
+
+        // Always restore motion blur parameters if they were modified
+        if self.motion_blur_modified.swap(false, Ordering::AcqRel) {
+            let mb_ptr = guest_base.add(G_MOTION_BLUR as usize) as *mut u32;
+            let mb_weight_ptr = guest_base.add(G_MOTION_BLUR_WEIGHT as usize) as *mut f32;
+            let orig_mb = self.saved_motion_blur_val.load(Ordering::Acquire);
+            let orig_weight = f32::from_bits(self.saved_blur_weight.load(Ordering::Acquire));
+            *mb_ptr = orig_mb;
+            *mb_weight_ptr = orig_weight;
+        }
+
+        if !self.is_applied.swap(false, Ordering::AcqRel) {
             return;
         }
 
