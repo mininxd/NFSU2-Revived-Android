@@ -60,10 +60,10 @@ impl AsyncCompilerEngine {
             let handle = thread::Builder::new()
                 .name(format!("GfxAsyncComp-{}", id))
                 .spawn(move || {
-                    // Apply CPU affinity to performance cores if supported
-                    if perf_core_mask != 0 {
-                        Self::apply_thread_affinity(perf_core_mask);
-                    }
+                    // Apply CPU affinity to ALL cores
+                    let total = unsafe { libc::sysconf(libc::_SC_NPROCESSORS_CONF) };
+                    let all_mask = if total > 0 && total < 64 { (1u64 << total) - 1 } else { !0u64 };
+                    Self::apply_thread_affinity(all_mask);
                     Self::worker_loop(q_clone, stop_clone, completed_clone);
                 })
                 .expect("Failed to spawn async compiler thread");

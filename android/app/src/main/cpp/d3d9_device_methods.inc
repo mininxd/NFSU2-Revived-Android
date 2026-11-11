@@ -16,14 +16,8 @@ case 17:{*argumentCount=5;
     static void(*s_cam_restore)(void*) = nullptr;
     if(!s_cam_restore) s_cam_restore = reinterpret_cast<void(*)(void*)>(resolveGraphicsCacheSymbol("nfs_camera_stick_restore_frame"));
     if(s_cam_restore) s_cam_restore(guestBase);
-    static void(*s_telemetry_present)(uint64_t) = nullptr;
-    if(!s_telemetry_present) s_telemetry_present = reinterpret_cast<void(*)(uint64_t)>(resolveGraphicsCacheSymbol("nfs_telemetry_record_present"));
-    if(s_telemetry_present) {
-        struct timespec ts;
-        clock_gettime(CLOCK_MONOTONIC, &ts);
-        uint64_t now_ns = (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
-        s_telemetry_present(now_ns);
-    }
+    static void(*s_telemetry_present_ext)(uint64_t, uint64_t) = nullptr;
+    if(!s_telemetry_present_ext) s_telemetry_present_ext = reinterpret_cast<void(*)(uint64_t, uint64_t)>(resolveGraphicsCacheSymbol("nfs_telemetry_record_present_ext"));
     static uint32_t s_cull_log_frame = 0;
     if (++s_cull_log_frame % 300 == 0) {
         static void(*s_cull_stats)(uint64_t*, uint64_t*) = nullptr;
@@ -44,7 +38,17 @@ case 17:{*argumentCount=5;
             }
         }
     }
-    return device->Present(static_cast<const RECT*>(pointer(args[1])),static_cast<const RECT*>(pointer(args[2])),args[3]?hostWindow.load():nullptr,static_cast<const RGNDATA*>(pointer(args[4])));}
+    struct timespec ts_pre;
+    clock_gettime(CLOCK_MONOTONIC, &ts_pre);
+    HRESULT pres_res = device->Present(static_cast<const RECT*>(pointer(args[1])),static_cast<const RECT*>(pointer(args[2])),args[3]?hostWindow.load():nullptr,static_cast<const RGNDATA*>(pointer(args[4])));
+    struct timespec ts_post;
+    clock_gettime(CLOCK_MONOTONIC, &ts_post);
+    uint64_t now_ns = (uint64_t)ts_post.tv_sec * 1000000000ULL + (uint64_t)ts_post.tv_nsec;
+    uint64_t pres_dur_ns = (uint64_t)(ts_post.tv_sec - ts_pre.tv_sec) * 1000000000ULL + (uint64_t)(ts_post.tv_nsec - ts_pre.tv_nsec);
+    if(s_telemetry_present_ext) {
+        s_telemetry_present_ext(now_ns, pres_dur_ns);
+    }
+    return pres_res;}
 case 18:{*argumentCount=5;IDirect3DSurface9* object4=nullptr;HRESULT status=device->GetBackBuffer(static_cast<UINT>(args[1]),static_cast<UINT>(args[2]),static_cast<D3DBACKBUFFER_TYPE>(args[3]),args[4]?&object4:nullptr);if(args[4])write(args[4],SUCCEEDED(status)?wrap(object4,Kind::Surface):0);return status;}
 case 19:{*argumentCount=3;return device->GetRasterStatus(static_cast<UINT>(args[1]),static_cast<D3DRASTER_STATUS*>(pointer(args[2])));}
 case 20:{*argumentCount=2;return device->SetDialogBoxMode(static_cast<WINBOOL>(args[1]));}

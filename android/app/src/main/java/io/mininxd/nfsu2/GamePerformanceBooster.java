@@ -52,6 +52,7 @@ public final class GamePerformanceBooster {
 
         try {
             // 1. Native Rust affinity, process priority, and SoC/OEM governor boost
+            AllCpuCoresManager.enableAllCores();
             if (nativeBoosterLoaded) {
                 try {
                     nativeApplyBooster(activity);
@@ -59,11 +60,11 @@ public final class GamePerformanceBooster {
                 } catch (Throwable t) {
                     Log.w(TAG, "nativeApplyBooster failed, using fallback: " + t.getMessage());
                     fallbackProcessPriority();
-                    PerformanceCores.bindToPerformanceCores();
+                    AllCpuCoresManager.enableAllCores();
                 }
             } else {
                 fallbackProcessPriority();
-                PerformanceCores.bindToPerformanceCores();
+                AllCpuCoresManager.enableAllCores();
             }
 
             // 2. Native Rust DXVK profile generation and driver environment setup

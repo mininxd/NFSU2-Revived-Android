@@ -461,11 +461,9 @@ public final class DiagnosticOverlay {
                 if (lastGpuPercent >= 0.0f) {
                     gpuUsage = Math.round(lastGpuPercent) + "%";
                 } else {
-                    float targetMs = 1000.0f / (liveGameFps > 0.0f ? Math.min(60.0f, liveGameFps) : 60.0f);
-                    float frameTime = (lastFrameDurationMs > 0.0f) ? lastFrameDurationMs : targetMs;
-                    float loadRatio = Math.min(1.5f, frameTime / targetMs);
-                    float base = (liveGameFps >= 58.0f) ? 45.0f : 55.0f;
-                    int est = Math.max(15, Math.min(99, Math.round(base * loadRatio)));
+                    float fpsVal = (liveGameFps > 0.0f) ? liveGameFps : 60.0f;
+                    float frameMs = (lastFrameDurationMs > 0.0f) ? lastFrameDurationMs : (1000.0f / fpsVal);
+                    int est = Math.max(15, Math.min(98, Math.round((frameMs / 16.667f) * 45.0f)));
                     gpuUsage = est + "%";
                 }
             }
@@ -483,11 +481,9 @@ public final class DiagnosticOverlay {
                 if (lastGpuPercent >= 0.0f) {
                     gpuLabel = Math.round(lastGpuPercent) + "%";
                 } else {
-                    float targetMs = 1000.0f / (liveGameFps > 0.0f ? Math.min(60.0f, liveGameFps) : 60.0f);
-                    float frameTime = (lastFrameDurationMs > 0.0f) ? lastFrameDurationMs : targetMs;
-                    float loadRatio = Math.min(1.5f, frameTime / targetMs);
-                    float base = (liveGameFps >= 58.0f) ? 45.0f : 55.0f;
-                    int est = Math.max(15, Math.min(99, Math.round(base * loadRatio)));
+                    float fpsVal = (liveGameFps > 0.0f) ? liveGameFps : 60.0f;
+                    float frameMs = (lastFrameDurationMs > 0.0f) ? lastFrameDurationMs : (1000.0f / fpsVal);
+                    int est = Math.max(15, Math.min(98, Math.round((frameMs / 16.667f) * 45.0f)));
                     gpuLabel = est + "%";
                 }
             }
@@ -555,14 +551,14 @@ public final class DiagnosticOverlay {
             }
         } catch (Exception ignored) {}
 
-        // Fallback: process CPU accounting normalized across the active performance cores
+        // Process CPU accounting normalized across ALL available CPU cores
         long nowWall = SystemClock.elapsedRealtime();
         long nowCpu = Process.getElapsedCpuTime();
         if (lastWallTime > 0 && nowWall > lastWallTime) {
             long cpuDiff = nowCpu - lastProcessCpuTime;
             long wallDiff = nowWall - lastWallTime;
-            int perfCores = Math.max(1, PerformanceCores.getPerformanceCoreCount());
-            lastCpuPercent = (cpuDiff * 100.0f) / (wallDiff * perfCores);
+            int totalCores = AllCpuCoresManager.getTotalCoreCount();
+            lastCpuPercent = (cpuDiff * 100.0f) / (wallDiff * totalCores);
         }
         lastWallTime = nowWall;
         lastProcessCpuTime = nowCpu;

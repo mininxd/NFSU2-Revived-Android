@@ -2143,6 +2143,28 @@ JNIEXPORT jstring JNICALL Java_io_mininxd_nfsu2_PerformanceCores_nativeGetSummar
     return (*env)->NewStringUTF(env, buf);
 }
 
+/* JNI Bindings for io.mininxd.nfsu2.AllCpuCoresManager */
+JNIEXPORT jint JNICALL Java_io_mininxd_nfsu2_AllCpuCoresManager_nativeEnableAllCores(
+        JNIEnv *env, jclass clazz) {
+    (void)env; (void)clazz;
+    return nfs_bind_to_perf_cores();
+}
+
+JNIEXPORT jlong JNICALL Java_io_mininxd_nfsu2_AllCpuCoresManager_nativeGetAllCoresMask(
+        JNIEnv *env, jclass clazz) {
+    (void)env; (void)clazz;
+    int total = sysconf(_SC_NPROCESSORS_CONF);
+    if (total <= 0 || total > 64) total = 8;
+    return total >= 64 ? -1LL : ((1LL << total) - 1LL);
+}
+
+JNIEXPORT jint JNICALL Java_io_mininxd_nfsu2_AllCpuCoresManager_nativeGetTotalCoreCount(
+        JNIEnv *env, jclass clazz) {
+    (void)env; (void)clazz;
+    int c = sysconf(_SC_NPROCESSORS_CONF);
+    return c > 0 ? c : 8;
+}
+
 
 
 /* ========================================================================= */

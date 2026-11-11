@@ -13,6 +13,8 @@
 
 pub mod steering_pacer;
 pub use steering_pacer::*;
+pub mod all_cores;
+pub use all_cores::*;
 
 use std::fs;
 use std::os::raw::{c_int, c_long};
@@ -82,41 +84,13 @@ impl CpuCluster {
             });
         }
 
-        // Performance threshold: cores within 50% of the SoC's highest frequency or capacity
-        // so all Prime, Big, and Mid performance cores are included
-        let threshold = if highest_freq > 0 {
-            (highest_freq as f64 * 0.50) as u64
-        } else {
-            0
-        };
-
-        let mut perf_cores_mask: u64 = 0;
-        let mut perf_core_count = 0;
+        // All CPU cores are enabled and utilized across the entire game engine
+        let all_mask = if total_cores >= 64 { !0u64 } else { (1u64 << total_cores) - 1 };
+        let perf_cores_mask: u64 = all_mask;
+        let perf_core_count = total_cores;
 
         for core in &mut cores {
-            if highest_freq > 0 && core.max_freq_khz >= threshold {
-                core.is_performance = true;
-                perf_cores_mask |= 1u64 << core.cpu_id;
-                perf_core_count += 1;
-            }
-        }
-
-        // Ensure at least the top half of cores (or at least 4 cores on octa-core) are included
-        // so worker threads and Vulkan can utilize all performance cores without artificial bottle-necking
-        if (perf_core_count < 2 || perf_cores_mask == 0) && total_cores > 1 {
-            let start = if total_cores >= 8 { 4 } else { total_cores / 2 };
-            for id in start..total_cores {
-                if (perf_cores_mask & (1u64 << id)) == 0 {
-                    perf_cores_mask |= 1u64 << id;
-                    perf_core_count += 1;
-                    if let Some(c) = cores.get_mut(id) {
-                        c.is_performance = true;
-                    }
-                }
-            }
-        } else if perf_cores_mask == 0 {
-            perf_cores_mask = 1;
-            perf_core_count = 1;
+            core.is_performance = true;
         }
 
         CpuCluster {
@@ -284,8 +258,7 @@ pub unsafe extern "C" fn Java_io_mininxd_nfsu2_PerformanceCores_nativeBoostCalli
     _env: JNIEnv,
     _class: JClass,
 ) {
-    let cluster = CpuCluster::detect();
-    let mask_val = cluster.perf_cores_mask as c_long;
+    let mask_val = get_all_cores_bitmask() as c_long;
     let _ = libc::syscall(
         libc::SYS_sched_setaffinity,
         0 as c_int,

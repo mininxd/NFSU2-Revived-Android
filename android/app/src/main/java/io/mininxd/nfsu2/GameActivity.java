@@ -375,6 +375,7 @@ public final class GameActivity extends NativeActivity {
         s_instance = this;
         refreshNewsAsync();
         GameOptions.syncWidescreenIni(this);
+        AllCpuCoresManager.init(this);
         GamePerformanceBooster.apply(this, getWindow());
         PerformanceCores.bindToPerformanceCores();
         GameLog.init(this);
