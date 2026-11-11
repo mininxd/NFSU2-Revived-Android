@@ -230,8 +230,14 @@ public final class GameActivity extends NativeActivity {
     private static boolean nativeGamepadUsed() { return com.nfsu2.androidevolved.GameActivity.nativeGamepadUsed(); }
     private static void nativeTypeText(String value, boolean replace) { com.nfsu2.androidevolved.GameActivity.nativeTypeText(value, replace); }
     private static void nativePointer(float x, float y, int phase) { com.nfsu2.androidevolved.GameActivity.nativePointer(x, y, phase); }
-    private static void nativeLanguage(String language) { com.nfsu2.androidevolved.GameActivity.nativeLanguage(language); }
-    private static void nativeResolution(int width, int height) { com.nfsu2.androidevolved.GameActivity.nativeResolution(width, height); }
+    private static void nativeLanguage(String language) {
+        try { com.nfsu2.androidevolved.GameActivity.nativeLanguage(language); }
+        catch (Throwable t) { android.util.Log.w("GameActivity", "nativeLanguage: " + t.getMessage()); }
+    }
+    private static void nativeResolution(int width, int height) {
+        try { com.nfsu2.androidevolved.GameActivity.nativeResolution(width, height); }
+        catch (Throwable t) { android.util.Log.w("GameActivity", "nativeResolution: " + t.getMessage()); }
+    }
     private static void nativeFrameLimit(int framesPerSecond) {
         try {
             com.nfsu2.androidevolved.GameActivity.nativeFrameLimit(framesPerSecond);
@@ -245,7 +251,10 @@ public final class GameActivity extends NativeActivity {
             }
         } catch (Throwable ignored) {}
     }
-    private static void nativeWidescreen(boolean enabled) { com.nfsu2.androidevolved.GameActivity.nativeWidescreen(enabled); }
+    private static void nativeWidescreen(boolean enabled) {
+        try { com.nfsu2.androidevolved.GameActivity.nativeWidescreen(enabled); }
+        catch (Throwable t) { android.util.Log.w("GameActivity", "nativeWidescreen: " + t.getMessage()); }
+    }
     private static void nativeScreenMode(int mode) {
         try { com.nfsu2.androidevolved.GameActivity.nativeScreenMode(mode); }
         catch (Throwable t) { android.util.Log.w("GameActivity", "nativeScreenMode: " + t.getMessage()); }
@@ -267,9 +276,15 @@ public final class GameActivity extends NativeActivity {
             android.util.Log.w("GameActivity", "nativeOnlineServer: " + t.getMessage());
         }
     }
-    private static void nativeGamepadConnected(boolean connected) { com.nfsu2.androidevolved.GameActivity.nativeGamepadConnected(connected); }
-    private static void nativeGamepadDevices(int[] ids) { com.nfsu2.androidevolved.GameActivity.nativeGamepadDevices(ids); }
-    private static void nativeMinimapTop(boolean top) { com.nfsu2.androidevolved.GameActivity.nativeMinimapTop(top); }
+    private static void nativeGamepadConnected(boolean connected) {
+        try { com.nfsu2.androidevolved.GameActivity.nativeGamepadConnected(connected); } catch (Throwable ignored) {}
+    }
+    private static void nativeGamepadDevices(int[] ids) {
+        try { com.nfsu2.androidevolved.GameActivity.nativeGamepadDevices(ids); } catch (Throwable ignored) {}
+    }
+    private static void nativeMinimapTop(boolean top) {
+        try { com.nfsu2.androidevolved.GameActivity.nativeMinimapTop(top); } catch (Throwable ignored) {}
+    }
     private static void nativeGamepadLayout(boolean playstationNames) {
         try {
             com.nfsu2.androidevolved.GameActivity.nativeGamepadLayout(playstationNames);
@@ -296,8 +311,12 @@ public final class GameActivity extends NativeActivity {
         nativeSpeedometerPosition(gamepad ? 0 : speedometerPosition);
         nativeMinimapTop(minimapTop);
     }
-    private static void nativeBackBuffers(int count) { com.nfsu2.androidevolved.GameActivity.nativeBackBuffers(count); }
-    private static void nativeCpuTextures(boolean enabled) { com.nfsu2.androidevolved.GameActivity.nativeCpuTextures(enabled); }
+    private static void nativeBackBuffers(int count) {
+        try { com.nfsu2.androidevolved.GameActivity.nativeBackBuffers(count); } catch (Throwable ignored) {}
+    }
+    private static void nativeCpuTextures(boolean enabled) {
+        try { com.nfsu2.androidevolved.GameActivity.nativeCpuTextures(enabled); } catch (Throwable ignored) {}
+    }
     // Older libnfsu2_android.so builds have no region switch: keep the game's region.
     private static void nativeRegion(int region) {
         try { com.nfsu2.androidevolved.GameActivity.nativeRegion(region); }
