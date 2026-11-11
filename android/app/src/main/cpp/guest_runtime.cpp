@@ -987,6 +987,16 @@ extern "C" void recomp_unresolved(const char* kind,uint32_t va,uint32_t from) {
         g_eax=0;
         return;
     }
+    if(from==0x005c5c00u||va==0u){
+        static uint32_t s_last_from = 0;
+        static uint32_t s_log_count = 0;
+        if(s_last_from != from || ++s_log_count <= 10){
+            s_last_from = from;
+            NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","Recovering gracefully from unresolved %s %08x at %08x to prevent game halt",kind,va,from);
+        }
+        g_eax=0;
+        return;
+    }
     throw GuestStop(std::string(kind)+" unresolved "+hex(va)+" from "+hex(from));
 }
 extern "C" void recomp_unimpl(uint32_t va,const char* what) {

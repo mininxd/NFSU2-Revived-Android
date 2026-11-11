@@ -107,6 +107,10 @@ void recomp_unimpl(uint32_t va, const char *what) {
 }
 
 void recomp_unresolved(const char *kind, uint32_t va, uint32_t from) {
+    if (from == 0x005c5c00u || from == 0x00725520u || va == 0u) {
+        g_eax = 0;
+        return;
+    }
     char why[300];
     const char *n = native32_name(va);
     snprintf(why, sizeof why, "%s to unlifted guest address 0x%08X from sub_%08X %s",
