@@ -466,16 +466,12 @@ void registryOpen(uint32_t output,uint32_t argc){
             gameRegistry.emplace("g_crowdenable",RegistryValue{4,{p,p+4}});
         }
         if(gameRegistry.find("g_overbrightenable")==gameRegistry.end()){
-            const char* envContrast=std::getenv("NFSU2_CONTRAST");
-            bool enable=(envContrast&&(std::strcmp(envContrast,"on")==0||std::strcmp(envContrast,"2")==0||strcasecmp(envContrast,"original")==0));
-            uint32_t val=enable?1:0;
+            uint32_t val=0;
             const uint8_t* p=reinterpret_cast<const uint8_t*>(&val);
             gameRegistry.emplace("g_overbrightenable",RegistryValue{4,{p,p+4}});
         }
         if(gameRegistry.find("g_bleachbypassenable")==gameRegistry.end()){
-            const char* envContrast=std::getenv("NFSU2_CONTRAST");
-            bool disable=(envContrast&&(std::strcmp(envContrast,"off")==0||std::strcmp(envContrast,"0")==0));
-            uint32_t val=disable?0:1;
+            uint32_t val=1;
             const uint8_t* p=reinterpret_cast<const uint8_t*>(&val);
             gameRegistry.emplace("g_bleachbypassenable",RegistryValue{4,{p,p+4}});
         }
@@ -505,14 +501,7 @@ void regQueryValueExA(){
         }
     }
     if(name=="g_overbrightenable"&&value->second.bytes.size()>=4){
-        const char* envContrast=std::getenv("NFSU2_CONTRAST");
-        bool enable=(envContrast&&(std::strcmp(envContrast,"on")==0||std::strcmp(envContrast,"2")==0||strcasecmp(envContrast,"original")==0));
-        uint32_t val=enable?1:0;std::memcpy(const_cast<uint8_t*>(value->second.bytes.data()),&val,4);
-    }
-    if(name=="g_bleachbypassenable"&&value->second.bytes.size()>=4){
-        const char* envContrast=std::getenv("NFSU2_CONTRAST");
-        bool disable=(envContrast&&(std::strcmp(envContrast,"off")==0||std::strcmp(envContrast,"0")==0));
-        uint32_t val=disable?0:1;std::memcpy(const_cast<uint8_t*>(value->second.bytes.data()),&val,4);
+        uint32_t val=0;std::memcpy(const_cast<uint8_t*>(value->second.bytes.data()),&val,4);
     }
     if(!arg(5)){ret(87,6);return;}uint32_t size=read32(arg(5));write32(arg(5),value->second.bytes.size());
     if(arg(3))write32(arg(3),value->second.type);

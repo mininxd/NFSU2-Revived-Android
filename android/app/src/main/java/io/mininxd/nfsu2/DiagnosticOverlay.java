@@ -52,10 +52,10 @@ public final class DiagnosticOverlay {
     private float lastFrameDurationMs = 0.0f;
     private boolean metricsListenerRegistered = false;
 
-    // Measured presentation FPS from native D3D9 bridge logcat
-    private volatile float measuredNativeFps = 0.0f;
-    private volatile long lastNativeLogTime = 0;
-    private Thread logcatThread;
+    // Native pure Rust telemetry buffer [fps, frame_time_ms, cpu_percent, gpu_busy]
+    private final float[] telemetryBuffer = new float[4];
+    public static native boolean nativeGetTelemetry(float[] outArray);
+    public static native void nativeRecordPresent(long frameDurationNs);
 
     // CPU measurement state
     private long prevTotal = 0;
@@ -164,7 +164,6 @@ public final class DiagnosticOverlay {
             metricsListenerRegistered = true;
         } catch (Exception ignored) {}
 
-        startLogcatFpsMonitor();
         handler.post(ticker);
     }
 
@@ -179,11 +178,6 @@ public final class DiagnosticOverlay {
                 activity.getWindow().removeOnFrameMetricsAvailableListener(frameMetricsListener);
             } catch (Exception ignored) {}
             metricsListenerRegistered = false;
-        }
-
-        if (logcatThread != null) {
-            try { logcatThread.interrupt(); } catch (Exception ignored) {}
-            logcatThread = null;
         }
 
         hide();
@@ -209,73 +203,29 @@ public final class DiagnosticOverlay {
         attached = false;
     }
 
-    /**
-     * Reads native D3D9 bridge measurements from libnfsu2_android.so logcat output.
-     */
-    private void startLogcatFpsMonitor() {
-        logcatThread = new Thread(() -> {
-            java.lang.Process process = null;
-            try {
-                process = new ProcessBuilder("logcat", "-v", "brief", "-s", "NFSU2:I")
-                        .redirectErrorStream(true)
-                        .start();
-                BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-                String line;
-                while (running && (line = reader.readLine()) != null) {
-                    int idx = line.indexOf("Guest D3D9 presentation ");
-                    if (idx >= 0) {
-                        String sub = line.substring(idx + 24);
-                        int fpsIdx = sub.indexOf(" FPS");
-                        if (fpsIdx > 0) {
-                            try {
-                                float parsed = Float.parseFloat(sub.substring(0, fpsIdx).trim());
-                                if (parsed > 0 && parsed <= 360) {
-                                    measuredNativeFps = parsed;
-                                    lastNativeLogTime = SystemClock.elapsedRealtime();
-                                }
-                            } catch (Exception ignored) {}
-                        }
-                    }
-                }
-            } catch (Exception ignored) {
-            } finally {
-                if (process != null) {
-                    try { process.destroy(); } catch (Exception ignored) {}
-                }
-            }
-        }, "FpsLogcatMonitor");
-        logcatThread.setDaemon(true);
-        logcatThread.start();
-    }
-
     private int perfBindCount = 0;
     private final Runnable ticker = new Runnable() {
         @Override
         public void run() {
             if (!running) return;
 
-            // Ensure background worker threads (GuestBootWorker, render, audio) are pinned to perf cores
+            // Ensure background worker threads are pinned to perf cores
             if (perfBindCount < 10) {
                 PerformanceCores.bindToPerformanceCores();
                 perfBindCount++;
             }
 
-            // Compute dynamic frame rate every second
-            long now = SystemClock.elapsedRealtime();
-            long elapsed = now - lastFrameCalcTime;
-            lastFrameCalcTime = now;
-
-            int frames = frameCounter.getAndSet(0);
-            if (elapsed > 0 && frames > 0) {
-                float measured = (frames * 1000.0f) / elapsed;
-                // Clamp sanity: cannot exceed twice the native cap
-                liveGameFps = measured;
-            }
-
-            // Cross-validate with native bridge report if available
-            if (measuredNativeFps > 0 && (now - lastNativeLogTime < 5000)) {
-                liveGameFps = measuredNativeFps;
-            }
+            // Read pure Rust native frame telemetry
+            try {
+                if (nativeGetTelemetry(telemetryBuffer)) {
+                    if (telemetryBuffer[0] > 0.0f) {
+                        liveGameFps = telemetryBuffer[0];
+                    }
+                    if (telemetryBuffer[1] > 0.0f) {
+                        lastFrameDurationMs = telemetryBuffer[1];
+                    }
+                }
+            } catch (Throwable ignored) {}
 
             updateStats();
 
@@ -296,10 +246,10 @@ public final class DiagnosticOverlay {
                 fps = 60.0f;
             }
         }
-        float frameTimeMs = (fps > 0) ? (1000.0f / fps) : 0.0f;
+        float frameTimeMs = (lastFrameDurationMs > 0.0f) ? lastFrameDurationMs : ((fps > 0) ? (1000.0f / fps) : 0.0f);
         String fpsStr = (fps >= 100.0f) ? String.format(Locale.US, "%.0f", fps) : String.format(Locale.US, "%.1f", fps);
 
-        float cpu = sampleCpuUsage();
+        float cpu = (telemetryBuffer[2] > 0.0f) ? telemetryBuffer[2] : sampleCpuUsage();
 
         // Memory
         ActivityManager am = (ActivityManager) activity.getSystemService(Context.ACTIVITY_SERVICE);
@@ -390,7 +340,9 @@ public final class DiagnosticOverlay {
             }
 
             sb.append(String.format(Locale.US, "cpu_usage: %.1f%%\n", cpu));
-            String gpuUsage = sampleGpuUsage();
+            String gpuUsage = (telemetryBuffer[3] > 0.0f)
+                    ? String.format(Locale.US, "%.0f%%", telemetryBuffer[3])
+                    : sampleGpuUsage();
             if (gpuUsage != null) {
                 sb.append("gpu_usage: ").append(gpuUsage).append('\n');
             }

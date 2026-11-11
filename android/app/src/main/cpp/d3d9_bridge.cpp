@@ -235,8 +235,42 @@ void* resolveGraphicsCacheSymbol(const char* name) {
     if (!sym) sym = dlsym(RTLD_DEFAULT, name);
     return sym;
 }
+
+static IDirect3DDevice9* s_active_d3d9_device = nullptr;
+
+extern "C" void nfs_d3d9_set_enhanced_contrast_ramp(int enable) {
+    if (!s_active_d3d9_device) return;
+    D3DGAMMARAMP ramp;
+    if (enable) {
+        for (int i = 0; i < 256; i++) {
+            float x = i / 255.0f;
+            float s_curve = x * x * (3.0f - 2.0f * x);
+            float enhanced = 0.35f * x + 0.65f * s_curve;
+            float val = std::clamp(enhanced, 0.0f, 1.0f);
+            WORD w = static_cast<WORD>(val * 65535.0f);
+            ramp.red[i] = w;
+            ramp.green[i] = w;
+            ramp.blue[i] = w;
+        }
+    } else {
+        for (int i = 0; i < 256; i++) {
+            WORD w = static_cast<WORD>(i * 257);
+            ramp.red[i] = w;
+            ramp.green[i] = w;
+            ramp.blue[i] = w;
+        }
+    }
+    s_active_d3d9_device->SetGammaRamp(0, D3DSGR_NO_CALIBRATION, &ramp);
+}
+
 uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumentCount){
     getGraphicsCacheHandle();
+    static bool s_contrast_ramp_reg = false;
+    if (!s_contrast_ramp_reg) {
+        s_contrast_ramp_reg = true;
+        auto reg_fn = reinterpret_cast<void(*)(void(*)(int))>(resolveGraphicsCacheSymbol("nfs_contrast_register_ramp_callback"));
+        if (reg_fn) reg_fn(nfs_d3d9_set_enhanced_contrast_ramp);
+    }
     uint32_t kind=(token-methodBase)/4096,method=((token-methodBase)%4096)/16;
     Object* entry=findObject(args[0]);
     if(!entry||static_cast<uint32_t>(entry->kind)!=kind){
@@ -351,7 +385,9 @@ uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumen
         if(s_filter_state && s_filter_state(method, args, argumentCount)){
             return D3D_OK;
         }
-        auto device=static_cast<IDirect3DDevice9*>(object);switch(method){
+        auto device=static_cast<IDirect3DDevice9*>(object);
+        s_active_d3d9_device = device;
+        switch(method){
         case 9:{*argumentCount=2;D3DDEVICE_CREATION_PARAMETERS p{};HRESULT status=device->GetCreationParameters(&p);if(SUCCEEDED(status)){write(args[1],p.AdapterOrdinal);write(args[1]+4,p.DeviceType);write(args[1]+8,0xf0000301);write(args[1]+12,p.BehaviorFlags);}return status;}
         case 13:{*argumentCount=3;auto p=presentation(args[1]);IDirect3DSwapChain9* result=nullptr;HRESULT status=device->CreateAdditionalSwapChain(&p,&result);write(args[2],SUCCEEDED(status)?wrap(result,Kind::SwapChain):0);return status;}
         case 16:{*argumentCount=2;auto p=presentation(args[1]);HRESULT status=D3DERR_DEVICELOST;

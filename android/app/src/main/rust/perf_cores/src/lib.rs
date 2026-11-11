@@ -11,6 +11,9 @@
 //! high-frequency Performance cores and applies process/thread affinity to ensure
 //! the guest emulation and Vulkan driver always run on the fastest cores.
 
+pub mod steering_pacer;
+pub use steering_pacer::*;
+
 use std::fs;
 use std::os::raw::{c_int, c_long};
 use jni::JNIEnv;

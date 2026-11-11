@@ -16,6 +16,14 @@ case 17:{*argumentCount=5;
     static void(*s_cam_restore)(void*) = nullptr;
     if(!s_cam_restore) s_cam_restore = reinterpret_cast<void(*)(void*)>(resolveGraphicsCacheSymbol("nfs_camera_stick_restore_frame"));
     if(s_cam_restore) s_cam_restore(guestBase);
+    static void(*s_telemetry_present)(uint64_t) = nullptr;
+    if(!s_telemetry_present) s_telemetry_present = reinterpret_cast<void(*)(uint64_t)>(resolveGraphicsCacheSymbol("nfs_telemetry_record_present"));
+    if(s_telemetry_present) {
+        struct timespec ts;
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        uint64_t now_ns = (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
+        s_telemetry_present(now_ns);
+    }
     static uint32_t s_cull_log_frame = 0;
     if (++s_cull_log_frame % 300 == 0) {
         static void(*s_cull_stats)(uint64_t*, uint64_t*) = nullptr;

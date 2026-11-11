@@ -1097,19 +1097,18 @@ static void framerate_pacing_fix(void) {
         }
     }
 
-    /* Enhanced Contrast Regulation: clamp OverBright and Bleach Bypass according to NFSU2_CONTRAST */
+    /* Enhanced Contrast Regulation: sync with in-game setting directly via pure Rust */
     if (rh_mem_committed(0x00870cfcu, 4) && rh_mem_committed(0x00870d00u, 4)) {
-        const char *env_contrast = getenv("NFSU2_CONTRAST");
-        if (env_contrast && (strcmp(env_contrast, "off") == 0 || strcmp(env_contrast, "0") == 0)) {
-            MR32(0x00870cfcu) = 0;
-            MR32(0x00870d00u) = 0;
-        } else if (env_contrast && (strcmp(env_contrast, "on") == 0 || strcmp(env_contrast, "2") == 0 || strcasecmp(env_contrast, "original") == 0)) {
-            MR32(0x00870cfcu) = 1;
-            MR32(0x00870d00u) = 1;
+        static uint32_t (*s_sync_contrast)(uint8_t*) = NULL;
+        if (!s_sync_contrast) {
+            void *h = dlopen("libgraphics_cache.so", RTLD_NOW | RTLD_LOCAL);
+            s_sync_contrast = h ? (uint32_t (*)(uint8_t*))dlsym(h, "nfs_contrast_sync_ingame") : NULL;
+            if (!s_sync_contrast) s_sync_contrast = (uint32_t (*)(uint8_t*))dlsym(RTLD_DEFAULT, "nfs_contrast_sync_ingame");
+        }
+        if (s_sync_contrast && g_p_mem_base && *g_p_mem_base) {
+            s_sync_contrast((uint8_t*)(*g_p_mem_base));
         } else {
-            // Optimized default: keep Bleach Bypass, disable OverBright bloom
             MR32(0x00870cfcu) = 0;
-            MR32(0x00870d00u) = 1;
         }
     }
 

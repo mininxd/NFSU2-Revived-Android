@@ -28,8 +28,7 @@ public final class GameOptions {
             STARTUP_MOVIES = "intro", CUTSCENE_BORDERS = "cutscene_borders",
             ROAM_CARS_LIMIT = "roam_max_cars", ROAM_CREW = "roam_crew",
             GRAPHICS_BACKEND = "graphics_backend", DRAW_DISTANCE = "draw_distance",
-            TRACKSIDE_CROWDS = "trackside_crowds", REGION = "region", SPEEDOMETER = "speedometer", PAD_LAYOUT = "pad_layout",
-            ENHANCED_CONTRAST = "enhanced_contrast";
+            TRACKSIDE_CROWDS = "trackside_crowds", REGION = "region", SPEEDOMETER = "speedometer", PAD_LAYOUT = "pad_layout";
 
     static final Option[] ALL = {
             new Option(GRAPHICS_BACKEND, "Graphics API", "auto",
@@ -41,9 +40,6 @@ public final class GameOptions {
             new Option(DRAW_DISTANCE, "Draw Distance", "performance",
                     new String[] {"ultra_performance", "performance", "balanced", "extended", "original"},
                     new String[] {"Ultra Performance", "Performance", "Balanced", "Extended", "Original"}),
-            new Option(ENHANCED_CONTRAST, "Enhanced Contrast", "optimized",
-                    new String[] {"optimized", "off", "on"},
-                    new String[] {"Optimized (Smooth 60 FPS)", "Off (Fastest)", "Original (High GPU Load)"}),
             new Option(FPS, "FPS Limit", "30",
                     new String[] {"30", "60", "90", "120", "0"},
                     new String[] {"30 FPS", "60 FPS", "90 FPS", "120 FPS", "Uncapped"}),
@@ -541,12 +537,21 @@ public final class GameOptions {
         return list;
     }
 
+    public static native int nativeSyncSettings(String gameRoot, String prefsXmlPath);
+
     /**
      * Synchronizes scripts/NFSUnderground2.WidescreenFix.ini settings.
      * Updates FEScale (button & UI sizing up to 200%), HudAspectRatioConstraint,
      * AutoFitFE, SingleCoreAffinity, SkipIntro, and DisableCutsceneBorders.
      */
     static void syncWidescreenIni(Context context) {
+        try {
+            String root = LauncherActivity.gameRoot().getAbsolutePath();
+            String prefs = "/data/data/" + context.getPackageName() + "/shared_prefs/nfsu2_game.xml";
+            if (nativeSyncSettings(root, prefs) == 0) {
+                return;
+            }
+        } catch (Throwable ignored) {}
         try {
             java.io.File iniFile = new java.io.File(LauncherActivity.gameRoot(),
                     "scripts/NFSUnderground2.WidescreenFix.ini");

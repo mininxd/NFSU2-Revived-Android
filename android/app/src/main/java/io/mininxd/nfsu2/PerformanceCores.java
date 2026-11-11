@@ -35,6 +35,7 @@ public final class PerformanceCores {
     public static native String nativeGetSummary();
     public static native void nativeBoostCallingThread();
     public static native float nativeCalculateSteering(float rawX, float centerX, float halfWidth, float scale);
+    public static native float nativeCalculateSteeringProgressive(float rawX, float centerX, float halfWidth, float scale, float deadzone);
 
     /**
      * Immediately boosts the priority and pins the calling thread to performance cores.
@@ -51,16 +52,23 @@ public final class PerformanceCores {
      * Calculates progressive steering sensitivity curve via Rust native SIMD engine.
      */
     public static float calculateSteering(float rawX, float centerX, float halfWidth, float scale) {
+        return calculateSteeringProgressive(rawX, centerX, halfWidth, scale, 0.05f);
+    }
+
+    public static float calculateSteeringProgressive(float rawX, float centerX, float halfWidth, float scale, float deadzone) {
         if (nativeLoaded) {
             try {
-                return nativeCalculateSteering(rawX, centerX, halfWidth, scale);
+                return nativeCalculateSteeringProgressive(rawX, centerX, halfWidth, scale, deadzone);
             } catch (Throwable ignored) {}
         }
         if (scale <= 0f || halfWidth <= 0f) return 0f;
         float norm = (rawX / scale - centerX) / halfWidth;
         float clamped = Math.max(-1f, Math.min(1f, norm));
         float abs = Math.abs(clamped);
-        float curved = abs * 0.30f + abs * abs * abs * 0.70f;
+        float dz = Math.max(0f, Math.min(0.5f, deadzone));
+        if (abs <= dz) return 0f;
+        float scaled = (abs - dz) / (1f - dz);
+        float curved = scaled * 0.30f + scaled * scaled * scaled * 0.70f;
         return clamped < 0f ? -curved : curved;
     }
 

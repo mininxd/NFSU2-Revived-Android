@@ -44,7 +44,14 @@ final class DriverArchive {
         }
     }
 
+    static native boolean nativeValidateLibrary(String path);
+
     static void validateLibrary(File library) throws IOException {
+        try {
+            if (nativeValidateLibrary(library.getAbsolutePath())) {
+                return;
+            }
+        } catch (Throwable ignored) {}
         byte[] h = new byte[64];
         try (DataInputStream input = new DataInputStream(new FileInputStream(library))) { input.readFully(h); }
         if (h[0] != 127 || h[1] != 'E' || h[2] != 'L' || h[3] != 'F' || h[4] != 2 || h[5] != 1 ||

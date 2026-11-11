@@ -9,6 +9,9 @@
  * pops what `ret N` would (g_esp += 4 + N).
  */
 #include <string.h>
+#if !defined(_WIN32)
+#include <dlfcn.h>
+#endif
 #include "recomp_types.h"
 #include "nfs_runtime.h"
 
@@ -36,7 +39,30 @@ static void ov_crt_memmove(void) {
     g_esp += 4;
 }
 
+/* 0x005C68D0: Bleach Bypass post-processing pass.
+ * Original PC code executes a 3-pass ping-pong render target pipeline across
+ * full-screen surfaces and calls CPU LockRect, saturating memory bandwidth on mobile
+ * TBDR GPUs and dropping framerate from 60 to 40-45 FPS (Issue #70).
+ * Replaced with zero-bandwidth hardware tone regulation (SetGammaRamp S-curve),
+ * maintaining the full Enhanced Contrast aesthetic with solid 60 FPS. */
+static void ov_bleach_bypass(void) {
+#if !defined(_WIN32)
+    static void (*s_contrast_tone)(int) = NULL;
+    if (!s_contrast_tone) {
+        void *h = dlopen("libgraphics_cache.so", RTLD_NOW | RTLD_LOCAL);
+        s_contrast_tone = h ? (void (*)(int))dlsym(h, "nfs_contrast_apply_hardware_tone") : NULL;
+        if (!s_contrast_tone) s_contrast_tone = (void (*)(int))dlsym(RTLD_DEFAULT, "nfs_contrast_apply_hardware_tone");
+    }
+    if (s_contrast_tone) s_contrast_tone(1);
+#endif
+    if (MEM32(0x008708F4u) != 0xFFFFFFFFu) {
+        MEM32(0x008708F4u) = 0xFFFFFFFFu;
+    }
+    g_esp += 4;
+}
+
 static const struct { uint32_t va; nfs_override_fn fn; } k_overrides[] = {
+    { 0x005C68D0u, ov_bleach_bypass },
     { 0x006F5FC5u, ov_is_cyrix },
     { 0x0075CFD0u, ov_crt_memmove },
 };

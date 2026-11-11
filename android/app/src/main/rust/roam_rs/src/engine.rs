@@ -212,28 +212,9 @@ pub unsafe extern "C" fn nfs_rust_apply_engine_pacing(mem_base: *mut u8, real_el
     crate::crowd::nfs_rust_apply_crowd_suppression(mem_base);
 
     // 8. Enhanced Contrast Regulation (Issue #70: Snapdragon 8 Elite / Adreno 840 / 740)
-    if !CONTRAST_INITIALIZED.load(Ordering::Relaxed) {
-        nfs_rust_auto_configure_contrast();
-    }
-    // Mode 0 = Off (Fastest): Both passes disabled
-    // Mode 1 = Optimized (Smooth 60 FPS): Bleach Bypass enabled for rich contrast,
-    //          OverBright bloom disabled to eliminate heavy TBDR tile resolves and frame drops
-    // Mode 2 = Original (High GPU Load): Both passes enabled
-    let cm = CONTRAST_MODE.load(Ordering::Relaxed);
-    match cm {
-        0 => {
-            write_u32(mem_base, G_OVERBRIGHT_ENABLE_ADDR, 0);
-            write_u32(mem_base, G_BLEACH_BYPASS_ENABLE_ADDR, 0);
-        }
-        1 => {
-            write_u32(mem_base, G_OVERBRIGHT_ENABLE_ADDR, 0);
-            write_u32(mem_base, G_BLEACH_BYPASS_ENABLE_ADDR, 1);
-        }
-        _ => {
-            write_u32(mem_base, G_OVERBRIGHT_ENABLE_ADDR, 1);
-            write_u32(mem_base, G_BLEACH_BYPASS_ENABLE_ADDR, 1);
-        }
-    }
+    // 8. Enhanced Contrast Regulation: clamp OverBright bloom to 0 to prevent TBDR tile stalls,
+    // while respecting the player's in-game Enhanced Contrast choice (G_BLEACH_BYPASS_ENABLE_ADDR)
+    write_u32(mem_base, G_OVERBRIGHT_ENABLE_ADDR, 0);
 
     // 9. Anti-slowmotion frame pacing
     if real_elapsed > 0.010 && real_elapsed < 0.200 {
