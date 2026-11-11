@@ -55,15 +55,37 @@ std::filesystem::path gamePath(std::string guest){
 
         // 2. Main game text strings (.bin) redirection
         if (normalized.find("languages/") != std::string::npos && normalized.length() >= 4 && (normalized.rfind(".bin") == normalized.length() - 4)) {
-            std::vector<std::filesystem::path> customBinCandidates;
-            if (isIndo) {
-                customBinCandidates.push_back(hostGameRoot / "LANGUAGES" / "Indonesian.bin");
-                customBinCandidates.push_back(hostGameRoot / "LANGUAGES" / "bahasa_indonesia.bin");
+            // Exclude texture or metadata bins (LanguageTextures.bin, Labels.bin, Largest.bin)
+            if (normalized.find("languagetextures") == std::string::npos &&
+                normalized.find("labels") == std::string::npos &&
+                normalized.find("largest") == std::string::npos) {
+                std::vector<std::filesystem::path> customBinCandidates;
+                if (isIndo) {
+                    customBinCandidates.push_back(hostGameRoot / "LANGUAGES" / "Indonesian.bin");
+                    customBinCandidates.push_back(hostGameRoot / "LANGUAGES" / "bahasa_indonesia.bin");
+                }
+                customBinCandidates.push_back(hostGameRoot / "LANGUAGES" / (guestLanguage + ".bin"));
+                customBinCandidates.push_back(hostGameRoot / "LANGUAGES" / (langLower + ".bin"));
+                customBinCandidates.push_back(hostGameRoot / "LANGPACKS" / langLower / "LANGUAGES" / "English.bin");
+                for (const auto& cand : customBinCandidates) {
+                    std::error_code ec;
+                    if (std::filesystem::exists(cand, ec)) {
+                        if (s_insert) s_insert(originalGuest.c_str(), cand.string().c_str());
+                        return cand;
+                    }
+                }
             }
-            customBinCandidates.push_back(hostGameRoot / "LANGUAGES" / (guestLanguage + ".bin"));
-            customBinCandidates.push_back(hostGameRoot / "LANGUAGES" / (langLower + ".bin"));
-            customBinCandidates.push_back(hostGameRoot / "LANGPACKS" / langLower / "LANGUAGES" / "English.bin");
-            for (const auto& cand : customBinCandidates) {
+        }
+
+        // 3. EULA agreement redirection
+        if (normalized.find("languages/agree.") != std::string::npos) {
+            std::vector<std::filesystem::path> agreeCandidates;
+            if (isIndo) {
+                agreeCandidates.push_back(hostGameRoot / "LANGUAGES" / "agree.ind");
+            }
+            agreeCandidates.push_back(hostGameRoot / "LANGUAGES" / "agree.eng");
+            agreeCandidates.push_back(hostGameRoot / "LANGUAGES" / "agree.spa");
+            for (const auto& cand : agreeCandidates) {
                 std::error_code ec;
                 if (std::filesystem::exists(cand, ec)) {
                     if (s_insert) s_insert(originalGuest.c_str(), cand.string().c_str());

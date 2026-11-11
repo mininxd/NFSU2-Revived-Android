@@ -36,6 +36,14 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Only displays player_racing and player_on_race during an ongoing race; when roaming, they are hidden.
  */
 public final class DiagnosticOverlay {
+    static {
+        try {
+            System.loadLibrary("graphics_cache");
+        } catch (Throwable t) {
+            android.util.Log.w("NFSU2", "DiagnosticOverlay: libgraphics_cache load: " + t.getMessage());
+        }
+    }
+
     private final Activity activity;
     private final String mode; // "compact" or "full"
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -216,16 +224,28 @@ public final class DiagnosticOverlay {
             }
 
             // Read pure Rust native frame telemetry
+            boolean gotNativeFps = false;
             try {
                 if (nativeGetTelemetry(telemetryBuffer)) {
-                    if (telemetryBuffer[0] > 0.0f) {
-                        liveGameFps = telemetryBuffer[0];
-                    }
-                    if (telemetryBuffer[1] > 0.0f) {
-                        lastFrameDurationMs = telemetryBuffer[1];
-                    }
+                    liveGameFps = Math.max(0.0f, telemetryBuffer[0]);
+                    lastFrameDurationMs = Math.max(0.0f, telemetryBuffer[1]);
+                    gotNativeFps = true;
                 }
             } catch (Throwable ignored) {}
+
+            // Cross-check with Android window frame metrics if native was not available
+            if (!gotNativeFps) {
+                long now = SystemClock.elapsedRealtime();
+                long elapsed = now - lastFrameCalcTime;
+                if (elapsed >= 500) {
+                    int frames = frameCounter.getAndSet(0);
+                    liveGameFps = (frames * 1000.0f) / elapsed;
+                    lastFrameCalcTime = now;
+                }
+            } else {
+                frameCounter.set(0);
+                lastFrameCalcTime = SystemClock.elapsedRealtime();
+            }
 
             updateStats();
 
@@ -238,16 +258,12 @@ public final class DiagnosticOverlay {
     };
 
     private void updateStats() {
-        float fps = liveGameFps;
-        if (fps <= 0.0f) {
-            try {
-                fps = Integer.parseInt(GameOptions.get(activity, GameOptions.FPS));
-            } catch (Exception ignored) {
-                fps = 60.0f;
-            }
-        }
-        float frameTimeMs = (lastFrameDurationMs > 0.0f) ? lastFrameDurationMs : ((fps > 0) ? (1000.0f / fps) : 0.0f);
+        float fps = Math.max(0.0f, liveGameFps);
+        float frameTimeMs = (lastFrameDurationMs > 0.0f) ? lastFrameDurationMs : ((fps > 0.0f) ? (1000.0f / fps) : 0.0f);
         String fpsStr = (fps >= 100.0f) ? String.format(Locale.US, "%.0f", fps) : String.format(Locale.US, "%.1f", fps);
+        if (fps <= 0.0f && lastFrameDurationMs <= 0.0f) {
+            fpsStr = "--";
+        }
 
         float cpu = (telemetryBuffer[2] > 0.0f) ? telemetryBuffer[2] : sampleCpuUsage();
 

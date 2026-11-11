@@ -481,6 +481,17 @@ public final class LauncherActivity extends Activity {
             if (!targetLocaleIndo.exists() || targetLocaleIndo.length() == 0) {
                 copyAssetFile(this, "memcard/LOCALE_INDONESIAN.loc", targetLocaleIndo);
             }
+
+            File langDir = new File(root, "LANGUAGES");
+            if (!langDir.exists()) langDir.mkdirs();
+            File targetBin = new File(langDir, "Indonesian.bin");
+            if (!targetBin.exists() || targetBin.length() == 0) {
+                copyAssetFile(this, "LANGUAGES/Indonesian.bin", targetBin);
+            }
+            File targetAgree = new File(langDir, "agree.ind");
+            if (!targetAgree.exists() || targetAgree.length() == 0) {
+                copyAssetFile(this, "LANGUAGES/agree.ind", targetAgree);
+            }
         } catch (Exception ignored) {}
     }
 

@@ -347,6 +347,18 @@ void d3dDispatch(){
         updateDumbAIState();
         serviceGuestSound();
         lastPresentMs=steadyMs();
+        static void(*s_telemetry_present)(uint64_t) = nullptr;
+        if(!s_telemetry_present) {
+            void* h=dlopen("libgraphics_cache.so", RTLD_NOW|RTLD_GLOBAL);
+            if(h) s_telemetry_present = reinterpret_cast<void(*)(uint64_t)>(dlsym(h, "nfs_telemetry_record_present"));
+            if(!s_telemetry_present) s_telemetry_present = reinterpret_cast<void(*)(uint64_t)>(dlsym(RTLD_DEFAULT, "nfs_telemetry_record_present"));
+        }
+        if(s_telemetry_present) {
+            struct timespec ts;
+            clock_gettime(CLOCK_MONOTONIC, &ts);
+            uint64_t now_ns = (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
+            s_telemetry_present(now_ns);
+        }
         startStallWatch();
     }
     if(token==0x7e002110u){
