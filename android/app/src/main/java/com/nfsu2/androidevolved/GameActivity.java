@@ -5,6 +5,9 @@ package com.nfsu2.androidevolved;
  */
 public final class GameActivity {
     static {
+        try {
+            System.loadLibrary("game_core");
+        } catch (Throwable ignored) {}
         System.loadLibrary("nfsu2_android");
     }
 

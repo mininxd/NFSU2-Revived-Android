@@ -73,8 +73,8 @@ impl GarageViewerEngine {
         if active {
             let idx = (dx * 10000.0) as i32;
             let idy = (dy * 10000.0) as i32;
-            self.two_finger_dx.store(idx, Ordering::Release);
-            self.two_finger_dy.store(idy, Ordering::Release);
+            self.two_finger_dx.fetch_add(idx, Ordering::AcqRel);
+            self.two_finger_dy.fetch_add(idy, Ordering::AcqRel);
             if let Ok(mut guard) = self.last_two_finger_update.lock() {
                 *guard = Some(Instant::now());
             }
@@ -129,8 +129,8 @@ impl GarageViewerEngine {
             let dy = idy as f32 / 10000.0;
 
             // Sensitivity multiplier for two-finger drag: fast responsive rotation
-            turn_vel = dx * 8.0;
-            tilt_vel = dy * 8.0;
+            turn_vel = dx * 15.0;
+            tilt_vel = dy * 15.0;
         }
 
         // 2. Process right analog stick if two-finger drag is not dominating

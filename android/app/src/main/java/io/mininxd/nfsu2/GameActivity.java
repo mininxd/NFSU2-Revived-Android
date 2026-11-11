@@ -233,7 +233,19 @@ public final class GameActivity extends NativeActivity {
     private static boolean nativeGamepadUsed() { return com.nfsu2.androidevolved.GameActivity.nativeGamepadUsed(); }
     private static void nativeTypeText(String value, boolean replace) { com.nfsu2.androidevolved.GameActivity.nativeTypeText(value, replace); }
     private static void nativePointer(float x, float y, int phase) { com.nfsu2.androidevolved.GameActivity.nativePointer(x, y, phase); }
-    static void nativePointerMiddle(float x, float y, int phase, float dx, float dy) { com.nfsu2.androidevolved.GameActivity.nativePointerMiddle(x, y, phase, dx, dy); }
+    static void nativePointerMiddle(float x, float y, int phase, float dx, float dy) {
+        try {
+            nativeDirectPointerMiddle(x, y, phase, dx, dy);
+        } catch (Throwable ignored) {}
+        try {
+            nativeGarageTwoFingerDrag(dx, dy, phase != 2);
+        } catch (Throwable ignored) {}
+        try {
+            com.nfsu2.androidevolved.GameActivity.nativePointerMiddle(x, y, phase, dx, dy);
+        } catch (Throwable ignored) {}
+    }
+    private static native void nativeDirectPointerMiddle(float x, float y, int phase, float dx, float dy);
+    private static native void nativeGarageTwoFingerDrag(float dx, float dy, boolean active);
     private static void nativeLanguage(String language) { com.nfsu2.androidevolved.GameActivity.nativeLanguage(language); }
     private static void nativeResolution(int width, int height) { com.nfsu2.androidevolved.GameActivity.nativeResolution(width, height); }
     private static void nativeFrameLimit(int framesPerSecond) {
