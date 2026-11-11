@@ -47,12 +47,20 @@ public:
         float rx_cand = axis(AMOTION_EVENT_AXIS_RX);
         float z_cand = axis(AMOTION_EVENT_AXIS_Z);
         if(z_cand < -0.85f) z_cand = 0.f; // resting trigger
-        rightX_ = (std::fabs(rx_cand) >= std::fabs(z_cand)) ? rx_cand : z_cand;
+        if(rx_cand < -0.85f) rx_cand = 0.f;
 
         float ry_cand = axis(AMOTION_EVENT_AXIS_RY);
         float rz_cand = axis(AMOTION_EVENT_AXIS_RZ);
         if(rz_cand < -0.85f) rz_cand = 0.f; // resting trigger
-        rightY_ = (std::fabs(ry_cand) >= std::fabs(rz_cand)) ? ry_cand : rz_cand;
+        if(ry_cand < -0.85f) ry_cand = 0.f;
+
+        if (std::fabs(rx_cand) > 0.10f || std::fabs(ry_cand) > 0.10f) {
+            rightX_ = rx_cand;
+            rightY_ = ry_cand;
+        } else {
+            rightX_ = z_cand;
+            rightY_ = rz_cand;
+        }
 
         // Pads report triggers as LTRIGGER/RTRIGGER, BRAKE/GAS or fallback to Z/RZ
         float lt = std::fmax(axis(AMOTION_EVENT_AXIS_LTRIGGER), axis(AMOTION_EVENT_AXIS_BRAKE));

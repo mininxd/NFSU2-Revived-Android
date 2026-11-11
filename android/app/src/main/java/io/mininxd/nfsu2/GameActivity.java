@@ -903,23 +903,47 @@ public final class GameActivity extends NativeActivity {
         }, "NewsRefresher").start();
     }
 
+    private void processGamepadRightStick(android.view.MotionEvent event) {
+        if ((event.getSource() & android.view.InputDevice.SOURCE_JOYSTICK) != android.view.InputDevice.SOURCE_JOYSTICK) {
+            return;
+        }
+        float rx_rot = event.getAxisValue(android.view.MotionEvent.AXIS_RX);
+        float ry_rot = event.getAxisValue(android.view.MotionEvent.AXIS_RY);
+
+        float rx_z = event.getAxisValue(android.view.MotionEvent.AXIS_Z);
+        float ry_z = event.getAxisValue(android.view.MotionEvent.AXIS_RZ);
+
+        // Clamp resting trigger values (-1.0f on resting analog triggers)
+        if (rx_z < -0.85f) rx_z = 0.0f;
+        if (ry_z < -0.85f) ry_z = 0.0f;
+        if (rx_rot < -0.85f) rx_rot = 0.0f;
+        if (ry_rot < -0.85f) ry_rot = 0.0f;
+
+        float rx, ry;
+        if (Math.abs(rx_rot) > 0.10f || Math.abs(ry_rot) > 0.10f) {
+            rx = rx_rot;
+            ry = ry_rot;
+        } else {
+            rx = rx_z;
+            ry = ry_z;
+        }
+
+        if (Math.abs(rx) > 0.15f || Math.abs(ry) > 0.15f) {
+            AdhocRoamClient.handleRightStick(rx, ry);
+        } else {
+            AdhocRoamClient.handleRightStick(0f, 0f);
+        }
+    }
+
+    @Override
+    public boolean dispatchGenericMotionEvent(android.view.MotionEvent event) {
+        processGamepadRightStick(event);
+        return super.dispatchGenericMotionEvent(event);
+    }
+
     @Override
     public boolean onGenericMotionEvent(android.view.MotionEvent event) {
-        if ((event.getSource() & android.view.InputDevice.SOURCE_JOYSTICK) == android.view.InputDevice.SOURCE_JOYSTICK
-                && event.getAction() == android.view.MotionEvent.ACTION_MOVE) {
-            float rx_z = event.getAxisValue(android.view.MotionEvent.AXIS_Z);
-            float rx_rot = event.getAxisValue(android.view.MotionEvent.AXIS_RX);
-            float rx = Math.abs(rx_rot) >= Math.abs(rx_z) ? rx_rot : rx_z;
-
-            float ry_z = event.getAxisValue(android.view.MotionEvent.AXIS_RZ);
-            float ry_rot = event.getAxisValue(android.view.MotionEvent.AXIS_RY);
-            float ry = Math.abs(ry_rot) >= Math.abs(ry_z) ? ry_rot : ry_z;
-            if (Math.abs(rx) > 0.15f || Math.abs(ry) > 0.15f) {
-                AdhocRoamClient.handleRightStick(rx, ry);
-            } else {
-                AdhocRoamClient.handleRightStick(0f, 0f);
-            }
-        }
+        processGamepadRightStick(event);
         return super.onGenericMotionEvent(event);
     }
 

@@ -195,8 +195,26 @@ impl GarageViewerEngine {
                 let (sx, sy) = self.get_stick_input();
                 let mag = (sx * sx + sy * sy).sqrt();
                 if mag >= STICK_DEADZONE {
-                    *turn_ptr = sx.clamp(-2.0, 2.0);
-                    *tilt_ptr = sy.clamp(-2.0, 2.0);
+                    // Turn car yaw directly (up to 180 degrees/sec at full stick deflection)
+                    let delta_deg = sx * 180.0 * dt;
+                    let mut ang = *angle_ptr + delta_deg;
+                    while ang < 0.0 { ang += 360.0; }
+                    while ang >= 360.0 { ang -= 360.0; }
+                    *angle_ptr = ang;
+
+                    // Camera tilt / height adjustment
+                    if sy.abs() > 0.05 {
+                        let cam_ptr = guest_base.add((viewer_va + VW_CAMERA) as usize) as *const u32;
+                        let cam = *cam_ptr;
+                        if cam >= 0x10000 && cam < 0x7ffff000 {
+                            let h_ptr = guest_base.add((cam + CAM_HEIGHT) as usize) as *mut f32;
+                            let new_h = (*h_ptr - sy * 1.5 * dt).clamp(0.2, 2.5);
+                            *h_ptr = new_h;
+                        }
+                    }
+
+                    *turn_ptr = 0.0;
+                    *tilt_ptr = 0.0;
                     interacted = true;
                 } else {
                     *turn_ptr = 0.0;
