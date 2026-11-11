@@ -1505,14 +1505,23 @@ static void hook_sub_005c7ec0(void) {
                 if (rh_mem_committed(view3 + 8, 1)) *(uint8_t*)GPTR(view3 + 8) = 0;
 
                 // 3. Motion blur suppression:
-                // Only remove motion blur when car is stopped (< 1.0 m/s). Keep enabled while driving.
+                // Disable motion blur ONLY for camera control (orbiting view) and when car is stopped.
+                // Keep motion blur fully active during normal driving and nitrous boost when camera is not being rotated.
                 uint32_t car = get_driving_car();
                 float spd = car ? get_car_speed_mps(car) : 0.0f;
+                static int s_look_cooldown = 0;
+                if (s_look_active) {
+                    s_look_cooldown = 3;
+                } else if (s_look_cooldown > 0) {
+                    s_look_cooldown--;
+                }
+                int cam_control_active = s_look_active || (s_look_cooldown > 0);
+
                 if (car && rh_mem_committed(0x00870cdcu, 4)) {
-                    if (spd < 1.0f) {
-                        MR32(0x00870cdcu) = 0; // stopped: disable blur
+                    if (cam_control_active || spd < 1.0f) {
+                        MR32(0x00870cdcu) = 0; // camera control or stopped: disable blur
                     } else {
-                        MR32(0x00870cdcu) = 1; // driving: keep blur enabled
+                        MR32(0x00870cdcu) = 1; // camera at rest + driving/nitrous: enable blur
                     }
                 }
 

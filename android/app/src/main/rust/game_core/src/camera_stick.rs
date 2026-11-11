@@ -307,17 +307,11 @@ impl CameraStickEngine {
             oy = eye_y;
         }
 
-        // Dynamic Motion Blur Tuning:
-        // When camera is orbiting, high angular velocity causes the game's motion blur
-        // calculation (frustum corner deltas in sub_005a1a90) to produce huge apparent
-        // velocities (> 25 m/s = 90 km/h) even when stationary or moving slowly (e.g. 10 km/h).
-        //
-        // Solution: Read the car's actual physical speed.
-        // - At low speed (< 20.0 m/s / ~72 km/h, covering 0-10 km/h crawl): completely disable
-        //   motion blur for this frame (g_MotionBlurEnable = 0) so the camera orbit is crystal clear.
-        // - At higher speed (>= 20.0 m/s): dynamically scale the max blur weight (0x007ff7b8)
-        //   to match the actual vehicle speed, preventing camera rotation from over-saturating the blur.
-        let speed_mps = Self::get_vehicle_speed_mps(guest_base, car);
+        // Motion Blur Suppression for Camera Control:
+        // When camera is orbiting, high angular velocity causes the game's frustum corner delta
+        // calculation (sub_005a1a90) to produce huge apparent velocities and smear the view.
+        // Disable motion blur ONLY while camera control / orbit is active.
+        // When the camera is at rest (normal driving or nitrous boost), motion blur remains active.
         let mb_ptr = guest_base.add(G_MOTION_BLUR as usize) as *mut u32;
         let mb_weight_ptr = guest_base.add(G_MOTION_BLUR_WEIGHT as usize) as *mut f32;
 
@@ -326,16 +320,10 @@ impl CameraStickEngine {
         self.saved_motion_blur_val.store(orig_mb, Ordering::Release);
         self.saved_blur_weight.store(orig_weight.to_bits(), Ordering::Release);
 
-        if speed_mps < 1.0 {
-            // Only remove motion blur when car is stopped (< 1.0 m/s)
-            if orig_mb != 0 {
-                *mb_ptr = 0;
-                self.motion_blur_modified.store(true, Ordering::Release);
-            } else {
-                self.motion_blur_modified.store(false, Ordering::Release);
-            }
+        if orig_mb != 0 {
+            *mb_ptr = 0;
+            self.motion_blur_modified.store(true, Ordering::Release);
         } else {
-            // Car is moving: preserve motion blur entirely
             self.motion_blur_modified.store(false, Ordering::Release);
         }
 
@@ -379,6 +367,7 @@ impl CameraStickEngine {
     }
 
     /// Extracts current vehicle speed in meters per second (m/s) from guest memory.
+    #[allow(dead_code)]
     pub unsafe fn get_vehicle_speed_mps(guest_base: *const u8, car: u32) -> f32 {
         if guest_base.is_null() || car < 0x10000 || car >= 0x7ffff000 {
             return 0.0;
