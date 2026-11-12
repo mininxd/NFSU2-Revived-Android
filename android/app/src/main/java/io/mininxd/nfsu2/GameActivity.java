@@ -80,6 +80,35 @@ public final class GameActivity extends NativeActivity {
         }
     };
 
+    private android.media.AudioDeviceCallback audioDeviceCallback;
+    private boolean audioDeviceCallbackRegistered;
+
+    private void registerAudioRouteCallback() {
+        if (audioDeviceCallbackRegistered) return;
+        try {
+            if (audioManager == null) {
+                audioManager = (android.media.AudioManager) getSystemService(AUDIO_SERVICE);
+            }
+            if (audioManager == null || android.os.Build.VERSION.SDK_INT < 23) return;
+            if (audioDeviceCallback == null) {
+                audioDeviceCallback = new android.media.AudioDeviceCallback() {
+                    @Override public void onAudioDevicesAdded(android.media.AudioDeviceInfo[] added) {
+                        GameLog.i("Audio", "Audio device added, requesting AAudio restart");
+                        try { nativeRequestAudioRestart(); } catch (Throwable ignored) {}
+                    }
+                    @Override public void onAudioDevicesRemoved(android.media.AudioDeviceInfo[] removed) {
+                        GameLog.i("Audio", "Audio device removed, requesting AAudio restart");
+                        try { nativeRequestAudioRestart(); } catch (Throwable ignored) {}
+                    }
+                };
+            }
+            audioManager.registerAudioDeviceCallback(audioDeviceCallback, new android.os.Handler(getMainLooper()));
+            audioDeviceCallbackRegistered = true;
+        } catch (Throwable t) {
+            GameLog.w("Audio", "Could not register audio device callback: " + t.getMessage());
+        }
+    }
+
     private void requestGameAudioFocus() {
         try {
             if (audioManager == null) {
@@ -98,6 +127,7 @@ public final class GameActivity extends NativeActivity {
                 } else {
                     audioManager.requestAudioFocus(audioFocusListener, android.media.AudioManager.STREAM_MUSIC, android.media.AudioManager.AUDIOFOCUS_GAIN);
                 }
+                registerAudioRouteCallback();
             }
         } catch (Throwable t) {
             GameLog.w("Audio", "Could not request audio focus: " + t.getMessage());
@@ -512,6 +542,7 @@ public final class GameActivity extends NativeActivity {
         }
         io.mininxd.nfsu2.net.EahubClassicOnline.logStartup(this, configuredServer, !useLocalBridge);
         minimapTop = launch.getBooleanExtra("minimapTop", "top".equalsIgnoreCase(GameOptions.get(this, GameOptions.MINIMAP)));
+        try { android.system.Os.setenv("NFSU2_MINIMAP", minimapTop ? "top" : "bottom", true); } catch (Throwable ignored) {}
         speedometerPosition = launch.getIntExtra("speedometer", GameOptions.speedometerPosition(this));
         nativeMinimapTop(minimapTop);
         updateHudForGamepad(false);

@@ -67,7 +67,7 @@ void enterCritical() {
     uint32_t address=arg(0); auto cs=criticalSections.find(address);
     if(cs==criticalSections.end()){
         NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","EnterCriticalSection on uninitialized %08x: auto-initializing",address);
-        criticalSections[address]=std::make_shared<FairMutex>();
+        criticalSections[address]=std::make_shared<std::recursive_mutex>();
         write32(address+8,0);write32(address+4,-1);write32(address+12,0);
         cs=criticalSections.find(address);
     }

@@ -26,6 +26,7 @@
 #include <setjmp.h>
 #include <sys/mman.h>
 #include <jni.h>
+#include "roam_compat.h"
 
 ptrdiff_t *g_p_mem_base = NULL;
 uint32_t  *g_p_esp = NULL;
@@ -1217,11 +1218,24 @@ static recomp_void_func_t arm64_inline_hook(void *target_func, void *hook_func) 
 #define G_VIEW_IDLE  0x00837aa0u   /* when the viewer was last turned */
 #define G_REALTIMER  0x008651acu
 
+static void clear_hook_4a_depth(_Atomic int **flag) {
+    if (flag && *flag) atomic_store(*flag, 0);
+}
+
 static void hook_sub_004a5d90(void) {
+    /* #87: a second hook or a k_functions bounce called this frame after
+     * frame, overflowing the stack (hook_sub_004a5d90+96). Refuse re-entry
+     * and never call a trampoline that points back at us. */
+    static _Atomic int s_in_4a = 0;
+    if (atomic_exchange(&s_in_4a, 1) != 0) {
+        return;
+    }
+    _Atomic int *s_in_4a_cleanup __attribute__((cleanup(clear_hook_4a_depth))) = &s_in_4a;
+
     static uint32_t turning = 0;
     uint32_t v = (g_p_ecx && g_p_mem_base && *g_p_mem_base) ? *g_p_ecx : 0;
 
-    if (s_orig_4a5d90) {
+    if (s_orig_4a5d90 && (void *)s_orig_4a5d90 != (void *)hook_sub_004a5d90) {
         s_orig_4a5d90();
     }
 
@@ -1735,6 +1749,7 @@ __attribute__((visibility("default"))) void nfs_roam_frame_tick(void) {
     if (!roam_android_init_symbols() || !g_p_esp || !*g_p_esp) return;
     roam_android_protect_guest_null_page();
     if (atomic_exchange(&s_tick_in_progress, 1) != 0) return;
+    roam_compat_apply_hud();
     pace_frame();
     static int s_perf_bound = 0;
     if (!s_perf_bound || (g_frame_count % 300) == 0) {
@@ -1817,6 +1832,7 @@ jint JNI_OnLoad(JavaVM *vm, void *reserved) {
     }
     roam_android_patch_carpool();
     roam_android_install_hooks();
+    roam_compat_install();
     return JNI_VERSION_1_6;
 }
 
@@ -2655,3 +2671,6 @@ JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeKeyNav(
 #ifdef __cplusplus
 }
 #endif
+
+/* Unity-built so CI compiles this without a workflow edit (no workflow scope). */
+#include "roam_compat.c"
