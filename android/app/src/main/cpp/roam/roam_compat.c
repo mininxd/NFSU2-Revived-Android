@@ -17,6 +17,15 @@
  *                            the game library to the current Android user.
  *
  * G5 (garage hook recursion) is fixed in roam_android.c itself.
+ *   G2  Guest CS deadlock  — GOT-wrap pthread_mutex_trylock/unlock in the
+ *                            prebuilt runtime and break ABBA waits on two
+ *                            recursive_mutexes after 400 failed trylocks,
+ *                            pairing a fake acquire with a matching unlock
+ *                            no-op (same idea as guest_kernel.inc 78d45b9).
+ *   G6  Enhanced Contrast  — ARM64-hook lifted 0x005C68D0 so the 3-pass
+ *                            full-screen LockRect blit is skipped; the
+ *                            existing SetGammaRamp S-curve already applies
+ *                            the look on change, at zero extra bandwidth.
  */
 
 #define _GNU_SOURCE
@@ -651,6 +660,9 @@ static int s_speedometer_pos = 0;
 typedef void (*set_minimap_fn)(float);
 static set_minimap_fn s_set_minimap;
 
+static atomic_int s_bleach_hooked;
+static void install_bleach_hook(void);
+
 void roam_compat_apply_hud(void) {
     if (!s_set_minimap) {
         s_set_minimap = (set_minimap_fn)dlsym(RTLD_DEFAULT, "nfs_widescreen_set_minimap_offset");
@@ -664,6 +676,8 @@ void roam_compat_apply_hud(void) {
         s_set_minimap(s_minimap_top ? -230.0f : 0.0f);
     }
     (void)s_speedometer_pos;
+    /* Bleach hook needs the dispatch table; retry until recomp_lookup hits. */
+    if (!atomic_load(&s_bleach_hooked)) install_bleach_hook();
 }
 
 JNIEXPORT void JNICALL
@@ -699,6 +713,259 @@ Java_com_nfsu2_androidevolved_GameActivity_nativeSetAudioMuted(JNIEnv *env, jcla
 }
 
 /* -------------------------------------------------------------------------- */
+/* G2: break guest critical-section ABBA deadlocks (#85, #89)                 */
+/*                                                                            */
+/* enterCritical in the prebuilt libnfsu2_android.so (Nov 3) spins on         */
+/* std::recursive_mutex::try_lock with yieldGuestMachine and has no           */
+/* owner-dead / ABBA breaker (that landed later as 78d45b9 and is not in      */
+/* the shipped .so). enterCritical itself is not exported, but the spin       */
+/* goes through this .so's GOT to libc pthread_mutex_trylock.                 */
+/*                                                                            */
+/* We wrap only those GOT slots (not pthread_mutex_lock), track which         */
+/* mutexes each host thread actually holds, and only return a fake success    */
+/* when two threads have each been failing trylock 400+ times on a mutex      */
+/* the other holds — the exact ABBA pattern in the #85/#89 logs               */
+/* (threads 1 and 6 on CS 0x00864f00 and 0x10806348). The matching            */
+/* pthread_mutex_unlock is a no-op for a fake acquire, so we never unlock     */
+/* a mutex this thread does not own. Only one side of a cycle is broken       */
+/* at a time. If the pattern does not match, behaviour is unchanged.          */
+/* -------------------------------------------------------------------------- */
+
+#define CS_MAX_THREADS 32
+#define CS_MAX_HELD    16
+#define CS_BREAK_AFTER 400u
+
+struct cs_thr {
+    pthread_t tid;
+    int in_use;
+    unsigned fail_count;
+    void *failing_on;
+    void *held[CS_MAX_HELD];
+    unsigned held_n[CS_MAX_HELD];
+    void *fake[CS_MAX_HELD];
+    unsigned fake_n[CS_MAX_HELD];
+};
+
+/* Each guest/host thread writes only its own slot. The common unlock and
+ * uncontended trylock paths take no lock. The ABBA scan (only after 400
+ * failures) reads other slots; those fields are stored atomically. */
+static struct cs_thr s_cs_thr[CS_MAX_THREADS];
+static atomic_int s_cs_used[CS_MAX_THREADS];
+static _Thread_local struct cs_thr *s_cs_me;
+static atomic_int s_cs_breaking;
+static int (*s_orig_trylock)(pthread_mutex_t *);
+static int (*s_orig_unlock)(pthread_mutex_t *);
+
+static struct cs_thr *cs_mine(void) {
+    if (s_cs_me) return s_cs_me;
+    pthread_t self = pthread_self();
+    for (int i = 0; i < CS_MAX_THREADS; i++) {
+        int expected = 0;
+        if (atomic_compare_exchange_strong(&s_cs_used[i], &expected, 1)) {
+            memset(&s_cs_thr[i], 0, sizeof(s_cs_thr[i]));
+            s_cs_thr[i].tid = self;
+            s_cs_thr[i].in_use = 1;
+            s_cs_me = &s_cs_thr[i];
+            return s_cs_me;
+        }
+        /* Lost the slot; if it is ours (thread restart) reuse it. */
+        if (s_cs_thr[i].in_use && pthread_equal(s_cs_thr[i].tid, self)) {
+            s_cs_me = &s_cs_thr[i];
+            return s_cs_me;
+        }
+    }
+    return NULL;
+}
+
+static int cs_idx(void **arr, unsigned *cnt, int cap, void *m, int alloc) {
+    int empty = -1;
+    for (int i = 0; i < cap; i++) {
+        if (arr[i] == m) return i;
+        if (!arr[i] && empty < 0) empty = i;
+        (void)cnt;
+    }
+    return alloc ? empty : -1;
+}
+
+static void cs_hold(struct cs_thr *t, void *m) {
+    int i = cs_idx(t->held, t->held_n, CS_MAX_HELD, m, 1);
+    if (i < 0) return;
+    if (!t->held[i]) { t->held[i] = m; t->held_n[i] = 1; }
+    else t->held_n[i]++;
+}
+
+static void cs_release(struct cs_thr *t, void *m) {
+    int i = cs_idx(t->held, t->held_n, CS_MAX_HELD, m, 0);
+    if (i < 0) return;
+    if (t->held_n[i] > 1) t->held_n[i]--;
+    else { t->held[i] = NULL; t->held_n[i] = 0; }
+}
+
+static int cs_holds(const struct cs_thr *t, void *m) {
+    int i = cs_idx((void **)t->held, (unsigned *)t->held_n, CS_MAX_HELD, m, 0);
+    return i >= 0 && t->held_n[i] > 0;
+}
+
+static int cs_fake_inc(struct cs_thr *t, void *m) {
+    int i = cs_idx(t->fake, t->fake_n, CS_MAX_HELD, m, 1);
+    if (i < 0) return 0;
+    if (!t->fake[i]) { t->fake[i] = m; t->fake_n[i] = 1; }
+    else t->fake_n[i]++;
+    return 1;
+}
+
+static int cs_fake_owned(const struct cs_thr *t, void *m) {
+    int i = cs_idx((void **)t->fake, (unsigned *)t->fake_n, CS_MAX_HELD, m, 0);
+    return i >= 0 && t->fake_n[i] > 0;
+}
+
+static int cs_fake_dec(struct cs_thr *t, void *m) {
+    int i = cs_idx(t->fake, t->fake_n, CS_MAX_HELD, m, 0);
+    if (i < 0) return 0;
+    if (t->fake_n[i] > 1) { t->fake_n[i]--; return 1; }
+    t->fake[i] = NULL;
+    t->fake_n[i] = 0;
+    return 1;
+}
+
+static int cs_any_fake(void) {
+    for (int i = 0; i < CS_MAX_THREADS; i++) {
+        if (!s_cs_thr[i].in_use) continue;
+        for (int j = 0; j < CS_MAX_HELD; j++)
+            if (s_cs_thr[i].fake_n[j]) return 1;
+    }
+    return 0;
+}
+
+static int hook_pthread_mutex_trylock(pthread_mutex_t *m) {
+    int r = s_orig_trylock ? s_orig_trylock(m) : pthread_mutex_trylock(m);
+    struct cs_thr *me = cs_mine();
+    if (!me) return r;
+    if (r == 0) {
+        cs_hold(me, m);
+        me->fail_count = 0;
+        me->failing_on = NULL;
+        return 0;
+    }
+    /* Already loaned this mutex to ourselves (recursive Enter after a break). */
+    if (cs_fake_owned(me, m)) {
+        cs_fake_inc(me, m);
+        return 0;
+    }
+    me->fail_count++;
+    me->failing_on = m;
+
+    if (me->fail_count >= CS_BREAK_AFTER && !atomic_load(&s_cs_breaking)) {
+        for (int i = 0; i < CS_MAX_THREADS; i++) {
+            struct cs_thr *ot = &s_cs_thr[i];
+            if (!ot->in_use || ot == me) continue;
+            if (ot->fail_count < CS_BREAK_AFTER) continue;
+            if (!ot->failing_on) continue;
+            /* ABBA: I hold what they wait on, they hold what I wait on. */
+            if (cs_holds(me, ot->failing_on) && cs_holds(ot, m)) {
+                int expected = 0;
+                if (atomic_compare_exchange_strong(&s_cs_breaking, &expected, 1)) {
+                    if (cs_fake_inc(me, m)) {
+                        LOGW("G2: breaking guest CS ABBA deadlock "
+                             "(this=%p waits on %p held by %p, who waits on %p); "
+                             "loaning a bypass, unlock will be a no-op (refs #85 #89)",
+                             (void *)me, m, (void *)ot, ot->failing_on);
+                        me->fail_count = 0;
+                        me->failing_on = NULL;
+                        return 0;
+                    }
+                    atomic_store(&s_cs_breaking, 0);
+                }
+                break;
+            }
+        }
+    }
+    return r;
+}
+
+static int hook_pthread_mutex_unlock(pthread_mutex_t *m) {
+    struct cs_thr *me = s_cs_me; /* never allocate on the unlock fast path */
+    if (me) {
+        if (atomic_load(&s_cs_breaking) && cs_fake_dec(me, m)) {
+            if (!cs_any_fake()) atomic_store(&s_cs_breaking, 0);
+            return 0;
+        }
+        cs_release(me, m);
+    }
+    return s_orig_unlock ? s_orig_unlock(m) : pthread_mutex_unlock(m);
+}
+
+static void install_cs_deadlock_hooks(void *base) {
+    /* libc primitives: every same-.so recursive_mutex::try_lock ends here
+     * through the PLT, whether or not the C++ wrapper is inlined. */
+    if (patch_got(base, "pthread_mutex_trylock",
+                  (void *)hook_pthread_mutex_trylock, (void **)&s_orig_trylock) == 0)
+        LOGI("G2: hooked pthread_mutex_trylock for guest CS ABBA breaker");
+    if (patch_got(base, "pthread_mutex_unlock",
+                  (void *)hook_pthread_mutex_unlock, (void **)&s_orig_unlock) == 0)
+        LOGI("G2: hooked pthread_mutex_unlock (fake-acquire no-op only)");
+}
+
+/* -------------------------------------------------------------------------- */
+/* G6: skip the Enhanced Contrast 3-pass blit (#70)                           */
+/*                                                                            */
+/* The source already has ov_bleach_bypass in overrides.c (SetGammaRamp       */
+/* instead of a 3-pass full-screen LockRect pipeline), but that override is   */
+/* not in the prebuilt libnfsu2_android.so, and overrides.txt never listed    */
+/* 0x005C68D0 so even a rebuilt runtime would still lift the original body.   */
+/* libgraphics_cache.so is rebuilt by CI and already applies the S-curve      */
+/* via nfs_contrast_sync_ingame on toggle; we just have to stop the guest     */
+/* pass from still running. recomp_lookup(0x005C68D0) is exported, so we      */
+/* can ARM64-hook the lifted entry and return immediately after marking       */
+/* the post-process state complete (same 0x008708F4 write as ov_bleach).      */
+/* Gamma is NOT re-applied every frame — only on change, in the Rust sync.    */
+/* -------------------------------------------------------------------------- */
+
+static uint32_t *s_g_esp;
+static uintptr_t *s_g_mem; /* g_mem_base, a pointer-sized guest base */
+
+static void hook_bleach_bypass(void) {
+    /* cdecl, no args: pop the return slot. */
+    if (s_g_esp) *s_g_esp += 4;
+    if (s_g_mem && *s_g_mem) {
+        uint32_t *state = (uint32_t *)((uint8_t *)(*s_g_mem) + 0x008708F4u);
+        if (*state != 0xFFFFFFFFu) *state = 0xFFFFFFFFu;
+    }
+}
+
+static void install_bleach_hook(void) {
+    if (atomic_load(&s_bleach_hooked)) return;
+    typedef void (*recomp_func_t)(void);
+    recomp_func_t (*lookup)(uint32_t) = (recomp_func_t (*)(uint32_t))dlsym(RTLD_DEFAULT, "recomp_lookup");
+    if (!lookup) {
+        void *h = dlopen("libnfsu2_android.so", RTLD_NOLOAD);
+        if (h) lookup = (recomp_func_t (*)(uint32_t))dlsym(h, "recomp_lookup");
+    }
+    if (!lookup) {
+        LOGW("G6: recomp_lookup not found; cannot hook bleach pass");
+        return;
+    }
+    if (!s_g_esp) {
+        s_g_esp = (uint32_t *)dlsym(RTLD_DEFAULT, "g_esp");
+        s_g_mem = (uintptr_t *)dlsym(RTLD_DEFAULT, "g_mem_base");
+    }
+    void *fn = (void *)lookup(0x005C68D0u);
+    if (!fn) {
+        static atomic_int logged;
+        if (!atomic_exchange(&logged, 1))
+            LOGW("G6: recomp_lookup(0x005C68D0) returned null (will retry quietly)");
+        return;
+    }
+    if (!arm64_hook(fn, (void *)hook_bleach_bypass)) {
+        LOGE("G6: ARM64 hook of bleach pass at %p failed", fn);
+        return;
+    }
+    atomic_store(&s_bleach_hooked, 1);
+    LOGI("G6: hooked lifted 0x005C68D0 at %p — 3-pass contrast blit skipped, "
+         "tone stays on SetGammaRamp (refs #70)", fn);
+}
+
+/* -------------------------------------------------------------------------- */
 /* Install                                                                   */
 /* -------------------------------------------------------------------------- */
 
@@ -716,6 +983,8 @@ void roam_compat_install(void) {
     install_icall_hook();
     install_path_hooks(base);
     install_aaudio_hooks(base);
+    install_cs_deadlock_hooks(base);
+    install_bleach_hook();
     roam_compat_apply_hud();
     LOGI("compat hooks ready");
 }
