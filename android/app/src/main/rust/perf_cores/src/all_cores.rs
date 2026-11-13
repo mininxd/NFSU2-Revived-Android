@@ -201,6 +201,7 @@ pub unsafe extern "C" fn Java_io_mininxd_nfsu2_AllCpuCoresManager_nativeEnableAl
     _env: JNIEnv,
     _class: JClass,
 ) -> jint {
+    bind_all_threads_to_all_cores();
     nfs_use_all_cpu_cores() as jint
 }
 

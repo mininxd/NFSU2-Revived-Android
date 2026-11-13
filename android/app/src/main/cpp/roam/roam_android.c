@@ -1775,8 +1775,30 @@ __attribute__((visibility("default"))) void nfs_roam_frame_tick(void) {
     if (atomic_exchange(&s_tick_in_progress, 1) != 0) return;
     roam_compat_apply_hud();
     pace_frame();
+
+    // Record frame presentation timing to graphics telemetry
+    static uint64_t s_last_tick_ns = 0;
+    struct timespec ts_now;
+    clock_gettime(CLOCK_MONOTONIC, &ts_now);
+    uint64_t now_ns = (uint64_t)ts_now.tv_sec * 1000000000ULL + (uint64_t)ts_now.tv_nsec;
+    uint64_t frame_interval_ns = (s_last_tick_ns > 0 && now_ns > s_last_tick_ns) ? (now_ns - s_last_tick_ns) : 16666666ULL;
+    s_last_tick_ns = now_ns;
+
+    typedef void (*fn_record_present_ext)(uint64_t, uint64_t);
+    static fn_record_present_ext s_rec_present = NULL;
+    static int s_rec_init = 0;
+    if (!s_rec_init) {
+        s_rec_init = 1;
+        void *h = dlopen("libgraphics_cache.so", RTLD_NOLOAD);
+        if (!h) h = dlopen("libgraphics_cache.so", RTLD_LAZY);
+        if (h) s_rec_present = (fn_record_present_ext)dlsym(h, "nfs_telemetry_record_present_ext");
+    }
+    if (s_rec_present) {
+        s_rec_present(now_ns, frame_interval_ns);
+    }
+
     static int s_perf_bound = 0;
-    if (!s_perf_bound || (g_frame_count % 300) == 0) {
+    if (!s_perf_bound || (g_frame_count % 60) == 0) {
         s_perf_bound = 1;
         nfs_bind_to_perf_cores();
     }

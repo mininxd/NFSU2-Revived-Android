@@ -172,7 +172,9 @@ pub unsafe extern "C" fn nfs_async_compiler_create(
     worker_count: u32,
     perf_core_mask: u64,
 ) -> *mut AsyncCompilerEngine {
-    let workers = if worker_count == 0 { 2 } else { worker_count as usize };
+    let total = unsafe { libc::sysconf(libc::_SC_NPROCESSORS_CONF) };
+    let default_workers = if total > 2 { (total as usize).min(8) } else { 4 };
+    let workers = if worker_count == 0 { default_workers } else { worker_count as usize };
     let compiler = Box::new(AsyncCompilerEngine::new(workers, perf_core_mask));
     Box::into_raw(compiler)
 }
