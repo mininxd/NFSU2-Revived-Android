@@ -1479,6 +1479,11 @@ static float get_car_speed_mps(uint32_t car) {
     return 0.0f;
 }
 
+static void hook_sub_005c5c00(void) {
+    // Safe motion blur draw stub preventing unresolved ICALL halt (0x00000000)
+    if (g_p_eax) *g_p_eax = 0;
+}
+
 static void hook_sub_005c7ec0(void) {
     if (g_p_mem_base && *g_p_mem_base && g_p_esp && *g_p_esp) {
         uint32_t esp = *g_p_esp;
@@ -1491,22 +1496,25 @@ static void hook_sub_005c7ec0(void) {
                     look_process_view(view_id, cam);
                 }
 
-                // 1. URL Race & World Far Plane Clamping:
-                // Bayview Speedway (4701..4705) and circuits hardcode 15000.0f (15km)
+                // 1. URL Race Far Plane Clamping (Restricted to Player View 1 on URL tracks only):
+                // Bayview Speedway (4701..4705) circuits hardcode 15000.0f (15km)
                 // in [esp+0x0C] and cam+0xC0, causing the entire map & stadium to be
                 // rendered simultaneously with zero distance culling.
+                // Clamping is strictly limited to URL tracks and the primary player driving view (view_id == 1u).
+                // Minimap radar camera (view 4) and regular races/roam are NOT clamped, fixing Issue #82.
                 uint32_t track = rh_mem_committed(0x0089e7a0u, 4) ? MR32(0x0089e7a0u) : 0;
                 int is_url = (track >= 4701 && track <= 4705);
-                float max_far = is_url ? 280.0f : 350.0f;
-
-                if (cam && rh_mem_committed(cam + 0xc0, 4)) {
-                    if (MRF32(cam + 0xc0) > max_far) {
-                        MRF32(cam + 0xc0) = max_far;
+                if (is_url && view_id == 1u) {
+                    float max_far = 350.0f;
+                    if (cam && rh_mem_committed(cam + 0xc0, 4)) {
+                        if (MRF32(cam + 0xc0) > max_far) {
+                            MRF32(cam + 0xc0) = max_far;
+                        }
                     }
-                }
-                if (rh_mem_committed(esp + 0x0c, 4)) {
-                    if (MRF32(esp + 0x0c) > max_far) {
-                        MRF32(esp + 0x0c) = max_far;
+                    if (rh_mem_committed(esp + 0x0c, 4)) {
+                        if (MRF32(esp + 0x0c) > max_far) {
+                            MRF32(esp + 0x0c) = max_far;
+                        }
                     }
                 }
 
@@ -1518,11 +1526,9 @@ static void hook_sub_005c7ec0(void) {
                 uint32_t view3 = 0x00832de0u + 3u * 0x70u;
                 if (rh_mem_committed(view3 + 8, 1)) *(uint8_t*)GPTR(view3 + 8) = 0;
 
-                // 3. Motion blur suppression:
-                // Disable motion blur ONLY for camera control (orbiting view) and when car is stopped.
-                // Keep motion blur fully active during normal driving and nitrous boost when camera is not being rotated.
-                uint32_t car = get_driving_car();
-                float spd = car ? get_car_speed_mps(car) : 0.0f;
+                // 3. Motion blur suppression during camera orbit:
+                // Only suppress motion blur while camera is actively orbiting to avoid streaking.
+                // Never force MR32(0x00870cdcu) = 1, let the game engine manage motion blur state.
                 static int s_look_cooldown = 0;
                 if (s_look_active) {
                     s_look_cooldown = 3;
@@ -1531,12 +1537,8 @@ static void hook_sub_005c7ec0(void) {
                 }
                 int cam_control_active = s_look_active || (s_look_cooldown > 0);
 
-                if (car && rh_mem_committed(0x00870cdcu, 4)) {
-                    if (cam_control_active || spd < 1.0f) {
-                        MR32(0x00870cdcu) = 0; // camera control or stopped: disable blur
-                    } else {
-                        MR32(0x00870cdcu) = 1; // camera at rest + driving/nitrous: enable blur
-                    }
+                if (cam_control_active && rh_mem_committed(0x00870cdcu, 4)) {
+                    MR32(0x00870cdcu) = 0; // camera control active: suppress blur
                 }
 
                 // 4. URL Race Crowds & Headlight Projectors:
@@ -1582,6 +1584,10 @@ static void roam_android_install_hooks(void) {
         0xff, 0x03, 0x02, 0xd1, 0xfd, 0x7b, 0x02, 0xa9,
         0xfc, 0x6f, 0x03, 0xa9, 0xfa, 0x67, 0x04, 0xa9
     };
+    static const uint8_t EXPECTED_5C5C[16] = {
+        0xff, 0x43, 0x02, 0xd1, 0xfd, 0x7b, 0x03, 0xa9,
+        0xfc, 0x6f, 0x04, 0xa9, 0xfa, 0x67, 0x05, 0xa9
+    };
 
     void *target_4a = (void *)(lib_base + 0x1464be0);
     if (memcmp(target_4a, EXPECTED_4A, 16) == 0) {
@@ -1605,6 +1611,16 @@ static void roam_android_install_hooks(void) {
                             "sub_005c7ec0 prefix mismatch at %p", target_5c);
     }
 
+    void *target_5c5c = (void *)(lib_base + 0x2d51828);
+    if (memcmp(target_5c5c, EXPECTED_5C5C, 16) == 0) {
+        arm64_inline_hook(target_5c5c, (void *)hook_sub_005c5c00);
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook",
+                            "Hooked sub_005c5c00 (motion blur draw stub) at %p", target_5c5c);
+    } else {
+        __android_log_print(ANDROID_LOG_WARN, "NFSU2-Hook",
+                            "sub_005c5c00 prefix mismatch at %p", target_5c5c);
+    }
+
     // Also update k_functions dispatch table
     uintptr_t k_4a = lib_base + 0x977c160;
     if (*(uint32_t *)k_4a == 0x004a5d90) {
@@ -1620,6 +1636,14 @@ static void roam_android_install_hooks(void) {
         mprotect((void *)page, page_sz * 2, PROT_READ | PROT_WRITE);
         *(void **)(k_5c + 8) = (void *)hook_sub_005c7ec0;
         __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Updated k_functions[0x005c7ec0]");
+    }
+
+    uintptr_t k_5c5c = lib_base + 0x9797c00;
+    if (*(uint32_t *)k_5c5c == 0x005c5c00) {
+        uintptr_t page = k_5c5c & ~((uintptr_t)page_sz - 1);
+        mprotect((void *)page, page_sz * 2, PROT_READ | PROT_WRITE);
+        *(void **)(k_5c5c + 8) = (void *)hook_sub_005c5c00;
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Updated k_functions[0x005c5c00]");
     }
 
     g_hooks_installed = 1;

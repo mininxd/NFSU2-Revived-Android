@@ -370,7 +370,7 @@ typedef void (*unresolved_fn)(const char *kind, uint32_t va, uint32_t from);
 static unresolved_fn s_orig_unresolved;
 
 static void hook_recomp_unresolved(const char *kind, uint32_t va, uint32_t from) {
-    if (from == 0x005c5c00u || va == 0u) {
+    if (from == 0x005c5c00u || from == 0x00725520u || va == 0u || va == 0x005c5c00u) {
         static uint32_t last_from, log_count;
         if (last_from != from || ++log_count <= 10) {
             last_from = from;
