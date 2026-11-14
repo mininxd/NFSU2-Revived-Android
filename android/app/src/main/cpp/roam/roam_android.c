@@ -1576,6 +1576,15 @@ static void hook_sub_005c5c00(void) {
         return;
     }
 
+    // Ensure camera culling is bypassed while motion blur renders
+    static void (*s_fn_cull_mb)(int) = NULL;
+    if (!s_fn_cull_mb) {
+        s_fn_cull_mb = (void (*)(int))dlsym(RTLD_DEFAULT, "nfs_camera_cull_set_motion_blur_active");
+    }
+    if (s_fn_cull_mb) {
+        s_fn_cull_mb(1);
+    }
+
     // Call original motion blur draw function
     if (s_orig_5c5c00) {
         s_orig_5c5c00();
@@ -1698,9 +1707,23 @@ static void hook_sub_005c7ec0(void) {
                     }
                 }
 
-                // 3. Motion blur suppression during camera orbit:
+                // 3. Motion blur suppression during camera orbit & culling bypass:
                 // Handled cleanly in hook_sub_005c5c00 while s_look_active is true,
                 // leaving 0x00870cdc intact so game settings and nitrous blur behave naturally.
+                // When motion blur is enabled or triggered, completely bypass camera culling.
+                static void (*s_fn_cull_sync_mb)(int) = NULL;
+                if (!s_fn_cull_sync_mb) {
+                    s_fn_cull_sync_mb = (void (*)(int))dlsym(RTLD_DEFAULT, "nfs_camera_cull_set_motion_blur_active");
+                }
+                if (s_fn_cull_sync_mb) {
+                    int mb_on = 0;
+                    if (rh_mem_committed(0x00870cdcu, 4) && MR32(0x00870cdcu) != 0) {
+                        mb_on = 1;
+                    } else if (rh_mem_committed(0x007ff7b8u, 4) && MRF32(0x007ff7b8u) > 0.001f) {
+                        mb_on = 1;
+                    }
+                    s_fn_cull_sync_mb(mb_on);
+                }
 
                 // 4. URL Race Crowds & Headlight Projectors:
                 if (is_url) {

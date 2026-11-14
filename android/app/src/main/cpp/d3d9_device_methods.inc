@@ -24,17 +24,20 @@ case 17:{*argumentCount=5;
         if(!s_cull_stats) s_cull_stats = reinterpret_cast<void(*)(uint64_t*, uint64_t*)>(resolveGraphicsCacheSymbol("nfs_camera_cull_stats"));
         static int(*s_cull_get_cam)(float*, float*) = nullptr;
         if(!s_cull_get_cam) s_cull_get_cam = reinterpret_cast<int(*)(float*, float*)>(resolveGraphicsCacheSymbol("nfs_camera_cull_get_camera"));
+        static int(*s_cull_is_mb)(void) = nullptr;
+        if(!s_cull_is_mb) s_cull_is_mb = reinterpret_cast<int(*)(void)>(resolveGraphicsCacheSymbol("nfs_camera_cull_is_motion_blur_active"));
         if (s_cull_stats) {
             uint64_t tot = 0, cul = 0;
             s_cull_stats(&tot, &cul);
             float cpos[3] = {0}, cfwd[3] = {0};
             int has_cam = s_cull_get_cam ? s_cull_get_cam(cpos, cfwd) : 0;
+            int mb_active = s_cull_is_mb ? s_cull_is_mb() : 0;
             if (tot > 0) {
                 NFS_RUNTIME_LOG(ANDROID_LOG_INFO, "NFSU2-CameraCull",
-                    "Stats: %llu total draws, %llu culled (%.2f%%) [cam_valid=%d pos=(%.1f,%.1f,%.1f) fwd=(%.2f,%.2f,%.2f)]",
+                    "Stats: %llu total draws, %llu culled (%.2f%%) [mb_active=%d cam_valid=%d pos=(%.1f,%.1f,%.1f) fwd=(%.2f,%.2f,%.2f)]",
                     (unsigned long long)tot, (unsigned long long)cul,
                     tot > 0 ? ((double)cul * 100.0 / (double)tot) : 0.0,
-                    has_cam, cpos[0], cpos[1], cpos[2], cfwd[0], cfwd[1], cfwd[2]);
+                    mb_active, has_cam, cpos[0], cpos[1], cpos[2], cfwd[0], cfwd[1], cfwd[2]);
             }
         }
     }
@@ -83,6 +86,21 @@ case 41:{*argumentCount=1;
     static void(*s_cam_apply)(void*) = nullptr;
     if(!s_cam_apply) s_cam_apply = reinterpret_cast<void(*)(void*)>(resolveGraphicsCacheSymbol("nfs_camera_stick_apply_frame"));
     if(s_cam_apply) s_cam_apply(guestBase);
+    static void(*s_cull_mb)(int) = nullptr;
+    if(!s_cull_mb) s_cull_mb = reinterpret_cast<void(*)(int)>(resolveGraphicsCacheSymbol("nfs_camera_cull_set_motion_blur_active"));
+    if(s_cull_mb && guestBase) {
+        int mb_active = 0;
+        const uint32_t* p_mb_enable = reinterpret_cast<const uint32_t*>(pointer(0x00870cdc));
+        if (p_mb_enable && *p_mb_enable != 0) {
+            mb_active = 1;
+        } else {
+            const float* p_mb_weight = reinterpret_cast<const float*>(pointer(0x007ff7b8));
+            if (p_mb_weight && *p_mb_weight > 0.001f) {
+                mb_active = 1;
+            }
+        }
+        s_cull_mb(mb_active);
+    }
     return device->BeginScene();}
 case 42:{*argumentCount=1;
     return device->EndScene();}

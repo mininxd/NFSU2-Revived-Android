@@ -15,6 +15,7 @@ pub const NEAR_PROTECTION_RADIUS_SQ: f32 = NEAR_PROTECTION_RADIUS * NEAR_PROTECT
 
 pub struct CameraCullEngine {
     enabled: AtomicBool,
+    motion_blur_active: AtomicBool,
     cull_margin: AtomicU32,   // f32 bits
     far_distance: AtomicU32,  // f32 bits
     // Camera world position & forward direction vector
@@ -51,6 +52,7 @@ impl CameraCullEngine {
     pub const fn new() -> Self {
         Self {
             enabled: AtomicBool::new(true),
+            motion_blur_active: AtomicBool::new(false),
             cull_margin: AtomicU32::new(DEFAULT_CULL_MARGIN.to_bits()),
             far_distance: AtomicU32::new(0), // 0 = unlimited
             cam_pos: [AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0)],
@@ -87,6 +89,16 @@ impl CameraCullEngine {
     #[inline]
     pub fn set_enabled(&self, val: bool) {
         self.enabled.store(val, Ordering::Release);
+    }
+
+    #[inline]
+    pub fn is_motion_blur_active(&self) -> bool {
+        self.motion_blur_active.load(Ordering::Acquire)
+    }
+
+    #[inline]
+    pub fn set_motion_blur_active(&self, val: bool) {
+        self.motion_blur_active.store(val, Ordering::Release);
     }
 
     #[inline]
@@ -178,7 +190,7 @@ impl CameraCullEngine {
     pub fn test_draw(&self) -> bool {
         self.total_draws.fetch_add(1, Ordering::Relaxed);
 
-        if !self.is_enabled() {
+        if !self.is_enabled() || self.motion_blur_active.load(Ordering::Relaxed) {
             return false;
         }
 
@@ -289,6 +301,16 @@ pub unsafe extern "C" fn nfs_camera_cull_set_enabled(enabled: i32) {
 #[no_mangle]
 pub unsafe extern "C" fn nfs_camera_cull_is_enabled() -> i32 {
     if GLOBAL_CAMERA_CULL.is_enabled() { 1 } else { 0 }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_camera_cull_set_motion_blur_active(active: i32) {
+    GLOBAL_CAMERA_CULL.set_motion_blur_active(active != 0);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_camera_cull_is_motion_blur_active() -> i32 {
+    if GLOBAL_CAMERA_CULL.is_motion_blur_active() { 1 } else { 0 }
 }
 
 #[no_mangle]
@@ -452,5 +474,30 @@ mod tests {
         world_back[14] = -50.0;
         engine.update_world_matrix(&world_back);
         assert!(!engine.test_draw());
+    }
+
+    #[test]
+    fn test_motion_blur_bypasses_culling() {
+        let engine = CameraCullEngine::new();
+        engine.set_enabled(true);
+        engine.set_margin(4.0);
+        engine.update_camera([0.0, 0.0, 0.0], [0.0, 0.0, 1.0]);
+
+        // Object behind camera beyond near protection: Z = -50.0m
+        let mut world_back = [0.0f32; 16];
+        world_back[0] = 1.0; world_back[5] = 1.0; world_back[10] = 1.0; world_back[15] = 1.0;
+        world_back[14] = -50.0;
+        engine.update_world_matrix(&world_back);
+
+        // When motion blur is NOT active, object should cull
+        assert!(engine.test_draw());
+
+        // When motion blur IS active, culling is completely bypassed
+        engine.set_motion_blur_active(true);
+        assert!(!engine.test_draw());
+
+        // When motion blur is deactivated, culling resumes
+        engine.set_motion_blur_active(false);
+        assert!(engine.test_draw());
     }
 }
