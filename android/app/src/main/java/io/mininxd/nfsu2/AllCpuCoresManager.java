@@ -43,6 +43,11 @@ public final class AllCpuCoresManager {
     public static native int nativeEnableAllCores();
     public static native long nativeGetAllCoresMask();
     public static native int nativeGetTotalCoreCount();
+    public static native boolean nativeStartCpuBoost(int mode);
+    public static native void nativeStopCpuBoost();
+    public static native void nativeSetCpuBoostMode(int mode);
+    public static native float nativeGetCpuBoostMflops();
+    public static native int nativeGetCpuBoostActiveThreads();
 
     /**
      * Returns the total number of hardware CPU cores available on the SoC.
@@ -86,9 +91,10 @@ public final class AllCpuCoresManager {
         if (nativeLoaded) {
             try {
                 nativeEnableAllCores();
-                Log.i(TAG, "All CPU cores enabled via native Rust engine (Total cores: " + getTotalCoreCount() + ", Mask: 0x" + Long.toHexString(getAllCoresMask()) + ")");
+                nativeStartCpuBoost(2); // Start aggressive native CPU governor boost
+                Log.i(TAG, "All CPU cores enabled and native booster active (Total cores: " + getTotalCoreCount() + ", Mask: 0x" + Long.toHexString(getAllCoresMask()) + ")");
             } catch (Throwable t) {
-                Log.w(TAG, "nativeEnableAllCores failed: " + t.getMessage());
+                Log.w(TAG, "nativeEnableAllCores / boost failed: " + t.getMessage());
             }
         }
 
@@ -122,6 +128,32 @@ public final class AllCpuCoresManager {
         if (nativeLoaded) {
             try {
                 nativeEnableAllCores();
+            } catch (Throwable ignored) {}
+        }
+    }
+
+    public static float getCpuBoostThroughputMflops() {
+        if (nativeLoaded) {
+            try {
+                return nativeGetCpuBoostMflops();
+            } catch (Throwable ignored) {}
+        }
+        return 0.0f;
+    }
+
+    public static int getCpuBoostActiveThreads() {
+        if (nativeLoaded) {
+            try {
+                return nativeGetCpuBoostActiveThreads();
+            } catch (Throwable ignored) {}
+        }
+        return 0;
+    }
+
+    public static void setBoostMode(int mode) {
+        if (nativeLoaded) {
+            try {
+                nativeSetCpuBoostMode(mode);
             } catch (Throwable ignored) {}
         }
     }

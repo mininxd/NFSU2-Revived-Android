@@ -413,6 +413,8 @@ uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumen
             if(FAILED(status)&&failures<2)return status;
             if(FAILED(status))throw std::runtime_error("The GPU could not create the graphics device (Vulkan, CreateDevice "+
                 std::to_string(uint32_t(status))+"). Use \"Check driver\" in the launcher to see what is missing.");
+            auto init_pipe = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_pipeline_init"));
+            if(init_pipe) init_pipe();
             write(args[6],wrap(device,Kind::Device));return status;
         }
         }

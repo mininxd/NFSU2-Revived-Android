@@ -15,6 +15,8 @@ pub mod steering_pacer;
 pub use steering_pacer::*;
 pub mod all_cores;
 pub use all_cores::*;
+pub mod native_cpu_boost;
+pub use native_cpu_boost::*;
 
 use std::fs;
 use std::os::raw::{c_int, c_long};

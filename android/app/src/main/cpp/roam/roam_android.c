@@ -1797,6 +1797,25 @@ __attribute__((visibility("default"))) void nfs_roam_frame_tick(void) {
         s_rec_present(now_ns, frame_interval_ns);
     }
 
+    // Pulse native CPU performance governor booster in Rust to prevent frequency downscaling
+    typedef void (*fn_native_boost_tick)(void);
+    static fn_native_boost_tick s_boost_tick = NULL;
+    static int s_boost_tick_init = 0;
+    if (!s_boost_tick_init) {
+        s_boost_tick_init = 1;
+        void *h = dlopen("libperf_cores.so", RTLD_NOLOAD);
+        if (!h) h = dlopen("libperf_cores.so", RTLD_LAZY);
+        if (h) {
+            s_boost_tick = (fn_native_boost_tick)dlsym(h, "nfs_native_boost_frame_tick");
+            typedef int (*fn_boost_start)(void);
+            fn_boost_start bstart = (fn_boost_start)dlsym(h, "nfs_native_boost_start");
+            if (bstart) bstart();
+        }
+    }
+    if (s_boost_tick) {
+        s_boost_tick();
+    }
+
     static int s_perf_bound = 0;
     if (!s_perf_bound || (g_frame_count % 60) == 0) {
         s_perf_bound = 1;
