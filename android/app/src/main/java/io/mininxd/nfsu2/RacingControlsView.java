@@ -169,8 +169,15 @@ final class RacingControlsView extends View {
     private final RectF resetDestRect = new RectF();
     private final PorterDuffColorFilter filterIdle = new PorterDuffColorFilter(COLOR_TEXT, PorterDuff.Mode.SRC_IN);
     private final PorterDuffColorFilter filterActive = new PorterDuffColorFilter(COLOR_LIME, PorterDuff.Mode.SRC_IN);
+    private final PorterDuffColorFilter filterPurge = new PorterDuffColorFilter(0xFF00E5FF, PorterDuff.Mode.SRC_IN);
     private boolean driftActive = false;
     private boolean controlsHidden = false;
+    private int nitroAutoGasPolicy = 0; // 0 = Never (Manual / Purge at 0 km/h), 1 = Moving Only (>1.0 km/h), 2 = Legacy
+    private boolean autoGasAppliedByNitro = false;
+
+    public static native boolean nativeEvaluateNitroAutoGas(float speedKmh, boolean nitroHeld, boolean gasHeld, int policy);
+    public static native int nativeGetNitroState(float speedKmh, boolean nitroHeld);
+    public static native int nativeGetNitroHaloColor(int state);
 
     private int keyGas = 0xc8;
     private int keyBrake = 0xd0;
@@ -209,6 +216,7 @@ final class RacingControlsView extends View {
         this.textInput = textInput;
         this.layouts = context.getSharedPreferences("touch_layouts_v2", Context.MODE_PRIVATE);
         this.style = layouts.getString("style", "classic");
+        this.nitroAutoGasPolicy = layouts.getInt("nitro_autogas_policy", 0);
         this.configureTilt = configureTilt;
         this.configureFrameLimit = configureFrameLimit;
 
@@ -654,14 +662,35 @@ final class RacingControlsView extends View {
                 chevron(canvas, cx, cy - s * 0.75f, s * 0.55f, false);
                 break;
             case "nitro":
+                float carSpeed = io.mininxd.nfsu2.net.RoamNativeBridge.getCarSpeedKmH();
+                int nitroState = 0;
+                try {
+                    nitroState = nativeGetNitroState(carSpeed, on);
+                } catch (Throwable ignored) {
+                    nitroState = on ? (carSpeed <= 1.0f ? 1 : 2) : 0;
+                }
+
+                if (on) {
+                    // Distinct halos: Cyan for Purge at 0 km/h, Lime for Boost at speed
+                    int haloBg = (nitroState == 1) ? 0x5500E5FF : 0x5539FF14;
+                    int haloStroke = (nitroState == 1) ? 0xFF00E5FF : COLOR_LIME;
+                    fill.setColor(haloBg);
+                    canvas.drawCircle(cx, cy, r * 1.22f, fill);
+                    line.setColor(haloStroke);
+                    line.setStrokeWidth(2.5f);
+                    canvas.drawCircle(cx, cy, r * 1.15f, line);
+                }
+
                 if (nitroBitmap != null) {
-                    bitmapPaint.setColorFilter(on ? filterActive : filterIdle);
+                    PorterDuffColorFilter filter = (nitroState == 1) ? filterPurge : (on ? filterActive : filterIdle);
+                    bitmapPaint.setColorFilter(filter);
                     float bw = r * 1.55f;
                     float bh = bw * ((float) nitroBitmap.getHeight() / (float) nitroBitmap.getWidth());
                     nitroDestRect.set(cx - bw / 2f, cy - bh / 2f, cx + bw / 2f, cy + bh / 2f);
                     canvas.drawBitmap(nitroBitmap, null, nitroDestRect, bitmapPaint);
                 } else {
-                    glyph(canvas, "NOS", cx, cy, 17f, on);
+                    String label = (nitroState == 1) ? "PURGE" : "NOS";
+                    glyph(canvas, label, cx, cy, (nitroState == 1) ? 12f : 17f, on);
                 }
                 break;
             case "drift":
@@ -1156,14 +1185,34 @@ final class RacingControlsView extends View {
                 .show();
     }
 
+    private void chooseNitroPolicy() {
+        String[] labels = {
+            "No Auto-Gas (Purge at 0 km/h) [Recommended]",
+            "Auto-Gas only while driving (> 1 km/h)",
+            "Legacy (Always hold gas)"
+        };
+        new AlertDialog.Builder(getContext(), android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Nitro Auto-Gas Behavior")
+                .setSingleChoiceItems(labels, nitroAutoGasPolicy, (dialog, which) -> {
+                    nitroAutoGasPolicy = which;
+                    layouts.edit().putInt("nitro_autogas_policy", which).apply();
+                    dialog.dismiss();
+                    Toast.makeText(getContext(), "Nitro behavior updated", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
     private void showOptions() {
         String currentSize = layouts.getString("control_size", "auto");
         String sizeLabel = currentSize.equals("auto") ? "Auto" : currentSize + "%";
+        String nitroLabel = nitroAutoGasPolicy == 0 ? "No Auto-Gas (Purge)" : nitroAutoGasPolicy == 1 ? "Moving Only" : "Always";
         Context ctx = getContext();
         new AlertDialog.Builder(ctx, android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle("Control Options")
                 .setItems(new String[]{
                         "Touch Button Size (" + sizeLabel + ")",
                         "Touch Button Opacity (" + Math.round(controlOpacity * 100) + "%)",
+                        "Nitro Auto-Gas (" + nitroLabel + ")",
                         "Steering: Buttons / Thumb stick",
                         "Tilt steering",
                         "FPS limit",
@@ -1174,13 +1223,14 @@ final class RacingControlsView extends View {
                 }, (dialog, which) -> {
                     if (which == 0) chooseButtonSize();
                     else if (which == 1) chooseButtonOpacity();
-                    else if (which == 2) chooseStyle();
-                    else if (which == 3) configureTilt.run();
-                    else if (which == 4) configureFrameLimit.run();
-                    else if (which == 5) toggleControlsVisibility();
-                    else if (which == 6) saveNamedLayout();
-                    else if (which == 7) loadNamedLayout();
-                    else if (which == 8) confirmExitToLauncher();
+                    else if (which == 2) chooseNitroPolicy();
+                    else if (which == 3) chooseStyle();
+                    else if (which == 4) configureTilt.run();
+                    else if (which == 5) configureFrameLimit.run();
+                    else if (which == 6) toggleControlsVisibility();
+                    else if (which == 7) saveNamedLayout();
+                    else if (which == 8) loadNamedLayout();
+                    else if (which == 9) confirmExitToLauncher();
                 })
                 .setPositiveButton("Close", null)
                 .setNegativeButton("Exit to Launcher", (dialog, which) -> confirmExitToLauncher())
@@ -1318,6 +1368,16 @@ final class RacingControlsView extends View {
         return best;
     }
 
+    private boolean isGasPedalHeld() {
+        for (int i = 0; i < 32; i++) {
+            Control other = fingerMap[i];
+            if (other != null && other.scan == keyGas && other.held > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void hold(Control c) {
         if (c == null || ++c.held != 1) return;
         if (c.scan >= 0) {
@@ -1330,9 +1390,27 @@ final class RacingControlsView extends View {
             if (c.scan == 0x31) {
                 AdhocRoamClient.setHorn(true);
             }
-            // Nitro holds Gas as well, matching web touch controls!
+            // Intelligent Nitro control: Removes auto-gas if car is idle or stopped at 0 km/h
             if (c.scan == keyNitro) {
-                keys.set(keyGas, true);
+                float currentSpeed = io.mininxd.nfsu2.net.RoamNativeBridge.getCarSpeedKmH();
+                boolean directGas = isGasPedalHeld();
+                boolean shouldGas = false;
+                try {
+                    shouldGas = nativeEvaluateNitroAutoGas(currentSpeed, true, directGas, nitroAutoGasPolicy);
+                } catch (Throwable t) {
+                    // Fallback: If car is stopped / idle <= 1.0 km/h, NEVER auto-gas!
+                    shouldGas = directGas || (nitroAutoGasPolicy > 0 && currentSpeed > 1.0f);
+                }
+                if (shouldGas) {
+                    keys.set(keyGas, true);
+                    autoGasAppliedByNitro = true;
+                } else {
+                    autoGasAppliedByNitro = false;
+                    // If car is stationary / 0 km/h, ensure auto-gas is removed unless user holds gas pedal directly
+                    if (!directGas) {
+                        keys.set(keyGas, false);
+                    }
+                }
             }
         }
         performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
@@ -1346,16 +1424,12 @@ final class RacingControlsView extends View {
                     AdhocRoamClient.setHorn(false);
                 }
                 if (c.scan == keyNitro) {
-                    // Release Gas unless another finger is holding it directly
-                    boolean gasHeld = false;
-                    for (int i = 0; i < 32; i++) {
-                        Control other = fingerMap[i];
-                        if (other != null && other.scan == keyGas && other.held > 0) {
-                            gasHeld = true;
-                            break;
-                        }
+                    // Release Gas unless another finger is holding the gas pedal directly
+                    boolean gasHeld = isGasPedalHeld();
+                    if (!gasHeld) {
+                        keys.set(keyGas, false);
                     }
-                    if (!gasHeld) keys.set(keyGas, false);
+                    autoGasAppliedByNitro = false;
                 }
             } else if (c.scan == STICK) {
                 c.steering = 0;

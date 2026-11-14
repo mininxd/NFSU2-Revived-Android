@@ -2,9 +2,11 @@
 
 pub mod camera_stick;
 pub mod garage_viewer;
+pub mod nitro_manager;
 
 pub use camera_stick::*;
 pub use garage_viewer::*;
+pub use nitro_manager::*;
 
 use jni::objects::JClass;
 use jni::sys::{jboolean, jfloat, jint};

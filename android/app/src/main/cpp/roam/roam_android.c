@@ -2246,6 +2246,37 @@ JNIEXPORT jint JNICALL Java_io_mininxd_nfsu2_AllCpuCoresManager_nativeGetTotalCo
     return c > 0 ? c : 8;
 }
 
+/* JNI Bindings for vehicle speed & NOS telemetry */
+JNIEXPORT jfloat JNICALL Java_io_mininxd_nfsu2_net_RoamNativeBridge_nativeGetCarSpeed(
+        JNIEnv *env, jclass clazz) {
+    (void)env; (void)clazz;
+    uint32_t car = get_driving_car();
+    if (!car) return 0.0f;
+    return get_car_speed_mps(car) * 3.6f;
+}
+
+JNIEXPORT jint JNICALL Java_io_mininxd_nfsu2_net_RoamNativeBridge_nativeGetCarNos(
+        JNIEnv *env, jclass clazz) {
+    (void)env; (void)clazz;
+    uint32_t car = get_driving_car();
+    if (!car || !g_p_mem_base || !*g_p_mem_base) return 0;
+    uint32_t n = car + 0x40u;
+    if (!rh_mem_committed(n + 0x414u, 16)) return 0;
+    uint32_t full = MR32(n + 0x414u), left = MR32(n + 0x41cu);
+    if (full == 0) return 0;
+    return (jint)((left * 100u) / full);
+}
+
+JNIEXPORT jboolean JNICALL Java_io_mininxd_nfsu2_net_RoamNativeBridge_nativeIsNosActive(
+        JNIEnv *env, jclass clazz) {
+    (void)env; (void)clazz;
+    uint32_t car = get_driving_car();
+    if (!car || !g_p_mem_base || !*g_p_mem_base) return JNI_FALSE;
+    uint32_t n = car + 0x40u;
+    if (!rh_mem_committed(n + 0x420u, 4)) return JNI_FALSE;
+    return (MR32(n + 0x420u) != 0) ? JNI_TRUE : JNI_FALSE;
+}
+
 
 
 /* ========================================================================= */
