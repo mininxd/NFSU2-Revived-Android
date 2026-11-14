@@ -2,10 +2,12 @@
 
 pub mod camera_stick;
 pub mod garage_viewer;
+pub mod motion_blur;
 pub mod nitro_manager;
 
 pub use camera_stick::*;
 pub use garage_viewer::*;
+pub use motion_blur::*;
 pub use nitro_manager::*;
 
 use jni::objects::JClass;

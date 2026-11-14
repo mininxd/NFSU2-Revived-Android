@@ -805,6 +805,22 @@ static void extraoptions_init_patches(void) {
         MR8(0x00838464u) = 0;
     }
 
+    // Motion Blur Texture Allocation & Hardware Capability fixes:
+    // 1. In SPEED2.EXE at 0x005bb87d: change "xor dl, dl" (32 d2) to "mov dl, 1" (b2 01).
+    // This guarantees the ping-pong motion blur render target textures (0x86eb88, 0x86eb8c)
+    // and surface levels (0x86eb0c, 0x86eb10) are always created at startup/device reset,
+    // preventing unallocated NULL surface ICALL 0x00000000 halts when blur is enabled in-game or nitro is pressed.
+    if (rh_mem_committed(0x005bb87du, 2)) {
+        MR16(0x005bb87du) = 0x01B2u; // B2 01: mov dl, 1
+    }
+
+    // 2. Motion blur hardware capability flag (0x008764f4):
+    // Mark hardware motion blur capable so the in-game Video Options menu allows toggling
+    // Motion Blur and the engine does not clamp 0x00870cdc to 0.
+    if (rh_mem_committed(0x008764f4u, 4)) {
+        MR32(0x008764f4u) = 1;
+    }
+
     __android_log_print(ANDROID_LOG_INFO, "NFSU2-ExtraOptions",
                         "Extra Options memory patches applied: regional cars, laps (0-127), opponents (0-5), 3D fixes, drift 9x, outrun");
 }
@@ -816,6 +832,11 @@ static void extraoptions_frame_tick(void) {
             s_init_done = 1;
             extraoptions_init_patches();
         }
+    }
+
+    // Maintain motion blur hardware capability so options menu can always toggle it
+    if (rh_mem_committed(0x008764f4u, 4) && MR32(0x008764f4u) == 0) {
+        MR32(0x008764f4u) = 1;
     }
 
     if (!rh_mem_committed(0x008654A4u, 4) || !rh_mem_committed(0x008900ACu, 4)) return;
@@ -1493,9 +1514,72 @@ static float get_car_speed_mps(uint32_t car) {
     return 0.0f;
 }
 
+static recomp_void_func_t s_orig_5c5c00 = NULL;
+
 static void hook_sub_005c5c00(void) {
-    // Safe motion blur draw stub preventing unresolved ICALL halt (0x00000000)
-    if (g_p_eax) *g_p_eax = 0;
+    static _Atomic int s_in_5c = 0;
+    if (atomic_exchange(&s_in_5c, 1) != 0) {
+        return;
+    }
+
+    if (!g_p_mem_base || !*g_p_mem_base || !g_p_esp || !*g_p_esp) {
+        if (g_p_eax) *g_p_eax = 0;
+        atomic_store(&s_in_5c, 0);
+        return;
+    }
+    uint32_t esp = *g_p_esp;
+    if (!rh_mem_committed(esp + 4, 8)) {
+        if (g_p_eax) *g_p_eax = 0;
+        atomic_store(&s_in_5c, 0);
+        return;
+    }
+    uint32_t surf = MR32(esp + 4);
+    uint32_t tex  = MR32(esp + 8);
+    // Guard against NULL surfaces/textures to prevent 0x00000000 ICALL halt
+    if (!surf || !tex || !rh_mem_committed(surf, 4) || !rh_mem_committed(tex, 4)) {
+        if (g_p_eax) *g_p_eax = 0;
+        atomic_store(&s_in_5c, 0);
+        return;
+    }
+    uint32_t vtbl = MR32(surf);
+    if (!vtbl || !rh_mem_committed(vtbl, 0x40) || MR32(vtbl + 0x30) == 0) {
+        if (g_p_eax) *g_p_eax = 0;
+        atomic_store(&s_in_5c, 0);
+        return;
+    }
+
+    // Skip drawing blur quad while camera orbit / touch view is actively moving
+    // to prevent angular streaking, without zeroing the engine's setting (0x00870cdc)!
+    static int (*s_mb_render_check)(uint32_t, uint32_t, int, uint32_t) = NULL;
+    if (!s_mb_render_check) {
+        void *h = dlopen("libgame_core.so", RTLD_NOLOAD);
+        if (h) s_mb_render_check = (int (*)(uint32_t, uint32_t, int, uint32_t))dlsym(h, "nfs_motion_blur_should_render");
+        if (!s_mb_render_check) s_mb_render_check = (int (*)(uint32_t, uint32_t, int, uint32_t))dlsym(RTLD_DEFAULT, "nfs_motion_blur_should_render");
+    }
+
+    uint32_t mb_setting = rh_mem_committed(0x00870cdcu, 4) ? MR32(0x00870cdcu) : 1;
+    int cam_orbiting = s_look_active;
+
+    if (s_mb_render_check) {
+        if (!s_mb_render_check(surf, tex, cam_orbiting, mb_setting)) {
+            if (g_p_eax) *g_p_eax = 0;
+            atomic_store(&s_in_5c, 0);
+            return;
+        }
+    } else {
+        if (cam_orbiting || mb_setting == 0) {
+            if (g_p_eax) *g_p_eax = 0;
+            atomic_store(&s_in_5c, 0);
+            return;
+        }
+    }
+
+    if (s_orig_5c5c00 && (void *)s_orig_5c5c00 != (void *)hook_sub_005c5c00) {
+        s_orig_5c5c00();
+    } else if (g_p_eax) {
+        *g_p_eax = 0;
+    }
+    atomic_store(&s_in_5c, 0);
 }
 
 static void hook_sub_005c7ec0(void) {
@@ -1540,20 +1624,10 @@ static void hook_sub_005c7ec0(void) {
                 uint32_t view3 = 0x00832de0u + 3u * 0x70u;
                 if (rh_mem_committed(view3 + 8, 1)) *(uint8_t*)GPTR(view3 + 8) = 0;
 
-                // 3. Motion blur suppression during camera orbit:
-                // Only suppress motion blur while camera is actively orbiting to avoid streaking.
-                // Never force MR32(0x00870cdcu) = 1, let the game engine manage motion blur state.
-                static int s_look_cooldown = 0;
-                if (s_look_active) {
-                    s_look_cooldown = 3;
-                } else if (s_look_cooldown > 0) {
-                    s_look_cooldown--;
-                }
-                int cam_control_active = s_look_active || (s_look_cooldown > 0);
-
-                if (cam_control_active && rh_mem_committed(0x00870cdcu, 4)) {
-                    MR32(0x00870cdcu) = 0; // camera control active: suppress blur
-                }
+                // 3. Motion blur management during camera orbit:
+                // Do not zero MR32(0x00870cdcu) here, as that permanently disabled motion blur
+                // in game options. Instead, hook_sub_005c5c00 dynamically skips the blur quad
+                // drawing during active camera orbit and restores it instantly when camera settles.
 
                 // 4. URL Race Crowds & Headlight Projectors:
                 if (is_url) {
@@ -1627,9 +1701,10 @@ static void roam_android_install_hooks(void) {
 
     void *target_5c5c = (void *)(lib_base + 0x2d51828);
     if (memcmp(target_5c5c, EXPECTED_5C5C, 16) == 0) {
-        arm64_inline_hook(target_5c5c, (void *)hook_sub_005c5c00);
+        s_orig_5c5c00 = arm64_inline_hook(target_5c5c, (void *)hook_sub_005c5c00);
         __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook",
-                            "Hooked sub_005c5c00 (motion blur draw stub) at %p", target_5c5c);
+                            "Hooked sub_005c5c00 (motion blur draw) at %p (orig: %p)",
+                            target_5c5c, s_orig_5c5c00);
     } else {
         __android_log_print(ANDROID_LOG_WARN, "NFSU2-Hook",
                             "sub_005c5c00 prefix mismatch at %p", target_5c5c);
