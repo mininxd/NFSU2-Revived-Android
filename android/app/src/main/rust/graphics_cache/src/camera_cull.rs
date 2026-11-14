@@ -9,7 +9,9 @@
 
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 
-pub const DEFAULT_CULL_MARGIN: f32 = 4.0; // 4.0m margin for object bounding radius
+pub const DEFAULT_CULL_MARGIN: f32 = 30.0; // 30.0m margin for object bounding radius
+pub const NEAR_PROTECTION_RADIUS: f32 = 35.0; // 35.0m proximity exclusion radius (never cull nearby objects)
+pub const NEAR_PROTECTION_RADIUS_SQ: f32 = NEAR_PROTECTION_RADIUS * NEAR_PROTECTION_RADIUS;
 
 pub struct CameraCullEngine {
     enabled: AtomicBool,
@@ -19,7 +21,15 @@ pub struct CameraCullEngine {
     cam_pos: [AtomicU32; 3],  // (x, y, z) f32 bits
     cam_fwd: [AtomicU32; 3],  // (fx, fy, fz) f32 bits
     cam_valid: AtomicBool,
-    // D3DTS_VIEW column 2: (V02, V12, V22, V32) for eye-space depth evaluation
+    // D3DTS_VIEW columns 0, 1, 2 for eye-space coordinate evaluation
+    v00: AtomicU32,
+    v10: AtomicU32,
+    v20: AtomicU32,
+    v30: AtomicU32,
+    v01: AtomicU32,
+    v11: AtomicU32,
+    v21: AtomicU32,
+    v31: AtomicU32,
     v02: AtomicU32,
     v12: AtomicU32,
     v22: AtomicU32,
@@ -46,6 +56,14 @@ impl CameraCullEngine {
             cam_pos: [AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0)],
             cam_fwd: [AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0)],
             cam_valid: AtomicBool::new(false),
+            v00: AtomicU32::new(0),
+            v10: AtomicU32::new(0),
+            v20: AtomicU32::new(0),
+            v30: AtomicU32::new(0),
+            v01: AtomicU32::new(0),
+            v11: AtomicU32::new(0),
+            v21: AtomicU32::new(0),
+            v31: AtomicU32::new(0),
             v02: AtomicU32::new(0),
             v12: AtomicU32::new(0),
             v22: AtomicU32::new(0),
@@ -104,12 +122,23 @@ impl CameraCullEngine {
         self.cam_valid.store(true, Ordering::Release);
     }
 
-    /// Updates D3DTS_VIEW matrix column 2 (Z axis in camera space).
+    /// Updates D3DTS_VIEW matrix columns 0, 1, 2 for eye-space transformation.
     pub fn update_view_matrix(&self, m: &[f32; 16]) {
+        self.v00.store(m[0].to_bits(), Ordering::Relaxed);
+        self.v10.store(m[4].to_bits(), Ordering::Relaxed);
+        self.v20.store(m[8].to_bits(), Ordering::Relaxed);
+        self.v30.store(m[12].to_bits(), Ordering::Relaxed);
+
+        self.v01.store(m[1].to_bits(), Ordering::Relaxed);
+        self.v11.store(m[5].to_bits(), Ordering::Relaxed);
+        self.v21.store(m[9].to_bits(), Ordering::Relaxed);
+        self.v31.store(m[13].to_bits(), Ordering::Relaxed);
+
         self.v02.store(m[2].to_bits(), Ordering::Relaxed);
         self.v12.store(m[6].to_bits(), Ordering::Relaxed);
         self.v22.store(m[10].to_bits(), Ordering::Relaxed);
         self.v32.store(m[14].to_bits(), Ordering::Relaxed);
+
         self.view_valid.store(true, Ordering::Release);
     }
 
@@ -171,8 +200,32 @@ impl CameraCullEngine {
         let wy = f32::from_bits(self.world_pos[1].load(Ordering::Relaxed));
         let wz = f32::from_bits(self.world_pos[2].load(Ordering::Relaxed));
 
-        // Evaluate distance along camera viewing vector
-        let fwd_distance = if self.cam_valid.load(Ordering::Relaxed) {
+        // Evaluate distance along camera viewing vector and eye-space proximity.
+        // Active D3DTS_VIEW (view_valid) is prioritized over cam_valid because view_valid
+        // is updated synchronously on SetTransform(D3DTS_VIEW) for the exact active render pass
+        // and correctly accounts for camera orbit / stick rotations.
+        let (eye_dist_sq, fwd_distance) = if self.view_valid.load(Ordering::Relaxed) {
+            let v00 = f32::from_bits(self.v00.load(Ordering::Relaxed));
+            let v10 = f32::from_bits(self.v10.load(Ordering::Relaxed));
+            let v20 = f32::from_bits(self.v20.load(Ordering::Relaxed));
+            let v30 = f32::from_bits(self.v30.load(Ordering::Relaxed));
+
+            let v01 = f32::from_bits(self.v01.load(Ordering::Relaxed));
+            let v11 = f32::from_bits(self.v11.load(Ordering::Relaxed));
+            let v21 = f32::from_bits(self.v21.load(Ordering::Relaxed));
+            let v31 = f32::from_bits(self.v31.load(Ordering::Relaxed));
+
+            let v02 = f32::from_bits(self.v02.load(Ordering::Relaxed));
+            let v12 = f32::from_bits(self.v12.load(Ordering::Relaxed));
+            let v22 = f32::from_bits(self.v22.load(Ordering::Relaxed));
+            let v32 = f32::from_bits(self.v32.load(Ordering::Relaxed));
+
+            let eye_x = wx * v00 + wy * v10 + wz * v20 + v30;
+            let eye_y = wx * v01 + wy * v11 + wz * v21 + v31;
+            let eye_z = wx * v02 + wy * v12 + wz * v22 + v32;
+
+            (eye_x * eye_x + eye_y * eye_y + eye_z * eye_z, eye_z)
+        } else if self.cam_valid.load(Ordering::Relaxed) {
             let cx = f32::from_bits(self.cam_pos[0].load(Ordering::Relaxed));
             let cy = f32::from_bits(self.cam_pos[1].load(Ordering::Relaxed));
             let cz = f32::from_bits(self.cam_pos[2].load(Ordering::Relaxed));
@@ -181,17 +234,21 @@ impl CameraCullEngine {
             let fy = f32::from_bits(self.cam_fwd[1].load(Ordering::Relaxed));
             let fz = f32::from_bits(self.cam_fwd[2].load(Ordering::Relaxed));
 
-            (wx - cx) * fx + (wy - cy) * fy + (wz - cz) * fz
-        } else if self.view_valid.load(Ordering::Relaxed) {
-            let v02 = f32::from_bits(self.v02.load(Ordering::Relaxed));
-            let v12 = f32::from_bits(self.v12.load(Ordering::Relaxed));
-            let v22 = f32::from_bits(self.v22.load(Ordering::Relaxed));
-            let v32 = f32::from_bits(self.v32.load(Ordering::Relaxed));
+            let dx = wx - cx;
+            let dy = wy - cy;
+            let dz = wz - cz;
 
-            wx * v02 + wy * v12 + wz * v22 + v32
+            (dx * dx + dy * dy + dz * dz, dx * fx + dy * fy + dz * fz)
         } else {
             return false;
         };
+
+        // Proximity Protection: Never cull geometry within near protection radius (35m).
+        // This guarantees the player vehicle, nearby traffic, pedestrians, and immediate road
+        // surfaces are never discarded or rendered as transparent ghosts during camera motion.
+        if eye_dist_sq < NEAR_PROTECTION_RADIUS_SQ {
+            return false;
+        }
 
         // 1. Back-Cull Check: Object is strictly behind player camera plane
         if fwd_distance < -margin {
@@ -335,18 +392,18 @@ mod tests {
         engine.update_world_matrix(&world_front);
         assert!(!engine.test_draw());
 
-        // 2. Object behind: Z = -15.0m (< -4.0m margin) -> Should CULL
+        // 2. Distant object behind beyond near protection: Z = -50.0m (< -4.0m margin, dist=50m > 35m) -> Should CULL
         let mut world_back = [0.0f32; 16];
         world_back[0] = 1.0; world_back[5] = 1.0; world_back[10] = 1.0; world_back[15] = 1.0;
-        world_back[12] = 0.0; world_back[13] = 0.0; world_back[14] = -15.0;
+        world_back[12] = 0.0; world_back[13] = 0.0; world_back[14] = -50.0;
         engine.update_world_matrix(&world_back);
         assert!(engine.test_draw());
 
-        // 3. Object right at edge of margin: Z = -3.5m (within 4m margin) -> Should NOT cull
-        let mut world_margin = [0.0f32; 16];
-        world_margin[0] = 1.0; world_margin[5] = 1.0; world_margin[10] = 1.0; world_margin[15] = 1.0;
-        world_margin[12] = 0.0; world_margin[13] = 0.0; world_margin[14] = -3.5;
-        engine.update_world_matrix(&world_margin);
+        // 3. Nearby object behind within near protection: Z = -15.0m (dist=15m < 35m) -> Should NOT cull
+        let mut world_near = [0.0f32; 16];
+        world_near[0] = 1.0; world_near[5] = 1.0; world_near[10] = 1.0; world_near[15] = 1.0;
+        world_near[12] = 0.0; world_near[13] = 0.0; world_near[14] = -15.0;
+        engine.update_world_matrix(&world_near);
         assert!(!engine.test_draw());
     }
 
