@@ -363,7 +363,6 @@ inline recomp_func_t resolveWin32CompatFunction(const std::string& dll, const st
     if (dll == "shell32.dll" || dll == "shfolder.dll") {
         if (name == "ShellExecuteA") return shellExecuteA;
         if (name == "ShellExecuteW") return shellExecuteW;
-        if (name == "SHGetFolderPathA") return shellFolderPathRust;
     }
 
     if (dll == "netapi32.dll") {

@@ -1175,6 +1175,7 @@ static recomp_void_func_t s_orig_4a5d90 = NULL;
 static recomp_void_func_t s_orig_5c7ec0 = NULL;
 static recomp_void_func_t s_orig_5cc460 = NULL;
 static recomp_void_func_t s_orig_5bdde0 = NULL;
+static recomp_void_func_t s_orig_5aa480 = NULL;
 
 static recomp_void_func_t arm64_inline_hook(void *target_func, void *hook_func) {
     if (!target_func || !hook_func) return NULL;
@@ -1535,6 +1536,23 @@ static void hook_sub_005bdde0(void) {
     }
 }
 
+static void hook_sub_005aa480(void) {
+    uint32_t ecx = (g_p_ecx && g_p_mem_base && *g_p_mem_base) ? *g_p_ecx : 0;
+    if (!ecx || !rh_mem_committed(ecx, 0x14) || MR32(ecx) == 0 || MR32(ecx + 0xc) == 0) {
+        // In SPEED2.EXE, sub_005aa480 is __thiscall void(float) with ret 4.
+        // When ecx or the emitter list *(ecx + 0xc) is unallocated/null, reading *(ecx + 0xc)
+        // causes the loop to treat 0 as a valid node, calling [0 + 4] = 0x00000000.
+        // Safely skip the unallocated particle update and pop the float parameter (esp += 8).
+        if (g_p_esp && *g_p_esp) {
+            *g_p_esp += 8;
+        }
+        return;
+    }
+    if (s_orig_5aa480) {
+        s_orig_5aa480();
+    }
+}
+
 static void hook_sub_005c7ec0(void) {
     if (g_p_mem_base && *g_p_mem_base && g_p_esp && *g_p_esp) {
         uint32_t esp = *g_p_esp;
@@ -1688,6 +1706,21 @@ static void roam_android_install_hooks(void) {
                             "sub_005bdde0 prefix mismatch at %p", target_5bdd);
     }
 
+    static const uint8_t EXPECTED_5AA4[16] = {
+        0xfd, 0x7b, 0xba, 0xa9, 0xfc, 0x6f, 0x01, 0xa9,
+        0xfa, 0x67, 0x02, 0xa9, 0xf8, 0x5f, 0x03, 0xa9
+    };
+    void *target_5aa4 = (void *)(lib_base + 0x025fd698);
+    if (memcmp(target_5aa4, EXPECTED_5AA4, 16) == 0) {
+        s_orig_5aa480 = arm64_inline_hook(target_5aa4, (void *)hook_sub_005aa480);
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook",
+                            "Hooked sub_005aa480 (particle emitter update) at %p (orig: %p)",
+                            target_5aa4, s_orig_5aa480);
+    } else {
+        __android_log_print(ANDROID_LOG_WARN, "NFSU2-Hook",
+                            "sub_005aa480 prefix mismatch at %p", target_5aa4);
+    }
+
     // Also update k_functions dispatch table
     uintptr_t k_4a = lib_base + 0x977c160;
     if (*(uint32_t *)k_4a == 0x004a5d90) {
@@ -1719,6 +1752,14 @@ static void roam_android_install_hooks(void) {
         mprotect((void *)page, page_sz * 2, PROT_READ | PROT_WRITE);
         *(void **)(k_5bdd + 8) = (void *)hook_sub_005bdde0;
         __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Updated k_functions[0x005bdde0]");
+    }
+
+    uintptr_t k_5aa4 = lib_base + 0x09791940;
+    if (*(uint32_t *)k_5aa4 == 0x005aa480) {
+        uintptr_t page = k_5aa4 & ~((uintptr_t)page_sz - 1);
+        mprotect((void *)page, page_sz * 2, PROT_READ | PROT_WRITE);
+        *(void **)(k_5aa4 + 8) = (void *)hook_sub_005aa480;
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Updated k_functions[0x005aa480]");
     }
 
     g_hooks_installed = 1;

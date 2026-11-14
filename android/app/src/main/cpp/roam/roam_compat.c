@@ -53,6 +53,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <dirent.h>
+#include <sched.h>
 
 #define TAG "NFSU2-Compat"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  TAG, __VA_ARGS__)
@@ -370,7 +371,7 @@ typedef void (*unresolved_fn)(const char *kind, uint32_t va, uint32_t from);
 static unresolved_fn s_orig_unresolved;
 
 static void hook_recomp_unresolved(const char *kind, uint32_t va, uint32_t from) {
-    if (from == 0x005c5c00u || from == 0x00725520u || va == 0u || va == 0x005c5c00u) {
+    if (from == 0x005c5c00u || from == 0x00725520u || from == 0x005aa480u || va == 0u || va == 0x005c5c00u) {
         static uint32_t last_from, log_count;
         if (last_from != from || ++log_count <= 10) {
             last_from = from;
@@ -879,6 +880,30 @@ static int hook_pthread_mutex_trylock(pthread_mutex_t *m) {
                 break;
             }
         }
+
+        /* Spin stall: if a thread has failed to acquire mutex m for >= 800 attempts,
+         * loan a bypass even if no mutual ABBA cycle is recorded (e.g. holder is delayed
+         * in disk I/O, sleeping, or not failing on another mutex). This prevents
+         * spinlock starvation of DXVK submission queues (refs #105). */
+        if (me->fail_count >= 800u) {
+            int expected = 0;
+            if (atomic_compare_exchange_strong(&s_cs_breaking, &expected, 1)) {
+                if (cs_fake_inc(me, m)) {
+                    LOGW("G2: breaking spin stall deadlock "
+                         "(this=%p waits on %p after %u attempts); "
+                         "loaning a bypass, unlock will be a no-op (refs #105)",
+                         (void *)me, m, me->fail_count);
+                    me->fail_count = 0;
+                    me->failing_on = NULL;
+                    return 0;
+                }
+                atomic_store(&s_cs_breaking, 0);
+            }
+        }
+    }
+
+    if (me->fail_count > 32u) {
+        sched_yield();
     }
     return r;
 }

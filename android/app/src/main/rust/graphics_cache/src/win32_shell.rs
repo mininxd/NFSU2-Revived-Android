@@ -57,19 +57,17 @@ pub const E_FAIL: i32 = -2147467259; // 0x80004005
 pub const E_INVALIDARG: i32 = -2147024809; // 0x80070057
 
 /// Translates a CSIDL into an application-safe path on Android / Linux host.
-pub fn resolve_csidl_path(csidl: i32, base_path: Option<&str>) -> String {
+pub fn resolve_csidl_path(csidl: i32, _base_path: Option<&str>) -> String {
     let clean_csidl = csidl & !CSIDL_FLAG_CREATE & !CSIDL_FLAG_DONT_VERIFY;
-    let fallback = base_path.unwrap_or("C:\\nfsu2");
 
     match clean_csidl {
-        CSIDL_PERSONAL | CSIDL_LOCAL_APPDATA | CSIDL_APPDATA | CSIDL_COMMON_APPDATA => {
-            // NFSU2 checks Local Settings\Application Data\NFS Underground 2 or My Documents
-            fallback.to_string()
-        }
+        CSIDL_LOCAL_APPDATA => "C:\\nfsu2\\AppData\\Local".to_string(),
+        CSIDL_APPDATA | CSIDL_COMMON_APPDATA => "C:\\nfsu2\\AppData\\Roaming".to_string(),
+        CSIDL_PERSONAL => "C:\\nfsu2\\Documents".to_string(),
         CSIDL_WINDOWS | CSIDL_SYSTEM => "C:\\windows".to_string(),
         CSIDL_PROGRAM_FILES => "C:\\Program Files".to_string(),
-        CSIDL_DESKTOP | CSIDL_DESKTOPDIRECTORY => fallback.to_string(),
-        _ => fallback.to_string(),
+        CSIDL_DESKTOP | CSIDL_DESKTOPDIRECTORY => "C:\\nfsu2".to_string(),
+        _ => "C:\\nfsu2".to_string(),
     }
 }
 
@@ -97,6 +95,21 @@ pub unsafe extern "C" fn rust_shell_get_folder_path_a(
     } else {
         None
     };
+
+    let clean_csidl = folder & !CSIDL_FLAG_CREATE & !CSIDL_FLAG_DONT_VERIFY;
+    if (folder & CSIDL_FLAG_CREATE) != 0 {
+        if let Some(root) = base_path {
+            let sub = match clean_csidl {
+                CSIDL_LOCAL_APPDATA => "AppData/Local",
+                CSIDL_APPDATA | CSIDL_COMMON_APPDATA => "AppData/Roaming",
+                CSIDL_PERSONAL => "Documents",
+                _ => "",
+            };
+            if !sub.is_empty() {
+                let _ = std::fs::create_dir_all(std::path::Path::new(root).join(sub));
+            }
+        }
+    }
 
     let resolved = resolve_csidl_path(folder, base_path);
     let bytes = resolved.as_bytes();

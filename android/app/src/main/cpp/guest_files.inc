@@ -28,6 +28,9 @@ std::filesystem::path gamePath(std::string guest){
 
     std::string originalGuest = guest;
     std::replace(guest.begin(),guest.end(),'\\','/');auto normalized=lower(guest);
+    if(!hostGameRoot.empty() && guest.rfind(hostGameRoot, 0) == 0) {
+        return safe_weakly_canonical(std::filesystem::path(guest));
+    }
     if(normalized=="c:/nfsu2")guest.clear();
     else if(normalized.rfind("c:/nfsu2/",0)==0)guest=guest.substr(9);
     else if(guest.find(':')!=std::string::npos||guest.rfind("//",0)==0)throw GuestStop("Unsupported guest path: "+guest);
@@ -198,8 +201,15 @@ void findNextFile(){auto found=fileSearches.find(arg(0));if(found==fileSearches.
     if(!writeFindData(arg(1),search.paths[search.next])){ret(0,2);return;}++search.next;ret(1,2);
 }
 void findClose(){if(!fileSearches.erase(arg(0))){lastError=6;ret(0,1);return;}ret(1,1);}
-void createDirectory(){if(arg(1))throw GuestStop("CreateDirectory security attributes pending");auto path=gamePath(guestString(arg(0)));
-    if(::mkdir(path.c_str(),0700)){lastError=errno==EEXIST?183:fileError();ret(0,2);return;}ret(1,2);
+void createDirectory(){
+    if(arg(1))throw GuestStop("CreateDirectory security attributes pending");
+    auto path=gamePath(guestString(arg(0)));
+    std::error_code ec;
+    if(std::filesystem::exists(path, ec)){lastError=183;ret(0,2);return;}
+    if(!std::filesystem::create_directories(path, ec) && ec){
+        lastError=fileError();ret(0,2);return;
+    }
+    ret(1,2);
 }
 void fullPathName(){
     auto requested=guestString(arg(0));if(requested.empty()){lastError=123;ret(0,4);return;}
