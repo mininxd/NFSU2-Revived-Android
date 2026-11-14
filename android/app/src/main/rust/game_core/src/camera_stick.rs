@@ -327,8 +327,25 @@ impl CameraStickEngine {
             oy = eye_y;
         }
 
-        // Motion blur suppression is handled dynamically by motion_blur.rs:nfs_motion_blur_should_render
-        // during hook_sub_005c5c00 without clobbering G_MOTION_BLUR in guest memory.
+        // Motion Blur Suppression for Camera Control:
+        // When camera is orbiting, high angular velocity causes the game's frustum corner delta
+        // calculation (0x5cc460) to produce huge apparent velocities and smear the view or crash.
+        // Disable motion blur ONLY while camera control / orbit is active.
+        // When the camera is restored after frame rendering, restore_frame re-enables it.
+        let mb_ptr = guest_base.add(G_MOTION_BLUR as usize) as *mut u32;
+        let mb_weight_ptr = guest_base.add(G_MOTION_BLUR_WEIGHT as usize) as *mut f32;
+
+        let orig_mb = *mb_ptr;
+        let orig_weight = *mb_weight_ptr;
+        self.saved_motion_blur_val.store(orig_mb, Ordering::Release);
+        self.saved_blur_weight.store(orig_weight.to_bits(), Ordering::Release);
+
+        if orig_mb != 0 {
+            *mb_ptr = 0;
+            self.motion_blur_modified.store(true, Ordering::Release);
+        } else {
+            self.motion_blur_modified.store(false, Ordering::Release);
+        }
 
         // Validate camera matrix before rotation
         let m_ptr = cam_raw as *mut f32;
