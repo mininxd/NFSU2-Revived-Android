@@ -853,11 +853,6 @@ static void extraoptions_frame_tick(void) {
         MR32(0x008764f4u) = 1;
     }
 
-    // Rearview mirror 3D world pass bypass (View 3 + 8 = 0)
-    if (rh_mem_committed(0x00832f38u, 1)) {
-        MR8(0x00832f38u) = 0;
-    }
-
     if (!rh_mem_committed(0x008654A4u, 4) || !rh_mem_committed(0x008900ACu, 4)) return;
 
     // Dumb AI (AutoDrive) State Machine
@@ -1439,24 +1434,16 @@ static void turn_cam_matrix(uint32_t cam) {
     }
 }
 
-static uint32_t s_saved_motion_blur_opt = 1;
-static int s_motion_blur_suppressed_for_orbit = 0;
-
 static void restore_turned_cameras(void) {
     for (int i = 0; i < s_num_cams_turned; i++) {
         uint32_t cam = s_turned_cams[i];
         if (cam && rh_mem_committed(cam, CAM_TURNED)) {
-            memcpy(GPTR(cam), s_keep_cam[i], CAM_TURNED);
+            if (memcmp(GPTR(cam), s_made_cam[i], CAM_TURNED) == 0) {
+                memcpy(GPTR(cam), s_keep_cam[i], CAM_TURNED);
+            }
         }
     }
     s_num_cams_turned = 0;
-
-    if (!s_look_active && s_motion_blur_suppressed_for_orbit) {
-        if (rh_mem_committed(0x00870cdcu, 4)) {
-            MR32(0x00870cdcu) = s_saved_motion_blur_opt;
-        }
-        s_motion_blur_suppressed_for_orbit = 0;
-    }
 }
 
 static void turn_one_camera(uint32_t cam) {
@@ -1540,15 +1527,6 @@ static void look_process_view(uint32_t view_id, uint32_t cam) {
     s_pivot_y = cy;
     s_look_active = 1;
     turn_one_camera(cam);
-
-    if (rh_mem_committed(0x00870cdcu, 4)) {
-        if (!s_motion_blur_suppressed_for_orbit) {
-            uint32_t cur = MR32(0x00870cdcu);
-            if (cur != 0) s_saved_motion_blur_opt = cur;
-            s_motion_blur_suppressed_for_orbit = 1;
-        }
-        MR32(0x00870cdcu) = 0;
-    }
 }
 
 int nfs_is_camera_turned_in_guest(void) {
@@ -1708,10 +1686,10 @@ static void hook_sub_005bdde0(void) {
         if (rh_mem_committed(esp + 8, 4)) {
             uint32_t view_id = MR32(esp + 8);
             if (view_id >= 22u) {
-                // Out-of-bounds or corrupt view_id (e.g. 0xc6d55556 from uninitialized eView pass):
-                // Clamp to primary View 1 to avoid unmapped memory indexing (0x832de0 + view_id * 0x70)
-                view_id = 1u;
-                MR32(esp + 8) = 1u;
+                // Out-of-bounds or corrupt view_id (e.g. from uninitialized mirror or eView pass):
+                // Do not execute sub_005bdde0 or clamp to View 1, as that caches view 1 in 0x800534
+                // and prevents D3DTS_VIEW from updating on real View 1 draws.
+                return;
             }
 
             uint32_t view_ptr = 0x00832de0u + (view_id * 0x70u);
@@ -1756,12 +1734,6 @@ static void hook_sub_005bdde0(void) {
 
 static void look_camera_frame_tick(void) {
     restore_turned_cameras();
-    if (!s_look_active && s_motion_blur_suppressed_for_orbit) {
-        if (rh_mem_committed(0x00870cdcu, 4)) {
-            MR32(0x00870cdcu) = s_saved_motion_blur_opt;
-        }
-        s_motion_blur_suppressed_for_orbit = 0;
-    }
 }
 
 static void roam_android_install_hooks(void) {

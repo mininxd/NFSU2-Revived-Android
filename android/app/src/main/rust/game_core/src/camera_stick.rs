@@ -251,18 +251,16 @@ impl CameraStickEngine {
             return;
         }
 
-        // If roam_android's hook_sub_005c7ec0 is actively managing camera orbit in guest memory during view setup,
-        // do not double-rotate cam in guest memory here.
-        type CheckFn = unsafe extern "C" fn() -> std::os::raw::c_int;
-        static CHECK_FN: std::sync::OnceLock<Option<CheckFn>> = std::sync::OnceLock::new();
-        let check = CHECK_FN.get_or_init(|| unsafe {
+        // If roam_android's hook_sub_005c7ec0 is present in libnfsu2_roam.so,
+        // camera orbit is fully handled in C during view setup (sub_005c7ec0).
+        // Defer completely so Rust does not compete with C view setup.
+        static HAS_ROAM: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        let has_roam = *HAS_ROAM.get_or_init(|| unsafe {
             let sym = libc::dlsym(libc::RTLD_DEFAULT, b"nfs_is_camera_turned_in_guest\0".as_ptr() as *const _);
-            if sym.is_null() { None } else { Some(std::mem::transmute(sym)) }
+            !sym.is_null()
         });
-        if let Some(f) = check {
-            if unsafe { f() } != 0 {
-                return;
-            }
+        if has_roam {
+            return;
         }
 
         let yaw = self.update_yaw();
@@ -327,25 +325,8 @@ impl CameraStickEngine {
             oy = eye_y;
         }
 
-        // Motion Blur Suppression for Camera Control:
-        // When camera is orbiting, high angular velocity causes the game's frustum corner delta
-        // calculation (0x5cc460) to produce huge apparent velocities and smear the view or crash.
-        // Disable motion blur ONLY while camera control / orbit is active.
-        // When the camera is restored after frame rendering, restore_frame re-enables it.
-        let mb_ptr = guest_base.add(G_MOTION_BLUR as usize) as *mut u32;
-        let mb_weight_ptr = guest_base.add(G_MOTION_BLUR_WEIGHT as usize) as *mut f32;
-
-        let orig_mb = *mb_ptr;
-        let orig_weight = *mb_weight_ptr;
-        self.saved_motion_blur_val.store(orig_mb, Ordering::Release);
-        self.saved_blur_weight.store(orig_weight.to_bits(), Ordering::Release);
-
-        if orig_mb != 0 {
-            *mb_ptr = 0;
-            self.motion_blur_modified.store(true, Ordering::Release);
-        } else {
-            self.motion_blur_modified.store(false, Ordering::Release);
-        }
+        // Motion blur suppression is handled dynamically by motion_blur.rs:nfs_motion_blur_should_render
+        // during hook_sub_005c5c00 without clobbering G_MOTION_BLUR in guest memory.
 
         // Validate camera matrix before rotation
         let m_ptr = cam_raw as *mut f32;
@@ -469,6 +450,17 @@ impl CameraStickEngine {
     /// Optionally rotates an active D3DTS_VIEW matrix directly if needed.
     pub unsafe fn transform_view_matrix(&self, matrix: *mut f32, guest_base: *const u8) -> bool {
         if !self.is_enabled() || matrix.is_null() || guest_base.is_null() {
+            return false;
+        }
+
+        // If roam_android is loaded, camera orbit is handled directly in sub_005c7ec0.
+        // Do not rotate D3DTS_VIEW again to prevent double-rotation.
+        static HAS_ROAM: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        let has_roam = *HAS_ROAM.get_or_init(|| unsafe {
+            let sym = libc::dlsym(libc::RTLD_DEFAULT, b"nfs_is_camera_turned_in_guest\0".as_ptr() as *const _);
+            !sym.is_null()
+        });
+        if has_roam {
             return false;
         }
 
