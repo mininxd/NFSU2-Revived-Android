@@ -28,7 +28,10 @@ public final class GameOptions {
             STARTUP_MOVIES = "intro", CUTSCENE_BORDERS = "cutscene_borders",
             ROAM_CARS_LIMIT = "roam_max_cars", ROAM_CREW = "roam_crew",
             GRAPHICS_BACKEND = "graphics_backend", DRAW_DISTANCE = "draw_distance",
-            TRACKSIDE_CROWDS = "trackside_crowds", REGION = "region", SPEEDOMETER = "speedometer", PAD_LAYOUT = "pad_layout";
+            TRACKSIDE_CROWDS = "trackside_crowds", REGION = "region", SPEEDOMETER = "speedometer", PAD_LAYOUT = "pad_layout",
+            UPDATE_CHANNEL = "update_channel";
+
+    public static final String CHANNEL_STABLE = "stable", CHANNEL_BETA = "beta";
 
     static final Option[] ALL = {
             new Option(GRAPHICS_BACKEND, "Graphics API", "auto",
@@ -170,6 +173,7 @@ public final class GameOptions {
     static String get(Context context, String key) {
         Option o = find(key);
         if (o == null) {
+            if (UPDATE_CHANNEL.equals(key)) return updateChannel(context);
             if (TOUCH_SIZE.equals(key)) return prefs(context).getString(key, "auto");
             if (MENU_BUTTON_SIZE.equals(key)) return prefs(context).getString(key, "100");
             return prefs(context).getString(key, "off");
@@ -191,6 +195,18 @@ public final class GameOptions {
 
     static void set(Context context, String key, String value) {
         prefs(context).edit().putString(key, value).apply();
+    }
+
+    public static String updateChannel(Context context) {
+        return prefs(context).getString(UPDATE_CHANNEL, CHANNEL_STABLE);
+    }
+
+    public static boolean isBetaChannel(Context context) {
+        return CHANNEL_BETA.equalsIgnoreCase(updateChannel(context));
+    }
+
+    public static void setUpdateChannel(Context context, String channel) {
+        prefs(context).edit().putString(UPDATE_CHANNEL, channel != null ? channel.toLowerCase(java.util.Locale.ROOT) : CHANNEL_STABLE).apply();
     }
 
     static final String ONLINE_SERVER = "online_server", DEFAULT_ONLINE_SERVER = "eahub.eu";
