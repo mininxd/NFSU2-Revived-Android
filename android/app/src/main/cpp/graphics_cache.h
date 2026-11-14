@@ -59,8 +59,6 @@ float nfs_camera_stick_get_yaw(void);
 // Dynamic Camera Forward-Only Back-Culling Engine
 void nfs_camera_cull_set_enabled(int enabled);
 int nfs_camera_cull_is_enabled(void);
-void nfs_camera_cull_set_motion_blur_active(int active);
-int nfs_camera_cull_is_motion_blur_active(void);
 void nfs_camera_cull_set_margin(float margin);
 void nfs_camera_cull_set_far_distance(float dist);
 void nfs_camera_cull_update_camera(float pos_x, float pos_y, float pos_z,

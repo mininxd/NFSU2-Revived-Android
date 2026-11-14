@@ -15,7 +15,6 @@ pub const NEAR_PROTECTION_RADIUS_SQ: f32 = NEAR_PROTECTION_RADIUS * NEAR_PROTECT
 
 pub struct CameraCullEngine {
     enabled: AtomicBool,
-    motion_blur_active: AtomicBool,
     cull_margin: AtomicU32,   // f32 bits
     far_distance: AtomicU32,  // f32 bits
     // Camera world position & forward direction vector
@@ -51,8 +50,7 @@ pub struct CameraCullEngine {
 impl CameraCullEngine {
     pub const fn new() -> Self {
         Self {
-            enabled: AtomicBool::new(true),
-            motion_blur_active: AtomicBool::new(false),
+            enabled: AtomicBool::new(false),
             cull_margin: AtomicU32::new(DEFAULT_CULL_MARGIN.to_bits()),
             far_distance: AtomicU32::new(0), // 0 = unlimited
             cam_pos: [AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0)],
@@ -89,16 +87,6 @@ impl CameraCullEngine {
     #[inline]
     pub fn set_enabled(&self, val: bool) {
         self.enabled.store(val, Ordering::Release);
-    }
-
-    #[inline]
-    pub fn is_motion_blur_active(&self) -> bool {
-        self.motion_blur_active.load(Ordering::Acquire)
-    }
-
-    #[inline]
-    pub fn set_motion_blur_active(&self, val: bool) {
-        self.motion_blur_active.store(val, Ordering::Release);
     }
 
     #[inline]
@@ -185,95 +173,10 @@ impl CameraCullEngine {
 
     /// Tests whether the impending draw call should be culled.
     ///
-    /// Returns `true` if the draw call is strictly behind the camera or out of range.
+    /// Always returns `false` (culling disabled) so vehicle and scenery are never hidden.
     #[inline]
     pub fn test_draw(&self) -> bool {
         self.total_draws.fetch_add(1, Ordering::Relaxed);
-
-        if !self.is_enabled() || self.motion_blur_active.load(Ordering::Relaxed) {
-            return false;
-        }
-
-        // Never cull 2D screen-space primitives (UI, HUD, minimap, speedometer)
-        if self.is_screen_space.load(Ordering::Relaxed) || self.is_ortho.load(Ordering::Relaxed) {
-            return false;
-        }
-
-        // If World matrix is Identity, this is fullscreen/postprocess or raw scenery
-        if self.world_is_identity.load(Ordering::Relaxed) || !self.world_valid.load(Ordering::Relaxed) {
-            return false;
-        }
-
-        let margin = self.get_margin();
-        let far_dist = self.get_far_distance();
-
-        let wx = f32::from_bits(self.world_pos[0].load(Ordering::Relaxed));
-        let wy = f32::from_bits(self.world_pos[1].load(Ordering::Relaxed));
-        let wz = f32::from_bits(self.world_pos[2].load(Ordering::Relaxed));
-
-        // Evaluate distance along camera viewing vector and eye-space proximity.
-        // Active D3DTS_VIEW (view_valid) is prioritized over cam_valid because view_valid
-        // is updated synchronously on SetTransform(D3DTS_VIEW) for the exact active render pass
-        // and correctly accounts for camera orbit / stick rotations.
-        let (eye_dist_sq, fwd_distance) = if self.view_valid.load(Ordering::Relaxed) {
-            let v00 = f32::from_bits(self.v00.load(Ordering::Relaxed));
-            let v10 = f32::from_bits(self.v10.load(Ordering::Relaxed));
-            let v20 = f32::from_bits(self.v20.load(Ordering::Relaxed));
-            let v30 = f32::from_bits(self.v30.load(Ordering::Relaxed));
-
-            let v01 = f32::from_bits(self.v01.load(Ordering::Relaxed));
-            let v11 = f32::from_bits(self.v11.load(Ordering::Relaxed));
-            let v21 = f32::from_bits(self.v21.load(Ordering::Relaxed));
-            let v31 = f32::from_bits(self.v31.load(Ordering::Relaxed));
-
-            let v02 = f32::from_bits(self.v02.load(Ordering::Relaxed));
-            let v12 = f32::from_bits(self.v12.load(Ordering::Relaxed));
-            let v22 = f32::from_bits(self.v22.load(Ordering::Relaxed));
-            let v32 = f32::from_bits(self.v32.load(Ordering::Relaxed));
-
-            let eye_x = wx * v00 + wy * v10 + wz * v20 + v30;
-            let eye_y = wx * v01 + wy * v11 + wz * v21 + v31;
-            let eye_z = wx * v02 + wy * v12 + wz * v22 + v32;
-
-            (eye_x * eye_x + eye_y * eye_y + eye_z * eye_z, eye_z)
-        } else if self.cam_valid.load(Ordering::Relaxed) {
-            let cx = f32::from_bits(self.cam_pos[0].load(Ordering::Relaxed));
-            let cy = f32::from_bits(self.cam_pos[1].load(Ordering::Relaxed));
-            let cz = f32::from_bits(self.cam_pos[2].load(Ordering::Relaxed));
-
-            let fx = f32::from_bits(self.cam_fwd[0].load(Ordering::Relaxed));
-            let fy = f32::from_bits(self.cam_fwd[1].load(Ordering::Relaxed));
-            let fz = f32::from_bits(self.cam_fwd[2].load(Ordering::Relaxed));
-
-            let dx = wx - cx;
-            let dy = wy - cy;
-            let dz = wz - cz;
-
-            (dx * dx + dy * dy + dz * dz, dx * fx + dy * fy + dz * fz)
-        } else {
-            return false;
-        };
-
-        // Proximity Protection: Never cull geometry within near protection radius (35m).
-        // This guarantees the player vehicle, nearby traffic, pedestrians, and immediate road
-        // surfaces are never discarded or rendered as transparent ghosts during camera motion
-        // or high-speed motion blur effects.
-        if eye_dist_sq < NEAR_PROTECTION_RADIUS_SQ {
-            return false;
-        }
-
-        // 1. Back-Cull Check: Object is strictly behind player camera plane
-        if fwd_distance < -margin {
-            self.culled_draws.fetch_add(1, Ordering::Relaxed);
-            return true;
-        }
-
-        // 2. Far Horizon Check: Object is beyond the configured draw distance
-        if far_dist > 0.0 && fwd_distance > (far_dist + margin) {
-            self.culled_draws.fetch_add(1, Ordering::Relaxed);
-            return true;
-        }
-
         false
     }
 
@@ -301,16 +204,6 @@ pub unsafe extern "C" fn nfs_camera_cull_set_enabled(enabled: i32) {
 #[no_mangle]
 pub unsafe extern "C" fn nfs_camera_cull_is_enabled() -> i32 {
     if GLOBAL_CAMERA_CULL.is_enabled() { 1 } else { 0 }
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn nfs_camera_cull_set_motion_blur_active(active: i32) {
-    GLOBAL_CAMERA_CULL.set_motion_blur_active(active != 0);
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn nfs_camera_cull_is_motion_blur_active() -> i32 {
-    if GLOBAL_CAMERA_CULL.is_motion_blur_active() { 1 } else { 0 }
 }
 
 #[no_mangle]
@@ -399,7 +292,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_camera_culling_front_and_back() {
+    fn test_culling_disabled_always_renders() {
         let engine = CameraCullEngine::new();
         engine.set_enabled(true);
         engine.set_margin(4.0);
@@ -407,97 +300,18 @@ mod tests {
         // Camera at origin, pointing along +Z
         engine.update_camera([0.0, 0.0, 0.0], [0.0, 0.0, 1.0]);
 
-        // 1. Object in front: Z = +20.0m -> Should NOT cull
+        // 1. Object in front -> Never culled
         let mut world_front = [0.0f32; 16];
         world_front[0] = 1.0; world_front[5] = 1.0; world_front[10] = 1.0; world_front[15] = 1.0;
-        world_front[12] = 0.0; world_front[13] = 0.0; world_front[14] = 20.0;
+        world_front[14] = 20.0;
         engine.update_world_matrix(&world_front);
         assert!(!engine.test_draw());
 
-        // 2. Distant object behind beyond near protection: Z = -50.0m (< -4.0m margin, dist=50m > 35m) -> Should CULL
-        let mut world_back = [0.0f32; 16];
-        world_back[0] = 1.0; world_back[5] = 1.0; world_back[10] = 1.0; world_back[15] = 1.0;
-        world_back[12] = 0.0; world_back[13] = 0.0; world_back[14] = -50.0;
-        engine.update_world_matrix(&world_back);
-        assert!(engine.test_draw());
-
-        // 3. Nearby object behind within near protection: Z = -15.0m (dist=15m < 35m) -> Should NOT cull
-        let mut world_near = [0.0f32; 16];
-        world_near[0] = 1.0; world_near[5] = 1.0; world_near[10] = 1.0; world_near[15] = 1.0;
-        world_near[12] = 0.0; world_near[13] = 0.0; world_near[14] = -15.0;
-        engine.update_world_matrix(&world_near);
-        assert!(!engine.test_draw());
-    }
-
-    #[test]
-    fn test_draw_distance_horizon_culling() {
-        let engine = CameraCullEngine::new();
-        engine.set_enabled(true);
-        engine.set_margin(4.0);
-        engine.set_far_distance(100.0); // 100m draw distance (Performance preset)
-
-        engine.update_camera([0.0, 0.0, 0.0], [0.0, 0.0, 1.0]);
-
-        // Object within 100m: Z = 80.0m -> Should NOT cull
-        let mut world_mid = [0.0f32; 16];
-        world_mid[0] = 1.0; world_mid[5] = 1.0; world_mid[10] = 1.0; world_mid[15] = 1.0;
-        world_mid[14] = 80.0;
-        engine.update_world_matrix(&world_mid);
-        assert!(!engine.test_draw());
-
-        // Object beyond 100m + margin: Z = 120.0m -> Should CULL
-        let mut world_far = [0.0f32; 16];
-        world_far[0] = 1.0; world_far[5] = 1.0; world_far[10] = 1.0; world_far[15] = 1.0;
-        world_far[14] = 120.0;
-        engine.update_world_matrix(&world_far);
-        assert!(engine.test_draw());
-    }
-
-    #[test]
-    fn test_identity_and_ortho_preservation() {
-        let engine = CameraCullEngine::new();
-        engine.set_enabled(true);
-        engine.update_camera([0.0, 0.0, 0.0], [0.0, 0.0, 1.0]);
-
-        // Identity world matrix (track / terrain batch) -> Never culled
-        let mut id_m = [0.0f32; 16];
-        id_m[0] = 1.0; id_m[5] = 1.0; id_m[10] = 1.0; id_m[15] = 1.0;
-        engine.update_world_matrix(&id_m);
-        assert!(!engine.test_draw());
-
-        // Orthographic projection -> Never culled
-        let mut ortho_proj = [0.0f32; 16];
-        ortho_proj[0] = 1.0; ortho_proj[5] = 1.0; ortho_proj[10] = 1.0; ortho_proj[15] = 1.0; // m[11] = 0, m[15] = 1
-        engine.update_proj_matrix(&ortho_proj);
+        // 2. Object behind -> Never culled (culling completely removed)
         let mut world_back = [0.0f32; 16];
         world_back[0] = 1.0; world_back[5] = 1.0; world_back[10] = 1.0; world_back[15] = 1.0;
         world_back[14] = -50.0;
         engine.update_world_matrix(&world_back);
         assert!(!engine.test_draw());
-    }
-
-    #[test]
-    fn test_motion_blur_bypasses_culling() {
-        let engine = CameraCullEngine::new();
-        engine.set_enabled(true);
-        engine.set_margin(4.0);
-        engine.update_camera([0.0, 0.0, 0.0], [0.0, 0.0, 1.0]);
-
-        // Object behind camera beyond near protection: Z = -50.0m
-        let mut world_back = [0.0f32; 16];
-        world_back[0] = 1.0; world_back[5] = 1.0; world_back[10] = 1.0; world_back[15] = 1.0;
-        world_back[14] = -50.0;
-        engine.update_world_matrix(&world_back);
-
-        // When motion blur is NOT active, object should cull
-        assert!(engine.test_draw());
-
-        // When motion blur IS active, culling is completely bypassed
-        engine.set_motion_blur_active(true);
-        assert!(!engine.test_draw());
-
-        // When motion blur is deactivated, culling resumes
-        engine.set_motion_blur_active(false);
-        assert!(engine.test_draw());
     }
 }

@@ -214,7 +214,7 @@ void nfs_widescreen_set_draw_distance(float distance) {
 #endif
 }
 
-static int s_forward_culling = 1;
+static int s_forward_culling = 0;
 
 void nfs_widescreen_set_forward_culling(int enabled) {
     s_forward_culling = enabled;
