@@ -1173,6 +1173,8 @@ typedef void (*recomp_void_func_t)(void);
 
 static recomp_void_func_t s_orig_4a5d90 = NULL;
 static recomp_void_func_t s_orig_5c7ec0 = NULL;
+static recomp_void_func_t s_orig_5cc460 = NULL;
+static recomp_void_func_t s_orig_5bdde0 = NULL;
 
 static recomp_void_func_t arm64_inline_hook(void *target_func, void *hook_func) {
     if (!target_func || !hook_func) return NULL;
@@ -1493,9 +1495,44 @@ static float get_car_speed_mps(uint32_t car) {
     return 0.0f;
 }
 
-static void hook_sub_005c5c00(void) {
-    // Safe motion blur draw stub preventing unresolved ICALL halt (0x00000000)
-    if (g_p_eax) *g_p_eax = 0;
+static void hook_sub_005cc460(void) {
+    if (!g_p_mem_base || !*g_p_mem_base) return;
+
+    // Check if motion blur render targets and textures are allocated and valid.
+    // In SPEED2.EXE, 0x0086eb0c/0x0086eb10 are ping-pong surfaces and 0x0086eb88/0x0086eb8c
+    // are textures. If unallocated (0), executing sub_005cc460 calls SetRenderTarget(0, 0)
+    // and invokes sub_005c5c00 on NULL textures, causing NULL ICALLs, viewport corruption,
+    // and car invisibility.
+    // When unallocated, safely skip the blur render pass; the game will continue drawing
+    // directly to the backbuffer without any crash or vehicle invisibility.
+    if (!rh_mem_committed(0x0086eb0cu, 4) || MR32(0x0086eb0cu) == 0 ||
+        !rh_mem_committed(0x0086eb10u, 4) || MR32(0x0086eb10u) == 0 ||
+        !rh_mem_committed(0x0086eb88u, 4) || MR32(0x0086eb88u) == 0 ||
+        !rh_mem_committed(0x0086eb8cu, 4) || MR32(0x0086eb8cu) == 0) {
+        return;
+    }
+
+    if (s_orig_5cc460) {
+        s_orig_5cc460();
+    }
+}
+
+static void hook_sub_005bdde0(void) {
+    if (g_p_mem_base && *g_p_mem_base && g_p_esp && *g_p_esp) {
+        uint32_t esp = *g_p_esp;
+        // In sub_005bdde0: arg 1 is [esp+4] (matrix ptr), arg 2 is [esp+8] (view_id)
+        if (rh_mem_committed(esp + 8, 4)) {
+            uint32_t view_id = MR32(esp + 8);
+            if (view_id >= 22u) {
+                // Out-of-bounds or corrupt view_id (e.g. 0xc6d55556):
+                // Clamp to primary driving View 1 to avoid reading unmapped memory (0x832de0 + view_id * 0x70)
+                MR32(esp + 8) = 1u;
+            }
+        }
+    }
+    if (s_orig_5bdde0) {
+        s_orig_5bdde0();
+    }
 }
 
 static void hook_sub_005c7ec0(void) {
@@ -1598,9 +1635,13 @@ static void roam_android_install_hooks(void) {
         0xff, 0x03, 0x02, 0xd1, 0xfd, 0x7b, 0x02, 0xa9,
         0xfc, 0x6f, 0x03, 0xa9, 0xfa, 0x67, 0x04, 0xa9
     };
-    static const uint8_t EXPECTED_5C5C[16] = {
-        0xff, 0x43, 0x02, 0xd1, 0xfd, 0x7b, 0x03, 0xa9,
-        0xfc, 0x6f, 0x04, 0xa9, 0xfa, 0x67, 0x05, 0xa9
+    static const uint8_t EXPECTED_5CC4[16] = {
+        0xf9, 0x0f, 0x1c, 0xf8, 0xf8, 0x5f, 0x01, 0xa9,
+        0xf6, 0x57, 0x02, 0xa9, 0xf4, 0x4f, 0x03, 0xa9
+    };
+    static const uint8_t EXPECTED_5BDD[16] = {
+        0xff, 0x03, 0x02, 0xd1, 0xfd, 0x7b, 0x02, 0xa9,
+        0xfc, 0x6f, 0x03, 0xa9, 0xfa, 0x67, 0x04, 0xa9
     };
 
     void *target_4a = (void *)(lib_base + 0x1464be0);
@@ -1625,14 +1666,26 @@ static void roam_android_install_hooks(void) {
                             "sub_005c7ec0 prefix mismatch at %p", target_5c);
     }
 
-    void *target_5c5c = (void *)(lib_base + 0x2d51828);
-    if (memcmp(target_5c5c, EXPECTED_5C5C, 16) == 0) {
-        arm64_inline_hook(target_5c5c, (void *)hook_sub_005c5c00);
+    void *target_5cc4 = (void *)(lib_base + 0x0275edc4);
+    if (memcmp(target_5cc4, EXPECTED_5CC4, 16) == 0) {
+        s_orig_5cc460 = arm64_inline_hook(target_5cc4, (void *)hook_sub_005cc460);
         __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook",
-                            "Hooked sub_005c5c00 (motion blur draw stub) at %p", target_5c5c);
+                            "Hooked sub_005cc460 (motion blur pipeline) at %p (orig: %p)",
+                            target_5cc4, s_orig_5cc460);
     } else {
         __android_log_print(ANDROID_LOG_WARN, "NFSU2-Hook",
-                            "sub_005c5c00 prefix mismatch at %p", target_5c5c);
+                            "sub_005cc460 prefix mismatch at %p", target_5cc4);
+    }
+
+    void *target_5bdd = (void *)(lib_base + 0x02c374ec);
+    if (memcmp(target_5bdd, EXPECTED_5BDD, 16) == 0) {
+        s_orig_5bdde0 = arm64_inline_hook(target_5bdd, (void *)hook_sub_005bdde0);
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook",
+                            "Hooked sub_005bdde0 (view matrix setup) at %p (orig: %p)",
+                            target_5bdd, s_orig_5bdde0);
+    } else {
+        __android_log_print(ANDROID_LOG_WARN, "NFSU2-Hook",
+                            "sub_005bdde0 prefix mismatch at %p", target_5bdd);
     }
 
     // Also update k_functions dispatch table
@@ -1652,12 +1705,20 @@ static void roam_android_install_hooks(void) {
         __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Updated k_functions[0x005c7ec0]");
     }
 
-    uintptr_t k_5c5c = lib_base + 0x9797c00;
-    if (*(uint32_t *)k_5c5c == 0x005c5c00) {
-        uintptr_t page = k_5c5c & ~((uintptr_t)page_sz - 1);
+    uintptr_t k_5cc4 = lib_base + 0x09794020;
+    if (*(uint32_t *)k_5cc4 == 0x005cc460) {
+        uintptr_t page = k_5cc4 & ~((uintptr_t)page_sz - 1);
         mprotect((void *)page, page_sz * 2, PROT_READ | PROT_WRITE);
-        *(void **)(k_5c5c + 8) = (void *)hook_sub_005c5c00;
-        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Updated k_functions[0x005c5c00]");
+        *(void **)(k_5cc4 + 8) = (void *)hook_sub_005cc460;
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Updated k_functions[0x005cc460]");
+    }
+
+    uintptr_t k_5bdd = lib_base + 0x097934a0;
+    if (*(uint32_t *)k_5bdd == 0x005bdde0) {
+        uintptr_t page = k_5bdd & ~((uintptr_t)page_sz - 1);
+        mprotect((void *)page, page_sz * 2, PROT_READ | PROT_WRITE);
+        *(void **)(k_5bdd + 8) = (void *)hook_sub_005bdde0;
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Updated k_functions[0x005bdde0]");
     }
 
     g_hooks_installed = 1;
