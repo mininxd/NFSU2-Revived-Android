@@ -821,8 +821,22 @@ static void extraoptions_init_patches(void) {
         MR32(0x008764f4u) = 1;
     }
 
+    // Rearview Mirror 3D World Pass Bypass in RenderScene (SPEED2.EXE: 0x005cae4c):
+    // In stock game: 0x005cae4c is "je 0x5caff1" (0f 84 9f 01 00 00).
+    // Patch to unconditional "jmp 0x5caff1; nop" (e9 a0 01 00 00 90) to completely
+    // eliminate duplicate world rendering in the rearview mirror on mobile, while allowing
+    // the view setup loop (0x005d295d) to properly initialize View 3 matrices and structures.
+    if (rh_mem_committed(0x005cae4cu, 6)) {
+        MR8(0x005cae4cu + 0) = 0xE9;
+        MR8(0x005cae4cu + 1) = 0xA0;
+        MR8(0x005cae4cu + 2) = 0x01;
+        MR8(0x005cae4cu + 3) = 0x00;
+        MR8(0x005cae4cu + 4) = 0x00;
+        MR8(0x005cae4cu + 5) = 0x90; // NOP
+    }
+
     __android_log_print(ANDROID_LOG_INFO, "NFSU2-ExtraOptions",
-                        "Extra Options memory patches applied: regional cars, laps (0-127), opponents (0-5), 3D fixes, drift 9x, outrun");
+                        "Extra Options memory patches applied: regional cars, laps (0-127), opponents (0-5), 3D fixes, drift 9x, outrun, mirror pass bypass");
 }
 
 static void extraoptions_frame_tick(void) {
@@ -1424,9 +1438,7 @@ static void restore_turned_cameras(void) {
     for (int i = 0; i < s_num_cams_turned; i++) {
         uint32_t cam = s_turned_cams[i];
         if (cam && rh_mem_committed(cam, CAM_TURNED)) {
-            if (memcmp(GPTR(cam), s_made_cam[i], CAM_TURNED) == 0) {
-                memcpy(GPTR(cam), s_keep_cam[i], CAM_TURNED);
-            }
+            memcpy(GPTR(cam), s_keep_cam[i], CAM_TURNED);
         }
     }
     s_num_cams_turned = 0;
@@ -1437,6 +1449,13 @@ static void turn_one_camera(uint32_t cam) {
     for (int i = 0; i < s_num_cams_turned; i++) {
         if (s_turned_cams[i] == cam) return;
     }
+    float *M = (float *)GPTR(cam);
+    for (int k = 0; k < 16; k++) {
+        if (!isfinite(M[k])) return;
+    }
+    float *pos = (float *)GPTR(cam + CAM_POS);
+    if (!isfinite(pos[0]) || !isfinite(pos[1]) || !isfinite(pos[2])) return;
+
     memcpy(s_keep_cam[s_num_cams_turned], GPTR(cam), CAM_TURNED);
     turn_cam_matrix(cam);
     turn_cam_xy((float *)GPTR(cam + CAM_POS), 1);
@@ -1448,7 +1467,6 @@ static void turn_one_camera(uint32_t cam) {
 
 static void look_process_view(uint32_t view_id, uint32_t cam) {
     if (view_id != 1u) {
-        if (s_look_active && cam) turn_one_camera(cam);
         return;
     }
 
@@ -1482,6 +1500,12 @@ static void look_process_view(uint32_t view_id, uint32_t cam) {
         while (s_look_yaw < -PI_F) s_look_yaw += 2.f * PI_F;
     }
 
+    if (!isfinite(s_look_yaw)) {
+        s_look_yaw = 0.f;
+        s_look_active = 0;
+        return;
+    }
+
     if (!car || (want == 0.f && !s_look_back && fabsf(s_look_yaw) < REST_RAD)) {
         s_look_yaw = 0.f;
         s_look_active = 0;
@@ -1489,9 +1513,10 @@ static void look_process_view(uint32_t view_id, uint32_t cam) {
     }
 
     float cx = MRF32(car + CAR_POS), cy = MRF32(car + CAR_POS + 4u);
+    if (!isfinite(cx) || !isfinite(cy)) return;
     if (cam && rh_mem_committed(cam + CAM_POS, 12)) {
         float ex = MRF32(cam + CAM_POS), ey = MRF32(cam + CAM_POS + 4u);
-        if (hypotf(ex - cx, ey - cy) < IN_CAR_M) {
+        if (isfinite(ex) && isfinite(ey) && hypotf(ex - cx, ey - cy) < IN_CAR_M) {
             cx = ex;
             cy = ey;
         }
@@ -1500,6 +1525,10 @@ static void look_process_view(uint32_t view_id, uint32_t cam) {
     s_pivot_y = cy;
     s_look_active = 1;
     turn_one_camera(cam);
+}
+
+int nfs_is_camera_turned_in_guest(void) {
+    return s_look_active;
 }
 
 static float get_car_speed_mps(uint32_t car) {
@@ -1590,7 +1619,7 @@ static void hook_sub_005c7ec0(void) {
             if (view && rh_mem_committed(view + 4, 0x40)) {
                 uint32_t view_id = MR32(view + 4);
                 uint32_t cam = MR32(view + 0x40);
-                if (view_id == 1u || view_id == 4u) {
+                if (view_id == 1u) {
                     look_process_view(view_id, cam);
                 }
 
@@ -1617,12 +1646,12 @@ static void hook_sub_005c7ec0(void) {
                 }
 
                 // 2. Rearview Mirror Suppression:
-                // In races, View 3 renders the entire 3D world a 2nd time every frame.
-                // Disabling View 3 completely eliminates the duplicate world rendering pass.
+                // View 3 duplicate 3D world rendering pass is cleanly bypassed via RenderScene patch
+                // at 0x005cae4c (jmp 0x5caff1; nop) in extraoptions_init_patches.
+                // We do NOT set byte ptr [view3 + 8] = 0 here, as that causes SPEED2.EXE (0x005d295d)
+                // to skip calling sub_005c7ec0 for View 3, leaving its view matrix uninitialized (0xaaaaaaaa).
                 if (rh_mem_committed(0x00870cf0u, 4)) MR32(0x00870cf0u) = 0;
                 if (rh_mem_committed(0x008707e0u, 4) && MR32(0x008707e0u) == 2) MR32(0x008707e0u) = 1;
-                uint32_t view3 = 0x00832de0u + 3u * 0x70u;
-                if (rh_mem_committed(view3 + 8, 1)) *(uint8_t*)GPTR(view3 + 8) = 0;
 
                 // 3. Motion blur management during camera orbit:
                 // Do not zero MR32(0x00870cdcu) here, as that permanently disabled motion blur
@@ -1644,6 +1673,38 @@ static void hook_sub_005c7ec0(void) {
 
     if (s_orig_5c7ec0) {
         s_orig_5c7ec0();
+    }
+}
+
+static recomp_void_func_t s_orig_5bdde0 = NULL;
+
+static void hook_sub_005bdde0(void) {
+    if (g_p_mem_base && *g_p_mem_base && g_p_esp && *g_p_esp) {
+        uint32_t esp = *g_p_esp;
+        if (rh_mem_committed(esp + 8, 4)) {
+            uint32_t view_id = MR32(esp + 8);
+            if (view_id < 22u) {
+                uint32_t view_ptr = 0x00832de0u + (view_id * 0x70u);
+                if (rh_mem_committed(view_ptr, 4)) {
+                    uint32_t mat_ptr = MR32(view_ptr);
+                    if (mat_ptr == 0 || mat_ptr == 0xaaaaaaaa || mat_ptr < 0x10000 || mat_ptr >= 0x7ffff000 || !rh_mem_committed(mat_ptr, 0x40)) {
+                        uint32_t fallback_mat = 0x00873380u + (view_id * 0x120u);
+                        if (rh_mem_committed(fallback_mat, 0x40)) {
+                            if (rh_mem_committed(0x008734a0u, 0x40) && MR32(fallback_mat) == 0xaaaaaaaa) {
+                                memcpy(GPTR(fallback_mat), GPTR(0x008734a0u), 0x40);
+                            }
+                            MR32(view_ptr) = fallback_mat;
+                        } else if (rh_mem_committed(0x008734a0u, 0x40)) {
+                            MR32(view_ptr) = 0x008734a0u;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (s_orig_5bdde0) {
+        s_orig_5bdde0();
     }
 }
 
@@ -1675,6 +1736,10 @@ static void roam_android_install_hooks(void) {
     static const uint8_t EXPECTED_5C5C[16] = {
         0xff, 0x43, 0x02, 0xd1, 0xfd, 0x7b, 0x03, 0xa9,
         0xfc, 0x6f, 0x04, 0xa9, 0xfa, 0x67, 0x05, 0xa9
+    };
+    static const uint8_t EXPECTED_5BDD[16] = {
+        0xff, 0x03, 0x02, 0xd1, 0xfd, 0x7b, 0x02, 0xa9,
+        0xfc, 0x6f, 0x03, 0xa9, 0xfa, 0x67, 0x04, 0xa9
     };
 
     void *target_4a = (void *)(lib_base + 0x1464be0);
@@ -1710,6 +1775,17 @@ static void roam_android_install_hooks(void) {
                             "sub_005c5c00 prefix mismatch at %p", target_5c5c);
     }
 
+    void *target_5bdd = (void *)(lib_base + 0x2c374ec);
+    if (memcmp(target_5bdd, EXPECTED_5BDD, 16) == 0) {
+        s_orig_5bdde0 = arm64_inline_hook(target_5bdd, (void *)hook_sub_005bdde0);
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook",
+                            "Hooked sub_005bdde0 (view matrix guard) at %p (orig: %p)",
+                            target_5bdd, s_orig_5bdde0);
+    } else {
+        __android_log_print(ANDROID_LOG_WARN, "NFSU2-Hook",
+                            "sub_005bdde0 prefix mismatch at %p", target_5bdd);
+    }
+
     // Also update k_functions dispatch table
     uintptr_t k_4a = lib_base + 0x977c160;
     if (*(uint32_t *)k_4a == 0x004a5d90) {
@@ -1733,6 +1809,14 @@ static void roam_android_install_hooks(void) {
         mprotect((void *)page, page_sz * 2, PROT_READ | PROT_WRITE);
         *(void **)(k_5c5c + 8) = (void *)hook_sub_005c5c00;
         __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Updated k_functions[0x005c5c00]");
+    }
+
+    uintptr_t k_5bdd = lib_base + 0x97934a0;
+    if (*(uint32_t *)k_5bdd == 0x005bdde0) {
+        uintptr_t page = k_5bdd & ~((uintptr_t)page_sz - 1);
+        mprotect((void *)page, page_sz * 2, PROT_READ | PROT_WRITE);
+        *(void **)(k_5bdd + 8) = (void *)hook_sub_005bdde0;
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Updated k_functions[0x005bdde0]");
     }
 
     g_hooks_installed = 1;

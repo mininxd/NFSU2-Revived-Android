@@ -251,8 +251,22 @@ impl CameraStickEngine {
             return;
         }
 
+        // If roam_android's hook_sub_005c7ec0 is actively managing camera orbit in guest memory during view setup,
+        // do not double-rotate cam in guest memory here.
+        type CheckFn = unsafe extern "C" fn() -> std::os::raw::c_int;
+        static CHECK_FN: std::sync::OnceLock<Option<CheckFn>> = std::sync::OnceLock::new();
+        let check = CHECK_FN.get_or_init(|| unsafe {
+            let sym = libc::dlsym(libc::RTLD_DEFAULT, b"nfs_is_camera_turned_in_guest\0".as_ptr() as *const _);
+            if sym.is_null() { None } else { Some(std::mem::transmute(sym)) }
+        });
+        if let Some(f) = check {
+            if unsafe { f() } != 0 {
+                return;
+            }
+        }
+
         let yaw = self.update_yaw();
-        if yaw.abs() < REST_YAW_THRESHOLD {
+        if yaw.abs() < REST_YAW_THRESHOLD || !yaw.is_finite() {
             return;
         }
 
@@ -273,6 +287,9 @@ impl CameraStickEngine {
         let car_pos = guest_base.add((car + CAR_POS_OFFSET) as usize) as *const f32;
         let mut ox = *car_pos;
         let mut oy = *car_pos.add(1);
+        if !ox.is_finite() || !oy.is_finite() {
+            return;
+        }
 
         // Find active drive camera:
         // In SPEED2.EXE, Player + 0x238 is the camera mover. Mover + 0xC is mover type (1 = MOVER_DRIVE).
@@ -298,6 +315,9 @@ impl CameraStickEngine {
         let cam_pos = cam_raw.add(CAM_POS_OFFSET as usize) as *mut f32;
         let eye_x = *cam_pos;
         let eye_y = *cam_pos.add(1);
+        if !eye_x.is_finite() || !eye_y.is_finite() {
+            return;
+        }
 
         // In-car camera detection (bumper/hood view within 3m): pivot at eye
         let dx = eye_x - ox;
@@ -307,24 +327,17 @@ impl CameraStickEngine {
             oy = eye_y;
         }
 
-        // Motion Blur Suppression for Camera Control:
-        // When camera is orbiting, high angular velocity causes the game's frustum corner delta
-        // calculation (sub_005a1a90) to produce huge apparent velocities and smear the view.
-        // Disable motion blur ONLY while camera control / orbit is active.
-        // When the camera is at rest (normal driving or nitrous boost), motion blur remains active.
-        let mb_ptr = guest_base.add(G_MOTION_BLUR as usize) as *mut u32;
-        let mb_weight_ptr = guest_base.add(G_MOTION_BLUR_WEIGHT as usize) as *mut f32;
+        // Motion blur suppression is handled dynamically by motion_blur.rs:nfs_motion_blur_should_render
+        // during hook_sub_005c5c00 without clobbering G_MOTION_BLUR in guest memory.
 
-        let orig_mb = *mb_ptr;
-        let orig_weight = *mb_weight_ptr;
-        self.saved_motion_blur_val.store(orig_mb, Ordering::Release);
-        self.saved_blur_weight.store(orig_weight.to_bits(), Ordering::Release);
-
-        if orig_mb != 0 {
-            *mb_ptr = 0;
-            self.motion_blur_modified.store(true, Ordering::Release);
-        } else {
-            self.motion_blur_modified.store(false, Ordering::Release);
+        // Validate camera matrix before rotation
+        let m_ptr = cam_raw as *mut f32;
+        let mut m = [0.0f32; 16];
+        std::ptr::copy_nonoverlapping(m_ptr, m.as_mut_ptr(), 16);
+        for val in &m {
+            if !val.is_finite() {
+                return;
+            }
         }
 
         // Save original camera bytes
@@ -336,34 +349,48 @@ impl CameraStickEngine {
         self.last_turn_count.fetch_add(1, Ordering::Relaxed);
 
         // Rotate matrix
-        let m_ptr = cam_raw as *mut f32;
-        let mut m = [0.0f32; 16];
-        std::ptr::copy_nonoverlapping(m_ptr, m.as_mut_ptr(), 16);
         Self::rotate_matrix(&mut m, ox, oy, yaw);
+        for val in &m {
+            if !val.is_finite() {
+                return;
+            }
+        }
         std::ptr::copy_nonoverlapping(m.as_ptr(), m_ptr, 16);
 
         // Rotate eye position
         let mut eye = [*cam_pos, *cam_pos.add(1), *cam_pos.add(2)];
-        Self::rotate_xy(&mut eye, true, ox, oy, yaw);
-        *cam_pos = eye[0];
-        *cam_pos.add(1) = eye[1];
-        *cam_pos.add(2) = eye[2];
+        if eye[0].is_finite() && eye[1].is_finite() && eye[2].is_finite() {
+            Self::rotate_xy(&mut eye, true, ox, oy, yaw);
+            if eye[0].is_finite() && eye[1].is_finite() && eye[2].is_finite() {
+                *cam_pos = eye[0];
+                *cam_pos.add(1) = eye[1];
+                *cam_pos.add(2) = eye[2];
+            }
+        }
 
         // Rotate forward vector
         let fwd_pos = cam_raw.add(CAM_FWD_OFFSET as usize) as *mut f32;
         let mut fwd = [*fwd_pos, *fwd_pos.add(1), *fwd_pos.add(2)];
-        Self::rotate_xy(&mut fwd, false, ox, oy, yaw);
-        *fwd_pos = fwd[0];
-        *fwd_pos.add(1) = fwd[1];
-        *fwd_pos.add(2) = fwd[2];
+        if fwd[0].is_finite() && fwd[1].is_finite() && fwd[2].is_finite() {
+            Self::rotate_xy(&mut fwd, false, ox, oy, yaw);
+            if fwd[0].is_finite() && fwd[1].is_finite() && fwd[2].is_finite() {
+                *fwd_pos = fwd[0];
+                *fwd_pos.add(1) = fwd[1];
+                *fwd_pos.add(2) = fwd[2];
+            }
+        }
 
         // Rotate target position
         let tgt_pos = cam_raw.add(CAM_TARGET_OFFSET as usize) as *mut f32;
         let mut tgt = [*tgt_pos, *tgt_pos.add(1), *tgt_pos.add(2)];
-        Self::rotate_xy(&mut tgt, true, ox, oy, yaw);
-        *tgt_pos = tgt[0];
-        *tgt_pos.add(1) = tgt[1];
-        *tgt_pos.add(2) = tgt[2];
+        if tgt[0].is_finite() && tgt[1].is_finite() && tgt[2].is_finite() {
+            Self::rotate_xy(&mut tgt, true, ox, oy, yaw);
+            if tgt[0].is_finite() && tgt[1].is_finite() && tgt[2].is_finite() {
+                *tgt_pos = tgt[0];
+                *tgt_pos.add(1) = tgt[1];
+                *tgt_pos.add(2) = tgt[2];
+            }
+        }
     }
 
     /// Extracts current vehicle speed in meters per second (m/s) from guest memory.
