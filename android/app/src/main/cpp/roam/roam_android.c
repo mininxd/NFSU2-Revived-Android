@@ -791,6 +791,20 @@ static void extraoptions_init_patches(void) {
         }
     }
 
+    // Sponsor Decal Unlock fix in Career mode:
+    // In SPEED2.EXE at 0x00529e90: change "test al, al" (84 c0) to "test edi, edi" (85 ff).
+    // This ensures any sponsor decal (edi != 0) must be unlocked in the player profile (0x83ad90)
+    // before it appears unlocked. In a new game or first playing, 0 sponsors are signed, so all
+    // sponsor decals remain locked. When signed in career, they unlock properly. Stock (edi==0) is always unlocked.
+    if (rh_mem_committed(0x00529e90u, 2)) {
+        MR16(0x00529e90u) = 0xFF85u; // 85 FF: test edi, edi
+    }
+
+    // Ensure _UnlockAllThings cheat byte is strictly 0 on startup to prevent premature unlock of items/decals
+    if (rh_mem_committed(0x00838464u, 1)) {
+        MR8(0x00838464u) = 0;
+    }
+
     __android_log_print(ANDROID_LOG_INFO, "NFSU2-ExtraOptions",
                         "Extra Options memory patches applied: regional cars, laps (0-127), opponents (0-5), 3D fixes, drift 9x, outrun");
 }

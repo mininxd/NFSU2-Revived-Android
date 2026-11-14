@@ -250,7 +250,7 @@ pub fn sync_extra_options_ini(game_root: &Path) -> bool {
     let (c2, ch2) = update_ini_key(&cur, "AllowLongerProfileNames", "AllowLongerProfileNames = 1");
     cur = c2; any_changed |= ch2;
 
-    let (c3, ch3) = update_ini_key(&cur, "ShowSpecialVinyls", "ShowSpecialVinyls = 1");
+    let (c3, ch3) = update_ini_key(&cur, "ShowSpecialVinyls", "ShowSpecialVinyls = 0");
     cur = c3; any_changed |= ch3;
 
     let (c4, ch4) = update_ini_key(&cur, "ShowOutrun", "ShowOutrun = 1");

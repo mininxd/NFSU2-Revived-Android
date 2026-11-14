@@ -44,7 +44,7 @@ impl AutoGasPolicy {
             0 => AutoGasPolicy::Never,
             1 => AutoGasPolicy::MovingOnly,
             2 => AutoGasPolicy::Legacy,
-            _ => AutoGasPolicy::Never,
+            _ => AutoGasPolicy::MovingOnly,
         }
     }
 }
@@ -65,7 +65,7 @@ impl NitroController {
             gas_held: AtomicBool::new(false),
             current_speed_kmh: AtomicU32::new(0),
             state: AtomicU32::new(NitroState::Idle as u32),
-            policy: AtomicU32::new(AutoGasPolicy::Never as u32),
+            policy: AtomicU32::new(AutoGasPolicy::MovingOnly as u32),
             activation_start_ms: AtomicU64::new(0),
         }
     }
