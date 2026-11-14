@@ -805,8 +805,39 @@ static void extraoptions_init_patches(void) {
         MR8(0x00838464u) = 0;
     }
 
+    // Motion Blur Texture Allocation & Hardware Capability:
+    // 1. In SPEED2.EXE data at 0x005bb87d: change "xor dl, dl" to "mov dl, 1"
+    if (rh_mem_committed(0x005bb87du, 2)) {
+        MR16(0x005bb87du) = 0x01B2u; // B2 01: mov dl, 1
+    }
+
+    // 2. Motion blur hardware capability flag (0x008764f4):
+    if (rh_mem_committed(0x008764f4u, 4)) {
+        MR32(0x008764f4u) = 1;
+    }
+
+    // 3. Initialize view table matrices (views 0..21) to prevent uninitialized 0xaaaaaaaa dereferences
+    if (rh_mem_committed(0x00832de0u, 22 * 0x70)) {
+        for (uint32_t i = 0; i < 22u; i++) {
+            uint32_t v_ptr = 0x00832de0u + i * 0x70u;
+            uint32_t m_ptr = 0x00873380u + i * 0x120u;
+            if (MR32(v_ptr) == 0 || MR32(v_ptr) == 0xaaaaaaaa) {
+                MR32(v_ptr) = m_ptr;
+            }
+            if (rh_mem_committed(m_ptr, 0x40) && (MR32(m_ptr) == 0 || MR32(m_ptr) == 0xaaaaaaaa)) {
+                static const float s_init_id[16] = {
+                    1.f, 0.f, 0.f, 0.f,
+                    0.f, 1.f, 0.f, 0.f,
+                    0.f, 0.f, 1.f, 0.f,
+                    0.f, 0.f, 0.f, 1.f
+                };
+                memcpy(GPTR(m_ptr), s_init_id, sizeof(s_init_id));
+            }
+        }
+    }
+
     __android_log_print(ANDROID_LOG_INFO, "NFSU2-ExtraOptions",
-                        "Extra Options memory patches applied: regional cars, laps (0-127), opponents (0-5), 3D fixes, drift 9x, outrun");
+                        "Extra Options memory patches applied: regional cars, laps (0-127), opponents (0-5), 3D fixes, drift 9x, outrun, motion blur");
 }
 
 static void extraoptions_frame_tick(void) {
@@ -816,6 +847,11 @@ static void extraoptions_frame_tick(void) {
             s_init_done = 1;
             extraoptions_init_patches();
         }
+    }
+
+    // Maintain motion blur hardware capability so options menu can always toggle it
+    if (rh_mem_committed(0x008764f4u, 4) && MR32(0x008764f4u) == 0) {
+        MR32(0x008764f4u) = 1;
     }
 
     if (!rh_mem_committed(0x008654A4u, 4) || !rh_mem_committed(0x008900ACu, 4)) return;
@@ -1493,9 +1529,100 @@ static float get_car_speed_mps(uint32_t car) {
     return 0.0f;
 }
 
+static void (*s_orig_5c5c00)(void) = NULL;
+static void (*s_orig_5bdde0)(void) = NULL;
+
 static void hook_sub_005c5c00(void) {
-    // Safe motion blur draw stub preventing unresolved ICALL halt (0x00000000)
-    if (g_p_eax) *g_p_eax = 0;
+    if (!g_p_mem_base || !*g_p_mem_base || !g_p_esp || !*g_p_esp) {
+        if (g_p_eax) *g_p_eax = 0;
+        return;
+    }
+
+    // Suppress blur drawing during active camera orbit/swipe to prevent visual smearing
+    if (s_look_active) {
+        if (g_p_eax) *g_p_eax = 0;
+        return;
+    }
+
+    // Check if surfaces and textures are allocated and committed
+    uint32_t dev  = rh_mem_committed(0x00870974u, 4) ? MR32(0x00870974u) : 0;
+    uint32_t surf = rh_mem_committed(0x0086eb0cu, 4) ? MR32(0x0086eb0cu) : 0;
+    uint32_t tex  = rh_mem_committed(0x0086eb88u, 4) ? MR32(0x0086eb88u) : 0;
+
+    if (!dev || !surf || !tex ||
+        !rh_mem_committed(dev, 4) || !rh_mem_committed(surf, 4) || !rh_mem_committed(tex, 4)) {
+        if (g_p_eax) *g_p_eax = 0;
+        return;
+    }
+
+    // Call original motion blur draw function
+    if (s_orig_5c5c00) {
+        s_orig_5c5c00();
+    }
+}
+
+static void hook_sub_005bdde0(void) {
+    if (g_p_mem_base && *g_p_mem_base && g_p_esp && *g_p_esp) {
+        uint32_t esp = *g_p_esp;
+        if (rh_mem_committed(esp + 8, 4)) {
+            uint32_t view_id = MR32(esp + 8);
+
+            // Guard against out-of-bounds view ID
+            if (view_id >= 22u) {
+                return;
+            }
+
+            // Ensure the View structure in guest memory has a valid pMatrix pointer
+            // to prevent SIGSEGV at libnfsu2_android.so 0x2c37704 ("ldr w17, [x10, x8]")
+            uint32_t view_ptr = 0x00832de0u + (view_id * 0x70u);
+            if (rh_mem_committed(view_ptr, 4)) {
+                uint32_t mat_ptr = MR32(view_ptr);
+                if (mat_ptr == 0 || mat_ptr == 0xaaaaaaaa || mat_ptr < 0x10000 || mat_ptr >= 0x7ffff000 || !rh_mem_committed(mat_ptr, 0x40)) {
+                    uint32_t fallback = 0x00873380u + (view_id * 0x120u);
+                    if (rh_mem_committed(fallback, 0x40)) {
+                        if (MR32(fallback) == 0xaaaaaaaa || MR32(fallback) == 0) {
+                            if (rh_mem_committed(0x008734a0u, 0x40) && MR32(0x008734a0u) != 0xaaaaaaaa) {
+                                memcpy(GPTR(fallback), GPTR(0x008734a0u), 0x40);
+                            } else {
+                                static const float s_id[16] = {
+                                    1.f, 0.f, 0.f, 0.f,
+                                    0.f, 1.f, 0.f, 0.f,
+                                    0.f, 0.f, 1.f, 0.f,
+                                    0.f, 0.f, 0.f, 1.f
+                                };
+                                memcpy(GPTR(fallback), s_id, sizeof(s_id));
+                            }
+                        }
+                        MR32(view_ptr) = fallback;
+                    } else if (rh_mem_committed(0x008734a0u, 0x40)) {
+                        MR32(view_ptr) = 0x008734a0u;
+                    }
+                }
+
+                mat_ptr = MR32(view_ptr);
+                if (rh_mem_committed(mat_ptr, 0x40)) {
+                    float *m = (float *)GPTR(mat_ptr);
+                    int valid = 1;
+                    for (int k = 0; k < 16; k++) {
+                        if (!isfinite(m[k])) { valid = 0; break; }
+                    }
+                    if (!valid) {
+                        static const float s_identity[16] = {
+                            1.f, 0.f, 0.f, 0.f,
+                            0.f, 1.f, 0.f, 0.f,
+                            0.f, 0.f, 1.f, 0.f,
+                            0.f, 0.f, 0.f, 1.f
+                        };
+                        memcpy(m, s_identity, sizeof(s_identity));
+                    }
+                }
+            }
+        }
+    }
+
+    if (s_orig_5bdde0) {
+        s_orig_5bdde0();
+    }
 }
 
 static void hook_sub_005c7ec0(void) {
@@ -1535,25 +1662,24 @@ static void hook_sub_005c7ec0(void) {
                 // 2. Rearview Mirror Suppression:
                 // In races, View 3 renders the entire 3D world a 2nd time every frame.
                 // Disabling View 3 completely eliminates the duplicate world rendering pass.
+                // Note: We DO NOT zero (view3 + 8), which would cause 0x005d295d to skip
+                // matrix setup and leave view3 uninitialized. Setting 0x00870cf0 = 0 cleanly
+                // suppresses the 3D mirror pass in RenderScene without corrupting view matrices.
                 if (rh_mem_committed(0x00870cf0u, 4)) MR32(0x00870cf0u) = 0;
                 if (rh_mem_committed(0x008707e0u, 4) && MR32(0x008707e0u) == 2) MR32(0x008707e0u) = 1;
                 uint32_t view3 = 0x00832de0u + 3u * 0x70u;
-                if (rh_mem_committed(view3 + 8, 1)) *(uint8_t*)GPTR(view3 + 8) = 0;
+                if (rh_mem_committed(view3, 12)) {
+                    if (MR32(view3) == 0 || MR32(view3) == 0xaaaaaaaa) {
+                        MR32(view3) = 0x008736e0u;
+                        if (rh_mem_committed(0x008736e0u, 0x40) && rh_mem_committed(0x008734a0u, 0x40)) {
+                            memcpy(GPTR(0x008736e0u), GPTR(0x008734a0u), 0x40);
+                        }
+                    }
+                }
 
                 // 3. Motion blur suppression during camera orbit:
-                // Only suppress motion blur while camera is actively orbiting to avoid streaking.
-                // Never force MR32(0x00870cdcu) = 1, let the game engine manage motion blur state.
-                static int s_look_cooldown = 0;
-                if (s_look_active) {
-                    s_look_cooldown = 3;
-                } else if (s_look_cooldown > 0) {
-                    s_look_cooldown--;
-                }
-                int cam_control_active = s_look_active || (s_look_cooldown > 0);
-
-                if (cam_control_active && rh_mem_committed(0x00870cdcu, 4)) {
-                    MR32(0x00870cdcu) = 0; // camera control active: suppress blur
-                }
+                // Handled cleanly in hook_sub_005c5c00 while s_look_active is true,
+                // leaving 0x00870cdc intact so game settings and nitrous blur behave naturally.
 
                 // 4. URL Race Crowds & Headlight Projectors:
                 if (is_url) {
@@ -1602,6 +1728,24 @@ static void roam_android_install_hooks(void) {
         0xff, 0x43, 0x02, 0xd1, 0xfd, 0x7b, 0x03, 0xa9,
         0xfc, 0x6f, 0x04, 0xa9, 0xfa, 0x67, 0x05, 0xa9
     };
+    static const uint8_t EXPECTED_5BDD[16] = {
+        0xff, 0x03, 0x02, 0xd1, 0xfd, 0x7b, 0x02, 0xa9,
+        0xfc, 0x6f, 0x03, 0xa9, 0xfa, 0x67, 0x04, 0xa9
+    };
+
+    // Patch ARM64 motion blur texture allocation flag in libnfsu2_android.so:
+    // At offset 0x2c2ba9c, change "mov w9, wzr" (0x2a1f03e9) to "mov w9, #1" (0x52800029).
+    // This ensures sub_005bb840 allocates the D3D9 motion blur ping-pong textures (0x86eb88, 0x86eb8c)
+    // and surfaces (0x86eb0c, 0x86eb10) at device creation/reset instead of clearing them to NULL.
+    void *target_alloc = (void *)(lib_base + 0x2c2ba9c);
+    if (*(uint32_t *)target_alloc == 0x2a1f03e9u) {
+        uintptr_t page = (uintptr_t)target_alloc & ~((uintptr_t)page_sz - 1);
+        mprotect((void *)page, page_sz * 2, PROT_READ | PROT_WRITE | PROT_EXEC);
+        *(uint32_t *)target_alloc = 0x52800029u; // mov w9, #1
+        __builtin___clear_cache((char *)target_alloc, (char *)target_alloc + 4);
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook",
+                            "Patched ARM64 motion blur texture alloc flag at %p (mov w9, #1)", target_alloc);
+    }
 
     void *target_4a = (void *)(lib_base + 0x1464be0);
     if (memcmp(target_4a, EXPECTED_4A, 16) == 0) {
@@ -1627,12 +1771,24 @@ static void roam_android_install_hooks(void) {
 
     void *target_5c5c = (void *)(lib_base + 0x2d51828);
     if (memcmp(target_5c5c, EXPECTED_5C5C, 16) == 0) {
-        arm64_inline_hook(target_5c5c, (void *)hook_sub_005c5c00);
+        s_orig_5c5c00 = arm64_inline_hook(target_5c5c, (void *)hook_sub_005c5c00);
         __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook",
-                            "Hooked sub_005c5c00 (motion blur draw stub) at %p", target_5c5c);
+                            "Hooked sub_005c5c00 (motion blur draw) at %p (orig: %p)",
+                            target_5c5c, s_orig_5c5c00);
     } else {
         __android_log_print(ANDROID_LOG_WARN, "NFSU2-Hook",
                             "sub_005c5c00 prefix mismatch at %p", target_5c5c);
+    }
+
+    void *target_5bdd = (void *)(lib_base + 0x2c374ec);
+    if (memcmp(target_5bdd, EXPECTED_5BDD, 16) == 0) {
+        s_orig_5bdde0 = arm64_inline_hook(target_5bdd, (void *)hook_sub_005bdde0);
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook",
+                            "Hooked sub_005bdde0 (view matrix guard) at %p (orig: %p)",
+                            target_5bdd, s_orig_5bdde0);
+    } else {
+        __android_log_print(ANDROID_LOG_WARN, "NFSU2-Hook",
+                            "sub_005bdde0 prefix mismatch at %p", target_5bdd);
     }
 
     // Also update k_functions dispatch table
@@ -1644,20 +1800,28 @@ static void roam_android_install_hooks(void) {
         __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Updated k_functions[0x004a5d90]");
     }
 
+    uintptr_t k_5bdd = lib_base + 0x97934a0;
+    if (*(uint32_t *)k_5bdd == 0x005bdde0) {
+        uintptr_t page = k_5bdd & ~((uintptr_t)page_sz - 1);
+        mprotect((void *)page, page_sz * 2, PROT_READ | PROT_WRITE);
+        *(void **)(k_5bdd + 8) = (void *)hook_sub_005bdde0;
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Updated k_functions[0x005bdde0]");
+    }
+
+    uintptr_t k_5c5c = lib_base + 0x9793c00;
+    if (*(uint32_t *)k_5c5c == 0x005c5c00) {
+        uintptr_t page = k_5c5c & ~((uintptr_t)page_sz - 1);
+        mprotect((void *)page, page_sz * 2, PROT_READ | PROT_WRITE);
+        *(void **)(k_5c5c + 8) = (void *)hook_sub_005c5c00;
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Updated k_functions[0x005c5c00]");
+    }
+
     uintptr_t k_5c = lib_base + 0x9797cd0;
     if (*(uint32_t *)k_5c == 0x005c7ec0) {
         uintptr_t page = k_5c & ~((uintptr_t)page_sz - 1);
         mprotect((void *)page, page_sz * 2, PROT_READ | PROT_WRITE);
         *(void **)(k_5c + 8) = (void *)hook_sub_005c7ec0;
         __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Updated k_functions[0x005c7ec0]");
-    }
-
-    uintptr_t k_5c5c = lib_base + 0x9797c00;
-    if (*(uint32_t *)k_5c5c == 0x005c5c00) {
-        uintptr_t page = k_5c5c & ~((uintptr_t)page_sz - 1);
-        mprotect((void *)page, page_sz * 2, PROT_READ | PROT_WRITE);
-        *(void **)(k_5c5c + 8) = (void *)hook_sub_005c5c00;
-        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Updated k_functions[0x005c5c00]");
     }
 
     g_hooks_installed = 1;
@@ -1909,6 +2073,7 @@ jint JNI_OnLoad(JavaVM *vm, void *reserved) {
             g_mid_on_send = (*env)->GetStaticMethodID(env, g_client_class, "onNativeSend", "(II[B)V");
         }
     }
+    roam_android_init_symbols();
     roam_android_patch_carpool();
     roam_android_install_hooks();
     roam_compat_install();
