@@ -1436,11 +1436,20 @@ static void turn_cam_matrix(uint32_t cam) {
 }
 
 static void restore_turned_cameras(void) {
+    static void (*s_fn_cull_cam)(float, float, float, float, float, float) = NULL;
+    static int s_fn_cull_inited = 0;
+    if (!s_fn_cull_inited) {
+        s_fn_cull_cam = (void (*)(float, float, float, float, float, float))dlsym(RTLD_DEFAULT, "nfs_camera_cull_update_camera");
+        s_fn_cull_inited = 1;
+    }
     for (int i = 0; i < s_num_cams_turned; i++) {
         uint32_t cam = s_turned_cams[i];
         if (cam && rh_mem_committed(cam, CAM_TURNED)) {
-            if (memcmp(GPTR(cam), s_made_cam[i], CAM_TURNED) == 0) {
-                memcpy(GPTR(cam), s_keep_cam[i], CAM_TURNED);
+            memcpy(GPTR(cam), s_keep_cam[i], CAM_TURNED);
+            if (i == 0 && s_fn_cull_cam) {
+                float *pos = (float *)(s_keep_cam[0] + CAM_POS);
+                float *fwd = (float *)(s_keep_cam[0] + CAM_FWD);
+                s_fn_cull_cam(pos[0], pos[1], pos[2], fwd[0], fwd[1], fwd[2]);
             }
         }
     }
@@ -1459,6 +1468,18 @@ static void turn_one_camera(uint32_t cam) {
     turn_cam_xy((float *)GPTR(cam + CAM_TARGET), 1);
     memcpy(s_made_cam[s_num_cams_turned], GPTR(cam), CAM_TURNED);
     s_turned_cams[s_num_cams_turned++] = cam;
+
+    static void (*s_fn_cull_cam)(float, float, float, float, float, float) = NULL;
+    static int s_fn_cull_inited = 0;
+    if (!s_fn_cull_inited) {
+        s_fn_cull_cam = (void (*)(float, float, float, float, float, float))dlsym(RTLD_DEFAULT, "nfs_camera_cull_update_camera");
+        s_fn_cull_inited = 1;
+    }
+    if (s_fn_cull_cam) {
+        float *npos = (float *)GPTR(cam + CAM_POS);
+        float *nfwd = (float *)GPTR(cam + CAM_FWD);
+        s_fn_cull_cam(npos[0], npos[1], npos[2], nfwd[0], nfwd[1], nfwd[2]);
+    }
 }
 
 static void look_process_view(uint32_t view_id, uint32_t cam) {
