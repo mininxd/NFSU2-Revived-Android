@@ -36,6 +36,7 @@ final class ReleaseVersion {
             if (firstLetter > 0) {
                 prerelease = s.substring(firstLetter).trim();
                 s = s.substring(0, firstLetter).trim();
+                if (s.endsWith(".")) s = s.substring(0, s.length() - 1).trim();
             }
         }
 
