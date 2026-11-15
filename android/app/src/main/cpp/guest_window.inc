@@ -124,6 +124,12 @@ void enqueueGuestPointer(int phase){  // 0 down, 1 move, 2 up
     if(phase==0)windowMessages.push_back({0,0x201u,1u,pointerPending,messageTime()});
     if(phase==2)windowMessages.push_back({0,0x202u,0u,pointerPending,messageTime()});
 }
+void enqueueGuestPointerMiddle(int phase){  // 0 down, 1 move, 2 up
+    std::lock_guard<std::mutex> lock(messageMutex);
+    windowMessages.push_back({0,0x200u,phase==2?0u:0x10u,pointerPending,messageTime()});
+    if(phase==0)windowMessages.push_back({0,0x207u,0x10u,pointerPending,messageTime()});
+    if(phase==2)windowMessages.push_back({0,0x208u,0u,pointerPending,messageTime()});
+}
 void setCapture(){uint32_t old=captureWindow;captureWindow=windows.count(arg(0))?arg(0):0;ret(old,1);}
 void releaseCapture(){captureWindow=0;ret(1,0);}
 bool takeWindowMessage(uint32_t output,uint32_t handle,uint32_t minimum,uint32_t maximum,bool remove){

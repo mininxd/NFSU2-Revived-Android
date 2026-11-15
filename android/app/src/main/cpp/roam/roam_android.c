@@ -1228,6 +1228,18 @@ static void hook_sub_004a5d90(void) {
     if (!g_p_mem_base || !*g_p_mem_base || !v) return;
     if (!rh_mem_committed(v, 0x280)) return;
 
+    static void (*s_garage_apply)(uint32_t, void *) = NULL;
+    if (!s_garage_apply) {
+        void *h = dlopen("libgame_core.so", RTLD_NOLOAD);
+        if (!h) h = dlopen("libgame_core.so", RTLD_NOW | RTLD_GLOBAL);
+        if (h) s_garage_apply = (void (*)(uint32_t, void *))dlsym(h, "nfs_garage_apply_viewer");
+        if (!s_garage_apply) s_garage_apply = (void (*)(uint32_t, void *))dlsym(RTLD_DEFAULT, "nfs_garage_apply_viewer");
+    }
+    if (s_garage_apply) {
+        s_garage_apply(v, (void *)(*g_p_mem_base));
+        return;
+    }
+
     if (rh_mem_committed(G_MOUSE_MID, 1) && MR8(G_MOUSE_MID)) {
         turning = 0;
         return;
@@ -1684,8 +1696,19 @@ void roam_stick_input(float x, float y) {
         roam_android_install_hooks();
     }
     static void (*s_cam_stick)(float, float) = NULL;
+    static void (*s_garage_stick)(float, float) = NULL;
+    if (!s_cam_stick || !s_garage_stick) {
+        void *h = dlopen("libgame_core.so", RTLD_NOLOAD);
+        if (!h) h = dlopen("libgame_core.so", RTLD_NOW | RTLD_GLOBAL);
+        if (h) {
+            if (!s_cam_stick) s_cam_stick = (void (*)(float, float))dlsym(h, "nfs_camera_stick_input");
+            if (!s_garage_stick) s_garage_stick = (void (*)(float, float))dlsym(h, "nfs_garage_stick_input");
+        }
+    }
     if (!s_cam_stick) s_cam_stick = (void (*)(float, float))dlsym(RTLD_DEFAULT, "nfs_camera_stick_input");
+    if (!s_garage_stick) s_garage_stick = (void (*)(float, float))dlsym(RTLD_DEFAULT, "nfs_garage_stick_input");
     if (s_cam_stick) s_cam_stick(x, y);
+    if (s_garage_stick) s_garage_stick(x, y);
 
     // Only process quickchat phrase selection if quickchat menu is ALREADY open.
     // Moving the right stick while driving MUST rotate camera, NOT open quick chat!

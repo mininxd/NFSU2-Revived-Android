@@ -63,6 +63,10 @@ jobs:
             cargo build --manifest-path android/app/src/main/rust/roam_rs/Cargo.toml --target aarch64-linux-android --release && \
               cp android/app/src/main/rust/roam_rs/target/aarch64-linux-android/release/libroam_rs.so android/app/src/main/jniLibs/arm64-v8a/
 
+            echo "Building Rust game_core crate..."
+            cargo build --manifest-path android/app/src/main/rust/game_core/Cargo.toml --target aarch64-linux-android --release && \
+              cp android/app/src/main/rust/game_core/target/aarch64-linux-android/release/libgame_core.so android/app/src/main/jniLibs/arm64-v8a/
+
             echo "Building Rust graphics_cache crate..."
             cargo build --manifest-path android/app/src/main/rust/graphics_cache/Cargo.toml --target aarch64-linux-android --release && \
               cp android/app/src/main/rust/graphics_cache/target/aarch64-linux-android/release/libgraphics_cache.so android/app/src/main/jniLibs/arm64-v8a/

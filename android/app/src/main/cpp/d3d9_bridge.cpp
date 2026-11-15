@@ -216,6 +216,17 @@ void noteVertexDeclaration(const D3DVERTEXELEMENT9* elements){
 // crash (null dereference, Mali reports); until a Reset succeeds the device reads as
 // lost and needing a reset, which the game handles as on Windows.
 bool deviceResetPending=false;
+void* getGameCoreHandle() {
+    static void* s_core_handle = nullptr;
+    if (!s_core_handle) {
+        s_core_handle = dlopen("libgame_core.so", RTLD_NOLOAD);
+        if (!s_core_handle) s_core_handle = dlopen("libgame_core.so", RTLD_NOW | RTLD_GLOBAL);
+        if (s_core_handle) {
+            NFS_RUNTIME_LOG(ANDROID_LOG_INFO, "NFSU2", "Loaded libgame_core.so successfully with RTLD_GLOBAL");
+        }
+    }
+    return s_core_handle;
+}
 void* getGraphicsCacheHandle() {
     static void* s_handle = nullptr;
     if (!s_handle) {
@@ -230,8 +241,12 @@ void* getGraphicsCacheHandle() {
     return s_handle;
 }
 void* resolveGraphicsCacheSymbol(const char* name) {
-    void* h = getGraphicsCacheHandle();
-    void* sym = h ? dlsym(h, name) : nullptr;
+    void* h_core = getGameCoreHandle();
+    void* sym = h_core ? dlsym(h_core, name) : nullptr;
+    if (!sym) {
+        void* h_gfx = getGraphicsCacheHandle();
+        sym = h_gfx ? dlsym(h_gfx, name) : nullptr;
+    }
     if (!sym) sym = dlsym(RTLD_DEFAULT, name);
     return sym;
 }

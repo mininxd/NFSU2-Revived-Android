@@ -931,6 +931,10 @@ struct DispatchHash {
     }
 };
 }
+extern "C" int guest_is_readable(uint32_t va, uint32_t bytes) {
+    if (!memory) return 0;
+    return memory->readable(va, bytes) ? 1 : 0;
+}
 extern "C" recomp_func_t recomp_lookup(uint32_t va) {
     // Sound/input/D3D COM and import stubs resolve in recomp_lookup_import.
     // Avoid an always-failing hash probe on every native method call. The
@@ -1195,6 +1199,18 @@ void setGuestFrameLimit(unsigned framesPerSecond){
 void setGuestKey(unsigned scan,bool down){if(scan>=256)return;std::lock_guard<std::mutex> lock(inputMutex);if(bool(inputKeys[scan])==down)return;inputKeys[scan]=down?0x80:0;recordInputKey(scan,down);enqueueGuestKey(scan,down);}
 void clearGuestInput(){std::lock_guard<std::mutex> lock(inputMutex);for(unsigned scan=0;scan<256;++scan)if(inputKeys[scan]){recordInputKey(scan,false);enqueueGuestKey(scan,false);}inputKeys.fill(0);inputMouseButtons.fill(0);inputMouseX=inputMouseY=inputMouseZ=0;}
 void setGuestPointer(float x,float y,int phase){guestPointerX=std::clamp(x,0.f,1.f);guestPointerY=std::clamp(y,0.f,1.f);if(phase!=1){std::lock_guard<std::mutex> lock(inputMutex);inputMouseButtons[0]=phase==0?0x80:0;}enqueueGuestPointer(phase);}
+void setGuestPointerMiddle(float x,float y,int phase,float dx,float dy){
+    guestPointerX=std::clamp(x,0.f,1.f);guestPointerY=std::clamp(y,0.f,1.f);
+    {
+        std::lock_guard<std::mutex> lock(inputMutex);
+        inputMouseButtons[2]=(phase!=2)?0x80:0;
+        int32_t mx=int32_t(dx*(renderWidth?renderWidth:640));
+        int32_t my=int32_t(dy*(renderHeight?renderHeight:480));
+        inputMouseX+=mx;
+        inputMouseY+=my;
+    }
+    enqueueGuestPointerMiddle(phase);
+}
 void typeGuestText(const std::vector<uint32_t>& characters){enqueueGuestText(characters);}
 void setGuestOnlineServer(const std::string& host){
     std::lock_guard<MachineMutex> lock(machine);

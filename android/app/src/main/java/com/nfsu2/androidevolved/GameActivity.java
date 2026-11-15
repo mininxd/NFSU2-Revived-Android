@@ -13,6 +13,7 @@ public final class GameActivity {
     public static native boolean nativeGamepadUsed();
     public static native void nativeTypeText(String value, boolean replace);
     public static native void nativePointer(float x, float y, int phase);
+    public static native void nativePointerMiddle(float x, float y, int phase, float dx, float dy);
     public static native void nativeLanguage(String language);
     public static native void nativeResolution(int width, int height);
     public static native void nativeFrameLimit(int cap);
