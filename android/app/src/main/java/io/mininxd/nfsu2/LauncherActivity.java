@@ -500,8 +500,9 @@ public final class LauncherActivity extends Activity {
         optionsList.addView(optionRow("Online Server", serverStatusSummary(), this::chooseOnlineServer));
         // optionsList.addView(optionRow("Room Name", GameOptions.roamRoom(this).isEmpty() ? "Default (Public)" : GameOptions.roamRoom(this), this::chooseRoamRoom));
         // optionsList.addView(optionRow("Crew Name", GameOptions.roamCrew(this).isEmpty() ? "None" : GameOptions.roamCrew(this), this::chooseRoamCrew));
+        optionsList.addView(optionRow("Update Channel", updateChannelLabel(), this::chooseUpdateChannel));
         optionsList.addView(optionRow("Check for updates",
-                checkingUpdates ? "Checking GitHub…" : "Version " + ReleaseUpdates.installed(this), () -> checkUpdates(true)));
+                checkingUpdates ? "Checking GitHub (" + updateChannelLabel() + ")…" : "Version " + ReleaseUpdates.installed(this), () -> checkUpdates(true)));
         optionsList.addView(optionRow("Report an issue", "GitHub issue / diagnostic ZIP", () -> showReportDialog(null)));
     }
 
@@ -886,6 +887,25 @@ public final class LauncherActivity extends Activity {
 
     // ---- Updates and reports ---------------------------------------------------------------------------
 
+    private String updateChannelLabel() {
+        return ReleaseUpdates.CHANNEL_BETA.equalsIgnoreCase(ReleaseUpdates.getChannel(this)) ? "Beta" : "Stable";
+    }
+
+    private void chooseUpdateChannel() {
+        String[] options = {"Stable (Latest releases)", "Beta (Include pre-releases)"};
+        int current = ReleaseUpdates.CHANNEL_BETA.equalsIgnoreCase(ReleaseUpdates.getChannel(this)) ? 1 : 0;
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Update Channel")
+                .setSingleChoiceItems(options, current, (dialog, which) -> {
+                    String selected = (which == 1) ? ReleaseUpdates.CHANNEL_BETA : ReleaseUpdates.CHANNEL_STABLE;
+                    ReleaseUpdates.setChannel(this, selected);
+                    dialog.dismiss();
+                    refreshOptions();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
     private void checkUpdates(boolean manual) {
         if (checkingUpdates) return;
         checkingUpdates = true;
@@ -894,10 +914,11 @@ public final class LauncherActivity extends Activity {
             checkingUpdates = false;
             if (isFinishing() || isDestroyed()) return;
             refreshOptions();
+            String channelName = updateChannelLabel();
             if (result.error != null) { if (manual) message("Updates", result.error); return; }
             if (!ReleaseVersion.newer(result.tag, ReleaseUpdates.installed(this))) {
                 if (manual) message("Updates", "You have version " + ReleaseUpdates.installed(this)
-                        + ". There is no newer version on GitHub.");
+                        + " (" + channelName + " channel).\nThere is no newer version on GitHub.");
                 return;
             }
             android.content.SharedPreferences updates = ReleaseUpdates.prefs(this);
@@ -905,9 +926,10 @@ public final class LauncherActivity extends Activity {
                 if (result.tag.equals(updates.getString("skip_update_tag", ""))) return;
                 if (result.tag.equals(updateLaterTag)) return;
             }
+            String releaseType = result.isPrerelease ? "Pre-Release" : "Release";
             new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                    .setTitle("New version available: " + result.tag)
-                    .setMessage("You can download it from GitHub or keep playing with this version. Install the APK over "
+                    .setTitle("New " + releaseType + " available: " + result.tag)
+                    .setMessage("Channel: " + channelName + "\n\nYou can download it from GitHub or keep playing with this version. Install the APK over "
                             + "the current one to preserve your saves and settings.")
                     .setPositiveButton("Update", (dialog, which) -> openUrl(Uri.parse(result.url)))
                     .setNeutralButton("Don't show again", (dialog, which) ->
