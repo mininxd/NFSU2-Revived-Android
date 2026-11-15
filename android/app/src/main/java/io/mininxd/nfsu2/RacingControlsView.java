@@ -169,8 +169,15 @@ final class RacingControlsView extends View {
     private final RectF resetDestRect = new RectF();
     private final PorterDuffColorFilter filterIdle = new PorterDuffColorFilter(COLOR_TEXT, PorterDuff.Mode.SRC_IN);
     private final PorterDuffColorFilter filterActive = new PorterDuffColorFilter(COLOR_LIME, PorterDuff.Mode.SRC_IN);
+    private final PorterDuffColorFilter filterPurge = new PorterDuffColorFilter(0xFF00E5FF, PorterDuff.Mode.SRC_IN);
     private boolean driftActive = false;
     private boolean controlsHidden = false;
+    private static final int NITRO_AUTOGAS_POLICY = 1; // 1 = Moving Only (>1.0 km/h), NEVER at 0 km/h
+    private boolean autoGasAppliedByNitro = false;
+
+    public static native boolean nativeEvaluateNitroAutoGas(float speedKmh, boolean nitroHeld, boolean gasHeld, int policy);
+    public static native int nativeGetNitroState(float speedKmh, boolean nitroHeld);
+    public static native int nativeGetNitroHaloColor(int state);
 
     private int keyGas = 0xc8;
     private int keyBrake = 0xd0;
@@ -654,14 +661,35 @@ final class RacingControlsView extends View {
                 chevron(canvas, cx, cy - s * 0.75f, s * 0.55f, false);
                 break;
             case "nitro":
+                float carSpeed = io.mininxd.nfsu2.net.RoamNativeBridge.getCarSpeedKmH();
+                int nitroState = 0;
+                try {
+                    nitroState = nativeGetNitroState(carSpeed, on);
+                } catch (Throwable ignored) {
+                    nitroState = on ? (carSpeed <= 1.0f ? 1 : 2) : 0;
+                }
+
+                if (on) {
+                    // Distinct halos: Cyan for Purge at 0 km/h, Lime for Boost at speed
+                    int haloBg = (nitroState == 1) ? 0x5500E5FF : 0x5539FF14;
+                    int haloStroke = (nitroState == 1) ? 0xFF00E5FF : COLOR_LIME;
+                    fill.setColor(haloBg);
+                    canvas.drawCircle(cx, cy, r * 1.22f, fill);
+                    line.setColor(haloStroke);
+                    line.setStrokeWidth(2.5f);
+                    canvas.drawCircle(cx, cy, r * 1.15f, line);
+                }
+
                 if (nitroBitmap != null) {
-                    bitmapPaint.setColorFilter(on ? filterActive : filterIdle);
+                    PorterDuffColorFilter filter = (nitroState == 1) ? filterPurge : (on ? filterActive : filterIdle);
+                    bitmapPaint.setColorFilter(filter);
                     float bw = r * 1.55f;
                     float bh = bw * ((float) nitroBitmap.getHeight() / (float) nitroBitmap.getWidth());
                     nitroDestRect.set(cx - bw / 2f, cy - bh / 2f, cx + bw / 2f, cy + bh / 2f);
                     canvas.drawBitmap(nitroBitmap, null, nitroDestRect, bitmapPaint);
                 } else {
-                    glyph(canvas, "NOS", cx, cy, 17f, on);
+                    String label = (nitroState == 1) ? "PURGE" : "NOS";
+                    glyph(canvas, label, cx, cy, (nitroState == 1) ? 12f : 17f, on);
                 }
                 break;
             case "drift":
@@ -1318,6 +1346,45 @@ final class RacingControlsView extends View {
         return best;
     }
 
+    private boolean isGasPedalHeld() {
+        for (int i = 0; i < 32; i++) {
+            Control other = fingerMap[i];
+            if (other != null && other.scan == keyGas && other.held > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isNitroHeld() {
+        for (int i = 0; i < 32; i++) {
+            Control other = fingerMap[i];
+            if (other != null && other.scan == keyNitro && other.held > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private final Runnable nitroWatcher = new Runnable() {
+        @Override
+        public void run() {
+            if (!isNitroHeld()) return;
+            float currentSpeed = io.mininxd.nfsu2.net.RoamNativeBridge.getCarSpeedKmH();
+            boolean directGas = isGasPedalHeld();
+            if (currentSpeed > 1.0f) {
+                keys.set(keyGas, true);
+                autoGasAppliedByNitro = true;
+            } else {
+                if (autoGasAppliedByNitro && !directGas) {
+                    keys.set(keyGas, false);
+                    autoGasAppliedByNitro = false;
+                }
+            }
+            postDelayed(this, 50);
+        }
+    };
+
     private void hold(Control c) {
         if (c == null || ++c.held != 1) return;
         if (c.scan >= 0) {
@@ -1330,11 +1397,29 @@ final class RacingControlsView extends View {
             if (c.scan == 0x31) {
                 AdhocRoamClient.setHorn(true);
             }
-            // Nitro holds Gas as well, matching web touch controls! (Auto-gas when speed > 1 km/h)
+            // Intelligent Nitro control: Auto-gas by default when > 1 km/h, NO auto-gas at 0 km/h (Purge)
             if (c.scan == keyNitro) {
-                if (io.mininxd.nfsu2.net.RoamNativeBridge.getCarSpeedKmH() > 1.0f) {
-                    keys.set(keyGas, true);
+                float currentSpeed = io.mininxd.nfsu2.net.RoamNativeBridge.getCarSpeedKmH();
+                boolean directGas = isGasPedalHeld();
+                boolean shouldGas = false;
+                try {
+                    shouldGas = nativeEvaluateNitroAutoGas(currentSpeed, true, directGas, NITRO_AUTOGAS_POLICY);
+                } catch (Throwable t) {
+                    // Fallback: If car is stopped / idle <= 1.0 km/h, NEVER auto-gas!
+                    shouldGas = directGas || (currentSpeed > 1.0f);
                 }
+                if (shouldGas) {
+                    keys.set(keyGas, true);
+                    autoGasAppliedByNitro = true;
+                } else {
+                    autoGasAppliedByNitro = false;
+                    // If car is stationary / 0 km/h, ensure auto-gas is removed unless user holds gas pedal directly
+                    if (!directGas) {
+                        keys.set(keyGas, false);
+                    }
+                }
+                removeCallbacks(nitroWatcher);
+                postDelayed(nitroWatcher, 50);
             }
         }
         performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
@@ -1348,17 +1433,22 @@ final class RacingControlsView extends View {
                     AdhocRoamClient.setHorn(false);
                 }
                 if (c.scan == keyNitro) {
-                    // Release Gas unless another finger is holding it directly
-                    boolean gasHeld = false;
-                    for (int i = 0; i < 32; i++) {
-                        Control other = fingerMap[i];
-                        if (other != null && other.scan == keyGas && other.held > 0) {
-                            gasHeld = true;
-                            break;
-                        }
-                    }
+                    removeCallbacks(nitroWatcher);
+                    // Release Gas unless another finger is holding the gas pedal directly
+                    boolean gasHeld = isGasPedalHeld();
                     if (!gasHeld) {
                         keys.set(keyGas, false);
+                    }
+                    autoGasAppliedByNitro = false;
+                }
+                if (c.scan == keyGas) {
+                    // If nitro is still held and speed > 1 km/h, keep gas held due to nitro auto-gas!
+                    if (isNitroHeld()) {
+                        float currentSpeed = io.mininxd.nfsu2.net.RoamNativeBridge.getCarSpeedKmH();
+                        if (currentSpeed > 1.0f) {
+                            keys.set(keyGas, true);
+                            autoGasAppliedByNitro = true;
+                        }
                     }
                 }
             } else if (c.scan == STICK) {
@@ -1426,6 +1516,8 @@ final class RacingControlsView extends View {
     }
 
     void releaseAll() {
+        removeCallbacks(nitroWatcher);
+        autoGasAppliedByNitro = false;
         for (int i = 0; i < 32; i++) {
             Control c = fingerMap[i];
             if (c != null) {

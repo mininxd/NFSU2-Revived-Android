@@ -26,8 +26,6 @@
 #include <setjmp.h>
 #include <sys/mman.h>
 #include <jni.h>
-#include "roam_language_fix.h"
-#include "roam_nitro_fix.h"
 
 ptrdiff_t *g_p_mem_base = NULL;
 uint32_t  *g_p_esp = NULL;
@@ -194,7 +192,11 @@ static inline void roam_android_patch_carpool(void) {
         if (rh_mem_committed(G_RIDE_SLOT_CAP, 1) && MR8(G_RIDE_SLOT_CAP) == 0x16) {
             MR8(G_RIDE_SLOT_CAP) = 0x7f; // expand CarLoadedRideInfoSlotPool from 22 to 127
         }
-        roam_language_fix_init();
+        if (rh_mem_committed(0x007F6DE8u, 8) && MR32(0x007F6DE8u) == 0x5b9d88b9u) {
+            if (MR32(0x007F6DECu) < 524288u) {
+                MR32(0x007F6DECu) = 524288u; // Expand LanguageMemoryPool headroom to 512KB for Spanish (280KB)
+            }
+        }
         g_carpool_patched = 1;
     }
 }
@@ -740,6 +742,11 @@ static void extraoptions_init_patches(void) {
     if (rh_mem_committed(0x007F6DBEu, 2)) {
         MR8(0x007F6DBEu) = 0x07;
         MR8(0x007F6DBFu) = 0x06;
+    }
+    if (rh_mem_committed(0x007F6DE8u, 8) && MR32(0x007F6DE8u) == 0x5b9d88b9u) {
+        if (MR32(0x007F6DECu) < 524288u) {
+            MR32(0x007F6DECu) = 524288u; // Expand LanguageMemoryPool headroom to 512KB for Spanish (280KB)
+        }
     }
 
     // Carbon-style 1-Lap race progress ("COMPLETED %X")
@@ -1326,6 +1333,18 @@ static uint32_t get_driving_car(void) {
     return car;
 }
 
+static float get_car_speed_mps(uint32_t car) {
+    if (!car || !rh_mem_committed(car + 0x430, 4)) return 0.0f;
+    float spd = MRF32(car + 0x430);
+    if (spd >= 0.0f && spd < 200.0f) return spd;
+    if (rh_mem_committed(car + 0x70, 12)) {
+        float vx = MRF32(car + 0x70), vy = MRF32(car + 0x74), vz = MRF32(car + 0x78);
+        float len = sqrtf(vx * vx + vy * vy + vz * vz);
+        if (len >= 0.0f && len < 200.0f) return len;
+    }
+    return 0.0f;
+}
+
 static float compute_stick_yaw(int can, int *back) {
     *back = 0;
     if (!can) return 0.f;
@@ -1541,7 +1560,6 @@ static void roam_android_install_hooks(void) {
         __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Updated k_functions[0x005c7ec0]");
     }
 
-    roam_language_fix_init();
     g_hooks_installed = 1;
 }
 
@@ -1682,7 +1700,6 @@ __attribute__((visibility("default"))) void nfs_roam_frame_tick(void) {
     framerate_pacing_fix();
     resolution_frame_tick();
     look_camera_frame_tick();
-    roam_language_fix_tick();
     static int s_gamepad_hooked_tick = 0;
     if (!s_gamepad_hooked_tick) {
         roam_apply_gamepad_layout(0);
@@ -2616,25 +2633,39 @@ JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeKeyNav(
 JNIEXPORT jfloat JNICALL Java_io_mininxd_nfsu2_net_RoamNativeBridge_nativeGetCarSpeed(
         JNIEnv *env, jclass clazz) {
     (void)env; (void)clazz;
-    return roam_nitro_get_car_speed_kmh();
+    uint32_t car = get_driving_car();
+    if (!car) return 0.0f;
+    return get_car_speed_mps(car) * 3.6f;
 }
 
 JNIEXPORT jfloat JNICALL Java_io_mininxd_nfsu2_net_RoamNativeBridge_nativeGetCarSpeedKmH(
         JNIEnv *env, jclass clazz) {
     (void)env; (void)clazz;
-    return roam_nitro_get_car_speed_kmh();
+    uint32_t car = get_driving_car();
+    if (!car) return 0.0f;
+    return get_car_speed_mps(car) * 3.6f;
 }
 
 JNIEXPORT jint JNICALL Java_io_mininxd_nfsu2_net_RoamNativeBridge_nativeGetCarNos(
         JNIEnv *env, jclass clazz) {
     (void)env; (void)clazz;
-    return (jint)roam_nitro_get_car_nos_percent();
+    uint32_t car = get_driving_car();
+    if (!car || !g_p_mem_base || !*g_p_mem_base) return 0;
+    uint32_t n = car + 0x40u;
+    if (!rh_mem_committed(n + 0x414u, 16)) return 0;
+    uint32_t full = MR32(n + 0x414u), left = MR32(n + 0x41cu);
+    if (full == 0) return 0;
+    return (jint)((left * 100u) / full);
 }
 
 JNIEXPORT jboolean JNICALL Java_io_mininxd_nfsu2_net_RoamNativeBridge_nativeIsNosActive(
         JNIEnv *env, jclass clazz) {
     (void)env; (void)clazz;
-    return roam_nitro_is_nos_active() ? JNI_TRUE : JNI_FALSE;
+    uint32_t car = get_driving_car();
+    if (!car || !g_p_mem_base || !*g_p_mem_base) return JNI_FALSE;
+    uint32_t n = car + 0x40u;
+    if (!rh_mem_committed(n + 0x420u, 4)) return JNI_FALSE;
+    return (MR32(n + 0x420u) != 0) ? JNI_TRUE : JNI_FALSE;
 }
 
 #ifdef __cplusplus

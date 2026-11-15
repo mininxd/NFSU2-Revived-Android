@@ -43,6 +43,7 @@ public final class RoamNativeBridge {
     public static native void nativeSetFrameLimit(int fps);
     public static native int[] nativeGetActionKeys();
     public static native long nativeGetFrameCount();
+    public static native float nativeGetCarSpeed();
     public static native float nativeGetCarSpeedKmH();
     public static native int nativeGetCarNos();
     public static native boolean nativeIsNosActive();
