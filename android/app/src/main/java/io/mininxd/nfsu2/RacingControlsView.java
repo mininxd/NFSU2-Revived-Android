@@ -1318,6 +1318,47 @@ final class RacingControlsView extends View {
         return best;
     }
 
+    private boolean isGasPedalHeld() {
+        for (int i = 0; i < 32; i++) {
+            Control other = fingerMap[i];
+            if (other != null && other.scan == keyGas && other.held > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isNitroHeld() {
+        for (int i = 0; i < 32; i++) {
+            Control other = fingerMap[i];
+            if (other != null && other.scan == keyNitro && other.held > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean autoGasAppliedByNitro = false;
+
+    private final Runnable nitroWatcher = new Runnable() {
+        @Override
+        public void run() {
+            if (!isNitroHeld()) return;
+            float currentSpeed = io.mininxd.nfsu2.net.RoamNativeBridge.getCarSpeedKmH();
+            boolean directGas = isGasPedalHeld();
+            if (currentSpeed > 1.0f) {
+                keys.set(keyGas, true);
+                autoGasAppliedByNitro = true;
+            } else {
+                if (autoGasAppliedByNitro && !directGas) {
+                    keys.set(keyGas, false);
+                    autoGasAppliedByNitro = false;
+                }
+            }
+            postDelayed(this, 50);
+        }
+    };
+
     private void hold(Control c) {
         if (c == null || ++c.held != 1) return;
         if (c.scan >= 0) {
@@ -1330,9 +1371,21 @@ final class RacingControlsView extends View {
             if (c.scan == 0x31) {
                 AdhocRoamClient.setHorn(true);
             }
-            // Nitro holds Gas as well, matching web touch controls!
+            // Auto-gas on nitro only when vehicle speed > 1 km/h (Purge at 0 km/h)
             if (c.scan == keyNitro) {
-                keys.set(keyGas, true);
+                float currentSpeed = io.mininxd.nfsu2.net.RoamNativeBridge.getCarSpeedKmH();
+                boolean directGas = isGasPedalHeld();
+                if (currentSpeed > 1.0f) {
+                    keys.set(keyGas, true);
+                    autoGasAppliedByNitro = true;
+                } else {
+                    autoGasAppliedByNitro = false;
+                    if (!directGas) {
+                        keys.set(keyGas, false);
+                    }
+                }
+                removeCallbacks(nitroWatcher);
+                postDelayed(nitroWatcher, 50);
             }
         }
         performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
@@ -1346,16 +1399,21 @@ final class RacingControlsView extends View {
                     AdhocRoamClient.setHorn(false);
                 }
                 if (c.scan == keyNitro) {
-                    // Release Gas unless another finger is holding it directly
-                    boolean gasHeld = false;
-                    for (int i = 0; i < 32; i++) {
-                        Control other = fingerMap[i];
-                        if (other != null && other.scan == keyGas && other.held > 0) {
-                            gasHeld = true;
-                            break;
+                    removeCallbacks(nitroWatcher);
+                    boolean gasHeld = isGasPedalHeld();
+                    if (!gasHeld) {
+                        keys.set(keyGas, false);
+                    }
+                    autoGasAppliedByNitro = false;
+                }
+                if (c.scan == keyGas) {
+                    if (isNitroHeld()) {
+                        float currentSpeed = io.mininxd.nfsu2.net.RoamNativeBridge.getCarSpeedKmH();
+                        if (currentSpeed > 1.0f) {
+                            keys.set(keyGas, true);
+                            autoGasAppliedByNitro = true;
                         }
                     }
-                    if (!gasHeld) keys.set(keyGas, false);
                 }
             } else if (c.scan == STICK) {
                 c.steering = 0;
@@ -1422,6 +1480,8 @@ final class RacingControlsView extends View {
     }
 
     void releaseAll() {
+        removeCallbacks(nitroWatcher);
+        autoGasAppliedByNitro = false;
         for (int i = 0; i < 32; i++) {
             Control c = fingerMap[i];
             if (c != null) {

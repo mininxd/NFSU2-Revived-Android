@@ -43,6 +43,33 @@ public final class RoamNativeBridge {
     public static native void nativeSetFrameLimit(int fps);
     public static native int[] nativeGetActionKeys();
     public static native long nativeGetFrameCount();
+    public static native float nativeGetCarSpeedKmH();
+    public static native int nativeGetCarNos();
+    public static native boolean nativeIsNosActive();
+
+    public static float getCarSpeedKmH() {
+        try {
+            return nativeGetCarSpeedKmH();
+        } catch (Throwable t) {
+            return 0.0f;
+        }
+    }
+
+    public static int getCarNos() {
+        try {
+            return nativeGetCarNos();
+        } catch (Throwable t) {
+            return 0;
+        }
+    }
+
+    public static boolean isNosActive() {
+        try {
+            return nativeIsNosActive();
+        } catch (Throwable t) {
+            return false;
+        }
+    }
 
     /**
      * Called from C roam_android.c when the engine wants to transmit a packet.

@@ -26,6 +26,8 @@
 #include <setjmp.h>
 #include <sys/mman.h>
 #include <jni.h>
+#include "roam_language_fix.h"
+#include "roam_nitro_fix.h"
 
 ptrdiff_t *g_p_mem_base = NULL;
 uint32_t  *g_p_esp = NULL;
@@ -192,6 +194,7 @@ static inline void roam_android_patch_carpool(void) {
         if (rh_mem_committed(G_RIDE_SLOT_CAP, 1) && MR8(G_RIDE_SLOT_CAP) == 0x16) {
             MR8(G_RIDE_SLOT_CAP) = 0x7f; // expand CarLoadedRideInfoSlotPool from 22 to 127
         }
+        roam_language_fix_init();
         g_carpool_patched = 1;
     }
 }
@@ -1538,6 +1541,7 @@ static void roam_android_install_hooks(void) {
         __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Updated k_functions[0x005c7ec0]");
     }
 
+    roam_language_fix_init();
     g_hooks_installed = 1;
 }
 
@@ -1678,6 +1682,7 @@ __attribute__((visibility("default"))) void nfs_roam_frame_tick(void) {
     framerate_pacing_fix();
     resolution_frame_tick();
     look_camera_frame_tick();
+    roam_language_fix_tick();
     static int s_gamepad_hooked_tick = 0;
     if (!s_gamepad_hooked_tick) {
         roam_apply_gamepad_layout(0);
@@ -2606,6 +2611,30 @@ JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeKeyNav(
     if (down && (scan == 0xcb || scan == 0xcd)) {
         roam_resolution_nav(scan == 0xcd ? 1 : -1);
     }
+}
+
+JNIEXPORT jfloat JNICALL Java_io_mininxd_nfsu2_net_RoamNativeBridge_nativeGetCarSpeed(
+        JNIEnv *env, jclass clazz) {
+    (void)env; (void)clazz;
+    return roam_nitro_get_car_speed_kmh();
+}
+
+JNIEXPORT jfloat JNICALL Java_io_mininxd_nfsu2_net_RoamNativeBridge_nativeGetCarSpeedKmH(
+        JNIEnv *env, jclass clazz) {
+    (void)env; (void)clazz;
+    return roam_nitro_get_car_speed_kmh();
+}
+
+JNIEXPORT jint JNICALL Java_io_mininxd_nfsu2_net_RoamNativeBridge_nativeGetCarNos(
+        JNIEnv *env, jclass clazz) {
+    (void)env; (void)clazz;
+    return (jint)roam_nitro_get_car_nos_percent();
+}
+
+JNIEXPORT jboolean JNICALL Java_io_mininxd_nfsu2_net_RoamNativeBridge_nativeIsNosActive(
+        JNIEnv *env, jclass clazz) {
+    (void)env; (void)clazz;
+    return roam_nitro_is_nos_active() ? JNI_TRUE : JNI_FALSE;
 }
 
 #ifdef __cplusplus

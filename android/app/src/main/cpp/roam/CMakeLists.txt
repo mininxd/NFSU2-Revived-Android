@@ -5,6 +5,8 @@ add_library(nfsu2_roam SHARED
     roam_core.c
     roam_game.c
     roam_android.c
+    roam_language_fix.c
+    roam_nitro_fix.c
 )
 
 target_include_directories(nfsu2_roam PRIVATE

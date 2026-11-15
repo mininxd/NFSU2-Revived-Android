@@ -104,6 +104,8 @@ jobs:
             android/app/src/main/cpp/roam/roam_core.c \
             android/app/src/main/cpp/roam/roam_game.c \
             android/app/src/main/cpp/roam/roam_android.c \
+            android/app/src/main/cpp/roam/roam_language_fix.c \
+            android/app/src/main/cpp/roam/roam_nitro_fix.c \
             $RUST_OBJS \
             -lm -llog -ldl \
             -o android/app/src/main/jniLibs/arm64-v8a/libnfsu2_roam.so
