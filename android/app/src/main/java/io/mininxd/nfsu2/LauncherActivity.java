@@ -521,17 +521,32 @@ public final class LauncherActivity extends Activity {
     private List<String[]> languages() {
         List<String[]> found = new ArrayList<>();
         File root = gameRoot();
-        for (String[] language : LANGUAGES)
-            if (new File(root, "LANGUAGES/" + language[2] + ".bin").isFile()
-                    || new File(root, "LANGPACKS/" + language[2].toLowerCase()).isDirectory()
-                    || new File(root, "LANGPACKS/" + language[1].toLowerCase()).isDirectory()
-                    || new File(root, "LANGPACKS/" + language[2] + ".bin").isFile()) found.add(language);
+        for (String[] language : LANGUAGES) {
+            String code = language[2];
+            String codeLower = code.toLowerCase(Locale.ROOT);
+            String nameLower = language[1].toLowerCase(Locale.ROOT);
+            if (new File(root, "LANGUAGES/" + code + ".bin").isFile()
+                    || new File(root, "LANGUAGES/" + codeLower + ".bin").isFile()
+                    || new File(root, "LANGPACKS/" + codeLower).isDirectory()
+                    || new File(root, "LANGPACKS/" + nameLower).isDirectory()
+                    || new File(root, "LANGPACKS/" + code + ".bin").isFile()
+                    || ("Spanish".equalsIgnoreCase(language[1]) && (
+                        new File(root, "LANGUAGES/Spanish.bin").isFile()
+                        || new File(root, "LANGUAGES/spanish.bin").isFile()
+                        || new File(root, "LANGUAGES/Espanol.bin").isFile()
+                        || new File(root, "LANGUAGES/espanol.bin").isFile()
+                    ))) {
+                found.add(language);
+            }
+        }
         return found;
     }
 
     private String languageLabel() {
         String current = GameOptions.language(this);
-        for (String[] language : LANGUAGES) if (language[1].equalsIgnoreCase(current)) return language[0];
+        for (String[] language : LANGUAGES) {
+            if (language[1].equalsIgnoreCase(current) || language[0].equalsIgnoreCase(current)) return language[0];
+        }
         return "English";
     }
 

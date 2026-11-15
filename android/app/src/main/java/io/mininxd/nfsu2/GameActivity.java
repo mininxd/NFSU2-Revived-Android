@@ -478,6 +478,9 @@ public final class GameActivity extends NativeActivity {
         if ("English".equalsIgnoreCase(language)) {
             language = "English UK";
         }
+        if ("Español".equalsIgnoreCase(language) || "Espanol".equalsIgnoreCase(language)) {
+            language = "Spanish";
+        }
         nativeLanguage(language);
         nativeFrameLimit(launch.getIntExtra("frameCap", Integer.parseInt(GameOptions.get(this, GameOptions.FPS))));
         int screenMode = launch.getIntExtra("widescreenMode", GameOptions.widescreenMode(this));

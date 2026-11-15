@@ -680,7 +680,10 @@ void loadImage(const char* path) {
         if(memory->readable(0x0061c744u,1)&&*static_cast<const uint8_t*>(ptr(0x0061c744u,1))==0x16){
             *static_cast<uint8_t*>(ptr(0x0061c744u,1))=0x7f;
         }
-        NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Patched guest CarPool memory (48MB, ride slots 127)");
+        if(memory->writable(0x007f6de8u,8)&&read32(0x007f6de8u)==0x5b9d88b9u){
+            if(read32(0x007f6decu)<524288u) write32(0x007f6decu,524288u);
+        }
+        NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Patched guest CarPool memory (48MB, ride slots 127, lang pool headroom 512KB)");
     }
 }
 uint32_t callGuest(uint32_t va, const uint32_t* args, size_t count, uint32_t cleanup, bool threadStart) {
@@ -1090,6 +1093,13 @@ std::string connectGuestRuntime(const char* executable) {
                 NFS_RUNTIME_LOG(ANDROID_LOG_INFO, "NFSU2", "Patched EventHandlerSlotPool capacity at 0x005d7b07 to 128");
             }
         }
+        // Expand LanguageMemoryPool headroom to 512KB for Spanish (280KB) and translated packs
+        if (memory->writable(0x007f6de8u, 8) && read32(0x007f6de8u) == 0x5b9d88b9u) {
+            if (read32(0x007f6decu) < 524288u) {
+                write32(0x007f6decu, 524288u);
+                NFS_RUNTIME_LOG(ANDROID_LOG_INFO, "NFSU2", "Patched LanguageMemoryPool headroom at 0x007f6dec to 512KB");
+            }
+        }
         nfs_widescreen_init(hostGameRoot.c_str());
         if(guestWidescreen){
             nfs_widescreen_set_screen_mode(guestScreenMode);
@@ -1229,8 +1239,13 @@ void setGuestScreenMode(int mode){std::lock_guard<MachineMutex> lock(machine);gu
 void setGuestHudSafeArea(bool enabled){std::lock_guard<MachineMutex> lock(machine);guestHudSafeArea=enabled;if(memory)nfs_widescreen_set_hud_safe_area(enabled?1:0);}
 void setGuestLanguage(const char* language){
     std::lock_guard<MachineMutex> lock(machine);if(memory)return;
+    if(language && (std::strcmp(language, "Español") == 0 || strcasecmp(language, "Espanol") == 0 || strcasecmp(language, "Spanish") == 0)) {
+        guestLanguage="Spanish";
+        NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Selected guest language: Spanish");
+        return;
+    }
     for(const char* known:{"English UK","English","Spanish","French","German","Italian","Dutch","Swedish","Danish","Japanese","Korean","Chinese (Traditional)","Thai"})
-        if(language&&std::strcmp(known,language)==0){guestLanguage=known;NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Selected guest language: %s",known);return;}
+        if(language&&strcasecmp(known,language)==0){guestLanguage=known;NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Selected guest language: %s",known);return;}
     guestLanguage="English UK";
 }
 void setGuestAudioMuted(bool muted) {

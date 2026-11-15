@@ -335,6 +335,9 @@ public final class GameOptions {
         if ("English".equalsIgnoreCase(lang) || "English (UK)".equalsIgnoreCase(lang) || "English (US)".equalsIgnoreCase(lang)) {
             return "English UK";
         }
+        if ("Español".equalsIgnoreCase(lang) || "Espanol".equalsIgnoreCase(lang)) {
+            return "Spanish";
+        }
         return lang;
     }
 

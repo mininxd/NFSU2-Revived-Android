@@ -32,6 +32,27 @@ std::filesystem::path gamePath(std::string guest){
     else if(normalized.rfind("c:/nfsu2/",0)==0)guest=guest.substr(9);
     else if(guest.find(':')!=std::string::npos||guest.rfind("//",0)==0)throw GuestStop("Unsupported guest path: "+guest);
     else {if(!guest.empty()&&guest.front()=='/')guest.erase(0,1);else{auto current=guestWorkingDirectory.substr(8);std::replace(current.begin(),current.end(),'\\','/');if(!current.empty())guest=current+"/"+guest;}}
+    // Spanish / Español file aliases (languages/spanish.bin <-> languages/espanol.bin, agree.spa <-> agree.esp, etc.)
+    if (normalized.find("languages/spanish.bin") != std::string::npos || normalized.find("languages/espanol.bin") != std::string::npos) {
+        std::error_code ec;
+        if (!std::filesystem::exists(hostGameRoot / "LANGUAGES" / "Spanish.bin", ec) &&
+            !std::filesystem::exists(hostGameRoot / "LANGUAGES" / "spanish.bin", ec)) {
+            if (std::filesystem::exists(hostGameRoot / "LANGUAGES" / "Espanol.bin", ec)) guest = "LANGUAGES/Espanol.bin";
+            else if (std::filesystem::exists(hostGameRoot / "LANGUAGES" / "espanol.bin", ec)) guest = "LANGUAGES/espanol.bin";
+        }
+    } else if (normalized.find("agree.spa") != std::string::npos || normalized.find("agree.esp") != std::string::npos) {
+        std::error_code ec;
+        if (!std::filesystem::exists(hostGameRoot / "LANGUAGES" / "agree.spa", ec)) {
+            if (std::filesystem::exists(hostGameRoot / "LANGUAGES" / "agree.esp", ec)) guest = "LANGUAGES/agree.esp";
+        }
+    } else if (normalized.find("memcard/locale_spanish.loc") != std::string::npos || normalized.find("memcard/locale_espanol.loc") != std::string::npos) {
+        std::error_code ec;
+        if (!std::filesystem::exists(hostGameRoot / "memcard" / "LOCALE_SPANISH.loc", ec) &&
+            !std::filesystem::exists(hostGameRoot / "memcard" / "locale_spanish.loc", ec)) {
+            if (std::filesystem::exists(hostGameRoot / "memcard" / "LOCALE_ESPANOL.loc", ec)) guest = "memcard/LOCALE_ESPANOL.loc";
+            else if (std::filesystem::exists(hostGameRoot / "memcard" / "locale_espanol.loc", ec)) guest = "memcard/locale_espanol.loc";
+        }
+    }
     auto relative=std::filesystem::path(guest).lexically_normal();for(const auto& part:relative)if(part=="..")throw GuestStop("Guest path leaves nfsu2: "+guest);
     auto result=std::filesystem::path(hostGameRoot);
     for(const auto& part:relative){if(part==".")continue;std::error_code error;bool found=false;
