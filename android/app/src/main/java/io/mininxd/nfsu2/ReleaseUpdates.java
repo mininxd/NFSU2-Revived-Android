@@ -166,13 +166,24 @@ final class ReleaseUpdates {
 
             if (rawJson.startsWith("[")) {
                 JSONArray releases = new JSONArray(rawJson);
-                for (int i = 0; i < releases.length(); i++) {
-                    JSONObject r = releases.getJSONObject(i);
-                    if (r.optBoolean("draft")) continue;
-                    boolean isPre = r.optBoolean("prerelease");
-                    if (!isBeta && isPre) continue; // Stable channel ignores prereleases
-                    selectedRelease = r;
-                    break;
+                if (isBeta) {
+                    for (int i = 0; i < releases.length(); i++) {
+                        JSONObject r = releases.getJSONObject(i);
+                        if (r.optBoolean("draft")) continue;
+                        if (r.optBoolean("prerelease")) {
+                            selectedRelease = r;
+                            break;
+                        }
+                    }
+                }
+                if (selectedRelease == null) {
+                    for (int i = 0; i < releases.length(); i++) {
+                        JSONObject r = releases.getJSONObject(i);
+                        if (r.optBoolean("draft")) continue;
+                        if (!isBeta && r.optBoolean("prerelease")) continue;
+                        selectedRelease = r;
+                        break;
+                    }
                 }
             } else if (rawJson.startsWith("{")) {
                 JSONObject r = new JSONObject(rawJson);

@@ -892,7 +892,7 @@ public final class LauncherActivity extends Activity {
     }
 
     private void chooseUpdateChannel() {
-        String[] options = {"Stable (Latest releases)", "Beta (Include pre-releases)"};
+        String[] options = {"Stable", "Beta"};
         int current = ReleaseUpdates.CHANNEL_BETA.equalsIgnoreCase(ReleaseUpdates.getChannel(this)) ? 1 : 0;
         new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
                 .setTitle("Update Channel")
@@ -916,7 +916,8 @@ public final class LauncherActivity extends Activity {
             refreshOptions();
             String channelName = updateChannelLabel();
             if (result.error != null) { if (manual) message("Updates", result.error); return; }
-            if (!ReleaseVersion.newer(result.tag, ReleaseUpdates.installed(this))) {
+            boolean isBeta = ReleaseUpdates.CHANNEL_BETA.equalsIgnoreCase(ReleaseUpdates.getChannel(this));
+            if (!ReleaseVersion.isUpdateAvailable(result.tag, ReleaseUpdates.installed(this), isBeta, result.isPrerelease)) {
                 if (manual) message("Updates", "You have version " + ReleaseUpdates.installed(this)
                         + " (" + channelName + " channel).\nThere is no newer version on GitHub.");
                 return;

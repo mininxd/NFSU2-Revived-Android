@@ -69,6 +69,41 @@ final class ReleaseVersion {
         return new Parsed(numbers, preLevel, preNumber);
     }
 
+    static boolean sameVersion(String remote, String installed) {
+        if (remote == null || installed == null) return false;
+        String sRemote = remote.trim().replaceFirst("(?i)^v", "");
+        String sInstalled = installed.trim().replaceFirst("(?i)^v", "");
+        if (sRemote.equalsIgnoreCase(sInstalled)) return true;
+
+        Parsed a = parse(remote);
+        Parsed b = parse(installed);
+        if (a == null || b == null) return false;
+
+        if (a.preLevel != b.preLevel || a.preNumber != b.preNumber) {
+            return false;
+        }
+
+        int maxLen = Math.max(a.numbers.size(), b.numbers.size());
+        for (int i = 0; i < maxLen; i++) {
+            int na = i < a.numbers.size() ? a.numbers.get(i) : 0;
+            int nb = i < b.numbers.size() ? b.numbers.get(i) : 0;
+            if (na != nb) return false;
+        }
+        return true;
+    }
+
+    static boolean isUpdateAvailable(String remoteTag, String installedVersion, boolean isBetaChannel, boolean isPrerelease) {
+        if (remoteTag == null || remoteTag.trim().isEmpty()) return false;
+        if (sameVersion(remoteTag, installedVersion)) return false;
+
+        if (isBetaChannel && isPrerelease) {
+            // Beta channel forces users onto latest pre-release until installed is on the exact same version
+            return true;
+        }
+
+        return newer(remoteTag, installedVersion);
+    }
+
     static boolean newer(String remote, String installed) {
         Parsed a = parse(remote);
         Parsed b = parse(installed);
