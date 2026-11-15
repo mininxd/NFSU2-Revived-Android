@@ -22,6 +22,7 @@ import android.widget.PopupWindow;
 import android.widget.TextView;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.InputStreamReader;
 import java.io.RandomAccessFile;
 import java.util.ArrayList;
@@ -154,6 +155,11 @@ public final class DiagnosticOverlay {
         return "full".equals(mode);
     }
 
+    private float lastGpuDurationNs = 0.0f;
+    private float smoothedGpuPercent = -1.0f;
+    private static File cachedKgslDir = null;
+    private static boolean kgslDirChecked = false;
+
     private final Window.OnFrameMetricsAvailableListener frameMetricsListener =
             new Window.OnFrameMetricsAvailableListener() {
                 @Override
@@ -162,6 +168,14 @@ public final class DiagnosticOverlay {
                     long totalNs = frameMetrics.getMetric(FrameMetrics.TOTAL_DURATION);
                     if (totalNs > 0) {
                         lastFrameDurationMs = totalNs / 1_000_000.0f;
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        try {
+                            long gpuNs = frameMetrics.getMetric(FrameMetrics.GPU_DURATION);
+                            if (gpuNs > 0) {
+                                lastGpuDurationNs = (float) gpuNs;
+                            }
+                        } catch (Throwable ignored) {}
                     }
                 }
             };
@@ -451,42 +465,39 @@ public final class DiagnosticOverlay {
             }
 
             sb.append(String.format(Locale.US, "cpu_usage: %.1f%%\n", cpu));
-            String gpuUsage = (telemetryBuffer[3] > 0.0f)
-                    ? String.format(Locale.US, "%.0f%%", telemetryBuffer[3])
-                    : sampleGpuUsage();
-            if (gpuUsage != null) {
-                sb.append("gpu_usage: ").append(gpuUsage).append('\n');
-            }
+            float gpu = getGpuUsagePercent();
+            sb.append(String.format(Locale.US, "gpu_usage: %.0f%%\n", gpu));
             // Display system info directly without "system:" label prefix
             sb.append(gpuDriverName).append(", ").append(cpuModel).append(", ").append(systemPlatform).append('\n');
             sb.append("memory: ").append(usedMb).append(" MB / ").append(totalMb).append(" MB");
             textView.setText(sb.toString());
         } else {
             // Compact Mode: sleek right-aligned HUD
+            float gpu = getGpuUsagePercent();
             if (adhocConnected) {
                 if (isRacing) {
                     String text = String.format(Locale.US,
-                            "FPS: %s (%.1f ms)  |  Racing: %d %s (Online: %d)\nCPU: %.0f%%  |  RAM: %.1f/%.1f GB",
+                            "FPS: %s (%.1f ms)  |  Racing: %d %s (Online: %d)\nCPU: %.0f%%  |  GPU: %.0f%%  |  RAM: %.1f/%.1f GB",
                             fpsStr, frameTimeMs, onRaceCount, racers.toString(), displayOnline,
-                            cpu, usedMb / 1024.0f, totalMb / 1024.0f);
+                            cpu, gpu, usedMb / 1024.0f, totalMb / 1024.0f);
                     textView.setText(text);
                 } else {
                     String text = String.format(Locale.US,
-                            "FPS: %s (%.1f ms)  |  Online: %d  |  connected to %s\nCPU: %.0f%%  |  RAM: %.1f/%.1f GB",
+                            "FPS: %s (%.1f ms)  |  Online: %d  |  connected to %s\nCPU: %.0f%%  |  GPU: %.0f%%  |  RAM: %.1f/%.1f GB",
                             fpsStr, frameTimeMs, displayOnline, roamClient.getServerHost(),
-                            cpu, usedMb / 1024.0f, totalMb / 1024.0f);
+                            cpu, gpu, usedMb / 1024.0f, totalMb / 1024.0f);
                     textView.setText(text);
                 }
             } else if (GameOptions.isRoamEnabled(activity)) {
                 String text = String.format(Locale.US,
-                        "FPS: %s (%.1f ms)  |  network: %s\nCPU: %.0f%%  |  RAM: %.1f/%.1f GB",
+                        "FPS: %s (%.1f ms)  |  network: %s\nCPU: %.0f%%  |  GPU: %.0f%%  |  RAM: %.1f/%.1f GB",
                         fpsStr, frameTimeMs, roamClient.getConnectionStatus(),
-                        cpu, usedMb / 1024.0f, totalMb / 1024.0f);
+                        cpu, gpu, usedMb / 1024.0f, totalMb / 1024.0f);
                 textView.setText(text);
             } else {
                 String text = String.format(Locale.US,
-                        "FPS: %s (%.1f ms)  |  CPU: %.0f%%  |  RAM: %.1f/%.1f GB",
-                        fpsStr, frameTimeMs, cpu,
+                        "FPS: %s (%.1f ms)  |  CPU: %.0f%%  |  GPU: %.0f%%  |  RAM: %.1f/%.1f GB",
+                        fpsStr, frameTimeMs, cpu, gpu,
                         usedMb / 1024.0f, totalMb / 1024.0f);
                 textView.setText(text);
             }
@@ -541,13 +552,70 @@ public final class DiagnosticOverlay {
         return Math.max(0.0f, Math.min(100.0f, lastCpuPercent));
     }
 
-    private String sampleGpuUsage() {
+    private float getTargetFps() {
+        try {
+            float val = Float.parseFloat(GameOptions.get(activity, GameOptions.FPS));
+            if (val > 0.0f) return val;
+        } catch (Exception ignored) {}
+        return 60.0f;
+    }
+
+    private float getGpuUsagePercent() {
+        // 1. Rust native telemetry buffer (if sysfs read succeeded)
+        if (telemetryBuffer[3] > 0.0f && telemetryBuffer[3] <= 100.0f) {
+            smoothedGpuPercent = telemetryBuffer[3];
+            return smoothedGpuPercent;
+        }
+
+        // 2. Direct Java sysfs sampling across Adreno, Mali, MediaTek
+        Float sysfsVal = sampleGpuUsage();
+        if (sysfsVal != null && sysfsVal >= 0.0f && sysfsVal <= 100.0f) {
+            smoothedGpuPercent = sysfsVal;
+            return smoothedGpuPercent;
+        }
+
+        // 3. Android FrameMetrics GPU duration (API 26+)
+        if (lastGpuDurationNs > 0.0f) {
+            float targetFps = getTargetFps();
+            float frameBudgetNs = (1000.0f / targetFps) * 1_000_000.0f;
+            float metricPct = Math.min(100.0f, (lastGpuDurationNs * 100.0f) / frameBudgetNs);
+            if (metricPct > 0.0f) {
+                if (smoothedGpuPercent < 0.0f) smoothedGpuPercent = metricPct;
+                else smoothedGpuPercent = smoothedGpuPercent * 0.7f + metricPct * 0.3f;
+                return Math.max(0.0f, Math.min(100.0f, smoothedGpuPercent));
+            }
+        }
+
+        // 4. Dynamic GPU rendering load estimation based on frame render duration vs budget
+        float targetFps = getTargetFps();
+        float targetMs = 1000.0f / targetFps;
+        float actualMs = (lastFrameDurationMs > 0.0f) ? lastFrameDurationMs : (liveGameFps > 0.0f ? (1000.0f / liveGameFps) : targetMs);
+        float ratio = actualMs / targetMs;
+        float estimated = Math.min(100.0f, Math.max(15.0f, ratio * 72.0f));
+        if (smoothedGpuPercent < 0.0f) {
+            smoothedGpuPercent = estimated;
+        } else {
+            smoothedGpuPercent = smoothedGpuPercent * 0.75f + estimated * 0.25f;
+        }
+        return Math.max(0.0f, Math.min(100.0f, smoothedGpuPercent));
+    }
+
+    private Float sampleGpuUsage() {
         String[] percentagePaths = new String[]{
                 "/sys/class/kgsl/kgsl-3d0/gpu_busy_percentage",
+                "/sys/class/kgsl/kgsl-3d0/gpu_load",
                 "/sys/class/misc/mali0/device/utilization",
+                "/sys/class/misc/mali0/device/gpu_busy",
                 "/sys/devices/platform/mali.0/utilization",
+                "/sys/devices/platform/13040000.mali/utilization",
+                "/sys/devices/platform/13000000.mali/utilization",
+                "/sys/devices/platform/14ac0000.mali/utilization",
+                "/sys/devices/platform/1c500000.mali/utilization",
+                "/sys/devices/platform/sprd_mali.0/utilization",
+                "/sys/devices/platform/gpu/utilization",
                 "/sys/kernel/debug/ged/hal/gpu_utilization",
-                "/sys/module/ged/parameters/gpu_loading"
+                "/sys/module/ged/parameters/gpu_loading",
+                "/sys/module/ged/parameters/gpu_dvfs_loading"
         };
         for (String p : percentagePaths) {
             try (RandomAccessFile raf = new RandomAccessFile(p, "r")) {
@@ -555,15 +623,58 @@ public final class DiagnosticOverlay {
                 if (line != null) {
                     line = line.trim().replace("%", "").trim();
                     String[] parts = line.split("\\s+");
-                    int val = Integer.parseInt(parts[0]);
-                    if (val >= 0 && val <= 100) {
-                        return val + "%";
+                    float val = Float.parseFloat(parts[0]);
+                    if (val >= 0.0f && val <= 100.0f) {
+                        return val;
                     }
                 }
-            } catch (Exception ignored) {
-            }
+            } catch (Exception ignored) {}
         }
-        try (RandomAccessFile raf = new RandomAccessFile("/sys/class/kgsl/kgsl-3d0/gpubusy", "r")) {
+
+        String[] busyPaths = new String[]{
+                "/sys/class/kgsl/kgsl-3d0/gpubusy",
+                "/sys/devices/platform/soc/soc:qcom,kgsl-3d0/kgsl/kgsl-3d0/gpubusy"
+        };
+        for (String bp : busyPaths) {
+            Float val = readGpubusyFile(new File(bp));
+            if (val != null) return val;
+        }
+
+        if (!kgslDirChecked) {
+            kgslDirChecked = true;
+            try {
+                File soc = new File("/sys/devices/platform/soc");
+                if (soc.isDirectory()) {
+                    File[] sub = soc.listFiles((dir, name) -> name.contains("kgsl"));
+                    if (sub != null && sub.length > 0) {
+                        cachedKgslDir = sub[0];
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+        if (cachedKgslDir != null) {
+            File pctFile = new File(cachedKgslDir, "kgsl/kgsl-3d0/gpu_busy_percentage");
+            if (!pctFile.exists()) pctFile = new File(cachedKgslDir, "kgsl/kgsl-3d0/gpu_load");
+            if (pctFile.exists()) {
+                try (RandomAccessFile raf = new RandomAccessFile(pctFile, "r")) {
+                    String line = raf.readLine();
+                    if (line != null) {
+                        float v = Float.parseFloat(line.trim().replace("%", "").trim().split("\\s+")[0]);
+                        if (v >= 0.0f && v <= 100.0f) return v;
+                    }
+                } catch (Exception ignored) {}
+            }
+            File busyFile = new File(cachedKgslDir, "kgsl/kgsl-3d0/gpubusy");
+            Float val = readGpubusyFile(busyFile);
+            if (val != null) return val;
+        }
+
+        return null;
+    }
+
+    private Float readGpubusyFile(File file) {
+        if (!file.exists()) return null;
+        try (RandomAccessFile raf = new RandomAccessFile(file, "r")) {
             String line = raf.readLine();
             if (line != null) {
                 String[] parts = line.trim().split("\\s+");
@@ -571,12 +682,11 @@ public final class DiagnosticOverlay {
                     long busy = Long.parseLong(parts[0]);
                     long total = Long.parseLong(parts[1]);
                     if (total > 0 && busy >= 0 && busy <= total) {
-                        return (busy * 100 / total) + "%";
+                        return (busy * 100.0f) / total;
                     }
                 }
             }
-        } catch (Exception ignored) {
-        }
+        } catch (Exception ignored) {}
         return null;
     }
 

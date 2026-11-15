@@ -148,39 +148,98 @@ pub extern "C" fn nfs_telemetry_get_gpu_busy() -> f32 {
     }
     LAST_GPU_CHECK_MS.store(now_ms, Ordering::Relaxed);
 
-    // 1. Qualcomm Adreno kgsl sysfs node: "busy_cycles total_cycles"
+    // 1. Qualcomm Adreno kgsl sysfs nodes
     let adreno_paths = [
+        "/sys/class/kgsl/kgsl-3d0/gpu_busy_percentage",
+        "/sys/class/kgsl/kgsl-3d0/gpu_load",
         "/sys/class/kgsl/kgsl-3d0/gpubusy",
+        "/sys/devices/platform/soc/soc:qcom,kgsl-3d0/kgsl/kgsl-3d0/gpu_busy_percentage",
         "/sys/devices/platform/soc/soc:qcom,kgsl-3d0/kgsl/kgsl-3d0/gpubusy",
+        "/sys/devices/platform/soc/soc:qcom,kgsl-3d0/kgsl/kgsl-3d0/gpu_load",
     ];
 
     for path in &adreno_paths {
         if let Ok(content) = fs::read_to_string(path) {
-            let mut parts = content.split_whitespace();
-            if let (Some(busy_str), Some(total_str)) = (parts.next(), parts.next()) {
-                if let (Ok(busy), Ok(total)) = (busy_str.parse::<u64>(), total_str.parse::<u64>()) {
-                    if total > 0 {
-                        let pct = (busy as f32 / total as f32) * 100.0;
-                        let clamped = pct.clamp(0.0, 100.0);
-                        LAST_GPU_BUSY.store(clamped.to_bits(), Ordering::Relaxed);
-                        return clamped;
+            let trimmed = content.trim().trim_end_matches('%').trim();
+            let mut parts = trimmed.split_whitespace();
+            if let Some(first) = parts.next() {
+                if let Some(second) = parts.next() {
+                    if let (Ok(busy), Ok(total)) = (first.parse::<u64>(), second.parse::<u64>()) {
+                        if total > 0 && busy <= total {
+                            let pct = (busy as f32 / total as f32) * 100.0;
+                            let clamped = pct.clamp(0.0, 100.0);
+                            LAST_GPU_BUSY.store(clamped.to_bits(), Ordering::Relaxed);
+                            return clamped;
+                        }
+                    }
+                } else if let Ok(val) = first.parse::<f32>() {
+                    if (0.0..=100.0).contains(&val) {
+                        LAST_GPU_BUSY.store(val.to_bits(), Ordering::Relaxed);
+                        return val;
                     }
                 }
             }
         }
     }
 
-    // 2. ARM Mali sysfs utilization nodes
+    // Dynamic search in /sys/devices/platform/soc for kgsl
+    if let Ok(entries) = fs::read_dir("/sys/devices/platform/soc") {
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let name_str = name.to_string_lossy();
+            if name_str.contains("kgsl") {
+                let p_busy = entry.path().join("kgsl/kgsl-3d0/gpubusy");
+                if let Ok(content) = fs::read_to_string(&p_busy) {
+                    let mut parts = content.split_whitespace();
+                    if let (Some(b_str), Some(t_str)) = (parts.next(), parts.next()) {
+                        if let (Ok(busy), Ok(total)) = (b_str.parse::<u64>(), t_str.parse::<u64>()) {
+                            if total > 0 && busy <= total {
+                                let pct = (busy as f32 / total as f32) * 100.0;
+                                let clamped = pct.clamp(0.0, 100.0);
+                                LAST_GPU_BUSY.store(clamped.to_bits(), Ordering::Relaxed);
+                                return clamped;
+                            }
+                        }
+                    }
+                }
+                let p_pct = entry.path().join("kgsl/kgsl-3d0/gpu_busy_percentage");
+                if let Ok(content) = fs::read_to_string(&p_pct) {
+                    let trimmed = content.trim().trim_end_matches('%').trim();
+                    if let Ok(val) = trimmed.parse::<f32>() {
+                        if (0.0..=100.0).contains(&val) {
+                            LAST_GPU_BUSY.store(val.to_bits(), Ordering::Relaxed);
+                            return val;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. ARM Mali & MediaTek GED sysfs utilization nodes
     let mali_paths = [
         "/sys/class/misc/mali0/device/gpu_busy",
         "/sys/class/misc/mali0/device/utilization",
+        "/sys/devices/platform/mali.0/utilization",
+        "/sys/devices/platform/13040000.mali/utilization",
+        "/sys/devices/platform/13000000.mali/utilization",
+        "/sys/devices/platform/14ac0000.mali/utilization",
+        "/sys/devices/platform/1c500000.mali/utilization",
+        "/sys/devices/platform/sprd_mali.0/utilization",
+        "/sys/devices/platform/gpu/utilization",
+        "/sys/kernel/debug/ged/hal/gpu_utilization",
+        "/sys/module/ged/parameters/gpu_loading",
+        "/sys/module/ged/parameters/gpu_dvfs_loading",
     ];
     for path in &mali_paths {
         if let Ok(content) = fs::read_to_string(path) {
-            if let Ok(val) = content.trim().parse::<f32>() {
-                let clamped = val.clamp(0.0, 100.0);
-                LAST_GPU_BUSY.store(clamped.to_bits(), Ordering::Relaxed);
-                return clamped;
+            let trimmed = content.trim().trim_end_matches('%').trim();
+            if let Ok(val) = trimmed.split_whitespace().next().unwrap_or("").parse::<f32>() {
+                if (0.0..=100.0).contains(&val) {
+                    let clamped = val.clamp(0.0, 100.0);
+                    LAST_GPU_BUSY.store(clamped.to_bits(), Ordering::Relaxed);
+                    return clamped;
+                }
             }
         }
     }
