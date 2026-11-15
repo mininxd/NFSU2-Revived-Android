@@ -1090,23 +1090,6 @@ std::string connectGuestRuntime(const char* executable) {
                 NFS_RUNTIME_LOG(ANDROID_LOG_INFO, "NFSU2", "Patched EventHandlerSlotPool capacity at 0x005d7b07 to 128");
             }
         }
-        // Expand LanguageMemoryPool headroom (FONT_SIZES[0].size at 0x007f6dec) from 0 to 512KB
-        // so InitLanguagePool (0x004ff680) allocates ~814KB pool, fitting Spanish (280KB) and other languages (Issue #112)
-        if (memory->writable(0x007f6de8u, 8)) {
-            uint32_t* pFontHeader = static_cast<uint32_t*>(ptr(0x007f6de8u, 8));
-            if (pFontHeader && pFontHeader[0] == 0x5b9d88b9u) {
-                pFontHeader[1] = 524288u;
-                NFS_RUNTIME_LOG(ANDROID_LOG_INFO, "NFSU2", "Patched FONT_SIZES[0].size at 0x007f6dec to %u for Spanish localization", pFontHeader[1]);
-            }
-        }
-        // Patch LoadLanguage (0x004ff85b: 7c 16 -> 90 90) to bypass capacity failure jump to stream pool 0
-        if (memory->writable(0x004ff85bu, 2)) {
-            uint16_t* pBranch = static_cast<uint16_t*>(ptr(0x004ff85bu, 2));
-            if (pBranch && *pBranch == 0x167cu) {
-                *pBranch = 0x9090u;
-                NFS_RUNTIME_LOG(ANDROID_LOG_INFO, "NFSU2", "Patched LoadLanguage at 0x004ff85b to NOPs for full localization loading");
-            }
-        }
         nfs_widescreen_init(hostGameRoot.c_str());
         if(guestWidescreen){
             nfs_widescreen_set_screen_mode(guestScreenMode);

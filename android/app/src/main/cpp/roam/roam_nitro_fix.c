@@ -14,15 +14,16 @@
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  TAG, __VA_ARGS__)
 #define LOGW(...) __android_log_print(ANDROID_LOG_WARN,  TAG, __VA_ARGS__)
 
-static volatile uintptr_t *s_p_mem_base = NULL;
-static int (*s_p_guest_is_readable)(uint32_t va, uint32_t bytes) = NULL;
+extern ptrdiff_t *g_p_mem_base;
+extern int roam_android_init_symbols(void);
+extern int roam_android_mem_readable(uint32_t a, uint32_t n);
 
 static inline void *nitro_gptr(uint32_t guest_va) {
-    if (!s_p_mem_base) {
-        s_p_mem_base = (volatile uintptr_t *)dlsym(RTLD_DEFAULT, "g_mem_base");
+    if (!g_p_mem_base || !*g_p_mem_base) {
+        roam_android_init_symbols();
     }
-    if (!s_p_mem_base || !*s_p_mem_base) return NULL;
-    return (void *)(*s_p_mem_base + (uintptr_t)guest_va);
+    if (!g_p_mem_base || !*g_p_mem_base) return NULL;
+    return (void *)((uintptr_t)*g_p_mem_base + (uintptr_t)guest_va);
 }
 
 static inline uint32_t nitro_mr32(uint32_t guest_va) {
@@ -36,18 +37,12 @@ static inline float nitro_mrf32(uint32_t guest_va) {
 }
 
 static inline int nitro_is_readable(uint32_t guest_va, size_t sz) {
-    if (!s_p_mem_base) {
-        s_p_mem_base = (volatile uintptr_t *)dlsym(RTLD_DEFAULT, "g_mem_base");
+    if (!g_p_mem_base || !*g_p_mem_base) {
+        roam_android_init_symbols();
     }
-    if (!s_p_mem_base || !*s_p_mem_base) return 0;
+    if (!g_p_mem_base || !*g_p_mem_base) return 0;
     if (guest_va < 0x400000u || (uint64_t)guest_va + sz >= 0x80000000ULL) return 0;
-    if (!s_p_guest_is_readable) {
-        s_p_guest_is_readable = (int (*)(uint32_t, uint32_t))dlsym(RTLD_DEFAULT, "guest_is_readable");
-    }
-    if (s_p_guest_is_readable) {
-        return s_p_guest_is_readable(guest_va, (uint32_t)sz);
-    }
-    return 1;
+    return roam_android_mem_readable(guest_va, (uint32_t)sz);
 }
 
 static uint32_t nitro_get_player_car(void) {
@@ -63,7 +58,7 @@ float roam_nitro_get_car_speed_kmh(void) {
     uint32_t car = nitro_get_player_car();
     if (!car) return 0.0f;
 
-    // 1. Try vehicle physics speed at car + 0x430 (m/s)
+    // 1. Vehicle physics speed at car + 0x430 (m/s)
     if (nitro_is_readable(car + 0x430u, 4)) {
         float spd = nitro_mrf32(car + 0x430u);
         if (isfinite(spd) && spd >= 0.0f && spd < 200.0f) {
@@ -71,7 +66,7 @@ float roam_nitro_get_car_speed_kmh(void) {
         }
     }
 
-    // 2. Try speedometer speed at car + 0x42c (m/s)
+    // 2. Speedometer speed at car + 0x42c (m/s)
     if (nitro_is_readable(car + 0x42cu, 4)) {
         float spd = nitro_mrf32(car + 0x42cu);
         if (isfinite(spd) && spd >= 0.0f && spd < 200.0f) {
@@ -79,7 +74,7 @@ float roam_nitro_get_car_speed_kmh(void) {
         }
     }
 
-    // 3. Fallback: linear velocity vector (vx, vy, vz) magnitude at car + 0x70
+    // 3. Fallback: linear velocity magnitude at car + 0x70
     if (nitro_is_readable(car + 0x70u, 12)) {
         float vx = nitro_mrf32(car + 0x70u);
         float vy = nitro_mrf32(car + 0x74u);
