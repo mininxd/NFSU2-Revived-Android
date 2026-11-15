@@ -32,6 +32,10 @@ uint32_t  *g_p_esp = NULL;
 uint32_t  *g_p_eax = NULL;
 uint32_t  *g_p_ecx = NULL;
 uint32_t  *g_p_edx = NULL;
+uint32_t  *g_p_ebp = NULL;
+uint32_t  *g_p_ebx = NULL;
+uint32_t  *g_p_esi = NULL;
+uint32_t  *g_p_edi = NULL;
 recomp_func_t (*g_p_recomp_lookup)(uint32_t va) = NULL;
 int (*g_p_guest_is_readable)(uint32_t va, uint32_t bytes) = NULL;
 
@@ -213,6 +217,10 @@ int roam_android_init_symbols(void) {
         g_p_eax = (uint32_t *)dlsym(h, "g_eax");
         g_p_ecx = (uint32_t *)dlsym(h, "g_ecx");
         g_p_edx = (uint32_t *)dlsym(h, "g_edx");
+        g_p_ebp = (uint32_t *)dlsym(h, "g_ebp");
+        g_p_ebx = (uint32_t *)dlsym(h, "g_ebx");
+        g_p_esi = (uint32_t *)dlsym(h, "g_esi");
+        g_p_edi = (uint32_t *)dlsym(h, "g_edi");
         g_p_guest_is_readable = (int (*)(uint32_t, uint32_t))dlsym(h, "guest_is_readable");
     }
 
@@ -1165,9 +1173,12 @@ static float g_stick_y = 0.f;
  * ========================================================================= */
 
 typedef void (*recomp_void_func_t)(void);
+typedef void (*recomp_hook_func_t)(uint32_t va);
 
 static recomp_void_func_t s_orig_4a5d90 = NULL;
 static recomp_void_func_t s_orig_5c7ec0 = NULL;
+static recomp_void_func_t s_orig_5caad0 = NULL;
+static recomp_hook_func_t s_orig_recomp_hook = NULL;
 
 static recomp_void_func_t arm64_inline_hook(void *target_func, void *hook_func) {
     if (!target_func || !hook_func) return NULL;
@@ -1476,15 +1487,24 @@ static void look_process_view(uint32_t view_id, uint32_t cam) {
 }
 
 static void hook_sub_005c7ec0(void) {
+    uint32_t view_id = 0;
+    uint32_t cam = 0;
     if (g_p_mem_base && *g_p_mem_base && g_p_esp && *g_p_esp) {
         uint32_t esp = *g_p_esp;
         if (rh_mem_committed(esp + 4, 4)) {
             uint32_t view = MR32(esp + 4);
             if (view && rh_mem_committed(view + 4, 0x40)) {
-                uint32_t view_id = MR32(view + 4);
-                uint32_t cam = MR32(view + 0x40);
-                if (view_id == 1u || view_id == 4u) {
+                view_id = MR32(view + 4);
+                cam = MR32(view + 0x40);
+                if (view_id == 1u) {
                     look_process_view(view_id, cam);
+                }
+                if (view_id == 4u || view_id == 5u) {
+                    if (cam && rh_mem_committed(cam + 0xC0u, 4)) {
+                        if (MRF32(cam + 0xC0u) < 1000.0f) {
+                            MRF32(cam + 0xC0u) = 10000.0f;
+                        }
+                    }
                 }
             }
         }
@@ -1492,6 +1512,89 @@ static void hook_sub_005c7ec0(void) {
 
     if (s_orig_5c7ec0) {
         s_orig_5c7ec0();
+    }
+
+    if ((view_id == 4u || view_id == 5u) && cam && rh_mem_committed(cam + 0xC0u, 4)) {
+        if (MRF32(cam + 0xC0u) < 1000.0f) {
+            MRF32(cam + 0xC0u) = 10000.0f;
+        }
+    }
+}
+
+static void hook_sub_005caad0(void) {
+    void *h_gc = dlopen("libgraphics_cache.so", RTLD_NOLOAD | RTLD_GLOBAL);
+    if (!h_gc) h_gc = dlopen("libgraphics_cache.so", RTLD_LAZY | RTLD_GLOBAL);
+    void (*fn_bypass)(int) = h_gc ? (void (*)(int))dlsym(h_gc, "nfs_camera_cull_set_bypass") : NULL;
+    if (fn_bypass) fn_bypass(1);
+
+    if (g_p_mem_base && *g_p_mem_base) {
+        uint32_t view4 = 0x00832DE0u + 4u * 0x70u; // 0x00832FA0
+        if (rh_mem_committed(view4 + 0x40u, 4)) {
+            uint32_t cam4 = MR32(view4 + 0x40u);
+            if (cam4 >= 0x10000u && rh_mem_committed(cam4 + 0xC0u, 4)) {
+                if (MRF32(cam4 + 0xC0u) < 1000.0f) {
+                    MRF32(cam4 + 0xC0u) = 10000.0f;
+                }
+            }
+        }
+    }
+
+    if (s_orig_5caad0) {
+        s_orig_5caad0();
+    }
+
+    if (fn_bypass) fn_bypass(0);
+}
+
+static void hook_recomp_hook(uint32_t va) {
+    if (va == 0x005C7F64u) { // FixFOV (FOV_SCALE)
+        uint32_t ebp = (g_p_ebp) ? *g_p_ebp : 0;
+        uint32_t ecx = (g_p_ecx) ? *g_p_ecx : 0;
+        uint32_t view = (ebp >= 0x10000u && ebp <= 0x7FFFF000u && rh_mem_committed(ebp + 4u, 4)) ? MR32(ebp + 4u) : ecx;
+        if (view == 0) view = ecx;
+
+        uint32_t cam = (ebp >= 0x10000u && ebp <= 0x7FFFF000u && rh_mem_committed(ebp + 0x40u, 4)) ? MR32(ebp + 0x40u) : 0;
+        float orig_far = (cam >= 0x10000u && rh_mem_committed(cam + 0xC0u, 4)) ? MRF32(cam + 0xC0u) : 10000.0f;
+        if (orig_far < 1000.0f) orig_far = 10000.0f;
+
+        if (s_orig_recomp_hook) {
+            s_orig_recomp_hook(va);
+        }
+
+        if (view == 4u || view == 5u) {
+            uint32_t esp = (g_p_esp && *g_p_esp) ? *g_p_esp : 0;
+            if (esp >= 0x10000u && rh_mem_committed(esp + 0x0Cu, 4)) {
+                MRF32(esp + 0x0Cu) = orig_far;
+            }
+            if (cam >= 0x10000u && rh_mem_committed(cam + 0xC0u, 4)) {
+                MRF32(cam + 0xC0u) = orig_far;
+            }
+        }
+        return;
+    }
+
+    if (va == 0x0051D655u) { // BLIPS_HOOK (radar blips)
+        uint32_t ebx = (g_p_ebx) ? *g_p_ebx : 0;
+        uint32_t edx = (g_p_edx) ? *g_p_edx : 0;
+        uint32_t esp = (g_p_esp) ? *g_p_esp : 0;
+        if (ebx >= 0x10000u && rh_mem_committed(ebx + 0x1C, 8) &&
+            edx >= 0x10000u && rh_mem_committed(edx, 4) &&
+            esp >= 0x10000u && rh_mem_committed(esp + 0x1C, 4)) {
+            float x = MRF32(ebx + 0x1C);
+            float y = MRF32(ebx + 0x20);
+            MRF32(edx) = x;
+            uint32_t vy; memcpy(&vy, &y, 4);
+            if (g_p_eax) *g_p_eax = vy;
+            uint32_t out_y_ptr = MR32(esp + 0x1C);
+            if (out_y_ptr >= 0x10000u && rh_mem_committed(out_y_ptr, 4)) {
+                MRF32(out_y_ptr) = y;
+            }
+        }
+        return;
+    }
+
+    if (s_orig_recomp_hook) {
+        s_orig_recomp_hook(va);
     }
 }
 
@@ -1520,6 +1623,14 @@ static void roam_android_install_hooks(void) {
         0xff, 0x03, 0x02, 0xd1, 0xfd, 0x7b, 0x02, 0xa9,
         0xfc, 0x6f, 0x03, 0xa9, 0xfa, 0x67, 0x04, 0xa9
     };
+    static const uint8_t EXPECTED_RADAR[16] = {
+        0xfd, 0x7b, 0xba, 0xa9, 0xfc, 0x6f, 0x01, 0xa9,
+        0xfa, 0x67, 0x02, 0xa9, 0xf8, 0x5f, 0x03, 0xa9
+    };
+    static const uint8_t EXPECTED_RECOMP_HOOK[16] = {
+        0xff, 0x43, 0x01, 0xd1, 0xe8, 0x0b, 0x00, 0xfd,
+        0xfd, 0x7b, 0x02, 0xa9, 0xf6, 0x57, 0x03, 0xa9
+    };
 
     void *target_4a = (void *)(lib_base + 0x1464be0);
     if (memcmp(target_4a, EXPECTED_4A, 16) == 0) {
@@ -1543,8 +1654,30 @@ static void roam_android_install_hooks(void) {
                             "sub_005c7ec0 prefix mismatch at %p", target_5c);
     }
 
+    void *target_radar = (void *)(lib_base + 0x2754a8c);
+    if (memcmp(target_radar, EXPECTED_RADAR, 16) == 0) {
+        s_orig_5caad0 = arm64_inline_hook(target_radar, (void *)hook_sub_005caad0);
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook",
+                            "Hooked sub_005caad0 (RenderRadar) at %p (orig: %p)",
+                            target_radar, s_orig_5caad0);
+    } else {
+        __android_log_print(ANDROID_LOG_WARN, "NFSU2-Hook",
+                            "sub_005caad0 prefix mismatch at %p", target_radar);
+    }
+
+    void *target_recomp_hook = (void *)(lib_base + 0x004ae2dc);
+    if (memcmp(target_recomp_hook, EXPECTED_RECOMP_HOOK, 16) == 0) {
+        s_orig_recomp_hook = (recomp_hook_func_t)arm64_inline_hook(target_recomp_hook, (void *)hook_recomp_hook);
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook",
+                            "Hooked recomp_hook at %p (orig: %p)",
+                            target_recomp_hook, s_orig_recomp_hook);
+    } else {
+        __android_log_print(ANDROID_LOG_WARN, "NFSU2-Hook",
+                            "recomp_hook prefix mismatch at %p", target_recomp_hook);
+    }
+
     // Also update k_functions dispatch table
-    uintptr_t k_4a = lib_base + 0x977c160;
+    uintptr_t k_4a = lib_base + 0x9778160;
     if (*(uint32_t *)k_4a == 0x004a5d90) {
         uintptr_t page = k_4a & ~((uintptr_t)page_sz - 1);
         mprotect((void *)page, page_sz * 2, PROT_READ | PROT_WRITE);
@@ -1552,12 +1685,28 @@ static void roam_android_install_hooks(void) {
         __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Updated k_functions[0x004a5d90]");
     }
 
-    uintptr_t k_5c = lib_base + 0x9797cd0;
+    uintptr_t k_5c = lib_base + 0x9793cd0;
     if (*(uint32_t *)k_5c == 0x005c7ec0) {
         uintptr_t page = k_5c & ~((uintptr_t)page_sz - 1);
         mprotect((void *)page, page_sz * 2, PROT_READ | PROT_WRITE);
         *(void **)(k_5c + 8) = (void *)hook_sub_005c7ec0;
         __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Updated k_functions[0x005c7ec0]");
+    }
+
+    uintptr_t k_radar = lib_base + 0x9793f10;
+    if (*(uint32_t *)k_radar == 0x005caad0) {
+        uintptr_t page = k_radar & ~((uintptr_t)page_sz - 1);
+        mprotect((void *)page, page_sz * 2, PROT_READ | PROT_WRITE);
+        *(void **)(k_radar + 8) = (void *)hook_sub_005caad0;
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Updated k_functions[0x005caad0]");
+    }
+
+    // Patch GOT slot for recomp_hook so PLT jumps directly to our hook
+    uintptr_t got_recomp_hook = lib_base + 0x97dd4a8;
+    uintptr_t got_page = got_recomp_hook & ~((uintptr_t)page_sz - 1);
+    if (mprotect((void *)got_page, page_sz * 2, PROT_READ | PROT_WRITE) == 0) {
+        *(void **)got_recomp_hook = (void *)hook_recomp_hook;
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Patched GOT entry for recomp_hook");
     }
 
     g_hooks_installed = 1;

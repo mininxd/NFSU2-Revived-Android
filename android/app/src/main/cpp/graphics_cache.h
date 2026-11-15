@@ -67,6 +67,8 @@ void nfs_camera_cull_update_view(const float* view_ptr);
 void nfs_camera_cull_update_proj(const float* proj_ptr);
 void nfs_camera_cull_update_world(const float* world_ptr);
 void nfs_camera_cull_set_screen_space(int is_screen_space);
+void nfs_camera_cull_set_bypass(int bypass);
+int nfs_camera_cull_is_bypassed(void);
 int nfs_camera_cull_test_draw(void);
 void nfs_camera_cull_stats(uint64_t* out_total, uint64_t* out_culled);
 int nfs_camera_cull_get_camera(float* out_pos, float* out_fwd);

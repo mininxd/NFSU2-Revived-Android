@@ -363,8 +363,18 @@ void recomp_hook(uint32_t va) {
     case RADAR_H54: set_esp_float(0x54, s_height * 2.0f); break;
     /* HudHook: the element position just stored from ecx/edx. */
     case HUD_HOOK: adjust_mem_pair(g_esp + 0x60, g_esp + 0x64); break;
-    /* BlipsHook: radar blips, before `mov [edx], ecx`. */
-    case BLIPS_HOOK: adjust_mem_pair(g_ebx + 0x1C, g_ebx + 0x20); g_ecx = MEM32(g_ebx + 0x1C); break;
+    /* BlipsHook: radar blips, before `mov [edx], ecx`. Avoid in-place memory mutation. */
+    case BLIPS_HOOK: {
+        float x = rdf(g_ebx + 0x1Cu), y = rdf(g_ebx + 0x20u);
+        widescreen_hud(&x, &y);
+        uint32_t vx, vy; memcpy(&vx, &x, 4); memcpy(&vy, &y, 4);
+        g_ecx = vx; g_eax = vy;
+        if (g_esp >= 0x10000u && g_esp <= 0x7FFFF000u) {
+            uint32_t out_y = MEM32(g_esp + 0x1Cu);
+            if (out_y >= 0x10000u && out_y <= 0x7FFFF000u) wrf(out_y, y);
+        }
+        break;
+    }
     /* HudHook2: ecx = adjusted X of [esi+1C]/[esi+20]. */
     case HUD_HOOK2: {
         float x, y; uint32_t v = g_ecx; memcpy(&x, &v, 4); y = rdf(g_esi + 0x20);
@@ -396,7 +406,7 @@ void recomp_hook(uint32_t va) {
             s_fov_scale[0] = 1.0; s_fov_scale[1] = 0.5; s_fov_scale[2] = 1.0;
         }
         g_st[0] = view == 3 ? 0.45 : 1.0;   /* rear-view mirror */
-        if (s_draw_distance > 0.0f) {
+        if (s_draw_distance > 0.0f && (view == 1 || view == 2 || view == 3)) {
             float max_far = (view == 3) ? (s_draw_distance * 0.75f) : s_draw_distance;
             if (view == 3 && max_far < 35.0f) max_far = 35.0f;
             if (max_far >= 30.0f) {

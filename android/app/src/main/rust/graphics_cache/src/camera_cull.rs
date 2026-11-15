@@ -32,6 +32,8 @@ pub struct CameraCullEngine {
     // State flags
     is_ortho: AtomicBool,
     is_screen_space: AtomicBool,
+    is_top_down: AtomicBool,
+    bypass: AtomicBool,
     // Metrics
     total_draws: AtomicU64,
     culled_draws: AtomicU64,
@@ -56,6 +58,8 @@ impl CameraCullEngine {
             world_valid: AtomicBool::new(false),
             is_ortho: AtomicBool::new(false),
             is_screen_space: AtomicBool::new(false),
+            is_top_down: AtomicBool::new(false),
+            bypass: AtomicBool::new(false),
             total_draws: AtomicU64::new(0),
             culled_draws: AtomicU64::new(0),
         }
@@ -111,6 +115,11 @@ impl CameraCullEngine {
         self.v22.store(m[10].to_bits(), Ordering::Relaxed);
         self.v32.store(m[14].to_bits(), Ordering::Relaxed);
         self.view_valid.store(true, Ordering::Release);
+
+        // Detect top-down camera (e.g. minimap radar pass):
+        // Horizontal look vector squared (m[2]^2 + m[6]^2) < 0.15 indicates view direction is vertical (looking down).
+        let horiz_sq = m[2] * m[2] + m[6] * m[6];
+        self.is_top_down.store(horiz_sq < 0.15, Ordering::Release);
     }
 
     /// Updates D3DTS_PROJECTION matrix, detecting orthographic vs perspective projections.
@@ -143,6 +152,17 @@ impl CameraCullEngine {
         self.is_screen_space.store(is_screen, Ordering::Release);
     }
 
+    /// Sets explicit cull bypass flag (e.g. during minimap radar rendering pass).
+    #[inline]
+    pub fn set_bypass(&self, bypass: bool) {
+        self.bypass.store(bypass, Ordering::Release);
+    }
+
+    #[inline]
+    pub fn is_bypassed(&self) -> bool {
+        self.bypass.load(Ordering::Relaxed)
+    }
+
     /// Tests whether the impending draw call should be culled.
     ///
     /// Returns `true` if the draw call is strictly behind the camera or out of range.
@@ -150,12 +170,16 @@ impl CameraCullEngine {
     pub fn test_draw(&self) -> bool {
         self.total_draws.fetch_add(1, Ordering::Relaxed);
 
-        if !self.is_enabled() {
+        if !self.is_enabled() || self.bypass.load(Ordering::Relaxed) {
             return false;
         }
 
         // Never cull 2D screen-space primitives (UI, HUD, minimap, speedometer)
-        if self.is_screen_space.load(Ordering::Relaxed) || self.is_ortho.load(Ordering::Relaxed) {
+        // or orthographic / top-down cameras (minimap radar)
+        if self.is_screen_space.load(Ordering::Relaxed)
+            || self.is_ortho.load(Ordering::Relaxed)
+            || self.is_top_down.load(Ordering::Relaxed)
+        {
             return false;
         }
 
@@ -288,6 +312,16 @@ pub unsafe extern "C" fn nfs_camera_cull_set_screen_space(is_screen_space: i32) 
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn nfs_camera_cull_set_bypass(bypass: i32) {
+    GLOBAL_CAMERA_CULL.set_bypass(bypass != 0);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_camera_cull_is_bypassed() -> i32 {
+    if GLOBAL_CAMERA_CULL.is_bypassed() { 1 } else { 0 }
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn nfs_camera_cull_test_draw() -> i32 {
     if GLOBAL_CAMERA_CULL.test_draw() { 1 } else { 0 }
 }
@@ -394,6 +428,36 @@ mod tests {
         world_back[0] = 1.0; world_back[5] = 1.0; world_back[10] = 1.0; world_back[15] = 1.0;
         world_back[14] = -50.0;
         engine.update_world_matrix(&world_back);
+        assert!(!engine.test_draw());
+    }
+
+    #[test]
+    fn test_top_down_and_bypass() {
+        let engine = CameraCullEngine::new();
+        engine.set_enabled(true);
+        engine.update_camera([0.0, 0.0, 0.0], [0.0, 0.0, 1.0]);
+
+        // Object behind camera: Z = -50.0m
+        let mut world_back = [0.0f32; 16];
+        world_back[0] = 1.0; world_back[5] = 1.0; world_back[10] = 1.0; world_back[15] = 1.0;
+        world_back[14] = -50.0;
+        engine.update_world_matrix(&world_back);
+        assert!(engine.test_draw());
+
+        // 1. Explicit bypass enables radar pass to preserve all draw calls
+        engine.set_bypass(true);
+        assert!(!engine.test_draw());
+        engine.set_bypass(false);
+        assert!(engine.test_draw());
+
+        // 2. Top-down view matrix (looking straight down along -Y or -Z)
+        let mut top_down_view = [0.0f32; 16];
+        top_down_view[0] = 1.0;
+        top_down_view[5] = 0.0;
+        top_down_view[10] = 1.0; // looking down
+        top_down_view[15] = 1.0;
+        // column 2: m[2]=0, m[6]=0, m[10]=1 -> horiz_sq = 0.0 < 0.15
+        engine.update_view_matrix(&top_down_view);
         assert!(!engine.test_draw());
     }
 }
