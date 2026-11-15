@@ -1426,8 +1426,6 @@ final class RacingControlsView extends View {
     }
 
     void releaseAll() {
-        removeCallbacks(nitroWatcher);
-        autoGasAppliedByNitro = false;
         for (int i = 0; i < 32; i++) {
             Control c = fingerMap[i];
             if (c != null) {
