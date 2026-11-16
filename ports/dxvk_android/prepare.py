@@ -101,7 +101,29 @@ for feat in OPTIONAL_FEATURES:
         feat.replace("true),", "false),")
     )
 
-# 3. Generate or copy SPIR-V shader headers
+# 4. Support custom Vulkan driver entry point on Android (adrenotools / Turnip)
+replace(
+    "src/vulkan/vulkan_loader.cpp",
+    "  LibraryLoader::LibraryLoader() {\n    std::tie(m_library, m_getInstanceProcAddr) = loadVulkanLibrary();\n  }",
+    """#ifdef __ANDROID__
+extern "C" PFN_vkGetInstanceProcAddr dxvkAndroidGetInstanceProcAddr();
+#endif
+
+  LibraryLoader::LibraryLoader() {
+#ifdef __ANDROID__
+    PFN_vkGetInstanceProcAddr customProc = dxvkAndroidGetInstanceProcAddr();
+    if (customProc) {
+      Logger::info("Vulkan: Using custom Vulkan driver entry point (adrenotools / Turnip)");
+      m_getInstanceProcAddr = customProc;
+      m_library = nullptr;
+      return;
+    }
+#endif
+    std::tie(m_library, m_getInstanceProcAddr) = loadVulkanLibrary();
+  }"""
+)
+
+# 5. Generate or copy SPIR-V shader headers
 gen_dir = args.output / "generated"
 gen_dir.mkdir(parents=True, exist_ok=True)
 

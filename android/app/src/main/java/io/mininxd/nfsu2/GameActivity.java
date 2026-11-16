@@ -602,10 +602,9 @@ public final class GameActivity extends NativeActivity {
         if (message != null) {
             String backend = GameOptions.getEffectiveGraphicsBackend(this);
             if ("opengl".equals(backend)) {
-                message = message.replace("Vulkan 1.1: presentación activa", "OpenGL ES: presentation active")
-                                 .replace("Vulkan 1.1: presentation active", "OpenGL ES: presentation active");
+                message = message.replaceAll("Vulkan [0-9]+\\.[0-9]+.*?: (presentación activa|presentation active)", "OpenGL ES: presentation active");
             } else {
-                message = message.replace("Vulkan 1.1: presentación activa", "Vulkan 1.1: presentation active");
+                message = message.replaceAll("Vulkan ([0-9]+\\.[0-9]+).*?: presentación activa", "Vulkan $1: presentation active");
             }
             message = message
                     .replace("Datos accesibles: memoria interna/nfsu2", "Accessible data: internal storage/nfsu2")

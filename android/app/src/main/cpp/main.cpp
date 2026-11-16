@@ -91,8 +91,8 @@ struct Renderer {
     void start(ANativeWindow* window) {
         const char* extensions[] = {VK_KHR_SURFACE_EXTENSION_NAME, VK_KHR_ANDROID_SURFACE_EXTENSION_NAME};
         VkApplicationInfo app{VK_STRUCTURE_TYPE_APPLICATION_INFO};
-        app.pApplicationName = "NFSU2 Vulkan 1.1 bootstrap";
-        app.apiVersion = VK_API_VERSION_1_1;
+        app.pApplicationName = "NFSU2 Vulkan bootstrap";
+        app.apiVersion = VK_API_VERSION_1_3;
         VkInstanceCreateInfo ci{VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
         ci.pApplicationInfo = &app; ci.enabledExtensionCount = 2; ci.ppEnabledExtensionNames = extensions;
         VK_CHECK(vkCreateInstance(&ci, nullptr, &instance));
@@ -448,6 +448,8 @@ extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeCpuTe
 // drives the GPU through two Vulkan drivers.
 static bool customVulkanDriver=false;
 static std::string customVulkanError;
+static uint32_t s_vulkanApiVersion = VK_API_VERSION_1_3;
+static std::string s_vulkanDriverDesc;
 extern "C" void dxvkAndroidSetInstanceProcAddr(PFN_vkGetInstanceProcAddr entry);
 extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeGpuDriver(JNIEnv* env,jclass,jstring hooks,jstring temp,jstring directory,jstring library){
     auto text=[&](jstring value){const char* c=value?env->GetStringUTFChars(value,nullptr):nullptr;std::string r=c?c:"";if(c)env->ReleaseStringUTFChars(value,c);return r;};
@@ -458,6 +460,16 @@ extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeGpuDr
     auto entry=nfsVulkanEntry(handle);
     if(!entry){customVulkanError="Could not load Vulkan driver "+l+". Choose system driver in the launcher.";return;}
     dxvkAndroidSetInstanceProcAddr(entry);
+    s_vulkanDriverDesc = l;
+    auto pfnEnumVer = reinterpret_cast<PFN_vkEnumerateInstanceVersion>(entry(VK_NULL_HANDLE, "vkEnumerateInstanceVersion"));
+    if (pfnEnumVer) {
+        uint32_t ver = 0;
+        if (pfnEnumVer(&ver) == VK_SUCCESS && ver >= VK_API_VERSION_1_0) {
+            s_vulkanApiVersion = ver;
+        }
+    }
+    __android_log_print(ANDROID_LOG_INFO, "NFSU2", "Custom Vulkan driver active: %s (API %u.%u)",
+        l.c_str(), VK_API_VERSION_MAJOR(s_vulkanApiVersion), VK_API_VERSION_MINOR(s_vulkanApiVersion));
 }
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeGpuDriver(JNIEnv* env,jclass cls,jstring hooks,jstring temp,jstring directory,jstring library){
     Java_io_mininxd_nfsu2_GameActivity_nativeGpuDriver(env,cls,hooks,temp,directory,library);
@@ -527,7 +539,10 @@ void android_main(android_app* app) {
                 host.guestStatus=status;
                 const char* rend = getenv("NFSU2_RENDERER");
                 bool isGl = rend && (strcmp(rend, "opengl") == 0 || strcmp(rend, "opengl_es") == 0);
-                std::string apiBanner = isGl ? "OpenGL ES: presentation active\n" : "Vulkan 1.1: presentation active\n";
+                unsigned major = VK_API_VERSION_MAJOR(s_vulkanApiVersion);
+                unsigned minor = VK_API_VERSION_MINOR(s_vulkanApiVersion);
+                if (major == 0) { major = 1; minor = 3; }
+                std::string apiBanner = isGl ? "OpenGL ES: presentation active\n" : ("Vulkan " + std::to_string(major) + "." + std::to_string(minor) + ": presentation active\n");
                 showStatus(app,("Accessible data: " + getGameRoot() + "\n" + apiBanner + status).c_str());
             }
             if (host.renderer.device&&!host.renderer.draw()) host.renderer.stop();

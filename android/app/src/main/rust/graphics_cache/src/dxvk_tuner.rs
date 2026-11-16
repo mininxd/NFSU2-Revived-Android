@@ -80,47 +80,36 @@ impl DxvkProfileConfig {
         s.push_str("dxvk.enableStateCache = True\n");
         s.push_str(&format!("dxvk.numCompilerThreads = {}\n", self.num_compiler_threads));
         s.push_str("dxvk.useRawSsbo = True\n");
-        s.push_str(&format!("dxvk.tilerMode = {}\n", if self.tiler_mode { "True" } else { "False" }));
-        s.push_str(&format!("dxvk.enableGraphicsPipelineLibrary = {}\n", if self.enable_gpl { "Auto" } else { "False" }));
-        s.push_str(&format!("dxvk.enableDescriptorBuffer = {}\n", if self.enable_descriptor_buffer { "Auto" } else { "False" }));
-        s.push_str(&format!("dxvk.enableDescriptorHeap = {}\n", if self.enable_descriptor_heap { "Auto" } else { "False" }));
-        s.push_str(&format!("dxvk.enableUnifiedImageLayouts = {}\n", if self.enable_unified_image_layouts { "True" } else { "False" }));
-        s.push_str(&format!("dxvk.trackPipelineLifetime = {}\n", if self.track_pipeline_lifetime { "Auto" } else { "False" }));
-        s.push_str("dxvk.enableImplicitResolves = True\n");
+        s.push_str("dxvk.tilerMode = Auto\n");
+        s.push_str("dxvk.enableGraphicsPipelineLibrary = Auto\n");
+        s.push_str("dxvk.enableDescriptorBuffer = Auto\n");
+        s.push_str("dxvk.enableDescriptorHeap = Auto\n");
+        s.push_str("dxvk.enableUnifiedImageLayouts = True\n");
+        s.push_str("dxvk.enableImplicitResolves = False\n");
         s.push_str("dxvk.enableMemoryDefrag = False\n");
 
-        s.push_str(&format!("d3d9.tearFree = {}\n", if self.tear_free { "True" } else { "False" }));
-        s.push_str(&format!("d3d9.maxFrameLatency = {}\n", self.max_frame_latency));
-        s.push_str(&format!("d3d9.deferSurfaceCreation = {}\n", if self.defer_surface_creation { "True" } else { "False" }));
-        s.push_str(&format!("d3d9.noExplicitFrontBuffer = {}\n", if self.no_explicit_front_buffer { "True" } else { "False" }));
-        s.push_str(&format!("d3d9.lenientClear = {}\n", if self.lenient_clear { "True" } else { "False" }));
-        s.push_str(&format!("d3d9.allowDiscard = {}\n", if self.allow_discard { "True" } else { "False" }));
-        s.push_str(&format!("d3d9.allowDoNotWait = {}\n", if self.allow_do_not_wait { "True" } else { "False" }));
-        s.push_str(&format!("d3d9.cachedDynamicBuffers = {}\n", if self.cached_dynamic_buffers { "True" } else { "False" }));
-        s.push_str(&format!("d3d9.cachedWriteOnlyBuffers = {}\n", if self.cached_write_only_buffers { "True" } else { "False" }));
-        s.push_str(&format!("d3d9.deviceLocalConstantBuffers = {}\n", if self.device_local_constant_buffers { "True" } else { "False" }));
-        s.push_str(&format!("d3d9.useFP16 = {}\n", if self.use_fp16 { "Auto" } else { "False" }));
-        s.push_str(&format!("d3d9.evictManagedOnUnlock = {}\n", if self.evict_managed_on_unlock { "True" } else { "False" }));
+        s.push_str("d3d9.tearFree = False\n");
+        s.push_str("d3d9.lenientClear = True\n");
+        s.push_str("d3d9.allowDiscard = True\n");
+        s.push_str("d3d9.allowDoNotWait = True\n");
+        s.push_str("d3d9.deviceLocalConstantBuffers = Auto\n");
+        s.push_str("d3d9.useFP16 = Auto\n");
+        s.push_str("d3d9.evictManagedOnUnlock = True\n");
         s.push_str("d3d9.memoryTrackTest = False\n");
         s.push_str(&format!("d3d9.maxAvailableMemory = {}\n", self.max_device_memory_mb));
 
-        // generalHazards = False eliminates pipeline barrier stalls across Enhanced Contrast render passes
-        s.push_str(&format!("d3d9.generalHazards = {}\n", if self.general_hazards { "True" } else { "False" }));
-        s.push_str(&format!("d3d9.invariantPosition = {}\n", if self.invariant_position { "True" } else { "False" }));
-        s.push_str(&format!("d3d9.forceSamplerTypeSpecConstants = {}\n", if self.force_sampler_spec_constants { "True" } else { "False" }));
-        s.push_str(&format!("d3d9.strictConstantCopies = {}\n", if self.strict_constant_copies { "True" } else { "False" }));
+        s.push_str("d3d9.invariantPosition = True\n");
+        s.push_str("d3d9.forceSamplerTypeSpecConstants = True\n");
         s.push_str("d3d9.samplerAnisotropy = 0\n");
         s.push_str("d3d9.clampNegativeLodBias = True\n");
         s.push_str("d3d9.seamlessCubes = True\n");
-        s.push_str("d3d9.supportDFFormats = False\n");
         s.push_str("d3d9.floatEmulation = Strict\n");
         s.push_str("d3d9.modeCountCompatibility = True\n");
 
-        s.push_str(&format!("dxgi.deferSurfaceCreation = {}\n", if self.defer_surface_creation { "True" } else { "False" }));
+        s.push_str("dxgi.deferSurfaceCreation = True\n");
         s.push_str(&format!("dxgi.maxDeviceMemory = {}\n", self.max_device_memory_mb));
         s.push_str(&format!("dxgi.maxSharedMemory = {}\n", self.max_shared_memory_mb));
 
-        // Disable swapchain multisampling to prevent tile-based MSAA resolve corruption on Adreno (Issue #67)
         s.push_str("d3d9.forceSwapchainMSAA = False\n");
         s
     }

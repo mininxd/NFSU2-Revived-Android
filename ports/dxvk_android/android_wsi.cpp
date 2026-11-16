@@ -43,7 +43,7 @@ std::atomic<PFN_vkGetInstanceProcAddr> instanceProcAddr{nullptr};
 
 extern "C" DXVK_EXPORT void dxvkAndroidSetInstanceProcAddr(PFN_vkGetInstanceProcAddr entry){instanceProcAddr=entry;}
 extern "C" DXVK_EXPORT PFN_vkGetInstanceProcAddr dxvkAndroidGetInstanceProcAddr(){
-    auto entry=instanceProcAddr.load();return entry?entry:vkGetInstanceProcAddr;
+    return instanceProcAddr.load();
 }
 extern "C" DXVK_EXPORT void dxvkAndroidSetRenderSize(uint32_t width,uint32_t height){std::lock_guard<std::mutex> guard(windowMutex);renderWidth=width;renderHeight=height;
 #ifdef __ANDROID__
