@@ -224,6 +224,7 @@ int roam_android_init_symbols(void) {
         g_p_esi = (uint32_t *)dlsym(h, "g_esi");
         g_p_edi = (uint32_t *)dlsym(h, "g_edi");
         g_p_guest_is_readable = (int (*)(uint32_t, uint32_t))dlsym(h, "guest_is_readable");
+        s_fn_get_minimap_offset = (void (*)(float *, float *))dlsym(h, "nfs_widescreen_get_minimap_offset");
     }
 
     if (g_p_mem_base && *g_p_mem_base != 0) {
@@ -689,6 +690,44 @@ static recomp_void_func_t s_orig_4a5d90 = NULL;
 static recomp_void_func_t s_orig_5c7ec0 = NULL;
 static recomp_void_func_t s_orig_5caad0 = NULL;
 static recomp_hook_func_t s_orig_recomp_hook = NULL;
+static void (*s_fn_get_minimap_offset)(float *out_dx, float *out_dy) = NULL;
+
+typedef struct {
+    uint32_t ebx;
+    float base_x;
+    float base_y;
+    float last_target_x;
+    float last_target_y;
+} MinimapBaseCache;
+
+static MinimapBaseCache s_roam_minimap_bases[16];
+static int s_roam_minimap_bases_count = 0;
+
+static void roam_get_or_register_minimap_base(uint32_t ebx, float cur_x, float cur_y, float *out_base_x, float *out_base_y) {
+    for (int i = 0; i < s_roam_minimap_bases_count; ++i) {
+        if (s_roam_minimap_bases[i].ebx == ebx) {
+            if (cur_x != s_roam_minimap_bases[i].last_target_x && (cur_x >= -400.0f && cur_x <= 400.0f)) {
+                s_roam_minimap_bases[i].base_x = cur_x;
+                s_roam_minimap_bases[i].base_y = cur_y;
+            }
+            *out_base_x = s_roam_minimap_bases[i].base_x;
+            *out_base_y = s_roam_minimap_bases[i].base_y;
+            return;
+        }
+    }
+    float bx = cur_x;
+    float by = cur_y;
+    if (s_roam_minimap_bases_count < 16) {
+        s_roam_minimap_bases[s_roam_minimap_bases_count].ebx = ebx;
+        s_roam_minimap_bases[s_roam_minimap_bases_count].base_x = bx;
+        s_roam_minimap_bases[s_roam_minimap_bases_count].base_y = by;
+        s_roam_minimap_bases[s_roam_minimap_bases_count].last_target_x = bx;
+        s_roam_minimap_bases[s_roam_minimap_bases_count].last_target_y = by;
+        s_roam_minimap_bases_count++;
+    }
+    *out_base_x = bx;
+    *out_base_y = by;
+}
 
 static recomp_void_func_t arm64_inline_hook(void *target_func, void *hook_func) {
     if (!target_func || !hook_func) return NULL;
@@ -1088,21 +1127,46 @@ static void hook_recomp_hook(uint32_t va) {
         return;
     }
 
-    if (va == 0x0051D655u) { // BLIPS_HOOK (radar blips)
+    if (va == 0x0051D655u || va == 0x0051D2E5u) { // BLIPS_HOOK (radar blips)
+        float dx = 0.0f, dy = 0.0f;
+        if (!s_fn_get_minimap_offset) {
+            void *h = dlopen("libnfsu2_android.so", RTLD_NOLOAD | RTLD_GLOBAL);
+            if (!h) h = RTLD_DEFAULT;
+            s_fn_get_minimap_offset = (void (*)(float *, float *))dlsym(h, "nfs_widescreen_get_minimap_offset");
+        }
+        if (s_fn_get_minimap_offset) {
+            s_fn_get_minimap_offset(&dx, &dy);
+        }
         uint32_t ebx = (g_p_ebx) ? *g_p_ebx : 0;
         uint32_t edx = (g_p_edx) ? *g_p_edx : 0;
         uint32_t esp = (g_p_esp) ? *g_p_esp : 0;
         if (ebx >= 0x10000u && rh_mem_committed(ebx + 0x1C, 8) &&
             edx >= 0x10000u && rh_mem_committed(edx, 4) &&
             esp >= 0x10000u && rh_mem_committed(esp + 0x1C, 4)) {
-            float x = MRF32(ebx + 0x1C);
-            float y = MRF32(ebx + 0x20);
-            MRF32(edx) = x;
-            uint32_t vy; memcpy(&vy, &y, 4);
+            float cur_x = MRF32(ebx + 0x1C);
+            float cur_y = MRF32(ebx + 0x20);
+            float bx = 0.0f, by = 0.0f;
+            roam_get_or_register_minimap_base(ebx, cur_x, cur_y, &bx, &by);
+            float target_x = bx + dx;
+            float target_y = by + dy;
+            for (int i = 0; i < s_roam_minimap_bases_count; ++i) {
+                if (s_roam_minimap_bases[i].ebx == ebx) {
+                    s_roam_minimap_bases[i].last_target_x = target_x;
+                    s_roam_minimap_bases[i].last_target_y = target_y;
+                    break;
+                }
+            }
+            MRF32(ebx + 0x1C) = target_x;
+            MRF32(ebx + 0x20) = target_y;
+            MRF32(edx) = target_x;
+            uint32_t vx, vy;
+            memcpy(&vx, &target_x, 4);
+            memcpy(&vy, &target_y, 4);
+            if (g_p_ecx) *g_p_ecx = vx;
             if (g_p_eax) *g_p_eax = vy;
             uint32_t out_y_ptr = MR32(esp + 0x1C);
             if (out_y_ptr >= 0x10000u && rh_mem_committed(out_y_ptr, 4)) {
-                MRF32(out_y_ptr) = y;
+                MRF32(out_y_ptr) = target_y;
             }
         }
         return;

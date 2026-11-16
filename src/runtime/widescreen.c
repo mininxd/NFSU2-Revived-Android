@@ -202,6 +202,25 @@ void nfs_widescreen_set_resolution(unsigned width, unsigned height) {
 int nfs_widescreen_hud_entries(void) { return (int)s_hud_count; }
 
 void nfs_widescreen_set_minimap_offset(float dy) { s_minimap_dy = dy; }
+
+void nfs_widescreen_get_minimap_offset(float *out_dx, float *out_dy) {
+    if (!s_enabled || s_screen_mode == 2) {
+        if (out_dx) *out_dx = 0.0f;
+        if (out_dy) *out_dy = s_minimap_dy;
+        return;
+    }
+    float x = -223.0f, y = 142.0f;
+    widescreen_hud(&x, &y);
+    float dx = x - (-223.0f);
+    if (dx == 0.0f && s_hud_offset != 0.0f) {
+        const float base_offset = (480.0f * (16.0f / 9.0f) - 640.0f) / 2.0f;
+        const float offset_x = -109.0f;
+        dx = -(s_hud_offset - (offset_x + base_offset));
+    }
+    if (out_dx) *out_dx = dx;
+    if (out_dy) *out_dy = y - 142.0f;
+}
+
 void nfs_widescreen_set_bank_left(int enabled) { s_bank_left = enabled; }
 void nfs_widescreen_set_sms_nav_offset(float dy) { s_sms_nav_dy = dy; }
 
@@ -336,6 +355,44 @@ void nfs_widescreen_apply_frame_rate(void) {
 
 static void set_esp_float(uint32_t offset, float value) { wrf(g_esp + offset, value); }
 
+
+typedef struct {
+    uint32_t ebx;
+    float base_x;
+    float base_y;
+    float last_target_x;
+    float last_target_y;
+} MinimapBaseCache;
+
+static MinimapBaseCache s_ws_minimap_bases[16];
+static int s_ws_minimap_bases_count = 0;
+
+static void ws_get_or_register_minimap_base(uint32_t ebx, float cur_x, float cur_y, float *out_base_x, float *out_base_y) {
+    for (int i = 0; i < s_ws_minimap_bases_count; ++i) {
+        if (s_ws_minimap_bases[i].ebx == ebx) {
+            if (cur_x != s_ws_minimap_bases[i].last_target_x && (cur_x >= -400.0f && cur_x <= 400.0f)) {
+                s_ws_minimap_bases[i].base_x = cur_x;
+                s_ws_minimap_bases[i].base_y = cur_y;
+            }
+            *out_base_x = s_ws_minimap_bases[i].base_x;
+            *out_base_y = s_ws_minimap_bases[i].base_y;
+            return;
+        }
+    }
+    float bx = cur_x;
+    float by = cur_y;
+    if (s_ws_minimap_bases_count < 16) {
+        s_ws_minimap_bases[s_ws_minimap_bases_count].ebx = ebx;
+        s_ws_minimap_bases[s_ws_minimap_bases_count].base_x = bx;
+        s_ws_minimap_bases[s_ws_minimap_bases_count].base_y = by;
+        s_ws_minimap_bases[s_ws_minimap_bases_count].last_target_x = bx;
+        s_ws_minimap_bases[s_ws_minimap_bases_count].last_target_y = by;
+        s_ws_minimap_bases_count++;
+    }
+    *out_base_x = bx;
+    *out_base_y = by;
+}
+
 void recomp_hook(uint32_t va) {
     int site = 0;
     while (site < SITE_COUNT && k_sites[site] != va) ++site;
@@ -368,17 +425,37 @@ void recomp_hook(uint32_t va) {
     case RADAR_W40: set_esp_float(0x40, s_width * 2.0f); break;
     case RADAR_H44: set_esp_float(0x44, s_height * 2.0f); break;
     case RADAR_H54: set_esp_float(0x54, s_height * 2.0f); break;
+
     /* HudHook: the element position just stored from ecx/edx. */
     case HUD_HOOK: adjust_mem_pair(g_esp + 0x60, g_esp + 0x64); break;
-    /* BlipsHook: radar blips, before `mov [edx], ecx`. Avoid in-place memory mutation. */
+    /* BlipsHook: radar blips, before `mov [edx], ecx`. Synchronize minimap center with widescreen HUD & dy. */
     case BLIPS_HOOK: {
-        float x = rdf(g_ebx + 0x1Cu), y = rdf(g_ebx + 0x20u);
-        widescreen_hud(&x, &y);
-        uint32_t vx, vy; memcpy(&vx, &x, 4); memcpy(&vy, &y, 4);
-        g_ecx = vx; g_eax = vy;
-        if (g_esp >= 0x10000u && g_esp <= 0x7FFFF000u) {
-            uint32_t out_y = MEM32(g_esp + 0x1Cu);
-            if (out_y >= 0x10000u && out_y <= 0x7FFFF000u) wrf(out_y, y);
+        float dx = 0.0f, dy = 0.0f;
+        nfs_widescreen_get_minimap_offset(&dx, &dy);
+        if (g_ebx >= 0x10000u && g_ebx <= 0x7FFFF000u) {
+            float cur_x = rdf(g_ebx + 0x1Cu), cur_y = rdf(g_ebx + 0x20u);
+            float bx = 0.0f, by = 0.0f;
+            ws_get_or_register_minimap_base(g_ebx, cur_x, cur_y, &bx, &by);
+            float target_x = bx + dx;
+            float target_y = by + dy;
+            for (int i = 0; i < s_ws_minimap_bases_count; ++i) {
+                if (s_ws_minimap_bases[i].ebx == g_ebx) {
+                    s_ws_minimap_bases[i].last_target_x = target_x;
+                    s_ws_minimap_bases[i].last_target_y = target_y;
+                    break;
+                }
+            }
+            wrf(g_ebx + 0x1Cu, target_x);
+            wrf(g_ebx + 0x20u, target_y);
+            if (g_edx >= 0x10000u && g_edx <= 0x7FFFF000u) {
+                wrf(g_edx, target_x);
+            }
+            uint32_t vx, vy; memcpy(&vx, &target_x, 4); memcpy(&vy, &target_y, 4);
+            g_ecx = vx; g_eax = vy;
+            if (g_esp >= 0x10000u && g_esp <= 0x7FFFF000u) {
+                uint32_t out_y = MEM32(g_esp + 0x1Cu);
+                if (out_y >= 0x10000u && out_y <= 0x7FFFF000u) wrf(out_y, target_y);
+            }
         }
         break;
     }

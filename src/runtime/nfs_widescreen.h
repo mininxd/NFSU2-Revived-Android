@@ -16,6 +16,9 @@ void nfs_widescreen_set_resolution(unsigned width, unsigned height);
 int nfs_widescreen_hud_entries(void);
 /* Vertical offset (480-line HUD units, negative = up) added to the minimap. */
 void nfs_widescreen_set_minimap_offset(float dy);
+/* Current minimap displacement (horizontal dx, vertical dy) calculated from
+ * the active screen mode, resolution aspect ratio, and minimap vertical offset. */
+void nfs_widescreen_get_minimap_offset(float *out_dx, float *out_dy);
 /* Reposition bank money GUI to left and offset SMS / Navigation GUI downwards. */
 void nfs_widescreen_set_bank_left(int enabled);
 void nfs_widescreen_set_sms_nav_offset(float dy);
