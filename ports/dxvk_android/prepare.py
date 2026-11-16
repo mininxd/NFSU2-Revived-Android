@@ -92,26 +92,21 @@ replace(
     "    args.samplerCursor = cursorSampler;\n\n    ctx->cmdBindPipeline",
     """    args.samplerCursor = cursorSampler;
 
-    static int s_env_contrast = -1;
-    if (s_env_contrast < 0) {
-      const char* e = getenv("NFSU2_ENHANCED_CONTRAST");
-      if (e && (strcmp(e, "0") == 0 || strcasecmp(e, "off") == 0 || strcasecmp(e, "false") == 0)) {
-        s_env_contrast = 0;
-      } else if (e && (strcmp(e, "2") == 0 || strcasecmp(e, "punchy") == 0)) {
-        s_env_contrast = 2;
-      } else if (e && (strcmp(e, "1") == 0 || strcasecmp(e, "on") == 0 || strcasecmp(e, "true") == 0)) {
-        s_env_contrast = 1;
-      } else {
-        s_env_contrast = -2;
-      }
-    }
-    uint32_t contrast_mode = 1u;
-    if (s_env_contrast >= 0) {
-      contrast_mode = static_cast<uint32_t>(s_env_contrast);
-    } else {
-      static auto s_mode_fn = reinterpret_cast<uint32_t(*)()>(dlsym(RTLD_DEFAULT, "nfs_contrast_get_mode"));
-      if (s_mode_fn) contrast_mode = s_mode_fn();
-    }
+    uint32_t contrast_mode = 0u;
+    static auto s_mode_fn = []() -> uint32_t(*)() {
+#ifdef __ANDROID__
+      void* h = dlopen("libgame_core.so", RTLD_NOLOAD);
+      if (!h) h = dlopen("libgame_core.so", RTLD_NOW | RTLD_GLOBAL);
+      if (!h) h = dlopen("libgraphics_cache.so", RTLD_NOLOAD);
+      if (!h) h = dlopen("libgraphics_cache.so", RTLD_NOW | RTLD_GLOBAL);
+      void* sym = h ? dlsym(h, "nfs_contrast_get_mode") : nullptr;
+      if (!sym) sym = dlsym(RTLD_DEFAULT, "nfs_contrast_get_mode");
+      return reinterpret_cast<uint32_t(*)()>(sym);
+#else
+      return reinterpret_cast<uint32_t(*)()>(dlsym(RTLD_DEFAULT, "nfs_contrast_get_mode"));
+#endif
+    }();
+    if (s_mode_fn) contrast_mode = s_mode_fn();
     args.enhancedContrast = contrast_mode;
 
     ctx->cmdBindPipeline"""
@@ -139,19 +134,42 @@ replace(
 };
 
 
-vec4 apply_enhanced_contrast(vec4 color, uint mode) {
-  if (mode == 0u) return color;
+vec4 apply_enhanced_contrast(vec4 color, uint enabled) {
+  if (enabled == 0u) return color;
   vec3 c = clamp(color.rgb, 0.0, 1.0);
-  // High-performance NFSU2 Enhanced Contrast S-curve:
-  // f(x) = x^2 * (3 - 2x)
+
+  // 1. Exposure (EV +0.01): 2^0.01 ~= 1.00695555
+  c = clamp(c * 1.00695555, 0.0, 1.0);
+
+  // 2. Contrast (+15): Sigmoidal S-curve blend
   vec3 s_curve = c * c * (3.0 - 2.0 * c);
-  // Blend curve based on mode (1 = balanced cinematic, 2 = punchy)
-  float blend = (mode == 2u) ? 0.80 : 0.60;
-  vec3 contrast = mix(c, s_curve, blend);
-  // Boost neon color saturation while keeping asphalt natural
-  float luma = dot(contrast, vec3(0.2126, 0.7152, 0.0722));
-  float sat_boost = (mode == 2u) ? 1.25 : 1.15;
-  vec3 vivid = mix(vec3(luma), contrast, sat_boost);
+  c = mix(c, s_curve, 0.15);
+
+  // 3. Highlight (-35) & White (+16): Glare recovery and specular boost
+  vec3 th = clamp((c - 0.5) / 0.5, 0.0, 1.0);
+  vec3 wh_weight = th * th * (3.0 - 2.0 * th);
+  c += -0.35 * 0.20 * wh_weight * (c - 0.5);
+
+  vec3 tw = clamp((c - 0.75) / 0.25, 0.0, 1.0);
+  vec3 ww_weight = tw * tw * (3.0 - 2.0 * tw);
+  c += 0.16 * 0.15 * ww_weight * (1.0 - c);
+
+  // 4. Shadow (-12) & Black (+22): Rich deep shadows with lifted toe
+  vec3 ts = clamp((0.5 - c) / 0.5, 0.0, 1.0);
+  vec3 ws_weight = ts * ts * (3.0 - 2.0 * ts);
+  c += -0.12 * 0.18 * ws_weight * (0.5 - c);
+
+  vec3 tb = clamp((0.25 - c) / 0.25, 0.0, 1.0);
+  vec3 wb_weight = tb * tb * (3.0 - 2.0 * tb);
+  c += 0.22 * 0.10 * wb_weight * c;
+
+  // 5. Dehaze (+20): Atmospheric clarity & chroma saturation boost (+20%)
+  c = clamp(c, 0.0, 1.0);
+  c = c - 0.024 * (1.0 - c) * c;
+  c = clamp(c, 0.0, 1.0);
+
+  float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  vec3 vivid = mix(vec3(luma), c, 1.20);
   return vec4(clamp(vivid, 0.0, 1.0), color.a);
 }"""
 )

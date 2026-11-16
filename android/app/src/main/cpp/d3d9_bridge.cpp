@@ -266,15 +266,32 @@ extern "C" void nfs_d3d9_set_enhanced_contrast_ramp(int enable) {
     if (!s_active_d3d9_device) return;
     D3DGAMMARAMP ramp;
     if (enable) {
-        for (int i = 0; i < 256; i++) {
-            float x = i / 255.0f;
-            float s_curve = x * x * (3.0f - 2.0f * x);
-            float enhanced = 0.35f * x + 0.65f * s_curve;
-            float val = std::clamp(enhanced, 0.0f, 1.0f);
-            WORD w = static_cast<WORD>(val * 65535.0f);
-            ramp.red[i] = w;
-            ramp.green[i] = w;
-            ramp.blue[i] = w;
+        static auto s_lr_ramp_fn = reinterpret_cast<int(*)(uint16_t*)>(resolveGraphicsCacheSymbol("nfs_lightroom_get_ramp"));
+        if (s_lr_ramp_fn && s_lr_ramp_fn(reinterpret_cast<uint16_t*>(ramp.red)) == 0) {
+            std::memcpy(ramp.green, ramp.red, sizeof(ramp.red));
+            std::memcpy(ramp.blue, ramp.red, sizeof(ramp.red));
+        } else {
+            // Lightroom photographic tone reproduction:
+            // EV+0.01, Contrast+15, Highlight-35, Shadow-12, White+16, Black+22, Dehaze+20
+            for (int i = 0; i < 256; i++) {
+                float c = i / 255.0f;
+                c = std::clamp(c * 1.00695555f, 0.0f, 1.0f);
+                float s_curve = c * c * (3.0f - 2.0f * c);
+                c = c * 0.85f + s_curve * 0.15f;
+                float th = std::clamp((c - 0.5f) / 0.5f, 0.0f, 1.0f);
+                c += -0.35f * 0.20f * (th * th * (3.0f - 2.0f * th)) * (c - 0.5f);
+                float tw = std::clamp((c - 0.75f) / 0.25f, 0.0f, 1.0f);
+                c += 0.16f * 0.15f * (tw * tw * (3.0f - 2.0f * tw)) * (1.0f - c);
+                float ts = std::clamp((0.5f - c) / 0.5f, 0.0f, 1.0f);
+                c += -0.12f * 0.18f * (ts * ts * (3.0f - 2.0f * ts)) * (0.5f - c);
+                float tb = std::clamp((0.25f - c) / 0.25f, 0.0f, 1.0f);
+                c += 0.22f * 0.10f * (tb * tb * (3.0f - 2.0f * tb)) * c;
+                c -= 0.20f * 0.12f * (1.0f - c) * c;
+                WORD w = static_cast<WORD>(std::clamp(c, 0.0f, 1.0f) * 65535.0f);
+                ramp.red[i] = w;
+                ramp.green[i] = w;
+                ramp.blue[i] = w;
+            }
         }
     } else {
         for (int i = 0; i < 256; i++) {

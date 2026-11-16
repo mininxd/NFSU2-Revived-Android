@@ -98,30 +98,17 @@ impl ContrastRegulator {
         is_on
     }
 
-    /// Generates high-contrast S-curve tone mapping LUT for 256 control points.
+    /// Generates Lightroom photographic tone mapping LUT for 256 control points:
+    /// EV+0.01, Contrast+15, Highlight-35, Shadow-12, White+16, Black+22, Dehaze+20.
     pub fn generate_tone_ramp(level: u32) -> [u16; 256] {
         let mut ramp = [0u16; 256];
+        let p = crate::lightroom_contrast::LightroomParams::default();
         for i in 0..256 {
             let x = i as f32 / 255.0;
-            let y = match level {
-                // Punchy S-curve (vivid blacks & crisp highlights)
-                2 => {
-                    if x < 0.5 {
-                        2.2 * x * x
-                    } else {
-                        1.0 - 2.2 * (1.0 - x) * (1.0 - x)
-                    }
-                }
-                // Standard Underground 2 Bleach Bypass S-curve
-                1 => {
-                    if x < 0.5 {
-                        2.0 * x * x
-                    } else {
-                        1.0 - 2.0 * (1.0 - x) * (1.0 - x)
-                    }
-                }
-                // Linear identity
-                _ => x,
+            let y = if level != 0 {
+                crate::lightroom_contrast::lightroom_tone_curve(x, &p)
+            } else {
+                x
             };
             let clamped = y.clamp(0.0, 1.0);
             ramp[i] = (clamped * 65535.0).round() as u16;

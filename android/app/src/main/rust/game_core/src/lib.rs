@@ -3,11 +3,13 @@
 pub mod camera_stick;
 pub mod contrast_regulator;
 pub mod garage_viewer;
+pub mod lightroom_contrast;
 pub mod nitro_manager;
 
 pub use camera_stick::*;
 pub use contrast_regulator::*;
 pub use garage_viewer::*;
+pub use lightroom_contrast::*;
 pub use nitro_manager::*;
 
 use jni::objects::JClass;
