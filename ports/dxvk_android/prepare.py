@@ -93,6 +93,58 @@ for feat in OPTIONAL_FEATURES:
         feat.replace("true),", "false),")
     )
 
+# 3. Generate or copy SPIR-V shader headers
+gen_dir = args.output / "generated"
+gen_dir.mkdir(parents=True, exist_ok=True)
+
+pre_gen = pathlib.Path(__file__).parent / "generated"
+if pre_gen.exists():
+    for h in pre_gen.glob("*.h"):
+        shutil.copy2(h, gen_dir / h.name)
+
+# If glslangValidator is available, compile live shaders to ensure freshness
+glslang = shutil.which("glslangValidator") or shutil.which("glslang")
+if glslang:
+    DXVK_SHADERS = [
+        "src/dxvk/shaders/dxvk_cursor_vert.vert",
+        "src/dxvk/shaders/dxvk_cursor_frag.frag",
+        "src/dxvk/shaders/dxvk_dummy_frag.frag",
+        "src/dxvk/shaders/dxvk_mipgen.comp",
+        "src/dxvk/shaders/dxvk_present_frag.frag",
+        "src/dxvk/shaders/dxvk_present_frag_blit.frag",
+        "src/dxvk/shaders/dxvk_present_frag_ms.frag",
+        "src/dxvk/shaders/dxvk_present_frag_ms_blit.frag",
+        "src/dxvk/shaders/dxvk_present_vert.vert",
+        "src/dxvk/hud/shaders/hud_chunk_frag_background.frag",
+        "src/dxvk/hud/shaders/hud_chunk_frag_visualize.frag",
+        "src/dxvk/hud/shaders/hud_chunk_vert_background.vert",
+        "src/dxvk/hud/shaders/hud_chunk_vert_visualize.vert",
+        "src/dxvk/hud/shaders/hud_frame_time_eval.comp",
+        "src/dxvk/hud/shaders/hud_graph_frag.frag",
+        "src/dxvk/hud/shaders/hud_graph_vert.vert",
+        "src/dxvk/hud/shaders/hud_text_frag.frag",
+        "src/dxvk/hud/shaders/hud_text_vert.vert",
+        "src/d3d9/shaders/d3d9_convert_yuy2_uyvy.comp",
+        "src/d3d9/shaders/d3d9_convert_l6v5u5.comp",
+        "src/d3d9/shaders/d3d9_convert_x8l8v8u8.comp",
+        "src/d3d9/shaders/d3d9_convert_a2w10v10u10.comp",
+        "src/d3d9/shaders/d3d9_convert_w11v11u10.comp",
+        "src/d3d9/shaders/d3d9_convert_nv12.comp",
+        "src/d3d9/shaders/d3d9_convert_yv12.comp",
+        "src/d3d9/shaders/d3d9_fixed_function_vert.vert",
+        "src/d3d9/shaders/d3d9_fixed_function_frag.frag",
+        "src/d3d9/shaders/d3d9_fixed_function_frag_sample.frag",
+    ]
+    for s in DXVK_SHADERS:
+        src_path = args.output / s
+        if src_path.exists():
+            var_name = src_path.stem
+            out_h = gen_dir / f"{var_name}.h"
+            subprocess.run([
+                glslang, "--quiet", "--target-env", "vulkan1.3",
+                "--vn", var_name, str(src_path), "-o", str(out_h)
+            ], check=False)
+
 (args.output / "version.h").write_text('#define DXVK_VERSION "v3.1.1-android-arm64"\n')
 (args.output / "PINNED_REVISION").write_text(PIN + "\n")
 (args.output / "ANDROID_PREPARE_SHA256").write_text(

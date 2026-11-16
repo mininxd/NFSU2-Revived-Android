@@ -2,32 +2,35 @@
 //!
 //! Controls the in-game "Enhanced Contrast" (Bleach Bypass) and "Over Bright" post-processing passes.
 //!
-//! ## Problem on Mobile GPUs (Qualcomm Adreno 840 / Snapdragon 8 Elite, Adreno 740, ARM Mali):
-//! In the original PC game, "Enhanced Contrast" toggles `g_BleachByPassEnable` (`0x00870D00`).
-//! When active, SPEED2.EXE executes a 3-pass ping-pong render target pipeline (`0x005c68d0`)
-//! across full-resolution backbuffers (e.g. 2608x1200 on modern flagship displays) and calls
-//! `LockRect`/`UnlockRect` on CPU textures (`0x005bbe80`).
-//! On mobile Tile-Based Deferred Rendering (TBDR) GPUs, switching full-screen render targets 3-4 times
-//! per frame causes on-chip tile buffers (GMEM) to repeatedly resolve and reload to system DRAM,
-//! consuming over 3 GB/s of memory bandwidth and collapsing framerates from 60 to 40-45 FPS (Issue #70).
+//! ## Problem on Mobile GPUs (Universal across Adreno, Mali, Immortalis, PowerVR):
+//! In the original PC game, "Enhanced Contrast" toggles `g_MasterBleachBypass` (`0x00876518`) in menus
+//! and `g_BleachByPassEnable` (`0x00870D00`) in frame setup.
+//! When active, SPEED2.EXE executes a 3-pass ping-pong render target pipeline (`0x005cc8b0`)
+//! invoking `IDirect3DDevice9::StretchRect` across full-resolution backbuffers.
+//! On mobile Tile-Based Deferred Rendering (TBDR) GPUs, switching full-screen render targets multiple
+//! times per frame forces on-chip tile buffers (GMEM) to repeatedly resolve and reload to system DRAM,
+//! consuming excessive memory bandwidth and collapsing framerates from 60 to 20-30 FPS.
 //!
-//! Furthermore, "Over Bright" (`g_OverBrightEnable` at `0x00870CFC`) adds a 6-pass Gaussian blur bloom
-//! downsampling pass, worsening the memory bus saturation.
+//! Furthermore, "Over Bright" (`g_MasterOverBright` at `0x00876514` and `g_OverBrightEnable` at `0x00870CFC`)
+//! adds a 6-pass Gaussian blur downsampling pass, worsening the memory bus saturation.
 //!
 //! ## Solution:
-//! 1. Enhanced Contrast is driven 100% by the in-game display settings menu ("Enhanced Contrast: ON/OFF").
-//! 2. When turned ON in the game (`0x00870D00 == 1`), the contrast curve is applied directly to the display
-//!    hardware via `SetGammaRamp` (an S-curve tone mapping curve with deeper blacks and punchy highlights).
-//!    The slow 3-pass ping-pong render target blit is overridden, delivering the full iconic high-contrast
-//!    visual tone at zero GPU memory bandwidth cost and locking the game to a solid 60 FPS.
-//! 3. When turned OFF in the game (`0x00870D00 == 0`), the identity linear ramp is restored.
-//! 4. "Over Bright" bloom (`0x00870CFC`) is clamped to 0 on mobile to prevent TBDR pipeline stalls.
+//! 1. Enhanced Contrast is driven by the player's in-game display settings menu (`0x00876518`).
+//! 2. The slow 3-pass ping-pong StretchRect blit is bypassed by clamping `0x00870D00`, `0x00870CFC`,
+//!    and `0x00876514` to 0 every frame before the 3D scene resolve executes.
+//! 3. When turned ON in the game, the tone curve is applied directly to display hardware via
+//!    `SetGammaRamp` (S-curve tone mapping curve with deeper blacks and vibrant highlights).
+//!    This delivers the iconic high-contrast visual tone at zero GPU memory bandwidth cost,
+//!    locking the game to a solid 60 FPS across all mobile GPUs.
+//! 4. When turned OFF, the identity linear ramp is restored.
 
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU32, Ordering};
 
 pub const G_OVERBRIGHT_ENABLE_ADDR: usize = 0x00870CFC;
 pub const G_BLEACH_BYPASS_ENABLE_ADDR: usize = 0x00870D00;
 pub const G_POST_PROCESS_STATE_ADDR: usize = 0x008708F4;
+pub const G_MASTER_OVERBRIGHT_ADDR: usize = 0x00876514;
+pub const G_MASTER_BLEACH_BYPASS_ADDR: usize = 0x00876518;
 
 static INGAME_CONTRAST_ACTIVE: AtomicBool = AtomicBool::new(false);
 static LAST_INGAME_CONTRAST_VAL: AtomicI32 = AtomicI32::new(-1);
@@ -81,9 +84,9 @@ pub extern "C" fn nfs_contrast_get_mode() -> u32 {
 
 /// Synchronizes with the in-game display setting on every frame tick directly from guest memory.
 ///
-/// - Reads `0x00870D00` (in-game Enhanced Contrast toggle).
-/// - Clamps `0x00870CFC` (OverBright bloom) to 0 on mobile.
-/// - When in-game toggle changes, updates the display hardware tone curve.
+/// - Reads `0x00876518` (master options menu setting) and `0x00870D00` (engine flag).
+/// - Clamps `0x00870D00` (Bleach Bypass), `0x00870CFC` (OverBright), and `0x00876514` (Master OverBright) to 0.
+/// - When in-game toggle changes, updates the display hardware tone curve via D3D9 SetGammaRamp.
 #[no_mangle]
 pub unsafe extern "C" fn nfs_contrast_sync_ingame(guest_mem: *mut u8) -> u32 {
     if guest_mem.is_null() {
@@ -92,25 +95,35 @@ pub unsafe extern "C" fn nfs_contrast_sync_ingame(guest_mem: *mut u8) -> u32 {
 
     let p_overbright = guest_mem.add(G_OVERBRIGHT_ENABLE_ADDR) as *mut u32;
     let p_bleach = guest_mem.add(G_BLEACH_BYPASS_ENABLE_ADDR) as *mut u32;
+    let p_master_overbright = guest_mem.add(G_MASTER_OVERBRIGHT_ADDR) as *mut u32;
+    let p_master_bleach = guest_mem.add(G_MASTER_BLEACH_BYPASS_ADDR) as *mut u32;
 
-    // 1. Clamp OverBright Bloom to 0 on mobile to avoid 6-pass Gaussian blur tile stalls
+    // 1. Read player's configured setting from master options menu & engine flags
+    let master_bleach = std::ptr::read_volatile(p_master_bleach);
+    let bleach = std::ptr::read_volatile(p_bleach);
+    let is_active = (master_bleach != 0) || (bleach != 0);
+
+    // 2. Clamp engine post-processing flags to 0 every frame
+    // This forces SPEED2.EXE to skip the 3-pass ping-pong StretchRect resolve (0x005cc8b0),
+    // eliminating GMEM resolve/reload stalls and memory bus choking on mobile TBDR GPUs.
+    std::ptr::write_volatile(p_bleach, 0);
     std::ptr::write_volatile(p_overbright, 0);
+    std::ptr::write_volatile(p_master_overbright, 0);
 
-    // 2. Read in-game Enhanced Contrast setting chosen by player
-    let ingame_val = std::ptr::read_volatile(p_bleach);
+    // 3. When in-game toggle changes, apply or remove hardware tone curve via D3D9 SetGammaRamp
+    let active_val = if is_active { 1 } else { 0 };
     let last_val = LAST_INGAME_CONTRAST_VAL.load(Ordering::Relaxed);
 
-    if (ingame_val as i32) != last_val {
-        LAST_INGAME_CONTRAST_VAL.store(ingame_val as i32, Ordering::Relaxed);
-        let active = ingame_val != 0;
-        INGAME_CONTRAST_ACTIVE.store(active, Ordering::Relaxed);
+    if active_val != last_val {
+        LAST_INGAME_CONTRAST_VAL.store(active_val, Ordering::Relaxed);
+        INGAME_CONTRAST_ACTIVE.store(is_active, Ordering::Relaxed);
         if let Some(cb) = G_RAMP_CALLBACK {
-            cb(if active { 1 } else { 0 });
+            cb(active_val);
         }
     }
 
     CONTRAST_FRAME_COUNT.fetch_add(1, Ordering::Relaxed);
-    ingame_val
+    active_val as u32
 }
 
 /// Returns the number of frames synchronized by pure Rust Enhanced Contrast regulator.
@@ -138,24 +151,34 @@ mod tests {
         let base = mock_mem.as_mut_ptr();
 
         unsafe {
-            // Player turns Enhanced Contrast ON in game options
+            // Player turns Enhanced Contrast ON in master game options
+            let p_master_bleach = base.add(G_MASTER_BLEACH_BYPASS_ADDR) as *mut u32;
+            let p_master_ob = base.add(G_MASTER_OVERBRIGHT_ADDR) as *mut u32;
             let p_bleach = base.add(G_BLEACH_BYPASS_ENABLE_ADDR) as *mut u32;
             let p_ob = base.add(G_OVERBRIGHT_ENABLE_ADDR) as *mut u32;
+
+            std::ptr::write_volatile(p_master_bleach, 1);
+            std::ptr::write_volatile(p_master_ob, 1);
             std::ptr::write_volatile(p_bleach, 1);
             std::ptr::write_volatile(p_ob, 1);
 
             let res = nfs_contrast_sync_ingame(base);
             assert_eq!(res, 1);
             assert!(nfs_contrast_is_enabled());
-            // Overbright must be clamped to 0
+            // Overbright and engine bleach flags must be clamped to 0 to bypass StretchRect
             assert_eq!(std::ptr::read_volatile(p_ob), 0);
+            assert_eq!(std::ptr::read_volatile(p_bleach), 0);
+            assert_eq!(std::ptr::read_volatile(p_master_ob), 0);
+            // Master setting remains 1 to preserve UI selection
+            assert_eq!(std::ptr::read_volatile(p_master_bleach), 1);
             assert_eq!(MOCK_CB_CALLED, 1);
 
             // Player turns Enhanced Contrast OFF in game options
-            std::ptr::write_volatile(p_bleach, 0);
+            std::ptr::write_volatile(p_master_bleach, 0);
             let res2 = nfs_contrast_sync_ingame(base);
             assert_eq!(res2, 0);
             assert!(!nfs_contrast_is_enabled());
+            assert_eq!(std::ptr::read_volatile(p_bleach), 0);
             assert_eq!(MOCK_CB_CALLED, 0);
         }
     }

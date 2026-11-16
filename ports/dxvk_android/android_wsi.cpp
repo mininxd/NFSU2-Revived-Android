@@ -39,19 +39,21 @@ HMONITOR monitor(){return reinterpret_cast<HMONITOR>(uintptr_t{1});}
 // adrenotools driver chosen in the launcher (set before the device exists).
 std::atomic<PFN_vkGetInstanceProcAddr> instanceProcAddr{nullptr};
 }
-extern "C" void dxvkAndroidSetInstanceProcAddr(PFN_vkGetInstanceProcAddr entry){instanceProcAddr=entry;}
-extern "C" PFN_vkGetInstanceProcAddr dxvkAndroidGetInstanceProcAddr(){
+#define DXVK_EXPORT __attribute__((visibility("default")))
+
+extern "C" DXVK_EXPORT void dxvkAndroidSetInstanceProcAddr(PFN_vkGetInstanceProcAddr entry){instanceProcAddr=entry;}
+extern "C" DXVK_EXPORT PFN_vkGetInstanceProcAddr dxvkAndroidGetInstanceProcAddr(){
     auto entry=instanceProcAddr.load();return entry?entry:vkGetInstanceProcAddr;
 }
-extern "C" void dxvkAndroidSetRenderSize(uint32_t width,uint32_t height){std::lock_guard<std::mutex> guard(windowMutex);renderWidth=width;renderHeight=height;
+extern "C" DXVK_EXPORT void dxvkAndroidSetRenderSize(uint32_t width,uint32_t height){std::lock_guard<std::mutex> guard(windowMutex);renderWidth=width;renderHeight=height;
 #ifdef __ANDROID__
     // Same as dxvkAndroidSetWindow when the window came first.
     if(currentWindow&&!bufferWidth&&width&&height&&width<screenWidth&&height<screenHeight&&
        ANativeWindow_setBuffersGeometry(currentWindow,width,height,0)==0){bufferWidth=width;bufferHeight=height;}
 #endif
 }
-extern "C" HWND dxvkAndroidGetWindowHandle(){std::lock_guard<std::mutex> guard(windowMutex);return currentHandle;}
-extern "C" void dxvkAndroidSetWindow(ANativeWindow* window){
+extern "C" DXVK_EXPORT HWND dxvkAndroidGetWindowHandle(){std::lock_guard<std::mutex> guard(windowMutex);return currentHandle;}
+extern "C" DXVK_EXPORT void dxvkAndroidSetWindow(ANativeWindow* window){
     std::lock_guard<std::mutex> guard(windowMutex);
     if(window==currentWindow)return;
 #ifdef __ANDROID__

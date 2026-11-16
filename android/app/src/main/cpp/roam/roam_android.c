@@ -1116,7 +1116,7 @@ static void framerate_pacing_fix(void) {
     }
 
     /* Enhanced Contrast Regulation: sync with in-game setting directly via pure Rust */
-    if (rh_mem_committed(0x00870cfcu, 4) && rh_mem_committed(0x00870d00u, 4)) {
+    if (rh_mem_committed(0x00870cfcu, 4) && rh_mem_committed(0x00870d00u, 4) && rh_mem_committed(0x00876514u, 8)) {
         static uint32_t (*s_sync_contrast)(uint8_t*) = NULL;
         if (!s_sync_contrast) {
             void *h = dlopen("libgraphics_cache.so", RTLD_NOW | RTLD_LOCAL);

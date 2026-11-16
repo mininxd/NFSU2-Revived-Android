@@ -19,43 +19,76 @@ string(STRIP "${DXVK_ACTUAL_PREPARE_SHA256}" DXVK_ACTUAL_PREPARE_SHA256)
 if(NOT DXVK_ACTUAL_PREPARE_SHA256 STREQUAL DXVK_EXPECTED_PREPARE_SHA256)
   message(FATAL_ERROR "DXVK patches are stale: rerun ${DXVK_PREPARE_SCRIPT}")
 endif()
+
+# 1. Util sources
 file(GLOB UTIL "${DXVK_SOURCE}/src/util/*.cpp" "${DXVK_SOURCE}/src/util/com/*.cpp"
   "${DXVK_SOURCE}/src/util/config/*.cpp" "${DXVK_SOURCE}/src/util/log/*.cpp"
   "${DXVK_SOURCE}/src/util/sha1/*.c" "${DXVK_SOURCE}/src/util/sha1/*.cpp"
   "${DXVK_SOURCE}/src/util/sync/*.cpp")
-list(FILTER UTIL EXCLUDE REGEX "util_gdi.cpp$")
-list(APPEND UTIL "${DXVK_SOURCE}/src/util/platform/util_env_linux.cpp"
-  "${DXVK_SOURCE}/src/util/platform/util_luid_linux.cpp"
-  "${DXVK_SOURCE}/src/util/platform/util_string_linux.cpp"
-  "${DXVK_SOURCE}/src/util/platform/thread_native.cpp")
-file(GLOB GRAPHICS "${DXVK_SOURCE}/src/dxso/*.cpp" "${DXVK_SOURCE}/src/spirv/*.cpp"
-  "${DXVK_SOURCE}/src/vulkan/*.cpp" "${DXVK_SOURCE}/src/dxvk/*.cpp"
-  "${DXVK_SOURCE}/src/dxvk/hud/*.cpp" "${DXVK_SOURCE}/src/d3d9/*.cpp")
+
+# 2. Vulkan and Spirv sources
+file(GLOB VULKAN "${DXVK_SOURCE}/src/vulkan/*.cpp")
+file(GLOB SPIRV "${DXVK_SOURCE}/src/spirv/*.cpp")
+
+# 3. Dxbc-spirv translation subsystem
+set(DXBC_SPV_DIR "${DXVK_SOURCE}/subprojects/dxbc-spirv")
+file(GLOB DXBC_SPV
+  "${DXBC_SPV_DIR}/ir/*.cpp"
+  "${DXBC_SPV_DIR}/ir/passes/*.cpp"
+  "${DXBC_SPV_DIR}/util/*.cpp"
+  "${DXBC_SPV_DIR}/sm3/*.cpp"
+  "${DXBC_SPV_DIR}/dxbc/*.cpp"
+  "${DXBC_SPV_DIR}/spirv/*.cpp"
+)
+
+# 4. DXVK core and D3D9 backend
+file(GLOB GRAPHICS
+  "${DXVK_SOURCE}/src/dxvk/*.cpp"
+  "${DXVK_SOURCE}/src/dxvk/hud/*.cpp"
+  "${DXVK_SOURCE}/src/d3d9/*.cpp"
+)
 list(FILTER GRAPHICS EXCLUDE REGEX "dxvk_open(vr|xr).cpp$")
+
 option(DXVK_ANDROID_STATIC "Link backend into the application" OFF)
 if(DXVK_ANDROID_STATIC)
   set(DXVK_LIBRARY_TYPE STATIC)
 else()
   set(DXVK_LIBRARY_TYPE SHARED)
 endif()
-add_library(dxvk_android ${DXVK_LIBRARY_TYPE} ${UTIL} ${GRAPHICS} android_wsi.cpp)
+
+add_library(dxvk_android ${DXVK_LIBRARY_TYPE} ${UTIL} ${VULKAN} ${SPIRV} ${DXBC_SPV} ${GRAPHICS} android_wsi.cpp)
 target_compile_features(dxvk_android PRIVATE cxx_std_17)
-target_compile_definitions(dxvk_android PRIVATE DXVK_NATIVE DXVK_PLATFORM_LINUX DXVK_WSI_ANDROID NOMINMAX)
+target_compile_definitions(dxvk_android PRIVATE
+  DXVK_NATIVE
+  DXVK_PLATFORM_LINUX
+  DXVK_WSI_ANDROID
+  NOMINMAX
+  DXBC_SPV_ENABLE_SM3
+  DXBC_SPV_ENABLE_SM5
+  DXBC_SPV_ENABLE_SPIRV
+)
 if(ANDROID)
   target_compile_definitions(dxvk_android PRIVATE VK_USE_PLATFORM_ANDROID_KHR)
 endif()
-target_include_directories(dxvk_android PRIVATE "${DXVK_SOURCE}" "${DXVK_SOURCE}/include"
+target_include_directories(dxvk_android PRIVATE
+  "${DXVK_SOURCE}"
+  "${DXVK_SOURCE}/include"
   "${DXVK_SOURCE}/src/util"
-  "${DXVK_SOURCE}/include/native" "${DXVK_SOURCE}/include/native/windows"
-  "${DXVK_SOURCE}/include/native/directx" "${DXVK_SOURCE}/generated")
-target_compile_options(dxvk_android PRIVATE -O2 -Wno-deprecated-declarations)
+  "${DXVK_SOURCE}/include/native"
+  "${DXVK_SOURCE}/include/native/windows"
+  "${DXVK_SOURCE}/include/native/directx"
+  "${DXVK_SOURCE}/generated"
+  "${DXBC_SPV_DIR}"
+  "${DXBC_SPV_DIR}/include"
+)
+target_compile_options(dxvk_android PRIVATE -O3 -fvisibility=hidden -Wno-deprecated-declarations -Wno-unused-variable -Wno-unused-parameter)
 find_library(DXVK_VULKAN_LIBRARY NAMES vulkan libvulkan.so.1 REQUIRED)
 target_link_libraries(dxvk_android PRIVATE ${DXVK_VULKAN_LIBRARY})
 if(ANDROID)
-  target_link_libraries(dxvk_android PRIVATE android log)
+  target_link_libraries(dxvk_android PRIVATE android log dl)
 else()
   find_library(DXVK_X11_LIBRARY NAMES X11 REQUIRED)
-  target_link_libraries(dxvk_android PRIVATE pthread ${DXVK_X11_LIBRARY})
+  target_link_libraries(dxvk_android PRIVATE pthread dl ${DXVK_X11_LIBRARY})
   add_executable(dxvk_query_check query_check.cpp)
   target_include_directories(dxvk_query_check SYSTEM PRIVATE "${DXVK_SOURCE}/include/native/windows" "${DXVK_SOURCE}/include/native/directx")
   target_link_libraries(dxvk_query_check PRIVATE dxvk_android)

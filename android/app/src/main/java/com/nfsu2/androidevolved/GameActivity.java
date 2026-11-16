@@ -5,6 +5,9 @@ package com.nfsu2.androidevolved;
  */
 public final class GameActivity {
     static {
+        try {
+            System.loadLibrary("dxvk_android");
+        } catch (Throwable ignored) {}
         System.loadLibrary("nfsu2_android");
     }
 
