@@ -19,13 +19,15 @@
 
 namespace {
 
+typedef PFN_vkVoidFunction (VKAPI_PTR *PFN_vk_icdGetPhysicalDeviceProcAddr)(VkInstance instance, const char* pName);
+
 class UniversalGpuLoaderState {
 public:
     UniversalGpuInfo info;
     void *driverHandle = nullptr;
     PFN_vkGetInstanceProcAddr rawGetProc = nullptr;
     PFN_vkGetInstanceProcAddr icdGetProc = nullptr;
-    PFN_vkGetPhysicalDeviceProcAddr icdGetPhysProc = nullptr;
+    PFN_vk_icdGetPhysicalDeviceProcAddr icdGetPhysProc = nullptr;
 
     void cleanup() {
         if (driverHandle) {
@@ -39,6 +41,8 @@ public:
     }
 
     bool init(const char *hooks, const char *temp, const char *dir, const char *lib) {
+        (void)hooks;
+        (void)temp;
         cleanup();
 
         // If no custom library specified, use system libvulkan.so
@@ -131,7 +135,7 @@ public:
         // Resolve entry points
         rawGetProc = reinterpret_cast<PFN_vkGetInstanceProcAddr>(dlsym(driverHandle, "vkGetInstanceProcAddr"));
         icdGetProc = reinterpret_cast<PFN_vkGetInstanceProcAddr>(dlsym(driverHandle, "vk_icdGetInstanceProcAddr"));
-        icdGetPhysProc = reinterpret_cast<PFN_vkGetPhysicalDeviceProcAddr>(dlsym(driverHandle, "vk_icdGetPhysicalDeviceProcAddr"));
+        icdGetPhysProc = reinterpret_cast<PFN_vk_icdGetPhysicalDeviceProcAddr>(dlsym(driverHandle, "vk_icdGetPhysicalDeviceProcAddr"));
 
         if (!rawGetProc && icdGetProc) {
             rawGetProc = icdGetProc;
