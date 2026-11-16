@@ -1,9 +1,6 @@
-//! DXVK, Wine & Proton Driver Performance Tuning Engine.
+//! DXVK Driver Configuration Engine.
 //!
-//! Inspired by GameHub smali reverse engineering (`com.winemu.openapi.Config`,
-//! `WineActivity`, `WINEMU_CPU_AFFINITY`, `MESA_VK_WSI_PRESENT_MODE`) and Wine/Proton/DXVK configurations.
-//!
-//! Optimizes Direct3D 9 translation on Android Vulkan drivers (Adreno, PanVK, Mali, Turnip):
+//! Direct3D 9 translation configuration for Android Vulkan:
 //! - `d3d9.invariantPosition`: Eliminates vertex jitter and geometric distortion on mobile Vulkan.
 //! - `d3d9.generalHazards`: Ensures Vulkan pipeline barriers for render target readback (rain splatter, bloom, motion blur).
 //! - `d3d9.forceSamplerTypeSpecConstants`: Specializes Vulkan samplers into constants, eliminating branch overhead.
@@ -80,7 +77,6 @@ impl DxvkProfileConfig {
     /// Formats the configuration into standard dxvk.conf syntax.
     pub fn format_conf(&self) -> String {
         let mut s = String::with_capacity(2048);
-        s.push_str("# NFSU2 Revived DXVK Configuration (GameHub, Proton & Vulkan 1.3 Optimized)\n");
         s.push_str("dxvk.enableStateCache = True\n");
         s.push_str(&format!("dxvk.numCompilerThreads = {}\n", self.num_compiler_threads));
         s.push_str("dxvk.useRawSsbo = True\n");
@@ -108,8 +104,7 @@ impl DxvkProfileConfig {
         s.push_str("d3d9.memoryTrackTest = False\n");
         s.push_str(&format!("d3d9.maxAvailableMemory = {}\n", self.max_device_memory_mb));
 
-        // Essential settings discovered from GameHub smali and Proton D3D9 analysis
-        // generalHazards = False eliminates massive pipeline barrier stalls across Enhanced Contrast render passes
+        // generalHazards = False eliminates pipeline barrier stalls across Enhanced Contrast render passes
         s.push_str(&format!("d3d9.generalHazards = {}\n", if self.general_hazards { "True" } else { "False" }));
         s.push_str(&format!("d3d9.invariantPosition = {}\n", if self.invariant_position { "True" } else { "False" }));
         s.push_str(&format!("d3d9.forceSamplerTypeSpecConstants = {}\n", if self.force_sampler_spec_constants { "True" } else { "False" }));
@@ -139,7 +134,7 @@ impl DxvkProfileConfig {
     }
 }
 
-/// Applies driver environment variables recommended by Wine, Proton, and GameHub.
+/// Applies driver environment variables.
 pub fn apply_driver_environment() {
     let vars: &[(&str, &str)] = &[
         ("DXVK_ASYNC", "1"),
