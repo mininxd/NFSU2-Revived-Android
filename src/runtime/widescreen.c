@@ -203,24 +203,6 @@ int nfs_widescreen_hud_entries(void) { return (int)s_hud_count; }
 
 void nfs_widescreen_set_minimap_offset(float dy) { s_minimap_dy = dy; }
 
-void nfs_widescreen_get_minimap_offset(float *out_dx, float *out_dy) {
-    if (!s_enabled || s_screen_mode == 2) {
-        if (out_dx) *out_dx = 0.0f;
-        if (out_dy) *out_dy = s_minimap_dy;
-        return;
-    }
-    float x = -223.0f, y = 142.0f;
-    widescreen_hud(&x, &y);
-    float dx = x - (-223.0f);
-    if (dx == 0.0f && s_hud_offset != 0.0f) {
-        const float base_offset = (480.0f * (16.0f / 9.0f) - 640.0f) / 2.0f;
-        const float offset_x = -109.0f;
-        dx = -(s_hud_offset - (offset_x + base_offset));
-    }
-    if (out_dx) *out_dx = dx;
-    if (out_dy) *out_dy = y - 142.0f;
-}
-
 void nfs_widescreen_set_bank_left(int enabled) { s_bank_left = enabled; }
 void nfs_widescreen_set_sms_nav_offset(float dy) { s_sms_nav_dy = dy; }
 
@@ -392,21 +374,8 @@ void recomp_hook(uint32_t va) {
 
     /* HudHook: the element position just stored from ecx/edx. */
     case HUD_HOOK: adjust_mem_pair(g_esp + 0x60, g_esp + 0x64); break;
-    /* BlipsHook: radar blips, before `mov [edx], ecx`. Avoid in-place memory mutation. */
-    case BLIPS_HOOK: {
-        float x = rdf(g_ebx + 0x1Cu), y = rdf(g_ebx + 0x20u);
-        widescreen_hud(&x, &y);
-        if (g_edx >= 0x10000u && g_edx <= 0x7FFFF000u) {
-            wrf(g_edx, x);
-        }
-        uint32_t vx, vy; memcpy(&vx, &x, 4); memcpy(&vy, &y, 4);
-        g_ecx = vx; g_eax = vy;
-        if (g_esp >= 0x10000u && g_esp <= 0x7FFFF000u) {
-            uint32_t out_y = MEM32(g_esp + 0x1Cu);
-            if (out_y >= 0x10000u && out_y <= 0x7FFFF000u) wrf(out_y, y);
-        }
-        break;
-    }
+    /* BlipsHook: radar blips, before `mov [edx], ecx`. */
+    case BLIPS_HOOK: adjust_mem_pair(g_ebx + 0x1C, g_ebx + 0x20); g_ecx = MEM32(g_ebx + 0x1C); break;
     /* HudHook2: ecx = adjusted X of [esi+1C]/[esi+20]. */
     case HUD_HOOK2: {
         float x, y; uint32_t v = g_ecx; memcpy(&x, &v, 4); y = rdf(g_esi + 0x20);
