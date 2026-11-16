@@ -41,6 +41,7 @@ uint32_t  *g_p_edi = NULL;
 recomp_func_t (*g_p_recomp_lookup)(uint32_t va) = NULL;
 int (*g_p_guest_is_readable)(uint32_t va, uint32_t bytes) = NULL;
 static uintptr_t s_lib_base = 0;
+static uint32_t s_display_w = 0, s_display_h = 0;
 
 static int s_probe_pipe[2] = { -1, -1 };
 static pthread_mutex_t s_probe_mu = PTHREAD_MUTEX_INITIALIZER;
@@ -1365,7 +1366,6 @@ static const uint32_t kAllResolutionPercents[] = {
 #define NUM_ALL_RESOLUTION_PERCENTS (sizeof(kAllResolutionPercents) / sizeof(kAllResolutionPercents[0]))
 
 static int s_res_window_start = -1;
-static uint32_t s_display_w = 0, s_display_h = 0;
 static uint32_t s_target_pct = 75;
 
 static void update_resolution_slots_in_memory(void) {
