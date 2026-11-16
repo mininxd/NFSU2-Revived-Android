@@ -70,6 +70,10 @@ target_compile_definitions(dxvk_android PRIVATE
 if(ANDROID)
   target_compile_definitions(dxvk_android PRIVATE VK_USE_PLATFORM_ANDROID_KHR)
 endif()
+target_include_directories(dxvk_android BEFORE SYSTEM PRIVATE
+  "${DXVK_SOURCE}/include/vulkan/include"
+  "${DXVK_SOURCE}/include/spirv/include"
+)
 target_include_directories(dxvk_android PRIVATE
   "${DXVK_SOURCE}"
   "${DXVK_SOURCE}/include"

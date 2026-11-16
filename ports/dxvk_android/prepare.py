@@ -33,6 +33,14 @@ for extra_file in ("LICENSE", "RELEASE"):
     if f.exists():
         shutil.copy2(f, args.output / extra_file)
 
+vulkan_headers_src = args.source / "include" / "vulkan" / "include" / "vulkan"
+if vulkan_headers_src.exists():
+    shutil.copytree(vulkan_headers_src, args.output / "include" / "vulkan", dirs_exist_ok=True)
+
+spirv_headers_src = args.source / "include" / "spirv" / "include" / "spirv"
+if spirv_headers_src.exists():
+    shutil.copytree(spirv_headers_src, args.output / "include" / "spirv", dirs_exist_ok=True)
+
 vulkan_inc = args.output / "include" / "vulkan"
 vulkan_inc.mkdir(parents=True, exist_ok=True)
 for header in ("vulkan_android.h", "vulkan_xlib.h"):
