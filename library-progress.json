@@ -2,7 +2,7 @@
   "title": "NFSU2 Win32 & DirectX 9 Translation Progress",
   "subtitle": "SPEED2.EXE ARM64 / Android HLE Surface Coverage",
   "description": "Library implementation status and function coverage for Need for Speed: Underground 2 recompilation.",
-  "last_updated": "2026-11-08 22:49:43Z",
+  "last_updated": "2026-11-16 04:47:50Z",
   "libraries": {
     "kernel32.dll": [
       {
@@ -1248,6 +1248,111 @@
         "name": "IDirect3DDevice9::GetViewport",
         "status": "implemented",
         "description": "Retrieves active rasterizer viewport"
+      },
+      {
+        "name": "IDirect3DDevice9::SetTransform",
+        "status": "implemented",
+        "description": "Translates D3DTS_WORLD, VIEW, PROJECTION to fixed-function shader constants"
+      },
+      {
+        "name": "IDirect3DDevice9::GetTransform",
+        "status": "implemented",
+        "description": "Retrieves active 4x4 matrix transformation"
+      },
+      {
+        "name": "IDirect3DDevice9::MultiplyTransform",
+        "status": "implemented",
+        "description": "Multiplies matrix with current world/view state"
+      },
+      {
+        "name": "IDirect3DDevice9::SetMaterial",
+        "status": "implemented",
+        "description": "Configures diffuse, ambient, specular lighting properties"
+      },
+      {
+        "name": "IDirect3DDevice9::GetMaterial",
+        "status": "implemented",
+        "description": "Retrieves active surface material"
+      },
+      {
+        "name": "IDirect3DDevice9::SetLight",
+        "status": "implemented",
+        "description": "Configures directional or point light parameters"
+      },
+      {
+        "name": "IDirect3DDevice9::GetLight",
+        "status": "implemented",
+        "description": "Retrieves lighting parameter structure"
+      },
+      {
+        "name": "IDirect3DDevice9::LightEnable",
+        "status": "implemented",
+        "description": "Toggles hardware lighting calculation on specific index"
+      },
+      {
+        "name": "IDirect3DDevice9::SetClipPlane",
+        "status": "implemented",
+        "description": "Configures user-defined clipping plane coefficients"
+      },
+      {
+        "name": "IDirect3DDevice9::CreateStateBlock",
+        "status": "implemented",
+        "description": "Records pipeline state block for fast switching"
+      },
+      {
+        "name": "IDirect3DDevice9::BeginStateBlock",
+        "status": "implemented",
+        "description": "Starts recording device state block changes"
+      },
+      {
+        "name": "IDirect3DDevice9::EndStateBlock",
+        "status": "implemented",
+        "description": "Finalizes recorded state block token"
+      },
+      {
+        "name": "IDirect3DDevice9::SetScissorRect",
+        "status": "implemented",
+        "description": "Restricts pixel rasterization to scissor rectangle"
+      },
+      {
+        "name": "IDirect3DDevice9::GetScissorRect",
+        "status": "implemented",
+        "description": "Retrieves active rasterizer scissor rectangle"
+      },
+      {
+        "name": "IDirect3DDevice9::UpdateSurface",
+        "status": "implemented",
+        "description": "Transfers pixel rectangle between surfaces without GPU stalling"
+      },
+      {
+        "name": "IDirect3DDevice9::UpdateTexture",
+        "status": "implemented",
+        "description": "Updates dirty mipmap levels and regions of Vulkan image"
+      },
+      {
+        "name": "IDirect3DDevice9::ColorFill",
+        "status": "implemented",
+        "description": "Hardware fill of surface with solid color"
+      },
+      {
+        "name": "IDirect3DDevice9::StretchRect",
+        "status": "implemented",
+        "description": "GPU blit with color conversion and bilinear scaling"
+      },
+      {
+        "name": "IDirect3DDevice9::CreateOffscreenPlainSurface",
+        "status": "implemented",
+        "description": "Allocates offscreen surface for render-to-texture and HUD"
+      },
+      {
+        "name": "IDirect3DDevice9::SetTextureStageState",
+        "status": "implemented",
+        "description": "Configures legacy fixed-function multi-texturing operations"
+      },
+      {
+        "name": "IDirect3DDevice9::GetTextureStageState",
+        "status": "implemented",
+        "description": "Queries multi-texture blending stage parameter"
       }
     ],
     "dsound.dll": [
@@ -1554,6 +1659,51 @@
         "name": "gethostbyname",
         "status": "implemented",
         "description": "DNS host resolution and address lookup"
+      },
+      {
+        "name": "inet_addr",
+        "status": "implemented",
+        "description": "Translates dotted IPv4 string to 32-bit network binary address"
+      },
+      {
+        "name": "inet_ntoa",
+        "status": "implemented",
+        "description": "Converts 32-bit in_addr to human-readable dotted IPv4 string"
+      },
+      {
+        "name": "ntohl",
+        "status": "implemented",
+        "description": "Network-to-host 32-bit integer endianness swap"
+      },
+      {
+        "name": "ntohs",
+        "status": "implemented",
+        "description": "Network-to-host 16-bit port endianness swap"
+      },
+      {
+        "name": "getprotobynumber",
+        "status": "implemented",
+        "description": "Protocol entity database lookup for IPPROTO_TCP / UDP"
+      },
+      {
+        "name": "getservbyport",
+        "status": "implemented",
+        "description": "Service name lookup by port number"
+      },
+      {
+        "name": "getservbyname",
+        "status": "implemented",
+        "description": "Service port lookup by service name"
+      },
+      {
+        "name": "WSASetLastError",
+        "status": "implemented",
+        "description": "Thread-local Winsock error code assignment"
+      },
+      {
+        "name": "__WSAFDIsSet",
+        "status": "implemented",
+        "description": "Determines if socket descriptor is included in fd_set mask"
       }
     ],
     "winmm.dll": [
@@ -1770,6 +1920,92 @@
         "name": "DirectDrawCreate",
         "status": "implemented",
         "description": "Rust-backed DirectDraw device & mode enumeration"
+      }
+    ],
+    "vulkan.so": [
+      {
+        "name": "universal_gpu_init",
+        "status": "implemented",
+        "description": "Universal dynamic namespace linker with sphal/vendor/system/vndk bypass"
+      },
+      {
+        "name": "universal_gpu_get_proc_addr",
+        "status": "implemented",
+        "description": "Resolves both standard vkGetInstanceProcAddr and ICD entry points"
+      },
+      {
+        "name": "universal_gpu_get_api_version",
+        "status": "implemented",
+        "description": "Enforces modern Vulkan 1.3 API reporting for PanVK, Turnip, and Mesa"
+      },
+      {
+        "name": "universal_vkEnumerateInstanceVersion",
+        "status": "implemented",
+        "description": "Instance version override guaranteeing Vulkan 1.3 presentation"
+      },
+      {
+        "name": "universal_vkGetInstanceProcAddr",
+        "status": "implemented",
+        "description": "Universal proc addr dispatcher for device/instance Vulkan entry points"
+      },
+      {
+        "name": "vk_icdNegotiateLoaderICDInterfaceVersion",
+        "status": "implemented",
+        "description": "ICD version 5 negotiation for Mesa PanVK & custom drivers"
+      },
+      {
+        "name": "linkernsbypass_namespace_dlopen",
+        "status": "implemented",
+        "description": "Direct loading into unrestricted Android linker namespace"
+      }
+    ],
+    "server.dll": [
+      {
+        "name": "Server_Init",
+        "status": "implemented",
+        "description": "Initializes EA LAN server subsystem and network worker thread"
+      },
+      {
+        "name": "Server_Tick",
+        "status": "implemented",
+        "description": "Frame tick handler for game lobby state, player replication, and heartbeat"
+      },
+      {
+        "name": "Server_Destroy",
+        "status": "implemented",
+        "description": "Gracefully cleans up LAN server sockets, room sessions, and clients"
+      }
+    ],
+    "libroam_native.so": [
+      {
+        "name": "roam_server_connect",
+        "status": "implemented",
+        "description": "Establishes low-latency UDP socket to Free Roam multiplayer server"
+      },
+      {
+        "name": "roam_server_disconnect",
+        "status": "implemented",
+        "description": "Leaves active multiplayer roam session"
+      },
+      {
+        "name": "roam_sync_send_position",
+        "status": "implemented",
+        "description": "Transmits driving vehicle transform, velocity, and orientation packet"
+      },
+      {
+        "name": "roam_sync_recv_peers",
+        "status": "implemented",
+        "description": "Processes incoming remote car positions, animations, and states"
+      },
+      {
+        "name": "roam_player_ped_spawn",
+        "status": "implemented",
+        "description": "Spawns 3D competitor car instances in active world partition"
+      },
+      {
+        "name": "roam_minimap_draw_icons",
+        "status": "implemented",
+        "description": "Renders peer blips and indicators on game GPS radar minimap"
       }
     ]
   }

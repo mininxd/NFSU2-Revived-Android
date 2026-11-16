@@ -289,7 +289,28 @@ DEFAULT_LIBRARIES = {
         ("IDirect3DDevice9::SetDepthStencilSurface", "implemented", "Binds z-buffer surface"),
         ("IDirect3DDevice9::GetDepthStencilSurface", "implemented", "Retrieves current depth surface"),
         ("IDirect3DDevice9::SetViewport", "implemented", "Sets rasterizer viewport rectangle"),
-        ("IDirect3DDevice9::GetViewport", "implemented", "Retrieves active rasterizer viewport")
+        ("IDirect3DDevice9::GetViewport", "implemented", "Retrieves active rasterizer viewport"),
+        ("IDirect3DDevice9::SetTransform", "implemented", "Translates D3DTS_WORLD, VIEW, PROJECTION to fixed-function shader constants"),
+        ("IDirect3DDevice9::GetTransform", "implemented", "Retrieves active 4x4 matrix transformation"),
+        ("IDirect3DDevice9::MultiplyTransform", "implemented", "Multiplies matrix with current world/view state"),
+        ("IDirect3DDevice9::SetMaterial", "implemented", "Configures diffuse, ambient, specular lighting properties"),
+        ("IDirect3DDevice9::GetMaterial", "implemented", "Retrieves active surface material"),
+        ("IDirect3DDevice9::SetLight", "implemented", "Configures directional or point light parameters"),
+        ("IDirect3DDevice9::GetLight", "implemented", "Retrieves lighting parameter structure"),
+        ("IDirect3DDevice9::LightEnable", "implemented", "Toggles hardware lighting calculation on specific index"),
+        ("IDirect3DDevice9::SetClipPlane", "implemented", "Configures user-defined clipping plane coefficients"),
+        ("IDirect3DDevice9::CreateStateBlock", "implemented", "Records pipeline state block for fast switching"),
+        ("IDirect3DDevice9::BeginStateBlock", "implemented", "Starts recording device state block changes"),
+        ("IDirect3DDevice9::EndStateBlock", "implemented", "Finalizes recorded state block token"),
+        ("IDirect3DDevice9::SetScissorRect", "implemented", "Restricts pixel rasterization to scissor rectangle"),
+        ("IDirect3DDevice9::GetScissorRect", "implemented", "Retrieves active rasterizer scissor rectangle"),
+        ("IDirect3DDevice9::UpdateSurface", "implemented", "Transfers pixel rectangle between surfaces without GPU stalling"),
+        ("IDirect3DDevice9::UpdateTexture", "implemented", "Updates dirty mipmap levels and regions of Vulkan image"),
+        ("IDirect3DDevice9::ColorFill", "implemented", "Hardware fill of surface with solid color"),
+        ("IDirect3DDevice9::StretchRect", "implemented", "GPU blit with color conversion and bilinear scaling"),
+        ("IDirect3DDevice9::CreateOffscreenPlainSurface", "implemented", "Allocates offscreen surface for render-to-texture and HUD"),
+        ("IDirect3DDevice9::SetTextureStageState", "implemented", "Configures legacy fixed-function multi-texturing operations"),
+        ("IDirect3DDevice9::GetTextureStageState", "implemented", "Queries multi-texture blending stage parameter")
     ],
 
     "dsound.dll": [
@@ -358,7 +379,16 @@ DEFAULT_LIBRARIES = {
         ("getsockname", "implemented", "Retrieves local socket IP and port"),
         ("getpeername", "implemented", "Retrieves remote connected peer address"),
         ("gethostname", "implemented", "Returns local Android hostname"),
-        ("gethostbyname", "implemented", "DNS host resolution and address lookup")
+        ("gethostbyname", "implemented", "DNS host resolution and address lookup"),
+        ("inet_addr", "implemented", "Translates dotted IPv4 string to 32-bit network binary address"),
+        ("inet_ntoa", "implemented", "Converts 32-bit in_addr to human-readable dotted IPv4 string"),
+        ("ntohl", "implemented", "Network-to-host 32-bit integer endianness swap"),
+        ("ntohs", "implemented", "Network-to-host 16-bit port endianness swap"),
+        ("getprotobynumber", "implemented", "Protocol entity database lookup for IPPROTO_TCP / UDP"),
+        ("getservbyport", "implemented", "Service name lookup by port number"),
+        ("getservbyname", "implemented", "Service port lookup by service name"),
+        ("WSASetLastError", "implemented", "Thread-local Winsock error code assignment"),
+        ("__WSAFDIsSet", "implemented", "Determines if socket descriptor is included in fd_set mask")
     ],
 
     "winmm.dll": [
@@ -423,6 +453,31 @@ DEFAULT_LIBRARIES = {
 
     "ddraw.dll": [
         ("DirectDrawCreate", "implemented", "Rust-backed DirectDraw device & mode enumeration")
+    ],
+
+    "vulkan.so": [
+        ("universal_gpu_init", "implemented", "Universal dynamic namespace linker with sphal/vendor/system/vndk bypass"),
+        ("universal_gpu_get_proc_addr", "implemented", "Resolves both standard vkGetInstanceProcAddr and ICD entry points"),
+        ("universal_gpu_get_api_version", "implemented", "Enforces modern Vulkan 1.3 API reporting for PanVK, Turnip, and Mesa"),
+        ("universal_vkEnumerateInstanceVersion", "implemented", "Instance version override guaranteeing Vulkan 1.3 presentation"),
+        ("universal_vkGetInstanceProcAddr", "implemented", "Universal proc addr dispatcher for device/instance Vulkan entry points"),
+        ("vk_icdNegotiateLoaderICDInterfaceVersion", "implemented", "ICD version 5 negotiation for Mesa PanVK & custom drivers"),
+        ("linkernsbypass_namespace_dlopen", "implemented", "Direct loading into unrestricted Android linker namespace")
+    ],
+
+    "server.dll": [
+        ("Server_Init", "implemented", "Initializes EA LAN server subsystem and network worker thread"),
+        ("Server_Tick", "implemented", "Frame tick handler for game lobby state, player replication, and heartbeat"),
+        ("Server_Destroy", "implemented", "Gracefully cleans up LAN server sockets, room sessions, and clients")
+    ],
+
+    "libroam_native.so": [
+        ("roam_server_connect", "implemented", "Establishes low-latency UDP socket to Free Roam multiplayer server"),
+        ("roam_server_disconnect", "implemented", "Leaves active multiplayer roam session"),
+        ("roam_sync_send_position", "implemented", "Transmits driving vehicle transform, velocity, and orientation packet"),
+        ("roam_sync_recv_peers", "implemented", "Processes incoming remote car positions, animations, and states"),
+        ("roam_player_ped_spawn", "implemented", "Spawns 3D competitor car instances in active world partition"),
+        ("roam_minimap_draw_icons", "implemented", "Renders peer blips and indicators on game GPS radar minimap")
     ]
 }
 
