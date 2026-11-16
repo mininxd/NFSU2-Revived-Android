@@ -80,27 +80,6 @@ extern "C" ANativeWindow* dxvkCreateTestWindow(){
 }
 extern "C" void dxvkDestroyTestWindow(ANativeWindow* window){if(!window)return;XDestroyWindow(window->display,window->window);XCloseDisplay(window->display);delete window;}
 #endif
-namespace dxvk {
-DxvkPlatformExts DxvkPlatformExts::s_instance;
-std::string_view DxvkPlatformExts::getName(){return "Android WSI";}
-DxvkExtensionList DxvkPlatformExts::getInstanceExtensions(){
-    DxvkExtensionList names;
-    names.push_back(vk::makeExtension(VK_KHR_SURFACE_EXTENSION_NAME));
-#ifdef __ANDROID__
-    names.push_back(vk::makeExtension(VK_KHR_ANDROID_SURFACE_EXTENSION_NAME));
-#else
-    names.push_back(vk::makeExtension(VK_KHR_XLIB_SURFACE_EXTENSION_NAME));
-#endif
-    return names;
-}
-DxvkExtensionList DxvkPlatformExts::getDeviceExtensions(uint32_t){
-    DxvkExtensionList names;
-    names.push_back(vk::makeExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME));
-    return names;
-}
-void DxvkPlatformExts::initInstanceExtensions(){}
-void DxvkPlatformExts::initDeviceExtensions(const DxvkInstance*){}
-}
 namespace dxvk::wsi {
 void init(){}
 void quit(){}
