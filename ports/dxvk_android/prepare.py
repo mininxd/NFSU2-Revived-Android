@@ -78,6 +78,11 @@ replace(
 
 # Zero-overhead Enhanced Contrast GPU post-processing in presenter swapchain
 replace(
+    "src/dxvk/dxvk_swapchain_blitter.cpp",
+    '#include "dxvk_swapchain_blitter.h"\n',
+    '#include "dxvk_swapchain_blitter.h"\n#ifdef __ANDROID__\n#include <dlfcn.h>\n#ifndef RTLD_DEFAULT\n#define RTLD_DEFAULT ((void*)0)\n#endif\n#endif\n'
+)
+replace(
     "src/dxvk/dxvk_swapchain_blitter.h",
     "      uint32_t   samplerCursor;\n    };",
     "      uint32_t   samplerCursor;\n      uint32_t   enhancedContrast;\n    };"
