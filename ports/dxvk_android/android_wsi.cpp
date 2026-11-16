@@ -142,7 +142,7 @@ HMONITOR getDefaultMonitor(){return monitor();}
 HMONITOR enumMonitors(uint32_t index){return index?nullptr:monitor();}
 HMONITOR enumMonitors(const LUID *adapterLUID[], uint32_t numLUIDs, uint32_t index){(void)adapterLUID;(void)numLUIDs;return enumMonitors(index);}
 bool getDisplayName(HMONITOR handle,WCHAR (&name)[32]){if(handle!=monitor())return false;const wchar_t display[]=L"\\\\.\\DISPLAY1";std::fill(std::begin(name),std::end(name),0);std::copy(std::begin(display),std::end(display),name);return true;}
-bool getDesktopCoordinates(HMONITOR handle,RECT* rect){if(handle!=monitor()||!rect)return false;std::lock_guard<std::mutex> guard(windowMutex);*rect={0,0,static_cast<LONG>(screenWidth),static_cast<LONG>(screenHeight)};return true;}
+bool getDesktopCoordinates(HMONITOR handle,RECT* rect){if(handle!=monitor()||!rect)return false;std::lock_guard<std::mutex> guard(windowMutex);*rect={0,0,static_cast<LONG>(bufferWidth?bufferWidth:screenWidth),static_cast<LONG>(bufferHeight?bufferHeight:screenHeight)};return true;}
 bool getCurrentDisplayMode(HMONITOR handle,WsiMode* mode){if(handle!=monitor()||!mode)return false;std::lock_guard<std::mutex> guard(windowMutex);*mode={screenWidth,screenHeight,{60,1},32,false};return true;}
 bool getDesktopDisplayMode(HMONITOR handle,WsiMode* mode){return getCurrentDisplayMode(handle,mode);}
 bool getDisplayMode(HMONITOR handle,uint32_t index,WsiMode* mode){
@@ -155,13 +155,9 @@ bool getDisplayMode(HMONITOR handle,uint32_t index,WsiMode* mode){
         *mode={selected.width,selected.height,{60,1},32,false};return true;
     }
     if(index>=6)return false;
-    auto sizes=androidRenderModes(screenWidth,screenHeight,renderWidth?renderWidth:screenWidth,renderHeight?renderHeight:screenHeight);
+    uint32_t activeSlot = 0;
+    auto sizes=androidRenderModes(screenWidth,screenHeight,renderWidth?renderWidth:screenWidth,renderHeight?renderHeight:screenHeight, activeSlot);
     *mode={sizes[index].width,sizes[index].height,{60,1},32,false};return true;
-}
-void getMonitorClientSize(HMONITOR handle,uint32_t* width,uint32_t* height){
-    std::lock_guard<std::mutex> guard(windowMutex);
-    if(width)*width=bufferWidth?bufferWidth:screenWidth;
-    if(height)*height=bufferHeight?bufferHeight:screenHeight;
 }
 WsiEdidData getMonitorEdid(HMONITOR handle){(void)handle;return {};}
 std::optional<WsiDisplayMetadata> parseColorimetryInfo(const WsiEdidData& edidData){(void)edidData;return std::nullopt;}
