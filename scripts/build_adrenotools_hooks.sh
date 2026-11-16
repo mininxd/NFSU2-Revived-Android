@@ -120,6 +120,7 @@ if $CLANGXX_BIN -std=c++17 -O2 -shared -fPIC -Wall -Wextra -Wno-missing-field-in
   -I"$ADRENOTOOLS_DIR/src" \
   "$ROOT_DIR/android/app/src/main/cpp/gpu_probe.cpp" \
   "$ROOT_DIR/android/app/src/main/cpp/vulkan_driver.cpp" \
+  "$ROOT_DIR/android/app/src/main/cpp/universal_gpu_loader.cpp" \
   "$ADRENOTOOLS_DIR/src/bcenabler.cpp" \
   "$ADRENOTOOLS_DIR/src/driver.cpp" \
   "$LINKERNS_DIR/android_linker_ns.cpp" \
@@ -135,6 +136,7 @@ else
     -I"$ROOT_DIR/android/app/src/main/cpp" \
     "$ROOT_DIR/android/app/src/main/cpp/gpu_probe.cpp" \
     "$ROOT_DIR/android/app/src/main/cpp/vulkan_driver.cpp" \
+    "$ROOT_DIR/android/app/src/main/cpp/universal_gpu_loader.cpp" \
     -static-libstdc++ \
     -llog -ldl \
     -o "$OUT_DIR/libnfsu2_diagnostics.so"

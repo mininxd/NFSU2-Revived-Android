@@ -148,11 +148,47 @@ public final class PerformanceCores {
             }
         }
 
+        // Secondary detection: Parse /proc/cpuinfo (always permitted by SELinux on Android 14)
         if (mask == 0) {
-            // Fallback: upper half of cores
-            int start = Math.max(1, totalCores / 2);
-            for (int i = start; i < totalCores; i++) {
-                mask |= (1L << i);
+            try (BufferedReader reader = new BufferedReader(new FileReader("/proc/cpuinfo"))) {
+                String line;
+                int currentCpu = -1;
+                while ((line = reader.readLine()) != null) {
+                    line = line.trim();
+                    if (line.startsWith("processor")) {
+                        int colon = line.indexOf(':');
+                        if (colon >= 0) {
+                            try {
+                                currentCpu = Integer.parseInt(line.substring(colon + 1).trim());
+                            } catch (Exception ignored) {}
+                        }
+                    } else if (line.startsWith("CPU part") && currentCpu >= 0 && currentCpu < totalCores) {
+                        int colon = line.indexOf(':');
+                        if (colon >= 0) {
+                            String partStr = line.substring(colon + 1).trim();
+                            try {
+                                int part = Integer.decode(partStr);
+                                boolean isLittle = (part == 0xd03 || part == 0xd05 || part == 0xd46 || part == 0xd80);
+                                if (part >= 0xd08 && !isLittle) {
+                                    mask |= (1L << currentCpu);
+                                }
+                            } catch (Exception ignored) {}
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+
+        if (mask == 0) {
+            // Intelligent fallback: On octa-core 2+6 (e.g. Helio G96/G99) and 4+4 / 1+3+4 SoCs,
+            // top 2 cores (cpu6, cpu7) are guaranteed big/prime performance cores.
+            if (totalCores >= 8) {
+                mask = (1L << 6) | (1L << 7);
+            } else {
+                int start = Math.max(1, totalCores / 2);
+                for (int i = start; i < totalCores; i++) {
+                    mask |= (1L << i);
+                }
             }
         }
         return mask;

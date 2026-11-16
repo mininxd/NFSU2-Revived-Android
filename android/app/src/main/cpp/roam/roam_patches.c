@@ -60,6 +60,18 @@ void hiddenraces_frame_tick(void) {
 void extraoptions_init_patches(void) {
     if (!rh_mem_committed(0x00400000u, 0x1000)) return;
 
+    // Bleach Bypass / Enhanced Contrast 3-pass ping-pong bypass:
+    // Original code executes 3 ping-pong render target passes with LockRect,
+    // which stalls mobile TBDR GPUs (Mali / Adreno).
+    // Set 0x008708F4 = 0xFFFFFFFF (contrast active) and RET immediately.
+    if (rh_mem_committed(0x005C68D0u, 11)) {
+        MR8(0x005C68D0u) = 0xC7; // MOV DWORD PTR [0x008708F4], 0xFFFFFFFF
+        MR8(0x005C68D1u) = 0x05;
+        MR32(0x005C68D2u) = 0x008708F4u;
+        MR32(0x005C68D6u) = 0xFFFFFFFFu;
+        MR8(0x005C68DAu) = 0xC3; // RET
+    }
+
     // Optical drive / Disc 2 bypass
     if (rh_mem_committed(0x005C0D3Fu, 1)) MR8(0x005C0D3Fu) = 0x78;
     if (rh_mem_committed(0x005C0D54u, 1)) MR8(0x005C0D54u) = 0x00;

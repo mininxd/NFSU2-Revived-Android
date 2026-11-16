@@ -100,8 +100,44 @@ impl CpuCluster {
             }
         }
 
-        // Fallback: If frequency detection wasn't readable, treat upper half of cores as performance
-        if perf_cores_mask == 0 && total_cores > 1 {
+        // Secondary detection: Parse /proc/cpuinfo (always permitted by Android 14 SELinux)
+        if perf_cores_mask == 0 {
+            if let Ok(cpuinfo) = fs::read_to_string("/proc/cpuinfo") {
+                let mut cur_cpu: i32 = -1;
+                for line in cpuinfo.lines() {
+                    let trimmed = line.trim();
+                    if trimmed.starts_with("processor") {
+                        if let Some(colon) = trimmed.find(':') {
+                            if let Ok(cpu_id) = trimmed[colon + 1..].trim().parse::<i32>() {
+                                cur_cpu = cpu_id;
+                            }
+                        }
+                    } else if trimmed.starts_with("CPU part") && cur_cpu >= 0 && (cur_cpu as usize) < total_cores {
+                        if let Some(colon) = trimmed.find(':') {
+                            let part_str = trimmed[colon + 1..].trim();
+                            let part = u32::from_str_radix(part_str.trim_start_matches("0x"), 16).unwrap_or(0);
+                            let is_little = part == 0xd03 || part == 0xd05 || part == 0xd46 || part == 0xd80;
+                            if part >= 0xd08 && !is_little {
+                                perf_cores_mask |= 1u64 << (cur_cpu as usize);
+                                perf_core_count += 1;
+                                if let Some(c) = cores.get_mut(cur_cpu as usize) {
+                                    c.is_performance = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Fallback: On octa-core 2+6 (e.g. Helio G96/G99) and 4+4 SoCs, top 2 cores (cpu6, cpu7)
+        // are guaranteed big/prime performance cores.
+        if perf_cores_mask == 0 && total_cores >= 8 {
+            perf_cores_mask = (1u64 << 6) | (1u64 << 7);
+            perf_core_count = 2;
+            if let Some(c) = cores.get_mut(6) { c.is_performance = true; }
+            if let Some(c) = cores.get_mut(7) { c.is_performance = true; }
+        } else if perf_cores_mask == 0 && total_cores > 1 {
             let start = total_cores / 2;
             for id in start..total_cores {
                 perf_cores_mask |= 1u64 << id;

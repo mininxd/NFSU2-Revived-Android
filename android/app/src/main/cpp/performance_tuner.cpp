@@ -46,6 +46,18 @@ void initTopology() {
             }
             std::fclose(fp);
         }
+        if (freq == 0) {
+            std::snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpu_capacity", i);
+            fp = std::fopen(path, "r");
+            if (fp) {
+                unsigned long cap = 0;
+                if (std::fscanf(fp, "%lu", &cap) == 1) {
+                    freq = cap * 1000;
+                    if (freq > max_seen_freq) max_seen_freq = freq;
+                }
+                std::fclose(fp);
+            }
+        }
         core_freqs.push_back({i, freq});
     }
 
@@ -62,25 +74,47 @@ void initTopology() {
         }
     }
 
-    // Fallback if sysfs cpuinfo_max_freq is inaccessible
+    // Secondary detection: Parse /proc/cpuinfo (always permitted by SELinux on Android 14)
+    if (s_perf_cores_count == 0) {
+        FILE* cpuinfo = std::fopen("/proc/cpuinfo", "r");
+        if (cpuinfo) {
+            char line[256];
+            int cur_cpu = -1;
+            while (std::fgets(line, sizeof(line), cpuinfo)) {
+                if (std::strncmp(line, "processor", 9) == 0) {
+                    char* colon = std::strchr(line, ':');
+                    if (colon) cur_cpu = std::atoi(colon + 1);
+                } else if (std::strncmp(line, "CPU part", 8) == 0 && cur_cpu >= 0 && cur_cpu < s_total_cores) {
+                    char* colon = std::strchr(line, ':');
+                    if (colon) {
+                        unsigned long part = std::strtoul(colon + 1, nullptr, 16);
+                        bool is_little = (part == 0xd03 || part == 0xd05 || part == 0xd46 || part == 0xd80);
+                        if (part >= 0xd08 && !is_little) {
+                            CPU_SET(cur_cpu, &s_perf_mask);
+                            ++s_perf_cores_count;
+                        } else {
+                            CPU_SET(cur_cpu, &s_little_mask);
+                        }
+                    }
+                }
+            }
+            std::fclose(cpuinfo);
+        }
+    }
+
+    // Fallback for 8-core SoCs (cores 6 and 7 guaranteed big cores on 2+6, 4+4, 1+3+4)
     if (s_perf_cores_count == 0) {
         if (s_total_cores >= 8) {
-            // Standard octa-core big.LITTLE: upper 4 cores are performance (e.g. 4+4 or 4+3+1)
-            for (int i = 4; i < s_total_cores; ++i) {
-                CPU_SET(i, &s_perf_mask);
-                ++s_perf_cores_count;
-            }
-            for (int i = 0; i < 4; ++i) {
-                CPU_SET(i, &s_little_mask);
-            }
+            CPU_SET(6, &s_perf_mask);
+            CPU_SET(7, &s_perf_mask);
+            s_perf_cores_count = 2;
+            for (int i = 0; i < 6; ++i) CPU_SET(i, &s_little_mask);
         } else if (s_total_cores >= 4) {
             for (int i = s_total_cores / 2; i < s_total_cores; ++i) {
                 CPU_SET(i, &s_perf_mask);
                 ++s_perf_cores_count;
             }
-            for (int i = 0; i < s_total_cores / 2; ++i) {
-                CPU_SET(i, &s_little_mask);
-            }
+            for (int i = 0; i < s_total_cores / 2; ++i) CPU_SET(i, &s_little_mask);
         } else {
             s_perf_mask = s_all_mask;
             s_perf_cores_count = s_total_cores;

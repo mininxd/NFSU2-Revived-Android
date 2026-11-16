@@ -1,5 +1,6 @@
 # Guest functions whose body is replaced by hand-written C (src/runtime/overrides.c).
 # run_lift.py emits sub_<VA> as a call into recomp_lookup_manual for each one.
 # VA        reason
+0x005C68D0  Bleach bypass: replace 3-pass ping-pong render targets with hardware tone curve
 0x006F5FC5  Cyrix probe (sahf/div/lahf): DIV flags are undefined and not modelled
 0x0075CFD0  CRT memcpy/memmove: computed jumps into unrolled blocks are not all lifted entries

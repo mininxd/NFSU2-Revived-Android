@@ -943,6 +943,7 @@ extern "C" recomp_func_t recomp_lookup(uint32_t va) {
     // Avoid an always-failing hash probe on every native method call. The
     // table constructor checks that no lifted module occupies this range.
     if(va-0x7c000000u<0x04000000u)return nullptr;
+    if(auto ov = nfs_override_lookup(va)) return ov;
     static const DispatchHash hash;
     return hash.find(va);
 }

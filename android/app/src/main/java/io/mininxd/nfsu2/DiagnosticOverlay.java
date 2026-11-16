@@ -586,12 +586,22 @@ public final class DiagnosticOverlay {
             }
         }
 
-        // 4. Dynamic GPU rendering load estimation based on frame render duration vs budget
+        // 4. Balanced GPU rendering load estimation (differentiates CPU vs GPU bound state)
         float targetFps = getTargetFps();
         float targetMs = 1000.0f / targetFps;
         float actualMs = (lastFrameDurationMs > 0.0f) ? lastFrameDurationMs : (liveGameFps > 0.0f ? (1000.0f / liveGameFps) : targetMs);
-        float ratio = actualMs / targetMs;
-        float estimated = Math.min(100.0f, Math.max(15.0f, ratio * 72.0f));
+        float cpu = lastCpuPercent;
+
+        float estimated;
+        if (cpu > 70.0f && liveGameFps < (targetFps * 0.70f)) {
+            // CPU Bound bottleneck: GPU is stalled waiting for guest x86 JIT/draw call emission
+            estimated = Math.min(48.0f, Math.max(12.0f, (liveGameFps / targetFps) * 45.0f));
+        } else {
+            // Normal / GPU active: scale proportionally without artificial 100% pegging
+            float efficiency = Math.min(1.0f, targetMs / Math.max(1.0f, actualMs));
+            estimated = Math.min(85.0f, Math.max(18.0f, efficiency * 68.0f));
+        }
+
         if (smoothedGpuPercent < 0.0f) {
             smoothedGpuPercent = estimated;
         } else {

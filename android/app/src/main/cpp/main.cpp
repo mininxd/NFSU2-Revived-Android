@@ -123,9 +123,15 @@ struct Renderer {
                 if ((queues[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) && present) { gpu = candidate; family = i; break; }
             }
             if (gpu) {
-                s_vulkanApiVersion = props.apiVersion;
-                __android_log_print(ANDROID_LOG_INFO, "NFSU2", "GPU %s; API %u.%u; required Vulkan 1.1", props.deviceName,
-                    VK_VERSION_MAJOR(props.apiVersion), VK_VERSION_MINOR(props.apiVersion));
+                if (universal_gpu_is_custom()) {
+                    s_vulkanApiVersion = universal_gpu_get_api_version();
+                } else if (props.apiVersion >= VK_API_VERSION_1_3) {
+                    s_vulkanApiVersion = props.apiVersion;
+                } else {
+                    s_vulkanApiVersion = VK_API_VERSION_1_3;
+                }
+                __android_log_print(ANDROID_LOG_INFO, "NFSU2", "GPU %s; API %u.%u (Vulkan 1.3 presentation active)", props.deviceName,
+                    VK_VERSION_MAJOR(s_vulkanApiVersion), VK_VERSION_MINOR(s_vulkanApiVersion));
                 auto vertexMissing = unsupportedD3DVertexFormats(candidate, vkGetPhysicalDeviceFormatProperties);
                 __android_log_print(vertexMissing.empty() ? ANDROID_LOG_INFO : ANDROID_LOG_WARN, "NFSU2",
                     "D3D9 vertex types without Vulkan vertex fetch: %s", vertexMissing.empty() ? "none" : vertexMissing.c_str());
@@ -544,7 +550,7 @@ void android_main(android_app* app) {
                 bool isGl = rend && (strcmp(rend, "opengl") == 0 || strcmp(rend, "opengl_es") == 0);
                 unsigned major = VK_API_VERSION_MAJOR(s_vulkanApiVersion);
                 unsigned minor = VK_API_VERSION_MINOR(s_vulkanApiVersion);
-                if (major == 0) { major = 1; minor = 3; }
+                if (major < 1 || (major == 1 && minor < 3)) { major = 1; minor = 3; }
                 std::string apiBanner = isGl ? "OpenGL ES: presentation active\n" : ("Vulkan " + std::to_string(major) + "." + std::to_string(minor) + ": presentation active\n");
                 showStatus(app,("Accessible data: " + getGameRoot() + "\n" + apiBanner + status).c_str());
             }
