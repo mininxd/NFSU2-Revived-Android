@@ -102,19 +102,15 @@ void initTopology() {
         }
     }
 
-    // Fallback for 8-core SoCs (cores 6 and 7 guaranteed big cores on 2+6, 4+4, 1+3+4)
+    // Universal multi-core fallback: upper half of CPU cores
     if (s_perf_cores_count == 0) {
-        if (s_total_cores >= 8) {
-            CPU_SET(6, &s_perf_mask);
-            CPU_SET(7, &s_perf_mask);
-            s_perf_cores_count = 2;
-            for (int i = 0; i < 6; ++i) CPU_SET(i, &s_little_mask);
-        } else if (s_total_cores >= 4) {
-            for (int i = s_total_cores / 2; i < s_total_cores; ++i) {
+        if (s_total_cores >= 4) {
+            int start = s_total_cores / 2;
+            for (int i = start; i < s_total_cores; ++i) {
                 CPU_SET(i, &s_perf_mask);
                 ++s_perf_cores_count;
             }
-            for (int i = 0; i < s_total_cores / 2; ++i) CPU_SET(i, &s_little_mask);
+            for (int i = 0; i < start; ++i) CPU_SET(i, &s_little_mask);
         } else {
             s_perf_mask = s_all_mask;
             s_perf_cores_count = s_total_cores;

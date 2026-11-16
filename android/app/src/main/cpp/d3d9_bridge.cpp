@@ -24,7 +24,12 @@ extern "C" IDirect3D9* Direct3DCreate9(UINT sdk);
 extern "C" void dxvkAndroidSetWindow(ANativeWindow* window);
 extern "C" HWND dxvkAndroidGetWindowHandle();
 extern "C" void dxvkAndroidSetRenderSize(uint32_t width,uint32_t height);
-void setD3D9RenderSize(unsigned width,unsigned height){dxvkAndroidSetRenderSize(width,height);}
+static std::atomic<uint32_t> s_targetRenderWidth{0}, s_targetRenderHeight{0};
+void setD3D9RenderSize(unsigned width,unsigned height){
+    s_targetRenderWidth = width;
+    s_targetRenderHeight = height;
+    dxvkAndroidSetRenderSize(width,height);
+}
 #ifndef __ANDROID__
 extern "C" ANativeWindow* dxvkCreateTestWindow();
 extern "C" void dxvkDestroyTestWindow(ANativeWindow* window);
@@ -123,7 +128,11 @@ uint32_t hostBackBufferCount(uint32_t requested){
 }
 D3DPRESENT_PARAMETERS presentation(uint32_t address){
     auto p=static_cast<const uint32_t*>(pointer(address));if(!p)throw std::runtime_error("Null D3D9 presentation parameters");
-    D3DPRESENT_PARAMETERS result{};result.BackBufferWidth=p[0];result.BackBufferHeight=p[1];result.BackBufferFormat=static_cast<D3DFORMAT>(p[2]);result.BackBufferCount=hostBackBufferCount(p[3]);
+    D3DPRESENT_PARAMETERS result{};
+    uint32_t targetW = s_targetRenderWidth.load(), targetH = s_targetRenderHeight.load();
+    result.BackBufferWidth=(targetW>0)?targetW:p[0];
+    result.BackBufferHeight=(targetH>0)?targetH:p[1];
+    result.BackBufferFormat=static_cast<D3DFORMAT>(p[2]);result.BackBufferCount=hostBackBufferCount(p[3]);
     // Mobile GPUs: Clamp MultiSampleType to NONE to eliminate broken tile-based MSAA resolves (Issue #67)
     result.MultiSampleType=D3DMULTISAMPLE_NONE;result.MultiSampleQuality=0;result.SwapEffect=static_cast<D3DSWAPEFFECT>(p[6]);result.hDeviceWindow=dxvkAndroidGetWindowHandle();
     result.Windowed=p[8];result.EnableAutoDepthStencil=p[9];result.AutoDepthStencilFormat=static_cast<D3DFORMAT>(p[10]);result.Flags=p[11];result.FullScreen_RefreshRateInHz=p[12];result.PresentationInterval=D3DPRESENT_INTERVAL_IMMEDIATE;return result;
@@ -359,7 +368,11 @@ uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumen
             surfaceRequested=true;auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(10);
             while(!surfaceAvailable){if(std::chrono::steady_clock::now()>deadline)throw std::runtime_error("Android surface handover timed out");std::this_thread::sleep_for(std::chrono::milliseconds(1));}
             auto window=dxvkAndroidGetWindowHandle();if(!window)return D3DERR_DEVICELOST;
-            D3DPRESENT_PARAMETERS parameters{};parameters.BackBufferWidth=p[0];parameters.BackBufferHeight=p[1];parameters.BackBufferFormat=static_cast<D3DFORMAT>(p[2]);parameters.BackBufferCount=hostBackBufferCount(p[3]);
+            uint32_t targetW = s_targetRenderWidth.load(), targetH = s_targetRenderHeight.load();
+            D3DPRESENT_PARAMETERS parameters{};
+            parameters.BackBufferWidth=(targetW>0)?targetW:p[0];
+            parameters.BackBufferHeight=(targetH>0)?targetH:p[1];
+            parameters.BackBufferFormat=static_cast<D3DFORMAT>(p[2]);parameters.BackBufferCount=hostBackBufferCount(p[3]);
             // Mobile GPUs: Clamp MultiSampleType to NONE to eliminate broken tile-based MSAA resolves (Issue #67)
             parameters.MultiSampleType=D3DMULTISAMPLE_NONE;parameters.MultiSampleQuality=0;parameters.SwapEffect=static_cast<D3DSWAPEFFECT>(p[6]);parameters.hDeviceWindow=window;
             parameters.Windowed=p[8];parameters.EnableAutoDepthStencil=p[9];parameters.AutoDepthStencilFormat=static_cast<D3DFORMAT>(p[10]);parameters.Flags=p[11];parameters.FullScreen_RefreshRateInHz=p[12];parameters.PresentationInterval=D3DPRESENT_INTERVAL_IMMEDIATE;

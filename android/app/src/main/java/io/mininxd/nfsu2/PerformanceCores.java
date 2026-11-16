@@ -180,15 +180,10 @@ public final class PerformanceCores {
         }
 
         if (mask == 0) {
-            // Intelligent fallback: On octa-core 2+6 (e.g. Helio G96/G99) and 4+4 / 1+3+4 SoCs,
-            // top 2 cores (cpu6, cpu7) are guaranteed big/prime performance cores.
-            if (totalCores >= 8) {
-                mask = (1L << 6) | (1L << 7);
-            } else {
-                int start = Math.max(1, totalCores / 2);
-                for (int i = start; i < totalCores; i++) {
-                    mask |= (1L << i);
-                }
+            // Universal fallback: upper half of CPU cores
+            int start = Math.max(1, totalCores / 2);
+            for (int i = start; i < totalCores; i++) {
+                mask |= (1L << i);
             }
         }
         return mask;

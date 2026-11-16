@@ -1084,8 +1084,7 @@ public final class LauncherActivity extends Activity {
     // ---- Launch ----------------------------------------------------------------------------------------
 
     private void play() {
-        if (android.os.Process.is64Bit() && GpuDrivers.selected(this) != null) probeDriver(true);
-        else launch();
+        launch();
     }
 
     private void launch() {

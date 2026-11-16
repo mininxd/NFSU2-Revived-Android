@@ -1017,10 +1017,13 @@ void configureAndroidResolutionModes(){
 }
 extern "C" int nfs_android_resolution(){
     uint32_t width=renderWidth.load(),height=renderHeight.load();if(!width||!height)return 0;
-    if(firstGameResolution){write32(0x870d1c,guestActiveResolutionSlot);firstGameResolution=false;}
-    uint32_t index=read32(0x870d1c);if(index>=guestRenderModes.size())throw GuestStop("Invalid Android resolution index");
-    width=read32(0x800538+index*4);height=read32(0x800550+index*4);
-    if(!width||!height){width=guestRenderModes[index].width;height=guestRenderModes[index].height;}
+    if(guestActiveResolutionSlot<guestRenderModes.size()){
+        write32(0x870d1c,guestActiveResolutionSlot);
+    }
+    uint32_t index=read32(0x870d1c);if(index>=guestRenderModes.size())index=guestActiveResolutionSlot;
+    if(index<guestRenderModes.size()&&guestRenderModes[index].width&&guestRenderModes[index].height){
+        width=guestRenderModes[index].width;height=guestRenderModes[index].height;
+    }
     if(!memory->writable(arg(0),4)||!memory->writable(arg(1),4))throw GuestStop("Invalid guest resolution outputs");
     write32(arg(0),width);write32(arg(1),height);ret(0,2);nfs_widescreen_set_resolution(width,height);
     NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Guest render resolution %ux%u slot=%u via original selector",width,height,index);
