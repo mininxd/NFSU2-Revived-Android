@@ -9,24 +9,41 @@
 
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 
-pub const DEFAULT_CULL_MARGIN: f32 = 4.0; // 4.0m margin for object bounding radius
+pub const DEFAULT_CULL_MARGIN: f32 = 6.0; // 6.0m margin for object bounding radius
+pub const DEFAULT_BACK_CULL_DISTANCE: f32 = 50.0; // 50.0m back-cull distance behind camera
 
 pub struct CameraCullEngine {
     enabled: AtomicBool,
-    cull_margin: AtomicU32,   // f32 bits
-    far_distance: AtomicU32,  // f32 bits
+    cull_margin: AtomicU32,       // f32 bits
+    far_distance: AtomicU32,      // f32 bits
+    back_cull_dist: AtomicU32,    // f32 bits (50m default)
     // Camera world position & forward direction vector
-    cam_pos: [AtomicU32; 3],  // (x, y, z) f32 bits
-    cam_fwd: [AtomicU32; 3],  // (fx, fy, fz) f32 bits
+    cam_pos: [AtomicU32; 3],      // (x, y, z) f32 bits
+    cam_fwd: [AtomicU32; 3],      // (fx, fy, fz) f32 bits
     cam_valid: AtomicBool,
-    // D3DTS_VIEW column 2: (V02, V12, V22, V32) for eye-space depth evaluation
+    // D3DTS_VIEW columns in eye space:
+    // col 0: (V00, V10, V20, V30) - eye X (right)
+    v00: AtomicU32,
+    v10: AtomicU32,
+    v20: AtomicU32,
+    v30: AtomicU32,
+    // col 1: (V01, V11, V21, V31) - eye Y (up)
+    v01: AtomicU32,
+    v11: AtomicU32,
+    v21: AtomicU32,
+    v31: AtomicU32,
+    // col 2: (V02, V12, V22, V32) - eye Z (forward)
     v02: AtomicU32,
     v12: AtomicU32,
     v22: AtomicU32,
     v32: AtomicU32,
     view_valid: AtomicBool,
+    // Projection scale factors (P00, P11) for FOV / lateral test
+    p00: AtomicU32,
+    p11: AtomicU32,
+    proj_valid: AtomicBool,
     // Current D3DTS_WORLD translation
-    world_pos: [AtomicU32; 3], // (x, y, z) f32 bits
+    world_pos: [AtomicU32; 3],    // (x, y, z) f32 bits
     world_is_identity: AtomicBool,
     world_valid: AtomicBool,
     // State flags
@@ -45,14 +62,26 @@ impl CameraCullEngine {
             enabled: AtomicBool::new(true),
             cull_margin: AtomicU32::new(DEFAULT_CULL_MARGIN.to_bits()),
             far_distance: AtomicU32::new(0), // 0 = unlimited
+            back_cull_dist: AtomicU32::new(DEFAULT_BACK_CULL_DISTANCE.to_bits()),
             cam_pos: [AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0)],
             cam_fwd: [AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0)],
             cam_valid: AtomicBool::new(false),
+            v00: AtomicU32::new(0),
+            v10: AtomicU32::new(0),
+            v20: AtomicU32::new(0),
+            v30: AtomicU32::new(0),
+            v01: AtomicU32::new(0),
+            v11: AtomicU32::new(0),
+            v21: AtomicU32::new(0),
+            v31: AtomicU32::new(0),
             v02: AtomicU32::new(0),
             v12: AtomicU32::new(0),
             v22: AtomicU32::new(0),
             v32: AtomicU32::new(0),
             view_valid: AtomicBool::new(false),
+            p00: AtomicU32::new(0),
+            p11: AtomicU32::new(0),
+            proj_valid: AtomicBool::new(false),
             world_pos: [AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0)],
             world_is_identity: AtomicBool::new(true),
             world_valid: AtomicBool::new(false),
@@ -95,6 +124,16 @@ impl CameraCullEngine {
         f32::from_bits(self.far_distance.load(Ordering::Relaxed))
     }
 
+    #[inline]
+    pub fn set_back_cull_distance(&self, dist: f32) {
+        self.back_cull_dist.store(dist.to_bits(), Ordering::Relaxed);
+    }
+
+    #[inline]
+    pub fn get_back_cull_distance(&self) -> f32 {
+        f32::from_bits(self.back_cull_dist.load(Ordering::Relaxed))
+    }
+
     /// Updates the player camera position and forward direction vector from guest memory.
     pub fn update_camera(&self, pos: [f32; 3], fwd: [f32; 3]) {
         self.cam_pos[0].store(pos[0].to_bits(), Ordering::Relaxed);
@@ -108,8 +147,21 @@ impl CameraCullEngine {
         self.cam_valid.store(true, Ordering::Release);
     }
 
-    /// Updates D3DTS_VIEW matrix column 2 (Z axis in camera space).
+    /// Updates D3DTS_VIEW matrix columns (eye space axes and translation).
     pub fn update_view_matrix(&self, m: &[f32; 16]) {
+        // Col 0: Right vector (X in eye space)
+        self.v00.store(m[0].to_bits(), Ordering::Relaxed);
+        self.v10.store(m[4].to_bits(), Ordering::Relaxed);
+        self.v20.store(m[8].to_bits(), Ordering::Relaxed);
+        self.v30.store(m[12].to_bits(), Ordering::Relaxed);
+
+        // Col 1: Up vector (Y in eye space)
+        self.v01.store(m[1].to_bits(), Ordering::Relaxed);
+        self.v11.store(m[5].to_bits(), Ordering::Relaxed);
+        self.v21.store(m[9].to_bits(), Ordering::Relaxed);
+        self.v31.store(m[13].to_bits(), Ordering::Relaxed);
+
+        // Col 2: Forward vector (Z in eye space)
         self.v02.store(m[2].to_bits(), Ordering::Relaxed);
         self.v12.store(m[6].to_bits(), Ordering::Relaxed);
         self.v22.store(m[10].to_bits(), Ordering::Relaxed);
@@ -129,6 +181,14 @@ impl CameraCullEngine {
         // Orthographic has m[11] == 0.0 and m[15] == 1.0.
         let ortho = (m[11].abs() < 1e-4) && ((m[15] - 1.0).abs() < 1e-3);
         self.is_ortho.store(ortho, Ordering::Release);
+
+        if !ortho && m[0].abs() > 1e-4 && m[5].abs() > 1e-4 {
+            self.p00.store(m[0].to_bits(), Ordering::Relaxed);
+            self.p11.store(m[5].to_bits(), Ordering::Relaxed);
+            self.proj_valid.store(true, Ordering::Release);
+        } else {
+            self.proj_valid.store(false, Ordering::Release);
+        }
     }
 
     /// Updates D3DTS_WORLD matrix translation components.
@@ -165,7 +225,13 @@ impl CameraCullEngine {
 
     /// Tests whether the impending draw call should be culled.
     ///
-    /// Returns `true` if the draw call is strictly behind the camera or out of range.
+    /// Evaluates geometry dynamically relative to the active camera:
+    /// 1. Behind camera: culled if further than back_cull_distance (50m default).
+    ///    When the player looks back, the camera direction dynamically flips:
+    ///    the car's rear becomes in front (drawn up to draw distance), and the front
+    ///    becomes behind (culled beyond 50m).
+    /// 2. In front of camera: culled if beyond selected draw distance preset (far_distance).
+    /// 3. Off-screen frustum: culled if outside lateral field of view (not displayed).
     #[inline]
     pub fn test_draw(&self) -> bool {
         self.total_draws.fetch_add(1, Ordering::Relaxed);
@@ -190,13 +256,34 @@ impl CameraCullEngine {
 
         let margin = self.get_margin();
         let far_dist = self.get_far_distance();
+        let back_dist = self.get_back_cull_distance();
 
         let wx = f32::from_bits(self.world_pos[0].load(Ordering::Relaxed));
         let wy = f32::from_bits(self.world_pos[1].load(Ordering::Relaxed));
         let wz = f32::from_bits(self.world_pos[2].load(Ordering::Relaxed));
 
-        // Evaluate distance along camera viewing vector
-        let fwd_distance = if self.cam_valid.load(Ordering::Relaxed) {
+        // Evaluate eye-space coordinates relative to active camera
+        let (fwd_distance, eye_x, eye_y, has_eye_xy) = if self.view_valid.load(Ordering::Relaxed) {
+            let v02 = f32::from_bits(self.v02.load(Ordering::Relaxed));
+            let v12 = f32::from_bits(self.v12.load(Ordering::Relaxed));
+            let v22 = f32::from_bits(self.v22.load(Ordering::Relaxed));
+            let v32 = f32::from_bits(self.v32.load(Ordering::Relaxed));
+            let ez = wx * v02 + wy * v12 + wz * v22 + v32;
+
+            let v00 = f32::from_bits(self.v00.load(Ordering::Relaxed));
+            let v10 = f32::from_bits(self.v10.load(Ordering::Relaxed));
+            let v20 = f32::from_bits(self.v20.load(Ordering::Relaxed));
+            let v30 = f32::from_bits(self.v30.load(Ordering::Relaxed));
+            let ex = wx * v00 + wy * v10 + wz * v20 + v30;
+
+            let v01 = f32::from_bits(self.v01.load(Ordering::Relaxed));
+            let v11 = f32::from_bits(self.v11.load(Ordering::Relaxed));
+            let v21 = f32::from_bits(self.v21.load(Ordering::Relaxed));
+            let v31 = f32::from_bits(self.v31.load(Ordering::Relaxed));
+            let ey = wx * v01 + wy * v11 + wz * v21 + v31;
+
+            (ez, ex, ey, true)
+        } else if self.cam_valid.load(Ordering::Relaxed) {
             let cx = f32::from_bits(self.cam_pos[0].load(Ordering::Relaxed));
             let cy = f32::from_bits(self.cam_pos[1].load(Ordering::Relaxed));
             let cz = f32::from_bits(self.cam_pos[2].load(Ordering::Relaxed));
@@ -205,28 +292,40 @@ impl CameraCullEngine {
             let fy = f32::from_bits(self.cam_fwd[1].load(Ordering::Relaxed));
             let fz = f32::from_bits(self.cam_fwd[2].load(Ordering::Relaxed));
 
-            (wx - cx) * fx + (wy - cy) * fy + (wz - cz) * fz
-        } else if self.view_valid.load(Ordering::Relaxed) {
-            let v02 = f32::from_bits(self.v02.load(Ordering::Relaxed));
-            let v12 = f32::from_bits(self.v12.load(Ordering::Relaxed));
-            let v22 = f32::from_bits(self.v22.load(Ordering::Relaxed));
-            let v32 = f32::from_bits(self.v32.load(Ordering::Relaxed));
-
-            wx * v02 + wy * v12 + wz * v22 + v32
+            let ez = (wx - cx) * fx + (wy - cy) * fy + (wz - cz) * fz;
+            (ez, 0.0, 0.0, false)
         } else {
             return false;
         };
 
-        // 1. Back-Cull Check: Object is strictly behind player camera plane
-        if fwd_distance < -margin {
+        // 1. Dynamic Back-Culling Check:
+        // Object is behind the active camera viewing vector by more than back_dist (50M).
+        // Preserves near-field rear geometry (-50m to 0m) for trailing cars, shadows, and smoke.
+        if fwd_distance < -back_dist {
             self.culled_draws.fetch_add(1, Ordering::Relaxed);
             return true;
         }
 
-        // 2. Far Horizon Check: Object is beyond the configured draw distance
+        // 2. Far Horizon Check:
+        // Object is in front of camera beyond the user's selected draw distance preset.
         if far_dist > 0.0 && fwd_distance > (far_dist + margin) {
             self.culled_draws.fetch_add(1, Ordering::Relaxed);
             return true;
+        }
+
+        // 3. Lateral / Frustum Check:
+        // Object is in front of camera but outside the display view angle (not displayed on screen).
+        if has_eye_xy && self.proj_valid.load(Ordering::Relaxed) && fwd_distance > margin {
+            let p00 = f32::from_bits(self.p00.load(Ordering::Relaxed));
+            let p11 = f32::from_bits(self.p11.load(Ordering::Relaxed));
+            if p00 > 0.01 && p11 > 0.01 {
+                let limit_x = (fwd_distance / p00) * 1.45 + (margin * 2.5);
+                let limit_y = (fwd_distance / p11) * 1.45 + (margin * 2.5);
+                if eye_x.abs() > limit_x || eye_y.abs() > limit_y {
+                    self.culled_draws.fetch_add(1, Ordering::Relaxed);
+                    return true;
+                }
+            }
         }
 
         false
@@ -256,6 +355,16 @@ pub unsafe extern "C" fn nfs_camera_cull_set_enabled(enabled: i32) {
 #[no_mangle]
 pub unsafe extern "C" fn nfs_camera_cull_is_enabled() -> i32 {
     if GLOBAL_CAMERA_CULL.is_enabled() { 1 } else { 0 }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_camera_cull_set_back_distance(dist: f32) {
+    GLOBAL_CAMERA_CULL.set_back_cull_distance(dist);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_camera_cull_get_back_distance() -> f32 {
+    GLOBAL_CAMERA_CULL.get_back_cull_distance()
 }
 
 #[no_mangle]
@@ -359,10 +468,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_camera_culling_front_and_back() {
+    fn test_camera_culling_front_and_back_50m() {
         let engine = CameraCullEngine::new();
         engine.set_enabled(true);
-        engine.set_margin(4.0);
+        engine.set_margin(6.0);
+        engine.set_back_cull_distance(50.0);
 
         // Camera at origin, pointing along +Z
         engine.update_camera([0.0, 0.0, 0.0], [0.0, 0.0, 1.0]);
@@ -374,19 +484,55 @@ mod tests {
         engine.update_world_matrix(&world_front);
         assert!(!engine.test_draw());
 
-        // 2. Object behind: Z = -15.0m (< -4.0m margin) -> Should CULL
-        let mut world_back = [0.0f32; 16];
-        world_back[0] = 1.0; world_back[5] = 1.0; world_back[10] = 1.0; world_back[15] = 1.0;
-        world_back[12] = 0.0; world_back[13] = 0.0; world_back[14] = -15.0;
-        engine.update_world_matrix(&world_back);
-        assert!(engine.test_draw());
-
-        // 3. Object right at edge of margin: Z = -3.5m (within 4m margin) -> Should NOT cull
-        let mut world_margin = [0.0f32; 16];
-        world_margin[0] = 1.0; world_margin[5] = 1.0; world_margin[10] = 1.0; world_margin[15] = 1.0;
-        world_margin[12] = 0.0; world_margin[13] = 0.0; world_margin[14] = -3.5;
-        engine.update_world_matrix(&world_margin);
+        // 2. Object trailing behind camera within 50m: Z = -30.0m -> Should NOT cull (near field kept)
+        let mut world_near_back = [0.0f32; 16];
+        world_near_back[0] = 1.0; world_near_back[5] = 1.0; world_near_back[10] = 1.0; world_near_back[15] = 1.0;
+        world_near_back[12] = 0.0; world_near_back[13] = 0.0; world_near_back[14] = -30.0;
+        engine.update_world_matrix(&world_near_back);
         assert!(!engine.test_draw());
+
+        // 3. Object further behind than 50m: Z = -60.0m (< -50m) -> Should CULL
+        let mut world_far_back = [0.0f32; 16];
+        world_far_back[0] = 1.0; world_far_back[5] = 1.0; world_far_back[10] = 1.0; world_far_back[15] = 1.0;
+        world_far_back[12] = 0.0; world_far_back[13] = 0.0; world_far_back[14] = -60.0;
+        engine.update_world_matrix(&world_far_back);
+        assert!(engine.test_draw());
+    }
+
+    #[test]
+    fn test_dynamic_look_back_culling() {
+        let engine = CameraCullEngine::new();
+        engine.set_enabled(true);
+        engine.set_margin(6.0);
+        engine.set_back_cull_distance(50.0);
+        engine.set_far_distance(175.0); // 175m draw distance
+
+        // Player camera looking backwards along -Z
+        // Standard D3D view matrix looking backwards:
+        let mut view_look_back = [0.0f32; 16];
+        view_look_back[0] = -1.0; // X flipped
+        view_look_back[5] = 1.0;
+        view_look_back[10] = -1.0; // Z points along -Z (behind car)
+        view_look_back[15] = 1.0;
+        engine.update_view_matrix(&view_look_back);
+
+        // 1. Object behind car: Z = -60.0m
+        // In view space: ez = 0*0 + 0*0 + (-60.0)*(-1.0) = +60.0m (IN FRONT of backwards camera!)
+        // Should NOT cull, it's displayed on screen!
+        let mut world_behind_car = [0.0f32; 16];
+        world_behind_car[0] = 1.0; world_behind_car[5] = 1.0; world_behind_car[10] = 1.0; world_behind_car[15] = 1.0;
+        world_behind_car[14] = -60.0;
+        engine.update_world_matrix(&world_behind_car);
+        assert!(!engine.test_draw());
+
+        // 2. Object in front of car: Z = +60.0m
+        // In view space: ez = 0*0 + 0*0 + (60.0)*(-1.0) = -60.0m (BEHIND backwards camera, > 50m!)
+        // Should CULL dynamically!
+        let mut world_front_of_car = [0.0f32; 16];
+        world_front_of_car[0] = 1.0; world_front_of_car[5] = 1.0; world_front_of_car[10] = 1.0; world_front_of_car[15] = 1.0;
+        world_front_of_car[14] = 60.0;
+        engine.update_world_matrix(&world_front_of_car);
+        assert!(engine.test_draw());
     }
 
     #[test]

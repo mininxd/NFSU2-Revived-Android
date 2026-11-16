@@ -297,22 +297,8 @@ void nfs_widescreen_apply_frame_rate(void) {
         }
     }
 
-    /* Forward-only rendering & rear-view mirror suppression */
+    /* Dynamic camera tracking for culling engine */
     if (s_forward_culling) {
-        /* Force Rear-View Mirror option to 0 (off) */
-        if (MEM32(0x00870CF0u) != 0) {
-            MEM32(0x00870CF0u) = 0;
-        }
-        /* Clamp mirror/screen split mode: 1 = Single View (no rear mirror viewport) */
-        if (MEM32(0x008707E0u) == 2) {
-            MEM32(0x008707E0u) = 1;
-        }
-        /* Disable View 3 active byte (0x00832F38 = 0x00832DE0 + 3*0x70 + 8) */
-        uint32_t view3 = 0x00832DE0u + 3u * 0x70u;
-        if (view3 >= 0x10000u && view3 <= 0x7FFFF000u) {
-            *(volatile uint8_t *)(uintptr_t)(view3 + 8u) = 0;
-        }
-
         /* Forward player camera position and forward vector to Rust camera cull engine */
         uint32_t view1 = 0x00832DE0u + 1u * 0x70u;
         if (view1 >= 0x10000u && view1 <= 0x7FFFF000u) {

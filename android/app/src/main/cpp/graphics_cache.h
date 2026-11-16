@@ -60,6 +60,8 @@ float nfs_camera_stick_get_yaw(void);
 void nfs_camera_cull_set_enabled(int enabled);
 int nfs_camera_cull_is_enabled(void);
 void nfs_camera_cull_set_margin(float margin);
+void nfs_camera_cull_set_back_distance(float dist);
+float nfs_camera_cull_get_back_distance(void);
 void nfs_camera_cull_set_far_distance(float dist);
 float nfs_camera_cull_get_far_distance(void);
 void nfs_camera_cull_update_camera(float pos_x, float pos_y, float pos_z,

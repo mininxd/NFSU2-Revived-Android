@@ -109,10 +109,58 @@ typedef VkResult_t (*PFN_vkCreateGraphicsPipelines_t)(
     const void* pAllocator,
     VkPipeline_t* pPipelines);
 
+typedef struct {
+    uint32_t sType;
+    void* pNext;
+    VkPhysicalDeviceFeatures_compat_t features;
+} VkPhysicalDeviceFeatures2_compat_t;
+
+typedef struct {
+    uint32_t sType;
+    void* pNext;
+    uint32_t robustBufferAccess2;
+    uint32_t robustImageAccess2;
+    uint32_t nullDescriptor;
+} VkPhysicalDeviceRobustness2FeaturesEXT_compat_t;
+
+typedef struct {
+    uint32_t apiVersion;
+    uint32_t driverVersion;
+    uint32_t vendorID;
+    uint32_t deviceID;
+    uint32_t deviceType;
+    char deviceName[256];
+    uint8_t pipelineCacheUUID[16];
+    uint32_t limits[128];
+    uint32_t sparseProperties[5];
+} VkPhysicalDeviceProperties_compat_t;
+
+typedef struct {
+    char extensionName[256];
+    uint32_t specVersion;
+} VkExtensionProperties_compat_t;
+
+typedef void (*PFN_vkGetPhysicalDeviceProperties_t)(
+    VkPhysicalDevice_t physicalDevice,
+    VkPhysicalDeviceProperties_compat_t* pProperties);
+
+typedef void (*PFN_vkGetPhysicalDeviceFeatures2_t)(
+    VkPhysicalDevice_t physicalDevice,
+    VkPhysicalDeviceFeatures2_compat_t* pFeatures);
+
+typedef VkResult_t (*PFN_vkEnumerateDeviceExtensionProperties_t)(
+    VkPhysicalDevice_t physicalDevice,
+    const char* pLayerName,
+    uint32_t* pPropertyCount,
+    VkExtensionProperties_compat_t* pProperties);
+
 static PFN_vkGetInstanceProcAddr_t s_real_vkGetInstanceProcAddr = NULL;
 static PFN_vkGetDeviceProcAddr_t s_real_vkGetDeviceProcAddr = NULL;
 static PFN_vkCreateDevice_t s_real_vkCreateDevice = NULL;
 static PFN_vkGetPhysicalDeviceFeatures_t s_real_vkGetPhysicalDeviceFeatures = NULL;
+static PFN_vkGetPhysicalDeviceProperties_t s_real_vkGetPhysicalDeviceProperties = NULL;
+static PFN_vkGetPhysicalDeviceFeatures2_t s_real_vkGetPhysicalDeviceFeatures2 = NULL;
+static PFN_vkEnumerateDeviceExtensionProperties_t s_real_vkEnumerateDeviceExtensionProperties = NULL;
 static PFN_vkCreateGraphicsPipelines_t s_real_vkCreateGraphicsPipelines = NULL;
 
 static VkResult_t guarded_vkCreateDevice(
@@ -159,29 +207,129 @@ static VkResult_t guarded_vkCreateDevice(
         safeInfo.pEnabledFeatures = &safeFeatures;
     }
 
-    typedef struct {
-        uint32_t sType;
-        void* pNext;
-        uint32_t robustBufferAccess2;
-        uint32_t robustImageAccess2;
-        uint32_t nullDescriptor;
-    } VkPhysicalDeviceRobustness2FeaturesEXT_compat_t;
+    // Detect GPU vendor & properties
+    VkPhysicalDeviceProperties_compat_t props;
+    memset(&props, 0, sizeof(props));
+    if (s_real_vkGetPhysicalDeviceProperties) {
+        s_real_vkGetPhysicalDeviceProperties(physicalDevice, &props);
+    }
+    int is_adreno = (props.vendorID == 0x5143);
 
+    // Enumerate supported extensions
+    uint32_t ext_count = 0;
+    int has_robustness2 = 0;
+    int has_qcom_tile = 0;
+    int has_qcom_rp_transform = 0;
+    int has_qcom_rotated_copy = 0;
+
+    if (s_real_vkEnumerateDeviceExtensionProperties) {
+        s_real_vkEnumerateDeviceExtensionProperties(physicalDevice, NULL, &ext_count, NULL);
+        if (ext_count > 0) {
+            VkExtensionProperties_compat_t* ext_list = (VkExtensionProperties_compat_t*)malloc(ext_count * sizeof(VkExtensionProperties_compat_t));
+            if (ext_list) {
+                if (s_real_vkEnumerateDeviceExtensionProperties(physicalDevice, NULL, &ext_count, ext_list) == 0) {
+                    for (uint32_t i = 0; i < ext_count; ++i) {
+                        if (strcmp(ext_list[i].extensionName, "VK_EXT_robustness2") == 0) has_robustness2 = 1;
+                        if (strcmp(ext_list[i].extensionName, "VK_QCOM_tile_properties") == 0) has_qcom_tile = 1;
+                        if (strcmp(ext_list[i].extensionName, "VK_QCOM_render_pass_transform") == 0) has_qcom_rp_transform = 1;
+                        if (strcmp(ext_list[i].extensionName, "VK_QCOM_rotated_copy_commands") == 0) has_qcom_rotated_copy = 1;
+                    }
+                }
+                free(ext_list);
+            }
+        }
+    }
+
+    // Check robustBufferAccess2 support
+    uint32_t supp_rob2_buf = 0;
+    uint32_t supp_rob2_img = 0;
+    uint32_t supp_rob2_null = 0;
+    if (has_robustness2 && s_real_vkGetPhysicalDeviceFeatures2) {
+        VkPhysicalDeviceRobustness2FeaturesEXT_compat_t q_rob2;
+        memset(&q_rob2, 0, sizeof(q_rob2));
+        q_rob2.sType = 1000286000;
+        VkPhysicalDeviceFeatures2_compat_t q_feat2;
+        memset(&q_feat2, 0, sizeof(q_feat2));
+        q_feat2.sType = 1000059000;
+        q_feat2.pNext = &q_rob2;
+        s_real_vkGetPhysicalDeviceFeatures2(physicalDevice, &q_feat2);
+        supp_rob2_buf = q_rob2.robustBufferAccess2;
+        supp_rob2_img = q_rob2.robustImageAccess2;
+        supp_rob2_null = q_rob2.nullDescriptor;
+    }
+
+    // If robustBufferAccess2 is supported, force enable it in pNext chain
+    static VkPhysicalDeviceRobustness2FeaturesEXT_compat_t s_rob2_chain;
+    int found_rob2_in_pnext = 0;
     const void* cur_next = pCreateInfo->pNext;
     while (cur_next) {
         const uint32_t* header = (const uint32_t*)cur_next;
         if (header[0] == 1000286000 /* VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT */) {
-            const VkPhysicalDeviceRobustness2FeaturesEXT_compat_t* rob2 =
-                (const VkPhysicalDeviceRobustness2FeaturesEXT_compat_t*)cur_next;
+            VkPhysicalDeviceRobustness2FeaturesEXT_compat_t* rob2 =
+                (VkPhysicalDeviceRobustness2FeaturesEXT_compat_t*)cur_next;
+            if (supp_rob2_buf) {
+                rob2->robustBufferAccess2 = 1;
+            }
+            found_rob2_in_pnext = 1;
             __android_log_print(ANDROID_LOG_INFO, "NFSU2",
-                "Adreno/Vulkan: VK_EXT_robustness2 active in vkCreateDevice (robustBufferAccess2=%u, robustImageAccess2=%u, nullDescriptor=%u)",
+                "Adreno/Vulkan: VK_EXT_robustness2 active in pNext (robustBufferAccess2=%u, robustImageAccess2=%u, nullDescriptor=%u)",
                 rob2->robustBufferAccess2, rob2->robustImageAccess2, rob2->nullDescriptor);
             break;
         }
         cur_next = *((const void* const*)((const char*)cur_next + 8));
     }
 
-    return s_real_vkCreateDevice(physicalDevice, &safeInfo, pAllocator, pDevice);
+    if (!found_rob2_in_pnext && has_robustness2 && supp_rob2_buf) {
+        memset(&s_rob2_chain, 0, sizeof(s_rob2_chain));
+        s_rob2_chain.sType = 1000286000;
+        s_rob2_chain.pNext = (void*)safeInfo.pNext;
+        s_rob2_chain.robustBufferAccess2 = 1;
+        s_rob2_chain.robustImageAccess2 = supp_rob2_img;
+        s_rob2_chain.nullDescriptor = supp_rob2_null;
+        safeInfo.pNext = &s_rob2_chain;
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2",
+            "Adreno/Vulkan: chained VK_EXT_robustness2 into vkCreateDevice (robustBufferAccess2=1, nullDescriptor=%u)",
+            supp_rob2_null);
+    }
+
+    // Build extension list adding VK_EXT_robustness2 and Qualcomm Adreno extensions if supported
+    const char** new_exts = NULL;
+    uint32_t new_ext_count = safeInfo.enabledExtensionCount;
+    uint32_t max_exts = new_ext_count + 8;
+    new_exts = (const char**)malloc(max_exts * sizeof(const char*));
+    if (new_exts) {
+        for (uint32_t i = 0; i < safeInfo.enabledExtensionCount; ++i) {
+            new_exts[i] = safeInfo.ppEnabledExtensionNames[i];
+        }
+
+        #define ADD_EXT_IF_MISSING(name) do { \
+            int present = 0; \
+            for (uint32_t k = 0; k < new_ext_count; ++k) { \
+                if (strcmp(new_exts[k], name) == 0) { present = 1; break; } \
+            } \
+            if (!present) { \
+                new_exts[new_ext_count++] = name; \
+                __android_log_print(ANDROID_LOG_INFO, "NFSU2", "Adreno/Vulkan: Enabled device extension: %s", name); \
+            } \
+        } while (0)
+
+        if (has_robustness2 && supp_rob2_buf) {
+            ADD_EXT_IF_MISSING("VK_EXT_robustness2");
+        }
+        if (is_adreno) {
+            if (has_qcom_tile) ADD_EXT_IF_MISSING("VK_QCOM_tile_properties");
+            if (has_qcom_rp_transform) ADD_EXT_IF_MISSING("VK_QCOM_render_pass_transform");
+            if (has_qcom_rotated_copy) ADD_EXT_IF_MISSING("VK_QCOM_rotated_copy_commands");
+        }
+        #undef ADD_EXT_IF_MISSING
+
+        safeInfo.enabledExtensionCount = new_ext_count;
+        safeInfo.ppEnabledExtensionNames = new_exts;
+    }
+
+    VkResult_t create_res = s_real_vkCreateDevice(physicalDevice, &safeInfo, pAllocator, pDevice);
+    if (new_exts) free(new_exts);
+    return create_res;
 }
 
 static __thread sigjmp_buf s_powervr_pipeline_jmp_buf;
@@ -296,6 +444,17 @@ static PFN_vkVoidFunction_t powervr_hook_vkGetInstanceProcAddr(VkInstance_t inst
         if (s_real_vkGetInstanceProcAddr && !s_real_vkGetPhysicalDeviceFeatures) {
             s_real_vkGetPhysicalDeviceFeatures = (PFN_vkGetPhysicalDeviceFeatures_t)s_real_vkGetInstanceProcAddr(instance, "vkGetPhysicalDeviceFeatures");
         }
+        if (s_real_vkGetInstanceProcAddr && !s_real_vkGetPhysicalDeviceProperties) {
+            s_real_vkGetPhysicalDeviceProperties = (PFN_vkGetPhysicalDeviceProperties_t)s_real_vkGetInstanceProcAddr(instance, "vkGetPhysicalDeviceProperties");
+        }
+        if (s_real_vkGetInstanceProcAddr && !s_real_vkGetPhysicalDeviceFeatures2) {
+            s_real_vkGetPhysicalDeviceFeatures2 = (PFN_vkGetPhysicalDeviceFeatures2_t)s_real_vkGetInstanceProcAddr(instance, "vkGetPhysicalDeviceFeatures2");
+            if (!s_real_vkGetPhysicalDeviceFeatures2)
+                s_real_vkGetPhysicalDeviceFeatures2 = (PFN_vkGetPhysicalDeviceFeatures2_t)s_real_vkGetInstanceProcAddr(instance, "vkGetPhysicalDeviceFeatures2KHR");
+        }
+        if (s_real_vkGetInstanceProcAddr && !s_real_vkEnumerateDeviceExtensionProperties) {
+            s_real_vkEnumerateDeviceExtensionProperties = (PFN_vkEnumerateDeviceExtensionProperties_t)s_real_vkGetInstanceProcAddr(instance, "vkEnumerateDeviceExtensionProperties");
+        }
         return (PFN_vkVoidFunction_t)guarded_vkCreateDevice;
     }
     if (strcmp(pName, "vkCreateGraphicsPipelines") == 0) {
@@ -336,6 +495,13 @@ void install_powervr_fault_guard(void) {
         if (sys_cd) s_real_vkCreateDevice = sys_cd;
         PFN_vkGetPhysicalDeviceFeatures_t sys_gpf = (PFN_vkGetPhysicalDeviceFeatures_t)dlsym(libvulkan, "vkGetPhysicalDeviceFeatures");
         if (sys_gpf) s_real_vkGetPhysicalDeviceFeatures = sys_gpf;
+        PFN_vkGetPhysicalDeviceProperties_t sys_gpp = (PFN_vkGetPhysicalDeviceProperties_t)dlsym(libvulkan, "vkGetPhysicalDeviceProperties");
+        if (sys_gpp) s_real_vkGetPhysicalDeviceProperties = sys_gpp;
+        PFN_vkGetPhysicalDeviceFeatures2_t sys_gpf2 = (PFN_vkGetPhysicalDeviceFeatures2_t)dlsym(libvulkan, "vkGetPhysicalDeviceFeatures2");
+        if (!sys_gpf2) sys_gpf2 = (PFN_vkGetPhysicalDeviceFeatures2_t)dlsym(libvulkan, "vkGetPhysicalDeviceFeatures2KHR");
+        if (sys_gpf2) s_real_vkGetPhysicalDeviceFeatures2 = sys_gpf2;
+        PFN_vkEnumerateDeviceExtensionProperties_t sys_edep = (PFN_vkEnumerateDeviceExtensionProperties_t)dlsym(libvulkan, "vkEnumerateDeviceExtensionProperties");
+        if (sys_edep) s_real_vkEnumerateDeviceExtensionProperties = sys_edep;
         PFN_vkCreateGraphicsPipelines_t sys_cgp = (PFN_vkCreateGraphicsPipelines_t)dlsym(libvulkan, "vkCreateGraphicsPipelines");
         if (sys_cgp) s_real_vkCreateGraphicsPipelines = sys_cgp;
         PFN_vkGetDeviceProcAddr_t sys_gdpa = (PFN_vkGetDeviceProcAddr_t)dlsym(libvulkan, "vkGetDeviceProcAddr");
