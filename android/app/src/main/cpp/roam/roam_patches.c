@@ -129,7 +129,15 @@ void extraoptions_init_patches(void) {
     }
 }
 
-void extraoptions_frame_tick(int dumb_ai) {
+static int g_dumb_ai = 0;
+
+void extraoptions_set_dumb_ai(int dumb_ai) {
+    g_dumb_ai = dumb_ai;
+}
+
+void extraoptions_frame_tick(void) {
+    const char *e = getenv("NFSU2_AUTOPILOT");
+    int dumb_ai = g_dumb_ai || (e && *e && *e != '0' && strcasecmp(e, "off") && strcasecmp(e, "false"));
     static int s_applied_state = -1;
     static uint32_t s_applied_player = 0;
 
