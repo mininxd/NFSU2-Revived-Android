@@ -76,6 +76,113 @@ replace(
     "if (!isIdentity)"
 )
 
+# Zero-overhead Enhanced Contrast GPU post-processing in presenter swapchain
+replace(
+    "src/dxvk/dxvk_swapchain_blitter.h",
+    "      uint32_t   samplerCursor;\n    };",
+    "      uint32_t   samplerCursor;\n      uint32_t   enhancedContrast;\n    };"
+)
+replace(
+    "src/dxvk/dxvk_swapchain_blitter.cpp",
+    "    args.samplerCursor = cursorSampler;\n\n    ctx->cmdBindPipeline",
+    """    args.samplerCursor = cursorSampler;
+
+    static int s_env_contrast = -1;
+    if (s_env_contrast < 0) {
+      const char* e = getenv("NFSU2_ENHANCED_CONTRAST");
+      if (e && (strcmp(e, "0") == 0 || strcasecmp(e, "off") == 0 || strcasecmp(e, "false") == 0)) {
+        s_env_contrast = 0;
+      } else if (e && (strcmp(e, "2") == 0 || strcasecmp(e, "punchy") == 0)) {
+        s_env_contrast = 2;
+      } else if (e && (strcmp(e, "1") == 0 || strcasecmp(e, "on") == 0 || strcasecmp(e, "true") == 0)) {
+        s_env_contrast = 1;
+      } else {
+        s_env_contrast = -2;
+      }
+    }
+    uint32_t contrast_mode = 1u;
+    if (s_env_contrast >= 0) {
+      contrast_mode = static_cast<uint32_t>(s_env_contrast);
+    } else {
+      static auto s_mode_fn = reinterpret_cast<uint32_t(*)()>(dlsym(RTLD_DEFAULT, "nfs_contrast_get_mode"));
+      if (s_mode_fn) contrast_mode = s_mode_fn();
+    }
+    args.enhancedContrast = contrast_mode;
+
+    ctx->cmdBindPipeline"""
+)
+replace(
+    "src/dxvk/shaders/dxvk_present_common.glsl",
+    """uniform present_info_t {
+  ivec2 src_offset;
+  ivec2 src_extent;
+  ivec2 dst_offset;
+  ivec2 cursor_offset;
+  ivec2 cursor_extent;
+  uint sampler_gamma;
+  uint sampler_cursor;
+};""",
+    """uniform present_info_t {
+  ivec2 src_offset;
+  ivec2 src_extent;
+  ivec2 dst_offset;
+  ivec2 cursor_offset;
+  ivec2 cursor_extent;
+  uint sampler_gamma;
+  uint sampler_cursor;
+  uint enhanced_contrast;
+};
+
+
+vec4 apply_enhanced_contrast(vec4 color, uint mode) {
+  if (mode == 0u) return color;
+  vec3 c = clamp(color.rgb, 0.0, 1.0);
+  // High-performance NFSU2 Enhanced Contrast S-curve:
+  // f(x) = x^2 * (3 - 2x)
+  vec3 s_curve = c * c * (3.0 - 2.0 * c);
+  // Blend curve based on mode (1 = balanced cinematic, 2 = punchy)
+  float blend = (mode == 2u) ? 0.80 : 0.60;
+  vec3 contrast = mix(c, s_curve, blend);
+  // Boost neon color saturation while keeping asphalt natural
+  float luma = dot(contrast, vec3(0.2126, 0.7152, 0.0722));
+  float sat_boost = (mode == 2u) ? 1.25 : 1.15;
+  vec3 vivid = mix(vec3(luma), contrast, sat_boost);
+  return vec4(clamp(vivid, 0.0, 1.0), color.a);
+}"""
+)
+replace(
+    "src/dxvk/shaders/dxvk_present_common.glsl",
+    """      return color;
+
+    case VK_COLOR_SPACE_SRGB_NONLINEAR_KHR: {
+      color.rgb = sc_rgb_to_nits(color.rgb) / SDR_NITS;
+
+      if (!c_dst_is_srgb)
+        color.rgb = linear_to_srgb(color.rgb);
+
+      return color;
+    }
+
+    case VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT:
+      return color;""",
+    """      color = apply_enhanced_contrast(color, enhanced_contrast);
+      return color;
+
+    case VK_COLOR_SPACE_SRGB_NONLINEAR_KHR: {
+      color.rgb = sc_rgb_to_nits(color.rgb) / SDR_NITS;
+
+      if (!c_dst_is_srgb)
+        color.rgb = linear_to_srgb(color.rgb);
+
+      color = apply_enhanced_contrast(color, enhanced_contrast);
+      return color;
+    }
+
+    case VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT:
+      color = apply_enhanced_contrast(color, enhanced_contrast);
+      return color;"""
+)
+
 # 2. Make optional Vulkan features non-blocking for universal mobile GPU support
 OPTIONAL_FEATURES = [
     "ENABLE_FEATURE(core.features, textureCompressionBC, true),",

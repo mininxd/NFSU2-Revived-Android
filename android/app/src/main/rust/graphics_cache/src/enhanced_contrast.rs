@@ -32,8 +32,8 @@ pub const G_POST_PROCESS_STATE_ADDR: usize = 0x008708F4;
 pub const G_MASTER_OVERBRIGHT_ADDR: usize = 0x00876514;
 pub const G_MASTER_BLEACH_BYPASS_ADDR: usize = 0x00876518;
 
-static INGAME_CONTRAST_ACTIVE: AtomicBool = AtomicBool::new(false);
-static LAST_INGAME_CONTRAST_VAL: AtomicI32 = AtomicI32::new(-1);
+static INGAME_CONTRAST_ACTIVE: AtomicBool = AtomicBool::new(true);
+static LAST_INGAME_CONTRAST_VAL: AtomicI32 = AtomicI32::new(1);
 static CONTRAST_FRAME_COUNT: AtomicU32 = AtomicU32::new(0);
 
 // Function pointer for native D3D9 SetGammaRamp callback

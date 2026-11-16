@@ -38,8 +38,8 @@ pub struct ContrastRegulator {
 impl ContrastRegulator {
     pub const fn new() -> Self {
         Self {
-            active: AtomicBool::new(false),
-            last_state: AtomicI32::new(-1),
+            active: AtomicBool::new(true),
+            last_state: AtomicI32::new(1),
             frame_count: AtomicU64::new(0),
             contrast_level: AtomicU32::new(1),
         }
@@ -56,20 +56,17 @@ impl ContrastRegulator {
         let p_bleach = guest_mem.add(G_BLEACH_BYPASS_ENABLE_ADDR) as *mut u32;
         let p_master_ob = guest_mem.add(G_MASTER_OVERBRIGHT_ADDR) as *mut u32;
         let p_ob = guest_mem.add(G_OVERBRIGHT_ENABLE_ADDR) as *mut u32;
-        let p_post = guest_mem.add(G_POST_PROCESS_STATE_ADDR) as *mut u32;
 
         let master_bleach = std::ptr::read_volatile(p_master_bleach);
         let bleach = std::ptr::read_volatile(p_bleach);
         let is_on = (master_bleach != 0) || (bleach != 0);
 
         // Clamping MUST happen before scene drawing and resolve!
+        // Clamping engine flags to 0 prevents SPEED2.EXE from running the slow 3-pass ping-pong
+        // resolve that drops frame rates to 30-40 FPS on mobile GPUs.
         std::ptr::write_volatile(p_bleach, 0);
         std::ptr::write_volatile(p_ob, 0);
         std::ptr::write_volatile(p_master_ob, 0);
-
-        if is_on {
-            std::ptr::write_volatile(p_post, 0xFFFFFFFF);
-        }
 
         self.active.store(is_on, Ordering::Relaxed);
         is_on
@@ -176,6 +173,20 @@ pub unsafe extern "C" fn nfs_contrast_regulator_post_frame(guest_base: *mut std:
 #[no_mangle]
 pub extern "C" fn nfs_contrast_regulator_is_active() -> i32 {
     if GLOBAL_CONTRAST_REGULATOR.is_active() { 1 } else { 0 }
+}
+
+#[no_mangle]
+pub extern "C" fn nfs_contrast_get_mode() -> u32 {
+    if GLOBAL_CONTRAST_REGULATOR.is_active() {
+        GLOBAL_CONTRAST_REGULATOR.get_contrast_level()
+    } else {
+        0
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn nfs_contrast_is_enabled() -> bool {
+    GLOBAL_CONTRAST_REGULATOR.is_active()
 }
 
 #[no_mangle]

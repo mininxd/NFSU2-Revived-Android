@@ -276,13 +276,18 @@ void nfs_widescreen_apply_frame_rate(void) {
         MEM32(0x00870CD0u) = 0;
     }
 
-    /* Suppress heavy Gaussian blur bloom passes (0x00870CFC = g_OverBrightEnable, 0x00876514 = g_MasterOverBright)
-     * on mobile TBDR architectures to eliminate massive GMEM resolve stalls */
+    /* Suppress heavy Gaussian blur bloom passes and engine bleach bypass resolves
+     * (0x00870CFC = g_OverBrightEnable, 0x00876514 = g_MasterOverBright, 0x00870D00 = g_BleachByPassEnable)
+     * on mobile TBDR architectures to eliminate massive GMEM resolve stalls and 30-40 FPS throttling.
+     * Enhanced contrast is now delivered directly through zero-bandwidth GPU presenter tone mapping. */
     if (MEM32(0x00870CFCu) != 0) {
         MEM32(0x00870CFCu) = 0;
     }
     if (MEM32(0x00876514u) != 0) {
         MEM32(0x00876514u) = 0;
+    }
+    if (MEM32(0x00870D00u) != 0) {
+        MEM32(0x00870D00u) = 0;
     }
 
     /* Apply World Detail / Scenery LoD reduction based on configured Draw Distance.
