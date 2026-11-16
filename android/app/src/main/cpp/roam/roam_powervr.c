@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 /* roam_powervr.c -- PowerVR Fault Guard and Vulkan pipeline stability interceptor */
 #include "roam_powervr.h"
 #include <stdint.h>

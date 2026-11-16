@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 /* roam_affinity.c -- Performance core CPU affinity management for Android */
 #include "roam_affinity.h"
 #include <stdio.h>
