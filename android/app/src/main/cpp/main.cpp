@@ -122,6 +122,7 @@ struct Renderer {
                 if ((queues[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) && present) { gpu = candidate; family = i; break; }
             }
             if (gpu) {
+                s_vulkanApiVersion = props.apiVersion;
                 __android_log_print(ANDROID_LOG_INFO, "NFSU2", "GPU %s; API %u.%u; required Vulkan 1.1", props.deviceName,
                     VK_VERSION_MAJOR(props.apiVersion), VK_VERSION_MINOR(props.apiVersion));
                 auto vertexMissing = unsupportedD3DVertexFormats(candidate, vkGetPhysicalDeviceFormatProperties);
@@ -461,12 +462,50 @@ extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeGpuDr
     if(!entry){customVulkanError="Could not load Vulkan driver "+l+". Choose system driver in the launcher.";return;}
     dxvkAndroidSetInstanceProcAddr(entry);
     s_vulkanDriverDesc = l;
-    auto pfnEnumVer = reinterpret_cast<PFN_vkEnumerateInstanceVersion>(entry(VK_NULL_HANDLE, "vkEnumerateInstanceVersion"));
-    if (pfnEnumVer) {
-        uint32_t ver = 0;
-        if (pfnEnumVer(&ver) == VK_SUCCESS && ver >= VK_API_VERSION_1_0) {
-            s_vulkanApiVersion = ver;
+
+    VkInstance probeInst = VK_NULL_HANDLE;
+    VkApplicationInfo appInfo{VK_STRUCTURE_TYPE_APPLICATION_INFO};
+    appInfo.pApplicationName = "NFSU2 Driver Probe";
+    appInfo.apiVersion = VK_API_VERSION_1_3;
+    VkInstanceCreateInfo instCi{VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
+    instCi.pApplicationInfo = &appInfo;
+    auto pfnCreateInst = reinterpret_cast<PFN_vkCreateInstance>(entry(VK_NULL_HANDLE, "vkCreateInstance"));
+    if (pfnCreateInst && pfnCreateInst(&instCi, nullptr, &probeInst) == VK_SUCCESS) {
+        auto pfnEnumPhys = reinterpret_cast<PFN_vkEnumeratePhysicalDevices>(entry(probeInst, "vkEnumeratePhysicalDevices"));
+        auto pfnGetPhysProps = reinterpret_cast<PFN_vkGetPhysicalDeviceProperties>(entry(probeInst, "vkGetPhysicalDeviceProperties"));
+        auto pfnDestroyInst = reinterpret_cast<PFN_vkDestroyInstance>(entry(probeInst, "vkDestroyInstance"));
+        if (pfnEnumPhys && pfnGetPhysProps) {
+            uint32_t count = 0;
+            if (pfnEnumPhys(probeInst, &count, nullptr) == VK_SUCCESS && count > 0) {
+                std::vector<VkPhysicalDevice> devs(count);
+                pfnEnumPhys(probeInst, &count, devs.data());
+                VkPhysicalDeviceProperties devProps{};
+                pfnGetPhysProps(devs[0], &devProps);
+                if (devProps.apiVersion >= VK_API_VERSION_1_0) {
+                    s_vulkanApiVersion = devProps.apiVersion;
+                }
+                __android_log_print(ANDROID_LOG_INFO, "NFSU2", "Custom driver device: %s, API %u.%u.%u (Driver 0x%x)",
+                    devProps.deviceName,
+                    VK_VERSION_MAJOR(s_vulkanApiVersion),
+                    VK_VERSION_MINOR(s_vulkanApiVersion),
+                    VK_VERSION_PATCH(s_vulkanApiVersion),
+                    devProps.driverVersion);
+            }
         }
+        if (pfnDestroyInst) {
+            pfnDestroyInst(probeInst, nullptr);
+        }
+    } else {
+        auto pfnEnumVer = reinterpret_cast<PFN_vkEnumerateInstanceVersion>(entry(VK_NULL_HANDLE, "vkEnumerateInstanceVersion"));
+        if (pfnEnumVer) {
+            uint32_t ver = 0;
+            if (pfnEnumVer(&ver) == VK_SUCCESS && ver >= VK_API_VERSION_1_0) {
+                s_vulkanApiVersion = ver;
+            }
+        }
+    }
+    if (customVulkanDriver && s_vulkanApiVersion < VK_API_VERSION_1_3) {
+        s_vulkanApiVersion = VK_API_VERSION_1_3;
     }
     __android_log_print(ANDROID_LOG_INFO, "NFSU2", "Custom Vulkan driver active: %s (API %u.%u)",
         l.c_str(), VK_API_VERSION_MAJOR(s_vulkanApiVersion), VK_API_VERSION_MINOR(s_vulkanApiVersion));

@@ -55,6 +55,9 @@ if [ ! -f "$HOOKS_DIR/hook_impl.cpp" ] || [ ! -f "$LINKERNS_DIR/android_linker_n
   exit 0
 fi
 
+echo "Applying Adrenotools patches for Mali PanVK & modern Vulkan drivers..."
+python3 "$SCRIPT_DIR/patch_adrenotools.py" || true
+
 echo "1. Building libhook_impl.so..."
 $CLANGXX_BIN -std=c++17 -O2 -shared -fPIC -Wall -Wextra -fvisibility=hidden \
   -Wl,-soname,libhook_impl.so \

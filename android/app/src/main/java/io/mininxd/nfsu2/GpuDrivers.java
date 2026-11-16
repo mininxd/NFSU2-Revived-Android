@@ -70,6 +70,7 @@ final class GpuDrivers {
             DriverArchive.validateLibrary(new File(packageRoot, library));
             String name = meta.optString("name", library);
             if (name.trim().isEmpty() || name.length() > 120) throw new IOException("Invalid driver name.");
+            String driverVersion = meta.optString("driverVersion", "");
             // Keep dependencies alongside the main library, including ZIPs with a wrapper directory.
             String relative = "payload";
             File installed = new File(root(context), UUID.randomUUID().toString());
@@ -77,6 +78,7 @@ final class GpuDrivers {
             try {
                 if (!packageRoot.renameTo(new File(installed, relative))) throw new IOException("Could not install package.");
                 JSONObject record = new JSONObject().put("name", name).put("libraryName", library).put("folder", relative);
+                if (!driverVersion.isEmpty()) record.put("driverVersion", driverVersion);
                 Files.write(new File(installed, "driver.json").toPath(), record.toString().getBytes(StandardCharsets.UTF_8));
                 readOnly(new File(installed, relative));
             } catch (Exception error) { DriverArchive.delete(installed); throw error; }

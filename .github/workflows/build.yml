@@ -106,6 +106,7 @@ jobs:
             android/app/src/main/cpp/roam/roam_android.c \
             android/app/src/main/cpp/roam/roam_affinity.c \
             android/app/src/main/cpp/roam/roam_powervr.c \
+            android/app/src/main/cpp/roam/roam_patches.c \
             $RUST_OBJS \
             -lm -llog -ldl \
             -o android/app/src/main/jniLibs/arm64-v8a/libnfsu2_roam.so
