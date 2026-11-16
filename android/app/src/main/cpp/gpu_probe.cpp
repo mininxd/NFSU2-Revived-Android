@@ -3,6 +3,7 @@
 // (D3D9DeviceEx::GetDeviceFeatures), so "compatible" means the game's device can be created.
 #include "vertex_formats.h"
 #include "vulkan_driver.h"
+#include "universal_gpu_loader.h"
 #include <jni.h>
 #include <dlfcn.h>
 #include <sstream>
@@ -20,19 +21,17 @@ std::string json(const std::string& value) {
 }
 
 std::string probe(const char* hooks, const char* temp, const char* directory, const char* library) {
-    struct Loader { void* handle; ~Loader() { if (handle) dlclose(handle); } }
-        loader{nfsOpenVulkan(hooks, temp, directory, library)};
-    if (!loader.handle) return "{\"driverLoadFailed\":true,\"probeError\":\"Could not open selected driver\"}";
-    auto getProc = nfsVulkanEntry(loader.handle);
+    if (!universal_gpu_init(hooks, temp, directory, library)) {
+        return "{\"driverLoadFailed\":true,\"probeError\":" + json(universal_gpu_get_error()) + "}";
+    }
+    auto getProc = universal_gpu_get_proc_addr();
     if (!getProc) return "{\"driverLoadFailed\":true,\"probeError\":\"Package does not provide vkGetInstanceProcAddr\"}";
     auto createInstance = reinterpret_cast<PFN_vkCreateInstance>(getProc(nullptr, "vkCreateInstance"));
     if (!createInstance) return "{\"driverLoadFailed\":true,\"probeError\":\"Package does not provide vkCreateInstance\"}";
-    uint32_t loaderVersion = VK_API_VERSION_1_0;
-    if (auto version = reinterpret_cast<PFN_vkEnumerateInstanceVersion>(getProc(nullptr, "vkEnumerateInstanceVersion")))
-        version(&loaderVersion);
+    uint32_t loaderVersion = universal_gpu_get_api_version();
     VkApplicationInfo app{VK_STRUCTURE_TYPE_APPLICATION_INFO};
     app.pApplicationName = "NFSU2 driver probe";
-    app.apiVersion = loaderVersion >= VK_API_VERSION_1_1 ? VK_API_VERSION_1_1 : VK_API_VERSION_1_0;
+    app.apiVersion = loaderVersion >= VK_API_VERSION_1_1 ? loaderVersion : VK_API_VERSION_1_0;
     VkInstanceCreateInfo instanceInfo{VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
     instanceInfo.pApplicationInfo = &app;
     VkInstance instance{};
@@ -141,10 +140,15 @@ std::string probe(const char* hooks, const char* temp, const char* directory, co
     }
     if (deviceResult != VK_SUCCESS) missing.emplace_back("vkCreateDevice: " + std::to_string(deviceResult));
 
+    uint32_t apiVer = props.apiVersion;
+    if (universal_gpu_is_custom() && apiVer < universal_gpu_get_api_version()) {
+        apiVer = universal_gpu_get_api_version();
+    }
+
     std::ostringstream out;
     out << "{\"gpu\":" << json(props.deviceName)
-        << ",\"vulkan\":" << json(std::to_string(VK_VERSION_MAJOR(props.apiVersion)) + "." +
-               std::to_string(VK_VERSION_MINOR(props.apiVersion)) + "." + std::to_string(VK_VERSION_PATCH(props.apiVersion)))
+        << ",\"vulkan\":" << json(std::to_string(VK_VERSION_MAJOR(apiVer)) + "." +
+               std::to_string(VK_VERSION_MINOR(apiVer)) + "." + std::to_string(VK_VERSION_PATCH(apiVer)))
         << ",\"vendorId\":" << props.vendorID
         << ",\"requestedDriver\":" << json(library && *library ? library : "system")
         << ",\"driverName\":" << json(driver.driverName)
@@ -159,6 +163,7 @@ std::string probe(const char* hooks, const char* temp, const char* directory, co
     for (size_t i = 0; i < missing.size(); ++i) out << (i ? "," : "") << json(missing[i]);
     out << "]}";
     vkDestroyInstance(instance, nullptr);
+    universal_gpu_cleanup();
     return out.str();
 }
 }  // namespace

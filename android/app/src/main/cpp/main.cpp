@@ -22,6 +22,7 @@
 #include "guest_boot_worker.h"
 #include "gamepad_input.h"
 #include "vulkan_driver.h"
+#include "universal_gpu_loader.h"
 #include "nfs_widescreen.h"
 
 static android_app* s_active_app = nullptr;
@@ -457,58 +458,21 @@ extern "C" JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeGpuDr
     std::string h=text(hooks),t=text(temp),d=text(directory),l=text(library);
     if(l.empty())return;
     customVulkanDriver=true;
-    void* handle=nfsOpenVulkan(h.c_str(),t.c_str(),d.c_str(),l.c_str());
-    auto entry=nfsVulkanEntry(handle);
+    if (!universal_gpu_init(h.c_str(), t.c_str(), d.c_str(), l.c_str())) {
+        customVulkanError = "Could not load Vulkan driver " + l + ": " + universal_gpu_get_error() + ". Choose system driver in the launcher.";
+        return;
+    }
+    auto entry = universal_gpu_get_proc_addr();
     if(!entry){customVulkanError="Could not load Vulkan driver "+l+". Choose system driver in the launcher.";return;}
     dxvkAndroidSetInstanceProcAddr(entry);
     s_vulkanDriverDesc = l;
-
-    VkInstance probeInst = VK_NULL_HANDLE;
-    VkApplicationInfo appInfo{VK_STRUCTURE_TYPE_APPLICATION_INFO};
-    appInfo.pApplicationName = "NFSU2 Driver Probe";
-    appInfo.apiVersion = VK_API_VERSION_1_3;
-    VkInstanceCreateInfo instCi{VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
-    instCi.pApplicationInfo = &appInfo;
-    auto pfnCreateInst = reinterpret_cast<PFN_vkCreateInstance>(entry(VK_NULL_HANDLE, "vkCreateInstance"));
-    if (pfnCreateInst && pfnCreateInst(&instCi, nullptr, &probeInst) == VK_SUCCESS) {
-        auto pfnEnumPhys = reinterpret_cast<PFN_vkEnumeratePhysicalDevices>(entry(probeInst, "vkEnumeratePhysicalDevices"));
-        auto pfnGetPhysProps = reinterpret_cast<PFN_vkGetPhysicalDeviceProperties>(entry(probeInst, "vkGetPhysicalDeviceProperties"));
-        auto pfnDestroyInst = reinterpret_cast<PFN_vkDestroyInstance>(entry(probeInst, "vkDestroyInstance"));
-        if (pfnEnumPhys && pfnGetPhysProps) {
-            uint32_t count = 0;
-            if (pfnEnumPhys(probeInst, &count, nullptr) == VK_SUCCESS && count > 0) {
-                std::vector<VkPhysicalDevice> devs(count);
-                pfnEnumPhys(probeInst, &count, devs.data());
-                VkPhysicalDeviceProperties devProps{};
-                pfnGetPhysProps(devs[0], &devProps);
-                if (devProps.apiVersion >= VK_API_VERSION_1_0) {
-                    s_vulkanApiVersion = devProps.apiVersion;
-                }
-                __android_log_print(ANDROID_LOG_INFO, "NFSU2", "Custom driver device: %s, API %u.%u.%u (Driver 0x%x)",
-                    devProps.deviceName,
-                    VK_VERSION_MAJOR(s_vulkanApiVersion),
-                    VK_VERSION_MINOR(s_vulkanApiVersion),
-                    VK_VERSION_PATCH(s_vulkanApiVersion),
-                    devProps.driverVersion);
-            }
-        }
-        if (pfnDestroyInst) {
-            pfnDestroyInst(probeInst, nullptr);
-        }
-    } else {
-        auto pfnEnumVer = reinterpret_cast<PFN_vkEnumerateInstanceVersion>(entry(VK_NULL_HANDLE, "vkEnumerateInstanceVersion"));
-        if (pfnEnumVer) {
-            uint32_t ver = 0;
-            if (pfnEnumVer(&ver) == VK_SUCCESS && ver >= VK_API_VERSION_1_0) {
-                s_vulkanApiVersion = ver;
-            }
-        }
-    }
-    if (customVulkanDriver && s_vulkanApiVersion < VK_API_VERSION_1_3) {
+    s_vulkanApiVersion = universal_gpu_get_api_version();
+    if (s_vulkanApiVersion < VK_API_VERSION_1_3) {
         s_vulkanApiVersion = VK_API_VERSION_1_3;
     }
-    __android_log_print(ANDROID_LOG_INFO, "NFSU2", "Custom Vulkan driver active: %s (API %u.%u)",
-        l.c_str(), VK_API_VERSION_MAJOR(s_vulkanApiVersion), VK_API_VERSION_MINOR(s_vulkanApiVersion));
+    __android_log_print(ANDROID_LOG_INFO, "NFSU2", "Custom Vulkan driver active: %s (API %u.%u, Device: %s)",
+        l.c_str(), VK_API_VERSION_MAJOR(s_vulkanApiVersion), VK_API_VERSION_MINOR(s_vulkanApiVersion),
+        universal_gpu_get_device_name());
 }
 extern "C" JNIEXPORT void JNICALL Java_com_nfsu2_androidevolved_GameActivity_nativeGpuDriver(JNIEnv* env,jclass cls,jstring hooks,jstring temp,jstring directory,jstring library){
     Java_io_mininxd_nfsu2_GameActivity_nativeGpuDriver(env,cls,hooks,temp,directory,library);
