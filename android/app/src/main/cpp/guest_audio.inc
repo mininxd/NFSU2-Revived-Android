@@ -207,19 +207,144 @@ void soundDispatch(){
         if(!arg(2)){ret(0x80004003,3);return;}write32(arg(2),0);
         const std::array<uint8_t,16> dsGuid={0x83,0xfa,0x9a,0x27,0x81,0x49,0xce,0x11,0xa5,0x21,0,0x20,0xaf,0x0b,0xe5,0x60};
         const std::array<uint8_t,16> bufferGuid={0x85,0xfa,0x9a,0x27,0x81,0x49,0xce,0x11,0xa5,0x21,0,0x20,0xaf,0x0b,0xe5,0x60};
+        const std::array<uint8_t,16> ds3dBufferGuid={0x86,0xfa,0x9a,0x27,0x81,0x49,0xce,0x11,0xa5,0x21,0,0x20,0xaf,0x0b,0xe5,0x60};
+        const std::array<uint8_t,16> ds3dListenerGuid={0x84,0xfa,0x9a,0x27,0x81,0x49,0xce,0x11,0xa5,0x21,0,0x20,0xaf,0x0b,0xe5,0x60};
+        const std::array<uint8_t,16> buffer8Guid={0x49,0xa4,0x25,0x68,0x24,0x75,0x82,0x4d,0x9e,0xf6,0x7f,0xa9,0x9d,0xe5,0x09,0x66};
         const std::array<uint8_t,16> unknown={0,0,0,0,0,0,0,0,0xc0,0,0,0,0,0,0,0x46};
+
+        if (kind == 2) {
+            if (inputGuidEquals(arg(1), ds3dBufferGuid)) {
+                uint32_t ds3d = createSoundObject(3, object.flags);
+                soundObjects.at(ds3d).voice = object.voice;
+                write32(arg(2), ds3d);
+                ret(0, 3);
+                return;
+            }
+            if (inputGuidEquals(arg(1), buffer8Guid)) {
+                ++object.references;
+                write32(arg(2), self);
+                ret(0, 3);
+                return;
+            }
+        }
+        if (kind == 1) {
+            if (inputGuidEquals(arg(1), ds3dListenerGuid)) {
+                uint32_t listener = createSoundObject(4, object.flags);
+                write32(arg(2), listener);
+                ret(0, 3);
+                return;
+            }
+        }
+        if (kind == 3) {
+            if (inputGuidEquals(arg(1), ds3dBufferGuid) || inputGuidEquals(arg(1), unknown)) {
+                ++object.references;
+                write32(arg(2), self);
+                ret(0, 3);
+                return;
+            }
+            ret(0x80004002, 3);
+            return;
+        }
+        if (kind == 4) {
+            if (inputGuidEquals(arg(1), ds3dListenerGuid) || inputGuidEquals(arg(1), unknown)) {
+                ++object.references;
+                write32(arg(2), self);
+                ret(0, 3);
+                return;
+            }
+            ret(0x80004002, 3);
+            return;
+        }
         if(!inputGuidEquals(arg(1),kind==1?dsGuid:bufferGuid)&&!inputGuidEquals(arg(1),unknown)){ret(0x80004002,3);return;}
         ++object.references;write32(arg(2),self);ret(0,3);return;
     }
     if(method==1){ret(++object.references,1);return;}
-    if(method==2){uint32_t refs=--object.references;if(!refs){if(object.voice)soundMixer.remove(object.voice);if(object.guestSamples)heaps->free(GuestHeaps::process,object.guestSamples);heaps->free(GuestHeaps::process,object.table);heaps->free(GuestHeaps::process,self);soundObjects.erase(found);}ret(refs,1);return;}
+    if(method==2){
+        uint32_t refs=--object.references;
+        if(!refs){
+            if(kind!=3&&kind!=4&&object.voice)soundMixer.remove(object.voice);
+            if(object.guestSamples)heaps->free(GuestHeaps::process,object.guestSamples);
+            heaps->free(GuestHeaps::process,object.table);
+            heaps->free(GuestHeaps::process,self);
+            soundObjects.erase(found);
+        }
+        ret(refs,1);return;
+    }
+    if(kind==3){
+        switch(method){
+            case 3:{ // GetAllParameters(LPDS3DBUFFER)
+                uint32_t p=arg(1);
+                if(p && memory && memory->writable(p, 4)){
+                    uint32_t dwSize=read32(p);
+                    if(dwSize>=4 && memory->writable(p, dwSize)){
+                        std::memset(ptr(p+4, dwSize-4), 0, dwSize-4);
+                    }
+                }
+                ret(0, 2); return;
+            }
+            case 4: ret(0, 3); return; // GetConeAngles
+            case 5: ret(0, 2); return; // GetConeOrientation
+            case 6: ret(0, 2); return; // GetConeOutsideVolume
+            case 7: ret(0, 2); return; // GetMaxDistance
+            case 8: ret(0, 2); return; // GetMinDistance
+            case 9: ret(0, 2); return; // GetMode
+            case 10:{ // GetPosition
+                uint32_t p=arg(1);
+                if(p && memory && memory->writable(p, 12)) std::memset(ptr(p, 12), 0, 12);
+                ret(0, 2); return;
+            }
+            case 11:{ // GetVelocity
+                uint32_t p=arg(1);
+                if(p && memory && memory->writable(p, 12)) std::memset(ptr(p, 12), 0, 12);
+                ret(0, 2); return;
+            }
+            case 12: ret(0, 3); return; // SetAllParameters(LPCDS3DBUFFER, DWORD)
+            case 13: ret(0, 4); return; // SetConeAngles(DWORD, DWORD, DWORD)
+            case 14: ret(0, 5); return; // SetConeOrientation(x, y, z, dwApply)
+            case 15: ret(0, 3); return; // SetConeOutsideVolume(LONG, DWORD)
+            case 16: ret(0, 3); return; // SetMaxDistance(float, DWORD)
+            case 17: ret(0, 3); return; // SetMinDistance(float, DWORD)
+            case 18: ret(0, 3); return; // SetMode(DWORD, DWORD)
+            case 19: ret(0, 5); return; // SetPosition(x, y, z, dwApply)
+            case 20: ret(0, 5); return; // SetVelocity(x, y, z, dwApply)
+            default: ret(0, 1); return;
+        }
+    }
+    if(kind==4){
+        switch(method){
+            case 3:{ // GetAllParameters(LPDS3DLISTENER)
+                uint32_t p=arg(1);
+                if(p && memory && memory->writable(p, 4)){
+                    uint32_t dwSize=read32(p);
+                    if(dwSize>=4 && memory->writable(p, dwSize)){
+                        std::memset(ptr(p+4, dwSize-4), 0, dwSize-4);
+                    }
+                }
+                ret(0, 2); return;
+            }
+            case 4: ret(0, 2); return; // GetDistanceFactor
+            case 5: ret(0, 2); return; // GetDopplerFactor
+            case 6: ret(0, 3); return; // GetOrientation
+            case 7: ret(0, 2); return; // GetPosition
+            case 8: ret(0, 2); return; // GetRolloffFactor
+            case 9: ret(0, 2); return; // GetVelocity
+            case 10: ret(0, 3); return; // SetAllParameters
+            case 11: ret(0, 3); return; // SetDistanceFactor
+            case 12: ret(0, 3); return; // SetDopplerFactor
+            case 13: ret(0, 8); return; // SetOrientation(xFront, yFront, zFront, xTop, yTop, zTop, dwApply)
+            case 14: ret(0, 5); return; // SetPosition(x, y, z, dwApply)
+            case 15: ret(0, 3); return; // SetRolloffFactor
+            case 16: ret(0, 5); return; // SetVelocity(x, y, z, dwApply)
+            case 17: ret(0, 1); return; // CommitDeferredSettings
+            default: ret(0, 1); return;
+        }
+    }
     if(kind==1){switch(method){
         case 3:{uint32_t desc=arg(1),output=arg(2);if(!output){ret(0x80004003,4);return;}write32(output,0);
             if(!desc||(read32(desc)!=20&&read32(desc)!=36)||arg(3)){ret(0x80070057,4);return;}
             uint32_t flags=read32(desc+4),bytes=read32(desc+8),format=read32(desc+16);
             auto voice=std::make_shared<PcmVoice>();
             if(!(flags&1)&&(!soundFormat(format,*voice)||!bytes||bytes>16*1024*1024||bytes%voice->block())){ret(soundBadFormat,4);return;}
-            if(flags&0x10){ret(0x8878001e,4);return;} // 3D spatialization is not implemented.
             if(!(flags&1)){voice->samples.resize(bytes,voice->bits==8?128:0);if(!soundMixer.add(voice)){ret(0x8878000a,4);return;}}
             uint32_t buffer=createSoundObject(2,flags);auto& created=soundObjects.at(buffer);created.voice=voice;
             if(!(flags&1)){created.guestSamples=allocate(bytes);std::memcpy(ptr(created.guestSamples,bytes),voice->samples.data(),bytes);}

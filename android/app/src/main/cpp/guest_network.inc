@@ -197,8 +197,14 @@ void count(uint32_t handle,Socket& socket,const std::string& peer,bool sent,ssiz
     auto now=std::chrono::steady_clock::now();
     if(now<socket.nextSummary)return;
     socket.nextSummary=now+std::chrono::seconds(5);
-    for(auto& [address,value]:socket.traffic)
-        NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Winsock: trafico %08x %s envia %u paq/%u B, recibe %u paq/%u B",handle,address.c_str(),value.sentPackets,value.sentBytes,value.receivedPackets,value.receivedBytes);
+    static int s_debug_net = -1;
+    if (s_debug_net < 0) {
+        s_debug_net = (std::getenv("NFSU2_DEBUG_NETWORK") != nullptr) ? 1 : 0;
+    }
+    if (s_debug_net) {
+        for(auto& [address,value]:socket.traffic)
+            NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Winsock: trafico %08x %s envia %u paq/%u B, recibe %u paq/%u B",handle,address.c_str(),value.sentPackets,value.sentBytes,value.receivedPackets,value.receivedBytes);
+    }
     socket.traffic.clear();
 }
 bool hardError(ssize_t result){return result<0&&errno!=EAGAIN&&errno!=EWOULDBLOCK;}

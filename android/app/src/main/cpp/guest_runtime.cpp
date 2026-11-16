@@ -366,8 +366,12 @@ void d3dDispatch(){
             serviceGuestSound();
         }
         nfs_adpf_begin_frame();
+        static int s_profile_bridge = -1;
+        if(s_profile_bridge < 0){
+            s_profile_bridge = (std::getenv("NFSU2_PROFILE_BRIDGE") != nullptr) ? 1 : 0;
+        }
         static unsigned frames=0;static auto since=std::chrono::steady_clock::now();
-        if(++frames==120){serviceGuestSound();auto now=std::chrono::steady_clock::now();double seconds=std::chrono::duration<double>(now-since).count();
+        if(s_profile_bridge && ++frames==120){serviceGuestSound();auto now=std::chrono::steady_clock::now();double seconds=std::chrono::duration<double>(now-since).count();
             NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Guest D3D9 presentation %.1f FPS over %.2f seconds; bridge ~%.2f ms/frame (present %.2f), %.0f calls/frame",
                 frames/seconds,seconds,double(bridgeTime.count())/1e6/frames,double(presentTime.count())/1e6/frames,double(bridgeCalls)/frames);
             std::array<unsigned,5> top{};

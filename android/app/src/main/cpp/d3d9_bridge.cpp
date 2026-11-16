@@ -309,6 +309,21 @@ uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumen
     if((kind==2&&method==17)||(kind==13&&method==3)){
         *argumentCount=kind==2?5:6;auto window=dxvkAndroidGetWindowHandle();
         if(!window||deviceResetPending)return D3DERR_DEVICELOST;
+        static void(*s_cam_restore)(void*) = nullptr;
+        if(!s_cam_restore) s_cam_restore = reinterpret_cast<void(*)(void*)>(resolveGraphicsCacheSymbol("nfs_camera_stick_restore_frame"));
+        if(s_cam_restore) s_cam_restore(guestBase);
+        static void(*s_telemetry_present)(uint64_t) = nullptr;
+        if(!s_telemetry_present) s_telemetry_present = reinterpret_cast<void(*)(uint64_t)>(resolveGraphicsCacheSymbol("nfs_telemetry_record_present"));
+        if(s_telemetry_present) {
+            struct timespec ts;
+            clock_gettime(CLOCK_MONOTONIC, &ts);
+            uint64_t now_ns = (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
+            s_telemetry_present(now_ns);
+        }
+        static uint32_t(*s_contrast_sync)(void*) = nullptr;
+        if(!s_contrast_sync) s_contrast_sync = reinterpret_cast<uint32_t(*)(void*)>(resolveGraphicsCacheSymbol("nfs_contrast_sync_ingame"));
+        if(s_contrast_sync) s_contrast_sync(guestBase);
+
         auto source=static_cast<const RECT*>(pointer(args[1])),destination=static_cast<const RECT*>(pointer(args[2]));
         auto dirty=static_cast<const RGNDATA*>(pointer(args[4]));
         return kind==2?static_cast<IDirect3DDevice9*>(object)->Present(source,destination,window,dirty):

@@ -276,6 +276,15 @@ void nfs_widescreen_apply_frame_rate(void) {
         MEM32(0x00870CD0u) = 0;
     }
 
+    /* Suppress heavy Gaussian blur bloom passes (0x00870CFC = g_OverBrightEnable, 0x00876514 = g_MasterOverBright)
+     * on mobile TBDR architectures to eliminate massive GMEM resolve stalls */
+    if (MEM32(0x00870CFCu) != 0) {
+        MEM32(0x00870CFCu) = 0;
+    }
+    if (MEM32(0x00876514u) != 0) {
+        MEM32(0x00876514u) = 0;
+    }
+
     /* Apply World Detail / Scenery LoD reduction based on configured Draw Distance.
      * In SPEED2.EXE, g_WorldLodLevel (0x00870CF4) controls scenery mesh LoD:
      * 0 = Low (drops distant scenery props & models), 1 = Medium, 2 = High, 3 = Maximum.

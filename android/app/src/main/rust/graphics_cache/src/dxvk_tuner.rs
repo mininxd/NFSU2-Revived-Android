@@ -67,7 +67,7 @@ impl Default for DxvkProfileConfig {
             defer_surface_creation: true,
             no_explicit_front_buffer: true,
             tear_free: true,
-            max_frame_latency: 1,
+            max_frame_latency: 2,
             num_compiler_threads: 4,
         }
     }
@@ -81,7 +81,7 @@ impl DxvkProfileConfig {
         s.push_str("dxvk.enableAsync = True\n");
         s.push_str("dxvk.gplAsyncCache = True\n");
         s.push_str(&format!("dxvk.numCompilerThreads = {}\n", self.num_compiler_threads));
-        s.push_str("dxvk.useRawSsbo = True\n");
+        s.push_str("dxvk.useRawSsbo = Auto\n");
         s.push_str("dxvk.tilerMode = Auto\n");
         s.push_str("dxvk.enableGraphicsPipelineLibrary = True\n");
         s.push_str("dxvk.enableDescriptorBuffer = Auto\n");
@@ -91,12 +91,17 @@ impl DxvkProfileConfig {
         s.push_str("dxvk.enableMemoryDefrag = False\n");
         s.push_str("dxvk.trackPipelineLifetime = True\n");
 
+        s.push_str("d3d9.deferSurfaceCreation = True\n");
         s.push_str("d3d9.tearFree = False\n");
-        s.push_str("d3d9.maxFrameLatency = 1\n");
+        s.push_str(&format!("d3d9.maxFrameLatency = {}\n", self.max_frame_latency));
         s.push_str("d3d9.lenientClear = True\n");
         s.push_str("d3d9.allowDiscard = True\n");
         s.push_str("d3d9.allowDoNotWait = True\n");
         s.push_str("d3d9.deviceLocalConstantBuffers = Auto\n");
+        s.push_str("d3d9.strictConstantCopies = False\n");
+        s.push_str("d3d9.cachedDynamicBuffers = True\n");
+        s.push_str("d3d9.cachedWriteOnlyBuffers = True\n");
+        s.push_str("d3d9.noExplicitFrontBuffer = True\n");
         s.push_str("d3d9.useFP16 = Auto\n");
         s.push_str("d3d9.evictManagedOnUnlock = True\n");
         s.push_str("d3d9.memoryTrackTest = False\n");
@@ -107,7 +112,7 @@ impl DxvkProfileConfig {
         s.push_str("d3d9.samplerAnisotropy = 0\n");
         s.push_str("d3d9.clampNegativeLodBias = True\n");
         s.push_str("d3d9.seamlessCubes = True\n");
-        s.push_str("d3d9.floatEmulation = Strict\n");
+        s.push_str("d3d9.floatEmulation = False\n");
         s.push_str("d3d9.modeCountCompatibility = True\n");
 
         s.push_str("dxgi.deferSurfaceCreation = True\n");
@@ -238,17 +243,17 @@ mod tests {
     fn test_dxvk_conf_formatting() {
         let conf = DxvkProfileConfig::default();
         let formatted = conf.format_conf();
-        assert!(formatted.contains("d3d9.generalHazards = False"));
         assert!(formatted.contains("d3d9.invariantPosition = True"));
         assert!(formatted.contains("d3d9.forceSamplerTypeSpecConstants = True"));
         assert!(formatted.contains("d3d9.strictConstantCopies = False"));
         assert!(formatted.contains("d3d9.forceSwapchainMSAA = False"));
         assert!(formatted.contains("dxvk.enableMemoryDefrag = False"));
-        assert!(formatted.contains("dxvk.tilerMode = True"));
-        assert!(formatted.contains("dxvk.enableGraphicsPipelineLibrary = Auto"));
+        assert!(formatted.contains("dxvk.tilerMode = Auto"));
+        assert!(formatted.contains("dxvk.useRawSsbo = Auto"));
+        assert!(formatted.contains("d3d9.maxFrameLatency = 2"));
         assert!(formatted.contains("dxvk.enableDescriptorBuffer = Auto"));
         assert!(formatted.contains("d3d9.useFP16 = Auto"));
-        assert!(formatted.contains("d3d9.deviceLocalConstantBuffers = True"));
+        assert!(formatted.contains("d3d9.deviceLocalConstantBuffers = Auto"));
         assert!(formatted.contains("d3d9.cachedWriteOnlyBuffers = True"));
     }
 }

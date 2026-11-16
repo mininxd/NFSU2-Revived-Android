@@ -24,6 +24,9 @@ case 17:{*argumentCount=5;
         uint64_t now_ns = (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
         s_telemetry_present(now_ns);
     }
+    static uint32_t(*s_contrast_sync)(void*) = nullptr;
+    if(!s_contrast_sync) s_contrast_sync = reinterpret_cast<uint32_t(*)(void*)>(resolveGraphicsCacheSymbol("nfs_contrast_sync_ingame"));
+    if(s_contrast_sync) s_contrast_sync(guestBase);
     static uint32_t s_cull_log_frame = 0;
     if (++s_cull_log_frame % 300 == 0) {
         static void(*s_cull_stats)(uint64_t*, uint64_t*) = nullptr;
