@@ -61,12 +61,37 @@ replace(
     '          std::cerr << adjusted;\n#ifdef __ANDROID__\n          if (level >= LogLevel::Warn)\n            __android_log_print(level >= LogLevel::Error ? ANDROID_LOG_ERROR : ANDROID_LOG_WARN, "DXVK", "%s", adjusted.c_str());\n#endif\n'
 )
 
-# 2. Make BC texture compression optional for mobile GPUs without BC support
-replace(
-    "src/dxvk/dxvk_device_info.cpp",
+# 2. Make optional Vulkan features non-blocking for universal mobile GPU support
+OPTIONAL_FEATURES = [
     "ENABLE_FEATURE(core.features, textureCompressionBC, true),",
-    "ENABLE_FEATURE(core.features, textureCompressionBC, false),"
-)
+    "ENABLE_FEATURE(core.features, depthBiasClamp, true),",
+    "ENABLE_FEATURE(core.features, depthClamp, true),",
+    "ENABLE_FEATURE(core.features, dualSrcBlend, true),",
+    "ENABLE_FEATURE(core.features, fillModeNonSolid, true),",
+    "ENABLE_FEATURE(core.features, geometryShader, true),",
+    "ENABLE_FEATURE(core.features, multiViewport, true),",
+    "ENABLE_FEATURE(core.features, occlusionQueryPrecise, true),",
+    "ENABLE_FEATURE(core.features, sampleRateShading, true),",
+    "ENABLE_FEATURE(core.features, shaderClipDistance, true),",
+    "ENABLE_FEATURE(core.features, shaderCullDistance, true),",
+    "ENABLE_FEATURE(core.features, shaderImageGatherExtended, true),",
+    "ENABLE_FEATURE(core.features, shaderInt16, true),",
+    "ENABLE_FEATURE(core.features, shaderInt64, true),",
+    "ENABLE_FEATURE(core.features, shaderSampledImageArrayDynamicIndexing, true),",
+    "ENABLE_EXT_FEATURE(extDepthClipEnable, depthClipEnable, true),",
+    "ENABLE_EXT_FEATURE(extRobustness2, robustBufferAccess2, true),",
+    "ENABLE_EXT_FEATURE(extRobustness2, nullDescriptor, true),",
+    "ENABLE_EXT(khrLoadStoreOpNone, true),",
+    "ENABLE_EXT_FEATURE(khrMaintenance5, maintenance5, true),",
+    "ENABLE_EXT_FEATURE(khrMaintenance6, maintenance6, true),",
+]
+
+for feat in OPTIONAL_FEATURES:
+    replace(
+        "src/dxvk/dxvk_device_info.cpp",
+        feat,
+        feat.replace("true),", "false),")
+    )
 
 (args.output / "version.h").write_text('#define DXVK_VERSION "v3.1.1-android-arm64"\n')
 (args.output / "PINNED_REVISION").write_text(PIN + "\n")

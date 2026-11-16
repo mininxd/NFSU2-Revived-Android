@@ -17,7 +17,9 @@ struct ANativeWindow {Display* display;Window window;uint32_t width,height;};
 #include "src/wsi/wsi_presenter.h"
 #include "src/wsi/wsi_window.h"
 #include "src/wsi/wsi_monitor.h"
+#include "src/wsi/wsi_platform.h"
 #include "src/dxvk/dxvk_platform_exts.h"
+#include "src/vulkan/vulkan_util.h"
 
 namespace {
 std::mutex windowMutex;
@@ -79,36 +81,64 @@ extern "C" void dxvkDestroyTestWindow(ANativeWindow* window){if(!window)return;X
 namespace dxvk {
 DxvkPlatformExts DxvkPlatformExts::s_instance;
 std::string_view DxvkPlatformExts::getName(){return "Android WSI";}
-DxvkNameSet DxvkPlatformExts::getInstanceExtensions(){DxvkNameSet names;names.add(VK_KHR_SURFACE_EXTENSION_NAME);
+DxvkExtensionList DxvkPlatformExts::getInstanceExtensions(){
+    DxvkExtensionList names;
+    names.push_back(vk::makeExtension(VK_KHR_SURFACE_EXTENSION_NAME));
 #ifdef __ANDROID__
-names.add(VK_KHR_ANDROID_SURFACE_EXTENSION_NAME);
+    names.push_back(vk::makeExtension(VK_KHR_ANDROID_SURFACE_EXTENSION_NAME));
 #else
-names.add(VK_KHR_XLIB_SURFACE_EXTENSION_NAME);
+    names.push_back(vk::makeExtension(VK_KHR_XLIB_SURFACE_EXTENSION_NAME));
 #endif
-return names;}
-DxvkNameSet DxvkPlatformExts::getDeviceExtensions(uint32_t){return {};}
+    return names;
+}
+DxvkExtensionList DxvkPlatformExts::getDeviceExtensions(uint32_t){
+    DxvkExtensionList names;
+    names.push_back(vk::makeExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME));
+    return names;
+}
 void DxvkPlatformExts::initInstanceExtensions(){}
 void DxvkPlatformExts::initDeviceExtensions(const DxvkInstance*){}
 }
 namespace dxvk::wsi {
-VkResult createSurface(HWND window,const Rc<vk::InstanceFn>& instance,VkSurfaceKHR* surface){
+void init(){}
+void quit(){}
+std::vector<const char *> getInstanceExtensions(){
+    return {
+        VK_KHR_SURFACE_EXTENSION_NAME,
+#ifdef __ANDROID__
+        VK_KHR_ANDROID_SURFACE_EXTENSION_NAME,
+#else
+        VK_KHR_XLIB_SURFACE_EXTENSION_NAME,
+#endif
+    };
+}
+VkResult createSurface(
+        HWND                      window,
+        PFN_vkGetInstanceProcAddr pfnVkGetInstanceProcAddr,
+        VkInstance                instance,
+        VkSurfaceKHR*             surface){
     std::lock_guard<std::mutex> guard(windowMutex);
 #ifdef __ANDROID__
     if(!currentWindow||!window)return VK_ERROR_SURFACE_LOST_KHR;
-    auto create=reinterpret_cast<PFN_vkCreateAndroidSurfaceKHR>(dxvkAndroidGetInstanceProcAddr()(instance->instance(),"vkCreateAndroidSurfaceKHR"));
+    auto create=reinterpret_cast<PFN_vkCreateAndroidSurfaceKHR>(
+        pfnVkGetInstanceProcAddr ? pfnVkGetInstanceProcAddr(instance, "vkCreateAndroidSurfaceKHR") :
+        dxvkAndroidGetInstanceProcAddr()(instance,"vkCreateAndroidSurfaceKHR"));
     if(!create)return VK_ERROR_EXTENSION_NOT_PRESENT;
     VkAndroidSurfaceCreateInfoKHR info{VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR};info.window=currentWindow;
-    return create(instance->instance(),&info,nullptr,surface);
+    return create(instance,&info,nullptr,surface);
 #else
     if(!currentWindow||window!=currentHandle)return VK_ERROR_SURFACE_LOST_KHR;
-    auto create=reinterpret_cast<PFN_vkCreateXlibSurfaceKHR>(vkGetInstanceProcAddr(instance->instance(),"vkCreateXlibSurfaceKHR"));
+    auto create=reinterpret_cast<PFN_vkCreateXlibSurfaceKHR>(
+        pfnVkGetInstanceProcAddr ? pfnVkGetInstanceProcAddr(instance, "vkCreateXlibSurfaceKHR") :
+        vkGetInstanceProcAddr(instance,"vkCreateXlibSurfaceKHR"));
     if(!create)return VK_ERROR_EXTENSION_NOT_PRESENT;
     VkXlibSurfaceCreateInfoKHR info{VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR};info.dpy=currentWindow->display;info.window=currentWindow->window;
-    return create(instance->instance(),&info,nullptr,surface);
+    return create(instance,&info,nullptr,surface);
 #endif
 }
 HMONITOR getDefaultMonitor(){return monitor();}
 HMONITOR enumMonitors(uint32_t index){return index?nullptr:monitor();}
+HMONITOR enumMonitors(const LUID *adapterLUID[], uint32_t numLUIDs, uint32_t index){(void)adapterLUID;(void)numLUIDs;return enumMonitors(index);}
 bool getDisplayName(HMONITOR handle,WCHAR (&name)[32]){if(handle!=monitor())return false;const wchar_t display[]=L"\\\\.\\DISPLAY1";std::fill(std::begin(name),std::end(name),0);std::copy(std::begin(display),std::end(display),name);return true;}
 bool getDesktopCoordinates(HMONITOR handle,RECT* rect){if(handle!=monitor()||!rect)return false;std::lock_guard<std::mutex> guard(windowMutex);*rect={0,0,static_cast<LONG>(screenWidth),static_cast<LONG>(screenHeight)};return true;}
 bool getCurrentDisplayMode(HMONITOR handle,WsiMode* mode){if(handle!=monitor()||!mode)return false;std::lock_guard<std::mutex> guard(windowMutex);*mode={screenWidth,screenHeight,{60,1},32,false};return true;}
@@ -126,6 +156,13 @@ bool getDisplayMode(HMONITOR handle,uint32_t index,WsiMode* mode){
     auto sizes=androidRenderModes(screenWidth,screenHeight,renderWidth?renderWidth:screenWidth,renderHeight?renderHeight:screenHeight);
     *mode={sizes[index].width,sizes[index].height,{60,1},32,false};return true;
 }
+void getMonitorClientSize(HMONITOR handle,uint32_t* width,uint32_t* height){
+    std::lock_guard<std::mutex> guard(windowMutex);
+    if(width)*width=bufferWidth?bufferWidth:screenWidth;
+    if(height)*height=bufferHeight?bufferHeight:screenHeight;
+}
+WsiEdidData getMonitorEdid(HMONITOR handle){(void)handle;return {};}
+std::optional<WsiDisplayMetadata> parseColorimetryInfo(const WsiEdidData& edidData){(void)edidData;return std::nullopt;}
 void getWindowSize(HWND window,uint32_t* width,uint32_t* height){
     std::lock_guard<std::mutex> guard(windowMutex);
 #ifdef __ANDROID__
@@ -144,6 +181,9 @@ void resizeWindow(HWND window,DxvkWindowState*,uint32_t width,uint32_t height){
     (void)window;(void)width;(void)height;
 #endif
 }
+void saveWindowState(HWND,DxvkWindowState*,bool){}
+void restoreWindowState(HWND,DxvkWindowState*,bool){}
+void updateFullscreenWindow(HMONITOR,HWND,bool){}
 bool isWindow(HWND window){
     std::lock_guard<std::mutex> guard(windowMutex);
 #ifdef __ANDROID__
@@ -152,9 +192,11 @@ bool isWindow(HWND window){
     return currentWindow&&window==currentHandle;
 #endif
 }
+bool isMinimized(HWND window){(void)window;return false;}
+bool isOccluded(HWND window){(void)window;return false;}
 HMONITOR getWindowMonitor(HWND window){return isWindow(window)?monitor():nullptr;}
-bool setWindowMode(HMONITOR handle,HWND window,const WsiMode*,bool){return handle==monitor()&&isWindow(window);}
+bool setWindowMode(HMONITOR handle,HWND window,DxvkWindowState*,const WsiMode&){return handle==monitor()&&isWindow(window);}
 bool enterFullscreenMode(HMONITOR handle,HWND window,DxvkWindowState*,bool){return handle==monitor()&&isWindow(window);}
 bool leaveFullscreenMode(HWND window,DxvkWindowState*){return isWindow(window);}
-bool restoreDisplayMode(HMONITOR handle){return handle==monitor();}
+bool restoreDisplayMode(){return true;}
 }

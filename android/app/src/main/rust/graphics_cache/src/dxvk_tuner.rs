@@ -90,6 +90,8 @@ impl DxvkProfileConfig {
         s.push_str(&format!("dxvk.enableDescriptorHeap = {}\n", if self.enable_descriptor_heap { "Auto" } else { "False" }));
         s.push_str(&format!("dxvk.enableUnifiedImageLayouts = {}\n", if self.enable_unified_image_layouts { "True" } else { "False" }));
         s.push_str(&format!("dxvk.trackPipelineLifetime = {}\n", if self.track_pipeline_lifetime { "Auto" } else { "False" }));
+        s.push_str("dxvk.enableImplicitResolves = True\n");
+        s.push_str("dxvk.enableMemoryDefrag = False\n");
 
         s.push_str(&format!("d3d9.tearFree = {}\n", if self.tear_free { "True" } else { "False" }));
         s.push_str(&format!("d3d9.maxFrameLatency = {}\n", self.max_frame_latency));
@@ -114,6 +116,10 @@ impl DxvkProfileConfig {
         s.push_str(&format!("d3d9.strictConstantCopies = {}\n", if self.strict_constant_copies { "True" } else { "False" }));
         s.push_str("d3d9.samplerAnisotropy = 0\n");
         s.push_str("d3d9.clampNegativeLodBias = True\n");
+        s.push_str("d3d9.seamlessCubes = True\n");
+        s.push_str("d3d9.supportDFFormats = False\n");
+        s.push_str("d3d9.floatEmulation = Strict\n");
+        s.push_str("d3d9.modeCountCompatibility = True\n");
 
         s.push_str(&format!("dxgi.deferSurfaceCreation = {}\n", if self.defer_surface_creation { "True" } else { "False" }));
         s.push_str(&format!("dxgi.maxDeviceMemory = {}\n", self.max_device_memory_mb));
@@ -121,7 +127,6 @@ impl DxvkProfileConfig {
 
         // Disable swapchain multisampling to prevent tile-based MSAA resolve corruption on Adreno (Issue #67)
         s.push_str("d3d9.forceSwapchainMSAA = False\n");
-        s.push_str("dxvk.enableMemoryDefrag = False\n");
         s
     }
 
