@@ -153,7 +153,10 @@ if glslang:
                 "--vn", var_name, str(src_path), "-o", str(out_h)
             ], check=False)
 
-(args.output / "version.h").write_text('#define DXVK_VERSION "v3.1.1-android-arm64"\n')
+(args.output / "version.h").write_text('#pragma once\n#define DXVK_VERSION "v3.1.1-android-arm64"\n')
+(args.output / "buildenv.h").write_text('#pragma once\n#define DXVK_TARGET "aarch64-linux-android"\n#define DXVK_COMPILER "clang"\n#define DXVK_COMPILER_VERSION "NDK Clang"\n')
+(gen_dir / "version.h").write_text('#pragma once\n#define DXVK_VERSION "v3.1.1-android-arm64"\n')
+(gen_dir / "buildenv.h").write_text('#pragma once\n#define DXVK_TARGET "aarch64-linux-android"\n#define DXVK_COMPILER "clang"\n#define DXVK_COMPILER_VERSION "NDK Clang"\n')
 (args.output / "PINNED_REVISION").write_text(PIN + "\n")
 (args.output / "ANDROID_PREPARE_SHA256").write_text(
     hashlib.sha256(pathlib.Path(__file__).read_bytes()).hexdigest() + "\n",
