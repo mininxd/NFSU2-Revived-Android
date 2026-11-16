@@ -1,7 +1,4 @@
-## NFSU2 Revived v0.15.25.beta3 (Pre-Release)
-
-> [!NOTE]
-> This is a **Pre-Release** build intended for testers on the **Beta** Update Channel. Players on the **Stable** channel will remain on official milestone releases.
+## NFSU2 Revived v0.15.25.beta3
 
 ### What's New in v0.15.25.beta3
 
@@ -56,9 +53,5 @@ d3d9.deferSurfaceCreation = True
 d3d9.maxFrameLatency = 1
 ```
 - **Deferred Surface Creation**: Enabled `d3d9.deferSurfaceCreation` and optimized frame latency to reduce transient memory bandwidth spikes during gameplay.
-
-#### 4. Universal Platform Stability
-- **Universal CPU Topology Support**: Dynamic `/proc/cpuinfo` parsing for CPU thread scheduling across all mobile multi-core architectures.
-- **Direct Launch Pipeline**: Streamlined launcher execution flow to immediately dispatch gameplay directly upon driver selection.
 
 **Full Changelog**: https://github.com/mininxd/NFSU2-Revived-Android/compare/v0.15.25.beta2...v0.15.25.beta3
