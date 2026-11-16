@@ -40,7 +40,7 @@ uint32_t  *g_p_esi = NULL;
 uint32_t  *g_p_edi = NULL;
 recomp_func_t (*g_p_recomp_lookup)(uint32_t va) = NULL;
 int (*g_p_guest_is_readable)(uint32_t va, uint32_t bytes) = NULL;
-static void (*s_fn_get_minimap_offset)(float *out_dx, float *out_dy) = NULL;
+static uintptr_t s_lib_base = 0;
 
 static int s_probe_pipe[2] = { -1, -1 };
 static pthread_mutex_t s_probe_mu = PTHREAD_MUTEX_INITIALIZER;
@@ -225,7 +225,12 @@ int roam_android_init_symbols(void) {
         g_p_esi = (uint32_t *)dlsym(h, "g_esi");
         g_p_edi = (uint32_t *)dlsym(h, "g_edi");
         g_p_guest_is_readable = (int (*)(uint32_t, uint32_t))dlsym(h, "guest_is_readable");
-        s_fn_get_minimap_offset = (void (*)(float *, float *))dlsym(h, "nfs_widescreen_get_minimap_offset");
+        if (!s_lib_base && g_p_recomp_lookup) {
+            Dl_info dlinfo;
+            if (dladdr((void *)g_p_recomp_lookup, &dlinfo) && dlinfo.dli_fbase) {
+                s_lib_base = (uintptr_t)dlinfo.dli_fbase;
+            }
+        }
     }
 
     if (g_p_mem_base && *g_p_mem_base != 0) {
@@ -729,6 +734,63 @@ static void roam_get_or_register_minimap_base(uint32_t ebx, float cur_x, float c
     *out_base_y = by;
 }
 
+static void roam_get_minimap_offset(float *out_dx, float *out_dy) {
+    float dx = 0.0f, dy = 0.0f;
+    const char *sm_env = getenv("NFSU2_SCREEN_MODE");
+    int screen_mode = (sm_env && *sm_env) ? atoi(sm_env) : -1;
+
+    if (!s_lib_base && g_p_recomp_lookup) {
+        Dl_info dlinfo;
+        if (dladdr((void *)g_p_recomp_lookup, &dlinfo) && dlinfo.dli_fbase) {
+            s_lib_base = (uintptr_t)dlinfo.dli_fbase;
+        }
+    }
+    if (!s_lib_base) {
+        void *h = dlopen("libnfsu2_android.so", RTLD_NOLOAD);
+        if (h) {
+            void *sym = dlsym(h, "recomp_hook");
+            Dl_info dlinfo;
+            if (sym && dladdr(sym, &dlinfo) && dlinfo.dli_fbase) {
+                s_lib_base = (uintptr_t)dlinfo.dli_fbase;
+            }
+        }
+    }
+
+    if (s_lib_base) {
+        float minimap_dy = *(float *)(s_lib_base + 0x97f7308);
+        dy = minimap_dy;
+
+        float tx = -223.0f, ty = 142.0f;
+        typedef void (*fn_ws_hud)(float *, float *);
+        fn_ws_hud ws_hud = (fn_ws_hud)(s_lib_base + 0x4aee50);
+        ws_hud(&tx, &ty);
+
+        if (tx != -223.0f) {
+            dx = (screen_mode == 2) ? 0.0f : (tx - (-223.0f));
+            dy = ty - 142.0f;
+        } else if (screen_mode != 2) {
+            float hud_offset = *(float *)(s_lib_base + 0x97f7304);
+            if (hud_offset != 0.0f) {
+                const float base_offset = (480.0f * (16.0f / 9.0f) - 640.0f) / 2.0f;
+                const float offset_x = -109.0f;
+                dx = -(hud_offset - (offset_x + base_offset));
+            } else {
+                float w = s_display_w > 0 ? (float)s_display_w : 1280.0f;
+                float h = s_display_h > 0 ? (float)s_display_h : 720.0f;
+                if (h > 0.0f) {
+                    float aspect = w / h;
+                    float calc_hud_offset = -((640.0f / 2.0f) - (480.0f / 2.0f) * aspect);
+                    const float base_offset = (480.0f * (16.0f / 9.0f) - 640.0f) / 2.0f;
+                    const float offset_x = -109.0f;
+                    dx = -(calc_hud_offset - (offset_x + base_offset));
+                }
+            }
+        }
+    }
+    if (out_dx) *out_dx = dx;
+    if (out_dy) *out_dy = dy;
+}
+
 static recomp_void_func_t arm64_inline_hook(void *target_func, void *hook_func) {
     if (!target_func || !hook_func) return NULL;
     uint32_t *target = (uint32_t *)target_func;
@@ -1129,44 +1191,49 @@ static void hook_recomp_hook(uint32_t va) {
 
     if (va == 0x0051D655u || va == 0x0051D2E5u) { // BLIPS_HOOK (radar blips)
         float dx = 0.0f, dy = 0.0f;
-        if (!s_fn_get_minimap_offset) {
-            void *h = dlopen("libnfsu2_android.so", RTLD_NOLOAD | RTLD_GLOBAL);
-            if (!h) h = RTLD_DEFAULT;
-            s_fn_get_minimap_offset = (void (*)(float *, float *))dlsym(h, "nfs_widescreen_get_minimap_offset");
-        }
-        if (s_fn_get_minimap_offset) {
-            s_fn_get_minimap_offset(&dx, &dy);
-        }
+        roam_get_minimap_offset(&dx, &dy);
+
         uint32_t ebx = (g_p_ebx) ? *g_p_ebx : 0;
         uint32_t edx = (g_p_edx) ? *g_p_edx : 0;
         uint32_t esp = (g_p_esp) ? *g_p_esp : 0;
-        if (ebx >= 0x10000u && rh_mem_committed(ebx + 0x1C, 8) &&
-            edx >= 0x10000u && rh_mem_committed(edx, 4) &&
-            esp >= 0x10000u && rh_mem_committed(esp + 0x1C, 4)) {
+        uint32_t eax = (g_p_eax) ? *g_p_eax : 0;
+        if (ebx >= 0x10000u && rh_mem_committed(ebx + 0x1C, 8)) {
             float cur_x = MRF32(ebx + 0x1C);
             float cur_y = MRF32(ebx + 0x20);
-            float bx = 0.0f, by = 0.0f;
-            roam_get_or_register_minimap_base(ebx, cur_x, cur_y, &bx, &by);
+            float bx = -223.0f, by = 142.0f;
+            if (cur_x >= -160.0f && cur_x <= -120.0f) {
+                bx = -143.0f;
+                by = 196.0f;
+            } else if (cur_x > -200.0f || cur_x < -400.0f) {
+                roam_get_or_register_minimap_base(ebx, cur_x, cur_y, &bx, &by);
+            }
             float target_x = bx + dx;
             float target_y = by + dy;
-            for (int i = 0; i < s_roam_minimap_bases_count; ++i) {
-                if (s_roam_minimap_bases[i].ebx == ebx) {
-                    s_roam_minimap_bases[i].last_target_x = target_x;
-                    s_roam_minimap_bases[i].last_target_y = target_y;
-                    break;
-                }
-            }
+
             MRF32(ebx + 0x1C) = target_x;
             MRF32(ebx + 0x20) = target_y;
-            MRF32(edx) = target_x;
+            if (edx >= 0x10000u && rh_mem_committed(edx, 4)) {
+                MRF32(edx) = target_x;
+            }
             uint32_t vx, vy;
             memcpy(&vx, &target_x, 4);
             memcpy(&vy, &target_y, 4);
             if (g_p_ecx) *g_p_ecx = vx;
             if (g_p_eax) *g_p_eax = vy;
-            uint32_t out_y_ptr = MR32(esp + 0x1C);
-            if (out_y_ptr >= 0x10000u && rh_mem_committed(out_y_ptr, 4)) {
-                MRF32(out_y_ptr) = target_y;
+            if (eax >= 0x10000u && rh_mem_committed(eax, 4)) {
+                MRF32(eax) = target_y;
+            }
+            if (esp >= 0x10000u && rh_mem_committed(esp + 0x1C, 4)) {
+                uint32_t out_y_ptr = MR32(esp + 0x1C);
+                if (out_y_ptr >= 0x10000u && rh_mem_committed(out_y_ptr, 4)) {
+                    MRF32(out_y_ptr) = target_y;
+                }
+            }
+            if (esp >= 0x10000u && rh_mem_committed(esp + 0x18, 4)) {
+                uint32_t out_x_ptr = MR32(esp + 0x18);
+                if (out_x_ptr >= 0x10000u && rh_mem_committed(out_x_ptr, 4)) {
+                    MRF32(out_x_ptr) = target_x;
+                }
             }
         }
         return;
@@ -1191,6 +1258,7 @@ static void roam_android_install_hooks(void) {
     }
 
     uintptr_t lib_base = (uintptr_t)dlinfo.dli_fbase;
+    s_lib_base = lib_base;
     long page_sz = sysconf(_SC_PAGESIZE);
     if (page_sz <= 0) page_sz = 16384;
 

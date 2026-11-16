@@ -256,6 +256,8 @@ public final class GameActivity extends NativeActivity {
     private static void nativeScreenMode(int mode) {
         try { com.nfsu2.androidevolved.GameActivity.nativeScreenMode(mode); }
         catch (Throwable t) { android.util.Log.w("GameActivity", "nativeScreenMode: " + t.getMessage()); }
+        try { android.system.Os.setenv("NFSU2_SCREEN_MODE", String.valueOf(mode), true); }
+        catch (Throwable ignored) {}
     }
     private static void nativeDrawDistance(float distance) {
         try {
