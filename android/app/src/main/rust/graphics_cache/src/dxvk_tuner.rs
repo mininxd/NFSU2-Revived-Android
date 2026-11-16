@@ -27,6 +27,15 @@ pub struct DxvkProfileConfig {
     pub allow_discard: bool,
     pub allow_do_not_wait: bool,
     pub cached_dynamic_buffers: bool,
+    pub cached_write_only_buffers: bool,
+    pub device_local_constant_buffers: bool,
+    pub tiler_mode: bool,
+    pub enable_gpl: bool,
+    pub enable_descriptor_buffer: bool,
+    pub enable_descriptor_heap: bool,
+    pub use_fp16: bool,
+    pub enable_unified_image_layouts: bool,
+    pub track_pipeline_lifetime: bool,
     pub evict_managed_on_unlock: bool,
     pub defer_surface_creation: bool,
     pub no_explicit_front_buffer: bool,
@@ -48,6 +57,15 @@ impl Default for DxvkProfileConfig {
             allow_discard: true,
             allow_do_not_wait: true,
             cached_dynamic_buffers: true,
+            cached_write_only_buffers: true,
+            device_local_constant_buffers: true,
+            tiler_mode: true,
+            enable_gpl: true,
+            enable_descriptor_buffer: true,
+            enable_descriptor_heap: true,
+            use_fp16: true,
+            enable_unified_image_layouts: true,
+            track_pipeline_lifetime: false,
             evict_managed_on_unlock: true,
             defer_surface_creation: true,
             no_explicit_front_buffer: true,
@@ -61,11 +79,17 @@ impl Default for DxvkProfileConfig {
 impl DxvkProfileConfig {
     /// Formats the configuration into standard dxvk.conf syntax.
     pub fn format_conf(&self) -> String {
-        let mut s = String::with_capacity(1024);
-        s.push_str("# NFSU2 Revived DXVK Configuration (GameHub & Proton Optimized)\n");
+        let mut s = String::with_capacity(2048);
+        s.push_str("# NFSU2 Revived DXVK Configuration (GameHub, Proton & Vulkan 1.3 Optimized)\n");
         s.push_str("dxvk.enableStateCache = True\n");
         s.push_str(&format!("dxvk.numCompilerThreads = {}\n", self.num_compiler_threads));
         s.push_str("dxvk.useRawSsbo = True\n");
+        s.push_str(&format!("dxvk.tilerMode = {}\n", if self.tiler_mode { "True" } else { "False" }));
+        s.push_str(&format!("dxvk.enableGraphicsPipelineLibrary = {}\n", if self.enable_gpl { "Auto" } else { "False" }));
+        s.push_str(&format!("dxvk.enableDescriptorBuffer = {}\n", if self.enable_descriptor_buffer { "Auto" } else { "False" }));
+        s.push_str(&format!("dxvk.enableDescriptorHeap = {}\n", if self.enable_descriptor_heap { "Auto" } else { "False" }));
+        s.push_str(&format!("dxvk.enableUnifiedImageLayouts = {}\n", if self.enable_unified_image_layouts { "True" } else { "False" }));
+        s.push_str(&format!("dxvk.trackPipelineLifetime = {}\n", if self.track_pipeline_lifetime { "Auto" } else { "False" }));
 
         s.push_str(&format!("d3d9.tearFree = {}\n", if self.tear_free { "True" } else { "False" }));
         s.push_str(&format!("d3d9.maxFrameLatency = {}\n", self.max_frame_latency));
@@ -75,6 +99,9 @@ impl DxvkProfileConfig {
         s.push_str(&format!("d3d9.allowDiscard = {}\n", if self.allow_discard { "True" } else { "False" }));
         s.push_str(&format!("d3d9.allowDoNotWait = {}\n", if self.allow_do_not_wait { "True" } else { "False" }));
         s.push_str(&format!("d3d9.cachedDynamicBuffers = {}\n", if self.cached_dynamic_buffers { "True" } else { "False" }));
+        s.push_str(&format!("d3d9.cachedWriteOnlyBuffers = {}\n", if self.cached_write_only_buffers { "True" } else { "False" }));
+        s.push_str(&format!("d3d9.deviceLocalConstantBuffers = {}\n", if self.device_local_constant_buffers { "True" } else { "False" }));
+        s.push_str(&format!("d3d9.useFP16 = {}\n", if self.use_fp16 { "Auto" } else { "False" }));
         s.push_str(&format!("d3d9.evictManagedOnUnlock = {}\n", if self.evict_managed_on_unlock { "True" } else { "False" }));
         s.push_str("d3d9.memoryTrackTest = False\n");
         s.push_str(&format!("d3d9.maxAvailableMemory = {}\n", self.max_device_memory_mb));
@@ -223,5 +250,11 @@ mod tests {
         assert!(formatted.contains("d3d9.strictConstantCopies = False"));
         assert!(formatted.contains("d3d9.forceSwapchainMSAA = False"));
         assert!(formatted.contains("dxvk.enableMemoryDefrag = False"));
+        assert!(formatted.contains("dxvk.tilerMode = True"));
+        assert!(formatted.contains("dxvk.enableGraphicsPipelineLibrary = Auto"));
+        assert!(formatted.contains("dxvk.enableDescriptorBuffer = Auto"));
+        assert!(formatted.contains("d3d9.useFP16 = Auto"));
+        assert!(formatted.contains("d3d9.deviceLocalConstantBuffers = True"));
+        assert!(formatted.contains("d3d9.cachedWriteOnlyBuffers = True"));
     }
 }
