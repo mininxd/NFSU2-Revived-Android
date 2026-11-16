@@ -20,8 +20,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-          submodules: recursive
+          fetch-depth: 1
+          submodules: false
+
+      - name: Checkout Submodules (Shallow Depth 1)
+        run: |
+          git submodule update --init --recursive --depth 1 --recommend-shallow
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
