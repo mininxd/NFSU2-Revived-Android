@@ -269,6 +269,11 @@ pub unsafe extern "C" fn nfs_camera_cull_set_far_distance(dist: f32) {
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn nfs_camera_cull_get_far_distance() -> f32 {
+    GLOBAL_CAMERA_CULL.get_far_distance()
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn nfs_camera_cull_update_camera(
     pos_x: f32, pos_y: f32, pos_z: f32,
     fwd_x: f32, fwd_y: f32, fwd_z: f32,

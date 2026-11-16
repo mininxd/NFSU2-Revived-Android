@@ -996,9 +996,20 @@ static void look_process_view(uint32_t view_id, uint32_t cam) {
     turn_one_camera(cam);
 }
 
+static float get_configured_draw_distance(void) {
+    const char *dd = getenv("NFSU2_DRAW_DISTANCE");
+    if (dd && *dd) {
+        float val = strtof(dd, NULL);
+        if (val > 0.0f) return val;
+    }
+    return 0.0f;
+}
+
 static void hook_sub_005c7ec0(void) {
     uint32_t view_id = 0;
     uint32_t cam = 0;
+    float max_far = 0.0f;
+    float dd = get_configured_draw_distance();
     if (g_p_mem_base && *g_p_mem_base && g_p_esp && *g_p_esp) {
         uint32_t esp = *g_p_esp;
         if (rh_mem_committed(esp + 4, 4)) {
@@ -1009,10 +1020,12 @@ static void hook_sub_005c7ec0(void) {
                 if (view_id == 1u) {
                     look_process_view(view_id, cam);
                 }
-                if (view_id == 4u || view_id == 5u) {
+                if (dd >= 30.0f && (view_id >= 1u && view_id <= 5u)) {
+                    max_far = (view_id == 3u || view_id == 4u) ? (dd * 0.75f) : dd;
+                    if ((view_id == 3u || view_id == 4u) && max_far < 35.0f) max_far = 35.0f;
                     if (cam && rh_mem_committed(cam + 0xC0u, 4)) {
-                        if (MRF32(cam + 0xC0u) < 1000.0f) {
-                            MRF32(cam + 0xC0u) = 10000.0f;
+                        if (MRF32(cam + 0xC0u) > max_far) {
+                            MRF32(cam + 0xC0u) = max_far;
                         }
                     }
                 }
@@ -1024,9 +1037,9 @@ static void hook_sub_005c7ec0(void) {
         s_orig_5c7ec0();
     }
 
-    if ((view_id == 4u || view_id == 5u) && cam && rh_mem_committed(cam + 0xC0u, 4)) {
-        if (MRF32(cam + 0xC0u) < 1000.0f) {
-            MRF32(cam + 0xC0u) = 10000.0f;
+    if (max_far >= 30.0f && cam && rh_mem_committed(cam + 0xC0u, 4)) {
+        if (MRF32(cam + 0xC0u) > max_far) {
+            MRF32(cam + 0xC0u) = max_far;
         }
     }
 }
@@ -1036,18 +1049,6 @@ static void hook_sub_005caad0(void) {
     if (!h_gc) h_gc = dlopen("libgraphics_cache.so", RTLD_LAZY | RTLD_GLOBAL);
     void (*fn_bypass)(int) = h_gc ? (void (*)(int))dlsym(h_gc, "nfs_camera_cull_set_bypass") : NULL;
     if (fn_bypass) fn_bypass(1);
-
-    if (g_p_mem_base && *g_p_mem_base) {
-        uint32_t view4 = 0x00832DE0u + 4u * 0x70u; // 0x00832FA0
-        if (rh_mem_committed(view4 + 0x40u, 4)) {
-            uint32_t cam4 = MR32(view4 + 0x40u);
-            if (cam4 >= 0x10000u && rh_mem_committed(cam4 + 0xC0u, 4)) {
-                if (MRF32(cam4 + 0xC0u) < 1000.0f) {
-                    MRF32(cam4 + 0xC0u) = 10000.0f;
-                }
-            }
-        }
-    }
 
     if (s_orig_5caad0) {
         s_orig_5caad0();
@@ -1063,21 +1064,25 @@ static void hook_recomp_hook(uint32_t va) {
         uint32_t view = (ebp >= 0x10000u && ebp <= 0x7FFFF000u && rh_mem_committed(ebp + 4u, 4)) ? MR32(ebp + 4u) : ecx;
         if (view == 0) view = ecx;
 
-        uint32_t cam = (ebp >= 0x10000u && ebp <= 0x7FFFF000u && rh_mem_committed(ebp + 0x40u, 4)) ? MR32(ebp + 0x40u) : 0;
-        float orig_far = (cam >= 0x10000u && rh_mem_committed(cam + 0xC0u, 4)) ? MRF32(cam + 0xC0u) : 10000.0f;
-        if (orig_far < 1000.0f) orig_far = 10000.0f;
-
         if (s_orig_recomp_hook) {
             s_orig_recomp_hook(va);
         }
 
-        if (view == 4u || view == 5u) {
+        float dd = get_configured_draw_distance();
+        if (dd >= 30.0f && (view >= 1u && view <= 5u)) {
+            float max_far = (view == 3u || view == 4u) ? (dd * 0.75f) : dd;
+            if ((view == 3u || view == 4u) && max_far < 35.0f) max_far = 35.0f;
             uint32_t esp = (g_p_esp && *g_p_esp) ? *g_p_esp : 0;
             if (esp >= 0x10000u && rh_mem_committed(esp + 0x0Cu, 4)) {
-                MRF32(esp + 0x0Cu) = orig_far;
+                if (MRF32(esp + 0x0Cu) > max_far) {
+                    MRF32(esp + 0x0Cu) = max_far;
+                }
             }
+            uint32_t cam = (ebp >= 0x10000u && ebp <= 0x7FFFF000u && rh_mem_committed(ebp + 0x40u, 4)) ? MR32(ebp + 0x40u) : 0;
             if (cam >= 0x10000u && rh_mem_committed(cam + 0xC0u, 4)) {
-                MRF32(cam + 0xC0u) = orig_far;
+                if (MRF32(cam + 0xC0u) > max_far) {
+                    MRF32(cam + 0xC0u) = max_far;
+                }
             }
         }
         return;

@@ -163,7 +163,14 @@ void nfs_widescreen_init(const char* game_root) {
     const char* dd_env = getenv("NFSU2_DRAW_DISTANCE");
     if (dd_env) {
         float d = (float)atof(dd_env);
-        if (d >= 0.0f) s_draw_distance = d;
+        if (d >= 0.0f) {
+            s_draw_distance = d;
+#if !defined(_WIN32)
+            void* h = get_graphics_cache_lib();
+            void (*fn)(float) = h ? (void (*)(float))dlsym(h, "nfs_camera_cull_set_far_distance") : NULL;
+            if (fn) fn(d);
+#endif
+        }
     }
     s_enabled = 1;
 }
@@ -406,9 +413,9 @@ void recomp_hook(uint32_t va) {
             s_fov_scale[0] = 1.0; s_fov_scale[1] = 0.5; s_fov_scale[2] = 1.0;
         }
         g_st[0] = view == 3 ? 0.45 : 1.0;   /* rear-view mirror */
-        if (s_draw_distance > 0.0f && (view == 1 || view == 2 || view == 3)) {
-            float max_far = (view == 3) ? (s_draw_distance * 0.75f) : s_draw_distance;
-            if (view == 3 && max_far < 35.0f) max_far = 35.0f;
+        if (s_draw_distance > 0.0f && (view >= 1 && view <= 5)) {
+            float max_far = (view == 3 || view == 4) ? (s_draw_distance * 0.75f) : s_draw_distance;
+            if ((view == 3 || view == 4) && max_far < 35.0f) max_far = 35.0f;
             if (max_far >= 30.0f) {
                 /* View 1 (main camera) hardcodes 15000.0f at [esp+0x0C] on stack
                  * at 0x005C7F0A, bypassing cam+0xC0. Overwriting [esp+0x0C] ensures both

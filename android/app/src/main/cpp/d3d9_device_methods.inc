@@ -102,6 +102,24 @@ case 44:{*argumentCount=3;
         static void(*s_cull_proj)(const float*) = nullptr;
         if(!s_cull_proj) s_cull_proj = reinterpret_cast<void(*)(const float*)>(resolveGraphicsCacheSymbol("nfs_camera_cull_update_proj"));
         if(s_cull_proj) s_cull_proj(reinterpret_cast<const float*>(matrix));
+        static int(*s_cull_bypass)() = nullptr;
+        if(!s_cull_bypass) s_cull_bypass = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_camera_cull_is_bypassed"));
+        static float(*s_cull_get_far)() = nullptr;
+        if(!s_cull_get_far) s_cull_get_far = reinterpret_cast<float(*)()>(resolveGraphicsCacheSymbol("nfs_camera_cull_get_far_distance"));
+        float farDist = s_cull_get_far ? s_cull_get_far() : 0.0f;
+        int bypassed = s_cull_bypass ? s_cull_bypass() : 0;
+        if(farDist >= 30.0f && !bypassed && matrix->_34 == 1.0f && matrix->_33 > 1.0f){
+            float zn = -matrix->_43 / matrix->_33;
+            if(zn > 0.01f && zn < farDist){
+                float currentZf = (matrix->_33 > 1.0001f) ? (zn * matrix->_33 / (matrix->_33 - 1.0f)) : 10000.0f;
+                if(currentZf > farDist){
+                    tf_copy = *matrix;
+                    tf_copy._33 = farDist / (farDist - zn);
+                    tf_copy._43 = -zn * farDist / (farDist - zn);
+                    matrix = &tf_copy;
+                }
+            }
+        }
     } else if((args[1]==256 || (args[1]>=256 && args[1]<=511)) && matrix){ // D3DTS_WORLD = 256
         static void(*s_cull_world)(const float*) = nullptr;
         if(!s_cull_world) s_cull_world = reinterpret_cast<void(*)(const float*)>(resolveGraphicsCacheSymbol("nfs_camera_cull_update_world"));
@@ -171,8 +189,16 @@ case 82:{*argumentCount=7;
     if(!s_cull_test) s_cull_test = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_camera_cull_test_draw"));
     if (s_cull_test && s_cull_test()) return D3D_OK;
     return device->DrawIndexedPrimitive(static_cast<D3DPRIMITIVETYPE>(args[1]),static_cast<INT>(args[2]),static_cast<UINT>(args[3]),static_cast<UINT>(args[4]),static_cast<UINT>(args[5]),static_cast<UINT>(args[6]));}
-case 83:{*argumentCount=5;return device->DrawPrimitiveUP(static_cast<D3DPRIMITIVETYPE>(args[1]),static_cast<UINT>(args[2]),static_cast<const void*>(pointer(args[3])),static_cast<UINT>(args[4]));}
-case 84:{*argumentCount=9;return device->DrawIndexedPrimitiveUP(static_cast<D3DPRIMITIVETYPE>(args[1]),static_cast<UINT>(args[2]),static_cast<UINT>(args[3]),static_cast<UINT>(args[4]),static_cast<const void*>(pointer(args[5])),static_cast<D3DFORMAT>(args[6]),static_cast<const void*>(pointer(args[7])),static_cast<UINT>(args[8]));}
+case 83:{*argumentCount=5;
+    static int(*s_cull_test)() = nullptr;
+    if(!s_cull_test) s_cull_test = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_camera_cull_test_draw"));
+    if (s_cull_test && s_cull_test()) return D3D_OK;
+    return device->DrawPrimitiveUP(static_cast<D3DPRIMITIVETYPE>(args[1]),static_cast<UINT>(args[2]),static_cast<const void*>(pointer(args[3])),static_cast<UINT>(args[4]));}
+case 84:{*argumentCount=9;
+    static int(*s_cull_test)() = nullptr;
+    if(!s_cull_test) s_cull_test = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_camera_cull_test_draw"));
+    if (s_cull_test && s_cull_test()) return D3D_OK;
+    return device->DrawIndexedPrimitiveUP(static_cast<D3DPRIMITIVETYPE>(args[1]),static_cast<UINT>(args[2]),static_cast<UINT>(args[3]),static_cast<UINT>(args[4]),static_cast<const void*>(pointer(args[5])),static_cast<D3DFORMAT>(args[6]),static_cast<const void*>(pointer(args[7])),static_cast<UINT>(args[8]));}
 case 85:{*argumentCount=7;return device->ProcessVertices(static_cast<UINT>(args[1]),static_cast<UINT>(args[2]),static_cast<UINT>(args[3]),nativeObject<IDirect3DVertexBuffer9>(args[4]),nativeObject<IDirect3DVertexDeclaration9>(args[5]),static_cast<DWORD>(args[6]));}
 case 86:{*argumentCount=3;IDirect3DVertexDeclaration9* object2=nullptr;noteVertexDeclaration(static_cast<const D3DVERTEXELEMENT9*>(pointer(args[1])));HRESULT status=device->CreateVertexDeclaration(static_cast<const D3DVERTEXELEMENT9*>(pointer(args[1])),args[2]?&object2:nullptr);if(args[2])write(args[2],SUCCEEDED(status)?wrap(object2,Kind::Declaration):0);return status;}
 case 87:{*argumentCount=2;return device->SetVertexDeclaration(nativeObject<IDirect3DVertexDeclaration9>(args[1]));}

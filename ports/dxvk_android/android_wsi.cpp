@@ -47,8 +47,7 @@ extern "C" DXVK_EXPORT PFN_vkGetInstanceProcAddr dxvkAndroidGetInstanceProcAddr(
 }
 extern "C" DXVK_EXPORT void dxvkAndroidSetRenderSize(uint32_t width,uint32_t height){std::lock_guard<std::mutex> guard(windowMutex);renderWidth=width;renderHeight=height;
 #ifdef __ANDROID__
-    // Same as dxvkAndroidSetWindow when the window came first.
-    if(currentWindow&&!bufferWidth&&width&&height&&width<screenWidth&&height<screenHeight&&
+    if(currentWindow&&width&&height&&
        ANativeWindow_setBuffersGeometry(currentWindow,width,height,0)==0){bufferWidth=width;bufferHeight=height;}
 #endif
 }
@@ -64,8 +63,8 @@ extern "C" DXVK_EXPORT void dxvkAndroidSetWindow(ANativeWindow* window){
 #ifdef __ANDROID__
     // Below native resolution, present at the render size and let the Android
     // compositor scale the surface: the swap chain blit no longer writes a
-    // full-screen image every frame (Adreno 610: 2.5 MB per frame at 2340x1080).
-    if(window&&renderWidth&&renderHeight&&renderWidth<screenWidth&&renderHeight<screenHeight&&
+    // full-screen image every frame.
+    if(window&&renderWidth&&renderHeight&&
        ANativeWindow_setBuffersGeometry(window,renderWidth,renderHeight,0)==0){bufferWidth=renderWidth;bufferHeight=renderHeight;}
     currentHandle=window?reinterpret_cast<HWND>(uintptr_t{0x1000}):nullptr;
 #else
@@ -153,7 +152,11 @@ void getWindowSize(HWND window,uint32_t* width,uint32_t* height){
 void resizeWindow(HWND window,DxvkWindowState*,uint32_t width,uint32_t height){
     std::lock_guard<std::mutex> guard(windowMutex);
 #ifdef __ANDROID__
-    if(currentWindow&&window&&ANativeWindow_setBuffersGeometry(currentWindow,width,height,0)==0){bufferWidth=width;bufferHeight=height;}
+    uint32_t targetW = renderWidth ? renderWidth : width;
+    uint32_t targetH = renderHeight ? renderHeight : height;
+    if(currentWindow&&window&&ANativeWindow_setBuffersGeometry(currentWindow,targetW,targetH,0)==0){
+        bufferWidth=targetW;bufferHeight=targetH;
+    }
 #else
     (void)window;(void)width;(void)height;
 #endif

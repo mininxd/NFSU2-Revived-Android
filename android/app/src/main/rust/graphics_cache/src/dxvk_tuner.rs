@@ -78,17 +78,21 @@ impl DxvkProfileConfig {
     pub fn format_conf(&self) -> String {
         let mut s = String::with_capacity(2048);
         s.push_str("dxvk.enableStateCache = True\n");
+        s.push_str("dxvk.enableAsync = True\n");
+        s.push_str("dxvk.gplAsyncCache = True\n");
         s.push_str(&format!("dxvk.numCompilerThreads = {}\n", self.num_compiler_threads));
         s.push_str("dxvk.useRawSsbo = True\n");
         s.push_str("dxvk.tilerMode = Auto\n");
-        s.push_str("dxvk.enableGraphicsPipelineLibrary = Auto\n");
+        s.push_str("dxvk.enableGraphicsPipelineLibrary = True\n");
         s.push_str("dxvk.enableDescriptorBuffer = Auto\n");
         s.push_str("dxvk.enableDescriptorHeap = Auto\n");
         s.push_str("dxvk.enableUnifiedImageLayouts = True\n");
         s.push_str("dxvk.enableImplicitResolves = False\n");
         s.push_str("dxvk.enableMemoryDefrag = False\n");
+        s.push_str("dxvk.trackPipelineLifetime = True\n");
 
         s.push_str("d3d9.tearFree = False\n");
+        s.push_str("d3d9.maxFrameLatency = 1\n");
         s.push_str("d3d9.lenientClear = True\n");
         s.push_str("d3d9.allowDiscard = True\n");
         s.push_str("d3d9.allowDoNotWait = True\n");
@@ -127,6 +131,7 @@ impl DxvkProfileConfig {
 pub fn apply_driver_environment() {
     let vars: &[(&str, &str)] = &[
         ("DXVK_ASYNC", "1"),
+        ("DXVK_GPLASYNCCACHE", "1"),
         ("DXVK_STATE_CACHE", "1"),
         ("DXVK_LOG_LEVEL", "none"),
         ("WINEDEBUG", "-all"),
