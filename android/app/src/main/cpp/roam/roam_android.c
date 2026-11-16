@@ -40,6 +40,7 @@ uint32_t  *g_p_esi = NULL;
 uint32_t  *g_p_edi = NULL;
 recomp_func_t (*g_p_recomp_lookup)(uint32_t va) = NULL;
 int (*g_p_guest_is_readable)(uint32_t va, uint32_t bytes) = NULL;
+static void (*s_fn_get_minimap_offset)(float *out_dx, float *out_dy) = NULL;
 
 static int s_probe_pipe[2] = { -1, -1 };
 static pthread_mutex_t s_probe_mu = PTHREAD_MUTEX_INITIALIZER;
@@ -690,7 +691,6 @@ static recomp_void_func_t s_orig_4a5d90 = NULL;
 static recomp_void_func_t s_orig_5c7ec0 = NULL;
 static recomp_void_func_t s_orig_5caad0 = NULL;
 static recomp_hook_func_t s_orig_recomp_hook = NULL;
-static void (*s_fn_get_minimap_offset)(float *out_dx, float *out_dy) = NULL;
 
 typedef struct {
     uint32_t ebx;
