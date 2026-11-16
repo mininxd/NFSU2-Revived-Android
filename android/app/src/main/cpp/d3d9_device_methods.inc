@@ -24,9 +24,14 @@ case 17:{*argumentCount=5;
         uint64_t now_ns = (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
         s_telemetry_present(now_ns);
     }
-    static uint32_t(*s_contrast_sync)(void*) = nullptr;
-    if(!s_contrast_sync) s_contrast_sync = reinterpret_cast<uint32_t(*)(void*)>(resolveGraphicsCacheSymbol("nfs_contrast_sync_ingame"));
-    if(s_contrast_sync) s_contrast_sync(guestBase);
+    static int(*s_contrast_post)(void*) = nullptr;
+    if(!s_contrast_post) s_contrast_post = reinterpret_cast<int(*)(void*)>(resolveGraphicsCacheSymbol("nfs_contrast_regulator_post_frame"));
+    if(s_contrast_post) s_contrast_post(guestBase);
+    else {
+        static uint32_t(*s_contrast_sync)(void*) = nullptr;
+        if(!s_contrast_sync) s_contrast_sync = reinterpret_cast<uint32_t(*)(void*)>(resolveGraphicsCacheSymbol("nfs_contrast_sync_ingame"));
+        if(s_contrast_sync) s_contrast_sync(guestBase);
+    }
     static uint32_t s_cull_log_frame = 0;
     if (++s_cull_log_frame % 300 == 0) {
         static void(*s_cull_stats)(uint64_t*, uint64_t*) = nullptr;
@@ -82,6 +87,9 @@ case 41:{*argumentCount=1;
     static void(*s_cam_apply)(void*) = nullptr;
     if(!s_cam_apply) s_cam_apply = reinterpret_cast<void(*)(void*)>(resolveGraphicsCacheSymbol("nfs_camera_stick_apply_frame"));
     if(s_cam_apply) s_cam_apply(guestBase);
+    static int(*s_contrast_pre)(void*) = nullptr;
+    if(!s_contrast_pre) s_contrast_pre = reinterpret_cast<int(*)(void*)>(resolveGraphicsCacheSymbol("nfs_contrast_regulator_pre_frame"));
+    if(s_contrast_pre) s_contrast_pre(guestBase);
     return device->BeginScene();}
 case 42:{*argumentCount=1;
     return device->EndScene();}

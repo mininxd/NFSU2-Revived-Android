@@ -135,7 +135,7 @@ D3DPRESENT_PARAMETERS presentation(uint32_t address){
     result.BackBufferFormat=static_cast<D3DFORMAT>(p[2]);result.BackBufferCount=hostBackBufferCount(p[3]);
     // Mobile GPUs: Clamp MultiSampleType to NONE to eliminate broken tile-based MSAA resolves (Issue #67)
     result.MultiSampleType=D3DMULTISAMPLE_NONE;result.MultiSampleQuality=0;result.SwapEffect=static_cast<D3DSWAPEFFECT>(p[6]);result.hDeviceWindow=dxvkAndroidGetWindowHandle();
-    result.Windowed=p[8];result.EnableAutoDepthStencil=p[9];result.AutoDepthStencilFormat=static_cast<D3DFORMAT>(p[10]);result.Flags=p[11];result.FullScreen_RefreshRateInHz=p[12];result.PresentationInterval=D3DPRESENT_INTERVAL_IMMEDIATE;return result;
+    result.Windowed=FALSE;result.EnableAutoDepthStencil=p[9];result.AutoDepthStencilFormat=static_cast<D3DFORMAT>(p[10]);result.Flags=p[11];result.FullScreen_RefreshRateInHz=p[12];result.PresentationInterval=D3DPRESENT_INTERVAL_IMMEDIATE;return result;
 }
 #include "d3d9_locks.inc"
 bool compressedFormat(D3DFORMAT format){return format>=D3DFMT_DXT1&&format<=D3DFMT_DXT5;}
@@ -292,7 +292,8 @@ uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumen
     static bool s_contrast_ramp_reg = false;
     if (!s_contrast_ramp_reg) {
         s_contrast_ramp_reg = true;
-        auto reg_fn = reinterpret_cast<void(*)(void(*)(int))>(resolveGraphicsCacheSymbol("nfs_contrast_register_ramp_callback"));
+        auto reg_fn = reinterpret_cast<void(*)(void(*)(int))>(resolveGraphicsCacheSymbol("nfs_contrast_regulator_register_callback"));
+        if (!reg_fn) reg_fn = reinterpret_cast<void(*)(void(*)(int))>(resolveGraphicsCacheSymbol("nfs_contrast_register_ramp_callback"));
         if (reg_fn) reg_fn(nfs_d3d9_set_enhanced_contrast_ramp);
     }
     uint32_t kind=(token-methodBase)/4096,method=((token-methodBase)%4096)/16;
@@ -320,9 +321,14 @@ uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumen
             uint64_t now_ns = (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
             s_telemetry_present(now_ns);
         }
-        static uint32_t(*s_contrast_sync)(void*) = nullptr;
-        if(!s_contrast_sync) s_contrast_sync = reinterpret_cast<uint32_t(*)(void*)>(resolveGraphicsCacheSymbol("nfs_contrast_sync_ingame"));
-        if(s_contrast_sync) s_contrast_sync(guestBase);
+        static int(*s_contrast_post)(void*) = nullptr;
+        if(!s_contrast_post) s_contrast_post = reinterpret_cast<int(*)(void*)>(resolveGraphicsCacheSymbol("nfs_contrast_regulator_post_frame"));
+        if(s_contrast_post) s_contrast_post(guestBase);
+        else {
+            static uint32_t(*s_contrast_sync)(void*) = nullptr;
+            if(!s_contrast_sync) s_contrast_sync = reinterpret_cast<uint32_t(*)(void*)>(resolveGraphicsCacheSymbol("nfs_contrast_sync_ingame"));
+            if(s_contrast_sync) s_contrast_sync(guestBase);
+        }
 
         auto source=static_cast<const RECT*>(pointer(args[1])),destination=static_cast<const RECT*>(pointer(args[2]));
         auto dirty=static_cast<const RGNDATA*>(pointer(args[4]));
@@ -390,7 +396,7 @@ uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumen
             parameters.BackBufferFormat=static_cast<D3DFORMAT>(p[2]);parameters.BackBufferCount=hostBackBufferCount(p[3]);
             // Mobile GPUs: Clamp MultiSampleType to NONE to eliminate broken tile-based MSAA resolves (Issue #67)
             parameters.MultiSampleType=D3DMULTISAMPLE_NONE;parameters.MultiSampleQuality=0;parameters.SwapEffect=static_cast<D3DSWAPEFFECT>(p[6]);parameters.hDeviceWindow=window;
-            parameters.Windowed=p[8];parameters.EnableAutoDepthStencil=p[9];parameters.AutoDepthStencilFormat=static_cast<D3DFORMAT>(p[10]);parameters.Flags=p[11];parameters.FullScreen_RefreshRateInHz=p[12];parameters.PresentationInterval=D3DPRESENT_INTERVAL_IMMEDIATE;
+            parameters.Windowed=FALSE;parameters.EnableAutoDepthStencil=p[9];parameters.AutoDepthStencilFormat=static_cast<D3DFORMAT>(p[10]);parameters.Flags=p[11];parameters.FullScreen_RefreshRateInHz=p[12];parameters.PresentationInterval=D3DPRESENT_INTERVAL_IMMEDIATE;
             IDirect3DDevice9* device=nullptr;HRESULT status=d3d->CreateDevice(args[1],static_cast<D3DDEVTYPE>(args[2]),window,args[4],&parameters,&device);
             if (FAILED(status)) {
                 // Device creation fallback for PowerVR GE8322 / low-end mobile Vulkan implementations:

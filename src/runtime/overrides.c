@@ -49,8 +49,11 @@ static void ov_bleach_bypass(void) {
 #if !defined(_WIN32)
     static void (*s_contrast_tone)(int) = NULL;
     if (!s_contrast_tone) {
-        void *h = dlopen("libgraphics_cache.so", RTLD_NOW | RTLD_LOCAL);
-        s_contrast_tone = h ? (void (*)(int))dlsym(h, "nfs_contrast_apply_hardware_tone") : NULL;
+        void *h = dlopen("libgame_core.so", RTLD_NOLOAD);
+        if (!h) h = dlopen("libgame_core.so", RTLD_NOW | RTLD_GLOBAL);
+        if (!h) h = dlopen("libgraphics_cache.so", RTLD_NOW | RTLD_LOCAL);
+        s_contrast_tone = h ? (void (*)(int))dlsym(h, "nfs_contrast_regulator_post_frame") : NULL;
+        if (!s_contrast_tone) s_contrast_tone = h ? (void (*)(int))dlsym(h, "nfs_contrast_apply_hardware_tone") : NULL;
         if (!s_contrast_tone) s_contrast_tone = (void (*)(int))dlsym(RTLD_DEFAULT, "nfs_contrast_apply_hardware_tone");
     }
     if (s_contrast_tone) s_contrast_tone(1);

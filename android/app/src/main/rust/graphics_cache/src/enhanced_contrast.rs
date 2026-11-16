@@ -132,6 +132,21 @@ pub extern "C" fn nfs_contrast_synced_frame_count() -> u32 {
     CONTRAST_FRAME_COUNT.load(Ordering::Relaxed)
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn nfs_contrast_regulator_pre_frame(guest_mem: *mut std::ffi::c_void) -> i32 {
+    nfs_contrast_sync_ingame(guest_mem as *mut u8) as i32
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_contrast_regulator_post_frame(guest_mem: *mut std::ffi::c_void) -> i32 {
+    nfs_contrast_sync_ingame(guest_mem as *mut u8) as i32
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_contrast_regulator_register_callback(cb: Option<unsafe extern "C" fn(i32)>) {
+    nfs_contrast_register_ramp_callback(cb);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

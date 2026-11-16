@@ -1,10 +1,12 @@
 //! Modular Game Core: Analog controls, right-stick camera orbit, and garage viewer rotation engine for NFSU2 Android.
 
 pub mod camera_stick;
+pub mod contrast_regulator;
 pub mod garage_viewer;
 pub mod nitro_manager;
 
 pub use camera_stick::*;
+pub use contrast_regulator::*;
 pub use garage_viewer::*;
 pub use nitro_manager::*;
 

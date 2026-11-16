@@ -69,6 +69,13 @@ replace(
     '          std::cerr << adjusted;\n#ifdef __ANDROID__\n          if (level >= LogLevel::Warn)\n            __android_log_print(level >= LogLevel::Error ? ANDROID_LOG_ERROR : ANDROID_LOG_WARN, "DXVK", "%s", adjusted.c_str());\n#endif\n'
 )
 
+# Apply hardware tone curve / gamma ramp on Android even in Windowed swapchain mode
+replace(
+    "src/d3d9/d3d9_swapchain.cpp",
+    "if (!isIdentity && !m_presentParams.Windowed)",
+    "if (!isIdentity)"
+)
+
 # 2. Make optional Vulkan features non-blocking for universal mobile GPU support
 OPTIONAL_FEATURES = [
     "ENABLE_FEATURE(core.features, textureCompressionBC, true),",

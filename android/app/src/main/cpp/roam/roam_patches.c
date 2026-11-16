@@ -148,6 +148,14 @@ void extraoptions_set_dumb_ai(int dumb_ai) {
 }
 
 void extraoptions_frame_tick(void) {
+    static int s_patches_inited = 0;
+    if (!s_patches_inited) {
+        if (rh_mem_committed(0x00400000u, 0x1000)) {
+            s_patches_inited = 1;
+            extraoptions_init_patches();
+        }
+    }
+
     const char *e = getenv("NFSU2_AUTOPILOT");
     int dumb_ai = g_dumb_ai || (e && *e && *e != '0' && strcasecmp(e, "off") && strcasecmp(e, "false"));
     static int s_applied_state = -1;
