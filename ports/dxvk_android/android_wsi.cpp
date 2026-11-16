@@ -14,7 +14,7 @@ struct ANativeWindow {Display* display;Window window;uint32_t width,height;};
 #include <atomic>
 #include <algorithm>
 #include <cstdint>
-#include "src/wsi/wsi_presenter.h"
+#include "src/dxvk/dxvk_presenter.h"
 #include "src/wsi/wsi_window.h"
 #include "src/wsi/wsi_monitor.h"
 #include "src/wsi/wsi_platform.h"
