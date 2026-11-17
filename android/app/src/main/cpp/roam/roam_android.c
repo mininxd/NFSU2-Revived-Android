@@ -1070,8 +1070,7 @@ static void hook_sub_005caad0(void) {
         }
     }
 
-    const char *env_bypass = getenv("NFSU2_POSTPROCESS_BYPASS");
-    int do_bypass = (!env_bypass || strcmp(env_bypass, "0") != 0);
+    int do_bypass = 1;
 
     static void (*s_set_contrast_active)(uint32_t) = NULL;
     if (!s_set_contrast_active) {

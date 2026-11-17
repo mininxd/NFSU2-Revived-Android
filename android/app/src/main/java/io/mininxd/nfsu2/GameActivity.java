@@ -444,8 +444,6 @@ public final class GameActivity extends NativeActivity {
 
             android.system.Os.setenv("NFSU2_CROWD", "0", true);
             GraphicsCacheManager.setCrowdSuppression(true);
-            String postProcess = GameOptions.get(this, GameOptions.POST_PROCESSING);
-            android.system.Os.setenv("NFSU2_POSTPROCESS_BYPASS", "original".equals(postProcess) ? "0" : "1", true);
             android.system.Os.setenv("NFSU2_NEWS_URL", "https://api.mininxd.tech/nfsu2_news", true);
 
             // Sync touch control size
