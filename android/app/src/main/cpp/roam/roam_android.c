@@ -1070,8 +1070,49 @@ static void hook_sub_005caad0(void) {
         }
     }
 
+    const char *env_bypass = getenv("NFSU2_POSTPROCESS_BYPASS");
+    int do_bypass = (!env_bypass || strcmp(env_bypass, "0") != 0);
+
+    static void (*s_set_contrast_active)(uint32_t) = NULL;
+    if (!s_set_contrast_active) {
+        if (h_gc) s_set_contrast_active = (void (*)(uint32_t))dlsym(h_gc, "nfs_contrast_set_active");
+        if (!s_set_contrast_active) {
+            void *h_core = dlopen("libgame_core.so", RTLD_NOLOAD | RTLD_GLOBAL);
+            if (!h_core) h_core = dlopen("libgame_core.so", RTLD_LAZY | RTLD_GLOBAL);
+            if (h_core) s_set_contrast_active = (void (*)(uint32_t))dlsym(h_core, "nfs_contrast_set_active");
+        }
+    }
+
+    uint32_t user_contrast = 0;
+    uint32_t user_ob = 0;
+    if (do_bypass) {
+        if (rh_mem_committed(0x00870D00u, 4)) {
+            user_contrast = MR32(0x00870D00u);
+            if (s_set_contrast_active) {
+                s_set_contrast_active(user_contrast);
+            }
+            // Clamping 0x00870D00 to 0 inside scene render causes SPEED2.EXE to cleanly
+            // skip the slow 3-pass ping-pong StretchRect resolve without hooking internal functions.
+            MR32(0x00870D00u) = 0;
+        }
+        if (rh_mem_committed(0x00870CFCu, 4)) {
+            user_ob = MR32(0x00870CFCu);
+            MR32(0x00870CFCu) = 0;
+        }
+    }
+
     if (s_orig_5caad0) {
         s_orig_5caad0();
+    }
+
+    if (do_bypass) {
+        // Restore user settings immediately so in-game menus and player profile stay accurate
+        if (rh_mem_committed(0x00870D00u, 4)) {
+            MR32(0x00870D00u) = user_contrast;
+        }
+        if (rh_mem_committed(0x00870CFCu, 4)) {
+            MR32(0x00870CFCu) = user_ob;
+        }
     }
 
     if (fn_bypass) fn_bypass(0);
