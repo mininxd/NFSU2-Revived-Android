@@ -110,10 +110,12 @@ pub unsafe extern "C" fn nfs_contrast_sync_ingame(guest_mem: *mut u8) -> u32 {
     let p_overbright = guest_mem.add(G_OVERBRIGHT_ENABLE_ADDR) as *mut u32;
     let p_bleach = guest_mem.add(G_BLEACH_BYPASS_ENABLE_ADDR) as *mut u32;
     let p_master_overbright = guest_mem.add(G_MASTER_OVERBRIGHT_ADDR) as *mut u32;
+    let p_master_bleach = guest_mem.add(G_MASTER_BLEACH_BYPASS_ADDR) as *mut u32;
 
-    // 1. Read player's configured setting from engine flag (0x00870D00)
+    // 1. Read player's configured setting from master options menu & engine flags
+    let master_bleach = std::ptr::read_volatile(p_master_bleach);
     let bleach = std::ptr::read_volatile(p_bleach);
-    let is_active = bleach != 0;
+    let is_active = (master_bleach != 0) || (bleach != 0);
 
     // 2. Clamp engine post-processing flags to 0 every frame
     // This forces SPEED2.EXE to skip the 3-pass ping-pong StretchRect resolve (0x005cc8b0),

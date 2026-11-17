@@ -52,12 +52,14 @@ impl ContrastRegulator {
             return false;
         }
 
+        let p_master_bleach = guest_mem.add(G_MASTER_BLEACH_BYPASS_ADDR) as *mut u32;
         let p_bleach = guest_mem.add(G_BLEACH_BYPASS_ENABLE_ADDR) as *mut u32;
         let p_master_ob = guest_mem.add(G_MASTER_OVERBRIGHT_ADDR) as *mut u32;
         let p_ob = guest_mem.add(G_OVERBRIGHT_ENABLE_ADDR) as *mut u32;
 
+        let master_bleach = std::ptr::read_volatile(p_master_bleach);
         let bleach = std::ptr::read_volatile(p_bleach);
-        let is_on = bleach != 0;
+        let is_on = (master_bleach != 0) || (bleach != 0);
 
         // Clamping MUST happen before scene drawing and resolve!
         // Clamping engine flags to 0 prevents SPEED2.EXE from running the slow 3-pass ping-pong
