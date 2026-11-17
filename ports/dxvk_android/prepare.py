@@ -95,11 +95,15 @@ replace(
     uint32_t contrast_mode = 0u;
     static auto s_mode_fn = []() -> uint32_t(*)() {
 #ifdef __ANDROID__
-      void* h = dlopen("libgame_core.so", RTLD_NOLOAD);
-      if (!h) h = dlopen("libgame_core.so", RTLD_NOW | RTLD_GLOBAL);
-      if (!h) h = dlopen("libgraphics_cache.so", RTLD_NOLOAD);
-      if (!h) h = dlopen("libgraphics_cache.so", RTLD_NOW | RTLD_GLOBAL);
-      void* sym = h ? dlsym(h, "nfs_contrast_get_mode") : nullptr;
+      void* sym = nullptr;
+      void* h_gc = dlopen("libgraphics_cache.so", RTLD_NOLOAD);
+      if (!h_gc) h_gc = dlopen("libgraphics_cache.so", RTLD_NOW | RTLD_GLOBAL);
+      if (h_gc) sym = dlsym(h_gc, "nfs_contrast_get_mode");
+      if (!sym) {
+        void* h_core = dlopen("libgame_core.so", RTLD_NOLOAD);
+        if (!h_core) h_core = dlopen("libgame_core.so", RTLD_NOW | RTLD_GLOBAL);
+        if (h_core) sym = dlsym(h_core, "nfs_contrast_get_mode");
+      }
       if (!sym) sym = dlsym(RTLD_DEFAULT, "nfs_contrast_get_mode");
       return reinterpret_cast<uint32_t(*)()>(sym);
 #else

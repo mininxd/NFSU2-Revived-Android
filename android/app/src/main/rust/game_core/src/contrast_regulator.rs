@@ -52,14 +52,12 @@ impl ContrastRegulator {
             return false;
         }
 
-        let p_master_bleach = guest_mem.add(G_MASTER_BLEACH_BYPASS_ADDR) as *mut u32;
         let p_bleach = guest_mem.add(G_BLEACH_BYPASS_ENABLE_ADDR) as *mut u32;
         let p_master_ob = guest_mem.add(G_MASTER_OVERBRIGHT_ADDR) as *mut u32;
         let p_ob = guest_mem.add(G_OVERBRIGHT_ENABLE_ADDR) as *mut u32;
 
-        let master_bleach = std::ptr::read_volatile(p_master_bleach);
         let bleach = std::ptr::read_volatile(p_bleach);
-        let is_on = (master_bleach != 0) || (bleach != 0);
+        let is_on = bleach != 0;
 
         // Clamping MUST happen before scene drawing and resolve!
         // Clamping engine flags to 0 prevents SPEED2.EXE from running the slow 3-pass ping-pong
@@ -79,9 +77,7 @@ impl ContrastRegulator {
             return false;
         }
 
-        let p_master_bleach = guest_mem.add(G_MASTER_BLEACH_BYPASS_ADDR) as *const u32;
-        let master_bleach = std::ptr::read_volatile(p_master_bleach);
-        let is_on = master_bleach != 0;
+        let is_on = self.active.load(Ordering::Relaxed);
 
         let new_state = if is_on { 1 } else { 0 };
         let prev_state = self.last_state.load(Ordering::Relaxed);
@@ -160,6 +156,16 @@ pub unsafe extern "C" fn nfs_contrast_regulator_post_frame(guest_base: *mut std:
 #[no_mangle]
 pub extern "C" fn nfs_contrast_regulator_is_active() -> i32 {
     if GLOBAL_CONTRAST_REGULATOR.is_active() { 1 } else { 0 }
+}
+
+#[no_mangle]
+pub extern "C" fn nfs_contrast_set_active(active: u32) {
+    let is_on = active != 0;
+    GLOBAL_CONTRAST_REGULATOR.active.store(is_on, Ordering::Relaxed);
+    GLOBAL_CONTRAST_REGULATOR.last_state.store(if is_on { 1 } else { 0 }, Ordering::Relaxed);
+    if let Some(cb) = unsafe { G_RAMP_CALLBACK } {
+        unsafe { cb(if is_on { 1 } else { 0 }) };
+    }
 }
 
 #[no_mangle]

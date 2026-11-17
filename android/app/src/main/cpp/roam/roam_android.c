@@ -1052,14 +1052,70 @@ static void hook_sub_005c7ec0(void) {
     }
 }
 
+static void hook_sub_005cc8b0(void) {
+    // 0x005cc8b0: Bleach Bypass StretchRect resolve pass.
+    // Zero-overhead bypass: pop return slot and return immediately without executing StretchRect.
+    if (g_p_esp && *g_p_esp) {
+        *g_p_esp += 4;
+    }
+}
+
+static void hook_sub_005c68d0(void) {
+    // 0x005c68d0: Bleach Bypass 3-pass ping-pong fullscreen quad blitter.
+    // Caller cleans up arguments (cdecl). Set scratch index to -1 and pop return slot.
+    if (rh_mem_committed(0x008708F4u, 4)) {
+        MR32(0x008708F4u) = 0xFFFFFFFFu;
+    }
+    if (g_p_esp && *g_p_esp) {
+        *g_p_esp += 4;
+    }
+}
+
+static void hook_sub_005cccd0(void) {
+    // 0x005cccd0: Render quad blitter pass.
+    if (g_p_esp && *g_p_esp) {
+        *g_p_esp += 4;
+    }
+}
+
 static void hook_sub_005caad0(void) {
     void *h_gc = dlopen("libgraphics_cache.so", RTLD_NOLOAD | RTLD_GLOBAL);
     if (!h_gc) h_gc = dlopen("libgraphics_cache.so", RTLD_LAZY | RTLD_GLOBAL);
     void (*fn_bypass)(int) = h_gc ? (void (*)(int))dlsym(h_gc, "nfs_camera_cull_set_bypass") : NULL;
     if (fn_bypass) fn_bypass(1);
 
+    static void (*s_set_contrast_active)(uint32_t) = NULL;
+    if (!s_set_contrast_active) {
+        if (h_gc) s_set_contrast_active = (void (*)(uint32_t))dlsym(h_gc, "nfs_contrast_set_active");
+        if (!s_set_contrast_active) {
+            void *h_core = dlopen("libgame_core.so", RTLD_NOLOAD | RTLD_GLOBAL);
+            if (!h_core) h_core = dlopen("libgame_core.so", RTLD_LAZY | RTLD_GLOBAL);
+            if (h_core) s_set_contrast_active = (void (*)(uint32_t))dlsym(h_core, "nfs_contrast_set_active");
+        }
+    }
+
+    uint32_t user_contrast = 0;
+    if (rh_mem_committed(0x00870D00u, 4)) {
+        user_contrast = MR32(0x00870D00u);
+        if (s_set_contrast_active) {
+            s_set_contrast_active(user_contrast);
+        }
+        // Force 0 inside 0x005caad0 scene render so SPEED2.EXE skips the 3-pass ping-pong
+        // StretchRect resolve and does not draw the default bleach bypass quad over backbuffer.
+        MR32(0x00870D00u) = 0;
+    }
+    if (rh_mem_committed(0x00870CFCu, 4)) {
+        MR32(0x00870CFCu) = 0;
+    }
+
     if (s_orig_5caad0) {
         s_orig_5caad0();
+    }
+
+    // Restore user setting immediately after scene rendering so that the game's
+    // Options menu ("Enhanced Contrast: ON / OFF") and save profile remain 100% accurate.
+    if (rh_mem_committed(0x00870D00u, 4)) {
+        MR32(0x00870D00u) = user_contrast;
     }
 
     if (fn_bypass) fn_bypass(0);
@@ -1135,6 +1191,34 @@ static void roam_android_install_hooks(void) {
         0xff, 0x43, 0x01, 0xd1, 0xe8, 0x0b, 0x00, 0xfd,
         0xfd, 0x7b, 0x02, 0xa9, 0xf6, 0x57, 0x03, 0xa9
     };
+    static const uint8_t EXPECTED_5CC8B0[16] = {
+        0xfd, 0x7b, 0xba, 0xa9, 0xfc, 0x6f, 0x01, 0xa9,
+        0xfa, 0x67, 0x02, 0xa9, 0xf8, 0x5f, 0x03, 0xa9
+    };
+    static const uint8_t EXPECTED_5C68D0[16] = {
+        0xf3, 0x0f, 0x1f, 0xf8, 0xa9, 0x84, 0x03, 0xf0,
+        0xa8, 0x84, 0x03, 0xf0, 0xaa, 0x84, 0x03, 0xf0
+    };
+
+    void *target_5cc8b0 = (void *)(lib_base + 0x275f1f0);
+    if (memcmp(target_5cc8b0, EXPECTED_5CC8B0, 16) == 0) {
+        arm64_inline_hook(target_5cc8b0, (void *)hook_sub_005cc8b0);
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook",
+                            "Hooked sub_005cc8b0 (bleach StretchRect resolve) at %p", target_5cc8b0);
+    } else {
+        __android_log_print(ANDROID_LOG_WARN, "NFSU2-Hook",
+                            "sub_005cc8b0 prefix mismatch at %p", target_5cc8b0);
+    }
+
+    void *target_5c68d0 = (void *)(lib_base + 0x2745094);
+    if (memcmp(target_5c68d0, EXPECTED_5C68D0, 16) == 0) {
+        arm64_inline_hook(target_5c68d0, (void *)hook_sub_005c68d0);
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook",
+                            "Hooked sub_005c68d0 (bleach 3-pass quad blit) at %p", target_5c68d0);
+    } else {
+        __android_log_print(ANDROID_LOG_WARN, "NFSU2-Hook",
+                            "sub_005c68d0 prefix mismatch at %p", target_5c68d0);
+    }
 
     void *target_4a = (void *)(lib_base + 0x1464be0);
     if (memcmp(target_4a, EXPECTED_4A, 16) == 0) {
@@ -1203,6 +1287,22 @@ static void roam_android_install_hooks(void) {
         mprotect((void *)page, page_sz * 2, PROT_READ | PROT_WRITE);
         *(void **)(k_radar + 8) = (void *)hook_sub_005caad0;
         __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Updated k_functions[0x005caad0]");
+    }
+
+    uintptr_t k_5cc8b0 = lib_base + 0x9794030;
+    if (*(uint32_t *)k_5cc8b0 == 0x005cc8b0) {
+        uintptr_t page = k_5cc8b0 & ~((uintptr_t)page_sz - 1);
+        mprotect((void *)page, page_sz * 2, PROT_READ | PROT_WRITE);
+        *(void **)(k_5cc8b0 + 8) = (void *)hook_sub_005cc8b0;
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Updated k_functions[0x005cc8b0]");
+    }
+
+    uintptr_t k_5c68d0 = lib_base + 0x9793c30;
+    if (*(uint32_t *)k_5c68d0 == 0x005c68d0) {
+        uintptr_t page = k_5c68d0 & ~((uintptr_t)page_sz - 1);
+        mprotect((void *)page, page_sz * 2, PROT_READ | PROT_WRITE);
+        *(void **)(k_5c68d0 + 8) = (void *)hook_sub_005c68d0;
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Updated k_functions[0x005c68d0]");
     }
 
     // Patch GOT slot for recomp_hook so PLT jumps directly to our hook

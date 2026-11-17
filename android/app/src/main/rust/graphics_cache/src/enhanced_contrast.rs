@@ -82,9 +82,23 @@ pub extern "C" fn nfs_contrast_get_mode() -> u32 {
     if INGAME_CONTRAST_ACTIVE.load(Ordering::Relaxed) { 1 } else { 0 }
 }
 
+#[no_mangle]
+pub extern "C" fn nfs_contrast_set_active(active: u32) {
+    let is_active = active != 0;
+    let active_val = if is_active { 1 } else { 0 };
+    let last_val = LAST_INGAME_CONTRAST_VAL.load(Ordering::Relaxed);
+    if active_val != last_val {
+        LAST_INGAME_CONTRAST_VAL.store(active_val, Ordering::Relaxed);
+        INGAME_CONTRAST_ACTIVE.store(is_active, Ordering::Relaxed);
+        if let Some(cb) = G_RAMP_CALLBACK {
+            cb(active_val);
+        }
+    }
+}
+
 /// Synchronizes with the in-game display setting on every frame tick directly from guest memory.
 ///
-/// - Reads `0x00876518` (master options menu setting) and `0x00870D00` (engine flag).
+/// - Reads `0x00870D00` (engine flag: 1 = ON, 0 = OFF).
 /// - Clamps `0x00870D00` (Bleach Bypass), `0x00870CFC` (OverBright), and `0x00876514` (Master OverBright) to 0.
 /// - When in-game toggle changes, updates the display hardware tone curve via D3D9 SetGammaRamp.
 #[no_mangle]
@@ -96,12 +110,10 @@ pub unsafe extern "C" fn nfs_contrast_sync_ingame(guest_mem: *mut u8) -> u32 {
     let p_overbright = guest_mem.add(G_OVERBRIGHT_ENABLE_ADDR) as *mut u32;
     let p_bleach = guest_mem.add(G_BLEACH_BYPASS_ENABLE_ADDR) as *mut u32;
     let p_master_overbright = guest_mem.add(G_MASTER_OVERBRIGHT_ADDR) as *mut u32;
-    let p_master_bleach = guest_mem.add(G_MASTER_BLEACH_BYPASS_ADDR) as *mut u32;
 
-    // 1. Read player's configured setting from master options menu & engine flags
-    let master_bleach = std::ptr::read_volatile(p_master_bleach);
+    // 1. Read player's configured setting from engine flag (0x00870D00)
     let bleach = std::ptr::read_volatile(p_bleach);
-    let is_active = (master_bleach != 0) || (bleach != 0);
+    let is_active = bleach != 0;
 
     // 2. Clamp engine post-processing flags to 0 every frame
     // This forces SPEED2.EXE to skip the 3-pass ping-pong StretchRect resolve (0x005cc8b0),
