@@ -12,7 +12,9 @@
 //! the guest emulation and Vulkan driver always run on the fastest cores.
 
 pub mod steering_pacer;
+pub mod tuner;
 pub use steering_pacer::*;
+pub use tuner::*;
 
 use std::fs;
 use std::os::raw::{c_int, c_long};

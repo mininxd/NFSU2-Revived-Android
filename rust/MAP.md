@@ -12,13 +12,16 @@
 - [x] **ADRs & Architecture Map** (`rust/DECISIONS.md`, `rust/MAP.md`, `rust/GLOSSARY.md`)
 - [x] **`src/platform/nfs_log.c` -> `rust/crates/nfs_platform`**: Safe C-ABI logging engine for recompilation host and Android.
 - [x] **`android/app/src/main/cpp/roam/roam_affinity.c` -> `perf_cores`**: CPU cluster detection and thread pinning with C-ABI export `nfs_bind_to_perf_cores`.
+- [x] **`performance_tuner.cpp` -> `perf_cores::tuner`**: Thread role affinity and priority tuning (`RenderMain`, `GuestAudio`, `BackgroundWorker`).
 
 ### Wave 1: Multiplayer & Network Protocol Engine (Active)
 - [x] **`VirtualSwitchClient.java` Packet Engine -> `roam_rs::switch`**:
   - RFC 6455 WebSocket frame encoding/decoding
   - Decapsulation for `KIND_UDP` (1), `KIND_LAN_UDP` (3), `KIND_TCP` (4), `KIND_BUNDLE` (32)
   - Zero-copy buffer serialization (`PacketWriter` / `PacketReader`)
-  - JNI & C-ABI bindings allowing Java and native C code to bypass manual allocations.
+- [x] **`AdhocPostofficeClient.java` Protocol Engine -> `roam_rs::postoffice`**:
+  - Binary opcodes: `OPCODE_PING`, `OPCODE_LOGIN`, `OPCODE_CONNECT`, `OPCODE_DISCONNECT`, `OPCODE_CONNECT_BSSID`, `OPCODE_CHAT`
+  - Postoffice PDP 24-byte registration and 14-byte datagram header parsing.
 - [ ] **`AdhocRoamClient.java` Peer Coordinator**: Migrate peer management and state synchronization to `roam_rs`.
 
 ### Wave 2: Win32 Emulation & Host Runtime (Active)
@@ -28,10 +31,12 @@
   - Window frame style normalization (`filter_window_long`)
 - [ ] **`guest_kernel.inc` & `guest_threads.inc`**: Memory mapping and thread pools in Rust.
 
-### Wave 3: Input, Audio & UI
+### Wave 3: Input, Audio & UI (Active)
 - [ ] **`RacingControlsView.java` -> `game_core::touch_hud`**: Native touch controls and HUD.
-- [ ] **`audio_mixer.h` & `audio_watchdog.cpp` -> `graphics_cache::audio_engine`**: Audio resampling and playback.
+- [x] **`audio_watchdog.cpp` -> `graphics_cache::audio_watchdog`**: Safe atomic watchdog and synthetic DirectSound clock progression.
+- [ ] **`audio_mixer.h` -> `graphics_cache::audio_engine`**: Full audio playback pipeline lift.
 
-### Wave 4: Graphics & Final Pure Lift
+### Wave 4: Graphics & Final Pure Lift (Active)
+- [x] **`vulkan_driver.cpp` -> `graphics_cache::vulkan_driver`**: Safe Vulkan driver opening and proc address resolution.
 - [ ] **`d3d9_bridge.cpp` -> `ash` Vulkan Layer**: Direct3D 9 to Vulkan state translation in Rust.
 - [ ] **Pure App Lift**: Switch Android entry point to `android-activity` (`NativeActivity`), removing the Java VM layer.
