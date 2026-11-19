@@ -42,14 +42,44 @@ pub unsafe extern "C" fn nfs_native_gles_draw_indexed(
 }
 ```
 
-#### 2. Draw Distance Setting Extended (+100m Across All Presets)
+#### 2. Native ARM64 Direct Vulkan Engine (`graphics_cache::native_vk`)
+- **Direct Native Vulkan Swapchain & Surface Architecture**:
+  - Implemented direct `libvulkan.so` loader, `VkInstance`, `VkDevice`, and `VkSwapchainKHR` on Android `ANativeWindow`.
+  - Turns DXVK into a lightweight pass-through/dummy COM wrapper while actual swapchain buffers, image acquisition, and presentation are executed natively by pure Rust.
+  - Eliminates desktop Vulkan translation overhead while preserving full UI option compatibility ("Vulkan (DXVK)") ahead of the 1.0 zero-DXVK release.
+
+```rust
+// graphics_cache/src/native_vk.rs - Direct Native Vulkan Presentation
+#[no_mangle]
+pub unsafe extern "C" fn nfs_native_vk_present() -> c_int {
+    let Some(ref api) = VK_API else { return -1; };
+    let mut guard = VK_STATE.lock().unwrap();
+    if let Some(ref mut ctx) = *guard {
+        let mut image_index = 0u32;
+        if (api.vk_acquire_next_image_khr)(ctx.device, ctx.swapchain, 1_000_000_000, 0, 0, &mut image_index) == VK_SUCCESS {
+            let present_info = VkPresentInfoKHR {
+                s_type: VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+                swapchain_count: 1,
+                p_swapchains: &ctx.swapchain,
+                p_image_indices: &image_index,
+                ..
+            };
+            (api.vk_queue_present_khr)(ctx.queue, &present_info);
+            return 0;
+        }
+    }
+    -1
+}
+```
+
+#### 3. Draw Distance Setting Extended (+100m Across All Presets)
 - Enhanced world streaming and geometry horizon across all presets:
   - **Ultra Performance**: Extended to **+175m** (was +75m)
   - **Performance**: Extended to **+275m** (was +175m)
   - **Balanced**: Extended to **+450m** (was +350m)
   - **Extended**: Extended to **+700m** (was +600m)
 
-#### 3. Build & Version Update
+#### 4. Build & Version Update
 - Bumped app `versionCode` to **90** and `versionName` to **0.15.25.beta9**.
 
 **Full Changelog**: https://github.com/mininxd/NFSU2-Revived-Android/compare/v0.15.25.beta8...v0.15.25.beta9

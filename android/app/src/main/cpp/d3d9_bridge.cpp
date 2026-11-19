@@ -166,6 +166,12 @@ void configureD3D9Bridge(void* base,uint32_t (*allocator)(uint32_t),void (*deall
             int ret = s_gles_init();
             NFS_RUNTIME_LOG(ANDROID_LOG_INFO, "NFSU2-GLES", "Native Pure Rust GLES initialized (result=%d)", ret);
         }
+    } else {
+        static auto s_vk_init = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_vk_init"));
+        if(s_vk_init) {
+            int ret = s_vk_init();
+            NFS_RUNTIME_LOG(ANDROID_LOG_INFO, "NFSU2-VK", "Native Pure Rust Vulkan initialized (result=%d)", ret);
+        }
     }
 #ifdef __ANDROID__
     // android_main provides a writable private cache before creating DXVK.
@@ -200,9 +206,18 @@ void setD3D9HostWindow(ANativeWindow* window){
             pfnSetFrameRate(window, 60.0f, 0);
         }
     }
-    static auto s_native_window = reinterpret_cast<int(*)(void*)>(resolveGraphicsCacheSymbol("nfs_native_gles_set_window"));
-    if(s_native_window) {
-        s_native_window(window);
+    const char* rend = std::getenv("NFSU2_RENDERER");
+    bool isGl = rend && (std::strcmp(rend, "opengl") == 0 || std::strcmp(rend, "opengl_es") == 0);
+    if(isGl) {
+        static auto s_native_window = reinterpret_cast<int(*)(void*)>(resolveGraphicsCacheSymbol("nfs_native_gles_set_window"));
+        if(s_native_window) {
+            s_native_window(window);
+        }
+    } else {
+        static auto s_native_vk_window = reinterpret_cast<int(*)(void*)>(resolveGraphicsCacheSymbol("nfs_native_vk_set_window"));
+        if(s_native_vk_window) {
+            s_native_vk_window(window);
+        }
     }
 #endif
     dxvkAndroidSetWindow(window);
@@ -366,6 +381,10 @@ uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumen
         static auto s_native_present = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_gles_present"));
         if(s_native_present) {
             s_native_present();
+        }
+        static auto s_native_vk_present = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_vk_present"));
+        if(s_native_vk_present) {
+            s_native_vk_present();
         }
         return kind==2?static_cast<IDirect3DDevice9*>(object)->Present(source,destination,window,dirty):
             static_cast<IDirect3DSwapChain9*>(object)->Present(source,destination,window,dirty,args[5]);
