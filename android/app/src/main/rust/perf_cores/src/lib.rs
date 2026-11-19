@@ -3,16 +3,19 @@
 //! Modern Android SoC chips (Snapdragon, Dimensity, Tensor, Exynos) employ big.LITTLE
 //! or DynamIQ heterogeneous architectures containing:
 //!  - LITTLE Cores (Efficiency / battery saver, e.g. Cortex-A55 / A510, ~1.8-2.0 GHz)
-//!  - MID / BIG Cores (Performance, e.g. Cortex-A78 / A715, ~2.8-3.0 GHz)
+//!  - MID / BIG Cores (Performance, e.g. Cortex-A78 / A715 / A720, ~2.6-3.0 GHz)
 //!  - PRIME Cores (Ultra-performance, e.g. Cortex-X1 / X3 / X4, ~3.2-3.4 GHz)
 //!
-//! If the process defaults to CPU 0 (a LITTLE efficiency core) or SingleCoreAffinity is on,
-//! the game suffers from severe frame drops and stuttering. This module identifies the
-//! high-frequency Performance cores and applies process/thread affinity to ensure
-//! the guest emulation and Vulkan driver always run on the fastest cores.
+//! If the process defaults to CPU 0 (a LITTLE efficiency core), or threads fight for
+//! the prime core, the game suffers from frame stutter and audio underruns.
+//! This module identifies the tri-cluster CPU topology and applies intelligent
+//! thread pinning so the guest emulation, Vulkan presentation, and audio pipeline
+//! run on their optimal cores.
 
 pub mod steering_pacer;
+pub mod tuner;
 pub use steering_pacer::*;
+pub use tuner::*;
 
 use std::fs;
 use std::os::raw::{c_int, c_long};
@@ -20,29 +23,47 @@ use jni::JNIEnv;
 use jni::objects::{JClass, JString};
 use jni::sys::{jint, jlong, jstring};
 
+/// Cluster hierarchy classification for CPU cores.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CoreClusterRole {
+    Prime = 0,
+    Mid = 1,
+    Little = 2,
+}
+
 /// Represents information about a single CPU core.
 #[derive(Debug, Clone, Copy)]
 pub struct CoreInfo {
     pub cpu_id: usize,
     pub max_freq_khz: u64,
+    pub capacity: u64,
+    pub role: CoreClusterRole,
     pub is_performance: bool,
 }
 
-/// Topology detection result.
+/// Topology detection result with tri-cluster core masks.
 #[derive(Debug, Clone)]
 pub struct CpuCluster {
     pub total_cores: usize,
-    pub perf_cores_mask: u64,
+    pub prime_cores_mask: u64,
+    pub mid_cores_mask: u64,
+    pub little_cores_mask: u64,
+    pub perf_cores_mask: u64, // prime | mid
+    pub prime_core_count: usize,
+    pub mid_core_count: usize,
+    pub little_core_count: usize,
     pub perf_core_count: usize,
     pub cores: Vec<CoreInfo>,
 }
 
 impl CpuCluster {
-    /// Detects the device CPU topology by inspecting sysfs cpufreq nodes.
+    /// Detects the device CPU topology by inspecting sysfs cpufreq nodes and /proc/cpuinfo.
     pub fn detect() -> Self {
-        let mut cores = Vec::new();
         let total_cores = Self::detect_total_cores();
+        let mut raw_cores: Vec<(usize, u64, u64, Option<CoreClusterRole>)> = Vec::with_capacity(total_cores);
         let mut highest_freq: u64 = 0;
+        let mut lowest_freq: u64 = u64::MAX;
 
         for id in 0..total_cores {
             let freq_path = format!("/sys/devices/system/cpu/cpu{}/cpufreq/cpuinfo_max_freq", id);
@@ -61,68 +82,58 @@ impl CpuCluster {
                     .unwrap_or(0);
             }
 
-            // ARM cpu_capacity (EAS): big cores ~1024, little cores ~300-500
-            if freq == 0 {
-                if let Some(cap) = fs::read_to_string(&capacity_path)
-                    .ok()
-                    .and_then(|s| s.trim().parse::<u64>().ok())
-                {
-                    freq = cap * 1000;
-                }
+            let mut cap = fs::read_to_string(&capacity_path)
+                .ok()
+                .and_then(|s| s.trim().parse::<u64>().ok())
+                .unwrap_or(0);
+
+            if freq == 0 && cap > 0 {
+                freq = cap * 1000;
             }
 
             if freq > highest_freq {
                 highest_freq = freq;
             }
-
-            cores.push(CoreInfo {
-                cpu_id: id,
-                max_freq_khz: freq,
-                is_performance: false,
-            });
-        }
-
-        // Performance threshold: cores within 80% of the SoC's highest frequency
-        let threshold = if highest_freq > 0 {
-            (highest_freq as f64 * 0.80) as u64
-        } else {
-            0
-        };
-
-        let mut perf_cores_mask: u64 = 0;
-        let mut perf_core_count = 0;
-
-        for core in &mut cores {
-            if highest_freq > 0 && core.max_freq_khz >= threshold {
-                core.is_performance = true;
-                perf_cores_mask |= 1u64 << core.cpu_id;
-                perf_core_count += 1;
+            if freq > 0 && freq < lowest_freq {
+                lowest_freq = freq;
             }
+
+            raw_cores.push((id, freq, cap, None));
         }
 
-        // Secondary detection: Parse /proc/cpuinfo (always permitted by Android 14 SELinux)
-        if perf_cores_mask == 0 {
-            if let Ok(cpuinfo) = fs::read_to_string("/proc/cpuinfo") {
-                let mut cur_cpu: i32 = -1;
-                for line in cpuinfo.lines() {
-                    let trimmed = line.trim();
-                    if trimmed.starts_with("processor") {
-                        if let Some(colon) = trimmed.find(':') {
-                            if let Ok(cpu_id) = trimmed[colon + 1..].trim().parse::<i32>() {
-                                cur_cpu = cpu_id;
-                            }
+        if lowest_freq == u64::MAX {
+            lowest_freq = 0;
+        }
+
+        // Secondary detection: Parse /proc/cpuinfo for known ARM Cortex part numbers
+        if let Ok(cpuinfo) = fs::read_to_string("/proc/cpuinfo") {
+            let mut cur_cpu: i32 = -1;
+            for line in cpuinfo.lines() {
+                let trimmed = line.trim();
+                if trimmed.starts_with("processor") {
+                    if let Some(colon) = trimmed.find(':') {
+                        if let Ok(cpu_id) = trimmed[colon + 1..].trim().parse::<i32>() {
+                            cur_cpu = cpu_id;
                         }
-                    } else if trimmed.starts_with("CPU part") && cur_cpu >= 0 && (cur_cpu as usize) < total_cores {
-                        if let Some(colon) = trimmed.find(':') {
-                            let part_str = trimmed[colon + 1..].trim();
-                            let part = u32::from_str_radix(part_str.trim_start_matches("0x"), 16).unwrap_or(0);
-                            let is_little = part == 0xd03 || part == 0xd05 || part == 0xd46 || part == 0xd80;
-                            if part >= 0xd08 && !is_little {
-                                perf_cores_mask |= 1u64 << (cur_cpu as usize);
-                                perf_core_count += 1;
-                                if let Some(c) = cores.get_mut(cur_cpu as usize) {
-                                    c.is_performance = true;
-                                }
+                    }
+                } else if trimmed.starts_with("CPU part") && cur_cpu >= 0 && (cur_cpu as usize) < total_cores {
+                    if let Some(colon) = trimmed.find(':') {
+                        let part_str = trimmed[colon + 1..].trim();
+                        let part = u32::from_str_radix(part_str.trim_start_matches("0x"), 16).unwrap_or(0);
+                        let role = match part {
+                            // Prime / Ultra-high performance cores (Cortex-X1/X2/X3/X4, Cortex-X925)
+                            0xd44 | 0xd48 | 0xd4e | 0xd4f | 0xd82 => Some(CoreClusterRole::Prime),
+                            // Performance / Mid cores (Cortex-A7x series)
+                            0xd07 | 0xd08 | 0xd09 | 0xd0a | 0xd0b | 0xd0d | 0xd41 | 0xd47 | 0xd4d | 0xd81 | 0xd87 => {
+                                Some(CoreClusterRole::Mid)
+                            }
+                            // Efficiency / Little cores (Cortex-A5x series)
+                            0xd03 | 0xd05 | 0xd46 | 0xd80 => Some(CoreClusterRole::Little),
+                            _ => None,
+                        };
+                        if let Some(r) = role {
+                            if let Some(item) = raw_cores.get_mut(cur_cpu as usize) {
+                                item.3 = Some(r);
                             }
                         }
                     }
@@ -130,26 +141,104 @@ impl CpuCluster {
             }
         }
 
-        // Universal fallback: upper half of CPU cores
-        if perf_cores_mask == 0 && total_cores > 1 {
-            let start = total_cores / 2;
-            for id in start..total_cores {
-                perf_cores_mask |= 1u64 << id;
-                perf_core_count += 1;
-                if let Some(c) = cores.get_mut(id) {
-                    c.is_performance = true;
+        // Tri-cluster frequency / capacity clustering
+        let mut final_cores: Vec<CoreInfo> = Vec::with_capacity(total_cores);
+        let mut prime_cores_mask: u64 = 0;
+        let mut mid_cores_mask: u64 = 0;
+        let mut little_cores_mask: u64 = 0;
+
+        for (id, freq, cap, explicit_role) in raw_cores {
+            let role = if let Some(r) = explicit_role {
+                r
+            } else if highest_freq > 0 && lowest_freq > 0 && highest_freq > lowest_freq {
+                let prime_thresh = (highest_freq as f64 * 0.92) as u64;
+                let mid_thresh = (highest_freq as f64 * 0.65) as u64;
+                if freq >= prime_thresh {
+                    CoreClusterRole::Prime
+                } else if freq >= mid_thresh {
+                    CoreClusterRole::Mid
+                } else {
+                    CoreClusterRole::Little
                 }
+            } else if cap > 0 {
+                if cap >= 950 {
+                    CoreClusterRole::Prime
+                } else if cap >= 500 {
+                    CoreClusterRole::Mid
+                } else {
+                    CoreClusterRole::Little
+                }
+            } else {
+                // Topology fallback: top 25% prime, next 25% mid, bottom 50% little
+                let ratio = (id as f64) / (total_cores as f64);
+                if ratio >= 0.75 {
+                    CoreClusterRole::Prime
+                } else if ratio >= 0.50 {
+                    CoreClusterRole::Mid
+                } else {
+                    CoreClusterRole::Little
+                }
+            };
+
+            let is_perf = role != CoreClusterRole::Little;
+            match role {
+                CoreClusterRole::Prime => prime_cores_mask |= 1u64 << id,
+                CoreClusterRole::Mid => mid_cores_mask |= 1u64 << id,
+                CoreClusterRole::Little => little_cores_mask |= 1u64 << id,
             }
-        } else if perf_cores_mask == 0 {
-            perf_cores_mask = 1;
-            perf_core_count = 1;
+
+            final_cores.push(CoreInfo {
+                cpu_id: id,
+                max_freq_khz: freq,
+                capacity: cap,
+                role,
+                is_performance: is_perf,
+            });
         }
+
+        let mut perf_cores_mask = prime_cores_mask | mid_cores_mask;
+
+        // Fallback safety if no perf cores detected
+        if perf_cores_mask == 0 {
+            if total_cores > 1 {
+                let start = total_cores / 2;
+                for id in start..total_cores {
+                    mid_cores_mask |= 1u64 << id;
+                }
+                for id in 0..start {
+                    little_cores_mask |= 1u64 << id;
+                }
+                perf_cores_mask = mid_cores_mask;
+            } else {
+                prime_cores_mask = 1;
+                perf_cores_mask = 1;
+            }
+        }
+
+        // If no prime cores distinguished from mid cores, treat all perf cores as prime
+        if prime_cores_mask == 0 {
+            prime_cores_mask = perf_cores_mask;
+        }
+        if mid_cores_mask == 0 {
+            mid_cores_mask = perf_cores_mask;
+        }
+
+        let prime_core_count = prime_cores_mask.count_ones() as usize;
+        let mid_core_count = mid_cores_mask.count_ones() as usize;
+        let little_core_count = little_cores_mask.count_ones() as usize;
+        let perf_core_count = perf_cores_mask.count_ones() as usize;
 
         CpuCluster {
             total_cores,
+            prime_cores_mask,
+            mid_cores_mask,
+            little_cores_mask,
             perf_cores_mask,
+            prime_core_count,
+            mid_core_count,
+            little_core_count,
             perf_core_count,
-            cores,
+            cores: final_cores,
         }
     }
 
@@ -165,48 +254,79 @@ impl CpuCluster {
         num_cpus_fallback()
     }
 
-    /// Binds the calling thread, process, and all worker threads to the performance cores.
+    /// Intelligently assigns affinity and priorities to process and threads in /proc/self/task.
     pub fn apply_affinity(&self) -> Result<(), i32> {
-        let mask = self.perf_cores_mask;
+        let render_mask = self.perf_cores_mask; // Prime + Mid cores
+        let audio_mask = if self.mid_cores_mask != 0 && self.mid_cores_mask != self.prime_cores_mask {
+            self.mid_cores_mask // Dedicated Mid cores isolated from prime render thread
+        } else {
+            self.perf_cores_mask
+        };
+        let background_mask = if self.little_cores_mask != 0 {
+            self.little_cores_mask | self.mid_cores_mask
+        } else {
+            self.perf_cores_mask
+        };
+
         unsafe {
-            // Linux sched_setaffinity: 0 = calling thread, getpid() = main thread
-            let mask_val = mask as c_long;
+            // Process-level default affinity: performance cluster
+            let mask_val = render_mask as c_long;
             let _ = libc::syscall(
                 libc::SYS_sched_setaffinity,
                 libc::getpid() as c_int,
                 std::mem::size_of::<c_long>(),
                 &mask_val as *const c_long,
             );
+
+            // Calling thread affinity (RenderMain / UI thread): nice -16
             let ret = libc::syscall(
                 libc::SYS_sched_setaffinity,
                 0 as c_int,
                 std::mem::size_of::<c_long>(),
                 &mask_val as *const c_long,
             );
+            let _ = libc::setpriority(libc::PRIO_PROCESS, libc::getpid() as u32, -16);
+            let _ = libc::setpriority(libc::PRIO_PROCESS, 0, -16);
 
-            // Elevate main and calling thread priority (-10 nice) to maintain high CPU frequencies
-            let _ = libc::setpriority(libc::PRIO_PROCESS, libc::getpid() as u32, -10);
-            let _ = libc::setpriority(libc::PRIO_PROCESS, 0, -10);
-
-            // Bind every existing thread in /proc/self/task (GuestBootWorker, audio, render, etc.)
+            // Thread-level assignment across /proc/self/task
             if let Ok(entries) = fs::read_dir("/proc/self/task") {
                 for entry in entries.flatten() {
                     if let Ok(tid) = entry.file_name().to_string_lossy().parse::<i32>() {
-                        let _ = libc::syscall(
-                            libc::SYS_sched_setaffinity,
-                            tid as c_int,
-                            std::mem::size_of::<c_long>(),
-                            &mask_val as *const c_long,
-                        );
-
-                        // Prioritize audio, render, and emulated guest workers
                         let comm_path = format!("/proc/self/task/{}/comm", tid);
                         if let Ok(comm) = fs::read_to_string(&comm_path) {
                             let n = comm.trim();
                             if n == "GuestBootWorker" || n == "RenderThread" || n == "main"
-                                || n.starts_with("AAudio") || n.contains("audio") || n.contains("nfs")
+                                || n.contains("MainRender") || n.contains("dxvk")
                             {
-                                let _ = libc::setpriority(libc::PRIO_PROCESS, tid as u32, -10);
+                                // Main rendering / guest emulation: prime + mid, urgent nice -16
+                                let m = render_mask as c_long;
+                                let _ = libc::syscall(
+                                    libc::SYS_sched_setaffinity,
+                                    tid as c_int,
+                                    std::mem::size_of::<c_long>(),
+                                    &m as *const c_long,
+                                );
+                                let _ = libc::setpriority(libc::PRIO_PROCESS, tid as u32, -16);
+                            } else if n.starts_with("AAudio") || n.contains("audio") || n.contains("Audio") {
+                                // Real-time audio: mid performance cores, isolated from prime render contention, nice -12
+                                let m = audio_mask as c_long;
+                                let _ = libc::syscall(
+                                    libc::SYS_sched_setaffinity,
+                                    tid as c_int,
+                                    std::mem::size_of::<c_long>(),
+                                    &m as *const c_long,
+                                );
+                                let _ = libc::setpriority(libc::PRIO_PROCESS, tid as u32, -12);
+                            } else if n.contains("Worker") || n.contains("Jit") || n.contains("Heap") || n.contains("pool") {
+                                // Background worker / GC: little + mid cores, standard nice 0
+                                let m = background_mask as c_long;
+                                let _ = libc::syscall(
+                                    libc::SYS_sched_setaffinity,
+                                    tid as c_int,
+                                    std::mem::size_of::<c_long>(),
+                                    &m as *const c_long,
+                                );
+                                let _ = libc::setpriority(libc::PRIO_PROCESS, tid as u32, 0);
                             }
                         }
                     }
@@ -229,6 +349,14 @@ fn num_cpus_fallback() -> usize {
 
 // ---- C ABI Exports ---------------------------------------------------------------------------------
 
+/// Compatibility export matching roam_affinity.h (replaces C roam_affinity.c)
+#[no_mangle]
+pub extern "C" fn nfs_bind_to_perf_cores() -> c_int {
+    let cluster = CpuCluster::detect();
+    let _ = cluster.apply_affinity();
+    cluster.perf_core_count as c_int
+}
+
 /// Binds the calling process to performance cores. Returns 0 on success, or -1 on error.
 #[no_mangle]
 pub extern "C" fn nfs_perf_cores_bind() -> c_int {
@@ -239,11 +367,32 @@ pub extern "C" fn nfs_perf_cores_bind() -> c_int {
     }
 }
 
-/// Returns the 64-bit performance core bitmask.
+/// Returns the 64-bit performance core bitmask (Prime | Mid).
 #[no_mangle]
 pub extern "C" fn nfs_perf_cores_mask() -> u64 {
     let cluster = CpuCluster::detect();
     cluster.perf_cores_mask
+}
+
+/// Returns the 64-bit Prime core bitmask.
+#[no_mangle]
+pub extern "C" fn nfs_perf_prime_cores_mask() -> u64 {
+    let cluster = CpuCluster::detect();
+    cluster.prime_cores_mask
+}
+
+/// Returns the 64-bit Mid core bitmask.
+#[no_mangle]
+pub extern "C" fn nfs_perf_mid_cores_mask() -> u64 {
+    let cluster = CpuCluster::detect();
+    cluster.mid_cores_mask
+}
+
+/// Returns the 64-bit Little core bitmask.
+#[no_mangle]
+pub extern "C" fn nfs_perf_little_cores_mask() -> u64 {
+    let cluster = CpuCluster::detect();
+    cluster.little_cores_mask
 }
 
 /// Returns the total number of CPU cores detected.
@@ -272,6 +421,30 @@ pub unsafe extern "C" fn Java_io_mininxd_nfsu2_PerformanceCores_nativeGetPerform
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn Java_io_mininxd_nfsu2_PerformanceCores_nativeGetPrimeCoresMask(
+    _env: JNIEnv,
+    _class: JClass,
+) -> jlong {
+    nfs_perf_prime_cores_mask() as jlong
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn Java_io_mininxd_nfsu2_PerformanceCores_nativeGetMidCoresMask(
+    _env: JNIEnv,
+    _class: JClass,
+) -> jlong {
+    nfs_perf_mid_cores_mask() as jlong
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn Java_io_mininxd_nfsu2_PerformanceCores_nativeGetLittleCoresMask(
+    _env: JNIEnv,
+    _class: JClass,
+) -> jlong {
+    nfs_perf_little_cores_mask() as jlong
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn Java_io_mininxd_nfsu2_PerformanceCores_nativeGetCoreCount(
     _env: JNIEnv,
     _class: JClass,
@@ -286,8 +459,8 @@ pub unsafe extern "C" fn Java_io_mininxd_nfsu2_PerformanceCores_nativeGetSummary
 ) -> jstring {
     let cluster = CpuCluster::detect();
     let summary = format!(
-        "Total Cores: {}, Perf Cores: {} (mask: 0x{:X})",
-        cluster.total_cores, cluster.perf_core_count, cluster.perf_cores_mask
+        "Cores: {} | Prime: 0x{:X} | Mid: 0x{:X} | Little: 0x{:X}",
+        cluster.total_cores, cluster.prime_cores_mask, cluster.mid_cores_mask, cluster.little_cores_mask
     );
     env.new_string(summary)
         .map(|s| s.into_raw())
@@ -307,7 +480,7 @@ pub unsafe extern "C" fn Java_io_mininxd_nfsu2_PerformanceCores_nativeBoostCalli
         std::mem::size_of::<c_long>(),
         &mask_val as *const c_long,
     );
-    let _ = libc::setpriority(libc::PRIO_PROCESS, 0, -10);
+    let _ = libc::setpriority(libc::PRIO_PROCESS, 0, -16);
 }
 
 #[no_mangle]
@@ -347,7 +520,6 @@ pub unsafe extern "C" fn Java_io_mininxd_nfsu2_GamePerformanceBooster_nativeAppl
     let _ = cluster.apply_affinity();
 
     // 3. Platform-specific OEM booster coordination (Xiaomi HyperOS / Joyose, MediaTek)
-    // Invoked directly from native Rust using JNI reflection with auto-recovery
     if let Ok(perf_class) = env.find_class("android/os/PerfService") {
         if let Ok(method_id) = env.get_static_method_id(&perf_class, "boostEnable", "(I)V") {
             let _ = env.call_static_method_unchecked(
@@ -397,4 +569,5 @@ pub unsafe extern "C" fn Java_io_mininxd_nfsu2_GamePerformanceBooster_nativeAppl
     }
     let _ = env.exception_clear();
 }
+
 

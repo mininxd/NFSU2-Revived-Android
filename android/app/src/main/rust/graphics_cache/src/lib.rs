@@ -3,6 +3,7 @@
 //! Pipeline cache validation, disk persistence, and background compilation workers.
 
 pub mod audio_engine;
+pub mod audio_watchdog;
 pub mod async_compiler;
 pub mod camera_cull;
 pub mod contrast_filter;
@@ -29,6 +30,7 @@ pub mod simd_audio;
 pub mod telemetry;
 pub mod texture_pipeline;
 pub mod visual_geometry;
+pub mod vulkan_driver;
 pub mod win32_comm;
 pub mod win32_ddraw;
 pub mod win32_dinput;
@@ -36,9 +38,11 @@ pub mod win32_fs;
 pub mod win32_gdi;
 pub mod win32_netapi;
 pub mod win32_shell;
+pub mod win32_shims;
 pub mod win32_tapi;
 
 pub use audio_engine::*;
+pub use audio_watchdog::*;
 pub use camera_cull::*;
 pub use contrast_filter::*;
 pub use crowd_filter::*;
@@ -58,6 +62,7 @@ pub use settings_engine::*;
 pub use telemetry::*;
 pub use texture_pipeline::*;
 pub use visual_geometry::*;
+pub use vulkan_driver::*;
 pub use win32_comm::*;
 pub use win32_ddraw::*;
 pub use win32_dinput::*;
@@ -65,6 +70,7 @@ pub use win32_fs::*;
 pub use win32_gdi::*;
 pub use win32_netapi::*;
 pub use win32_shell::*;
+pub use win32_shims::*;
 pub use win32_tapi::*;
 
 use async_compiler::AsyncCompilerEngine;

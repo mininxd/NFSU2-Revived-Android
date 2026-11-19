@@ -31,11 +31,41 @@ public final class PerformanceCores {
 
     public static native int nativeBindToPerformanceCores();
     public static native long nativeGetPerformanceCoresMask();
+    public static native long nativeGetPrimeCoresMask();
+    public static native long nativeGetMidCoresMask();
+    public static native long nativeGetLittleCoresMask();
     public static native int nativeGetCoreCount();
     public static native String nativeGetSummary();
     public static native void nativeBoostCallingThread();
     public static native float nativeCalculateSteering(float rawX, float centerX, float halfWidth, float scale);
     public static native float nativeCalculateSteeringProgressive(float rawX, float centerX, float halfWidth, float scale, float deadzone);
+
+    public static long getPrimeCoresMask() {
+        if (nativeLoaded) {
+            try {
+                return nativeGetPrimeCoresMask();
+            } catch (Throwable ignored) {}
+        }
+        return detectPerformanceCoresMask();
+    }
+
+    public static long getMidCoresMask() {
+        if (nativeLoaded) {
+            try {
+                return nativeGetMidCoresMask();
+            } catch (Throwable ignored) {}
+        }
+        return 0L;
+    }
+
+    public static long getLittleCoresMask() {
+        if (nativeLoaded) {
+            try {
+                return nativeGetLittleCoresMask();
+            } catch (Throwable ignored) {}
+        }
+        return 0L;
+    }
 
     /**
      * Immediately boosts the priority and pins the calling thread to performance cores.

@@ -4,6 +4,7 @@
 #include <pthread.h>
 #include <sys/resource.h>
 #include <android/log.h>
+#include <dlfcn.h>
 #include <cstdio>
 #include <vector>
 #include <string>
@@ -123,6 +124,26 @@ void initTopology() {
 }
 
 void tuneThread(ThreadRole role, const char* name) {
+    typedef void (*FnTuneRole)(int, const char*);
+    static FnTuneRole s_rust_tune = nullptr;
+    static bool s_checked = false;
+    if (!s_checked) {
+        s_checked = true;
+        void* handle = dlopen("libperf_cores.so", RTLD_NOLOAD);
+        if (!handle) handle = dlopen("libperf_cores.so", RTLD_NOW);
+        if (handle) {
+            s_rust_tune = reinterpret_cast<FnTuneRole>(dlsym(handle, "nfs_perf_tune_thread_role"));
+        }
+        if (!s_rust_tune) {
+            s_rust_tune = reinterpret_cast<FnTuneRole>(dlsym(RTLD_DEFAULT, "nfs_perf_tune_thread_role"));
+        }
+    }
+
+    if (s_rust_tune) {
+        s_rust_tune(static_cast<int>(role), name);
+        return;
+    }
+
     if (!s_topology_initialized) initTopology();
 
     if (name && name[0] != '\0') {
@@ -131,16 +152,21 @@ void tuneThread(ThreadRole role, const char* name) {
 
     switch (role) {
         case ThreadRole::RENDER_MAIN: {
-            // High priority nice value for UI/render loop; leave core affinity to Linux EAS
-            // to dynamically utilize Cortex-X3 prime cores without throttling.
-            setpriority(PRIO_PROCESS, 0, -10);
+            if (s_perf_cores_count > 0) {
+                sched_setaffinity(0, sizeof(cpu_set_t), &s_perf_mask);
+            }
+            setpriority(PRIO_PROCESS, 0, -16);
             break;
         }
         case ThreadRole::GUEST_AUDIO: {
-            setpriority(PRIO_PROCESS, 0, -5);
+            if (s_perf_cores_count > 0) {
+                sched_setaffinity(0, sizeof(cpu_set_t), &s_perf_mask);
+            }
+            setpriority(PRIO_PROCESS, 0, -12);
             break;
         }
         case ThreadRole::BACKGROUND_WORKER: {
+            sched_setaffinity(0, sizeof(cpu_set_t), &s_all_mask);
             setpriority(PRIO_PROCESS, 0, 0);
             break;
         }
@@ -148,6 +174,28 @@ void tuneThread(ThreadRole role, const char* name) {
 }
 
 std::string getTopologySummary() {
+    typedef int (*FnSummaryBuf)(char*, size_t);
+    static FnSummaryBuf s_rust_summary = nullptr;
+    static bool s_checked = false;
+    if (!s_checked) {
+        s_checked = true;
+        void* handle = dlopen("libperf_cores.so", RTLD_NOLOAD);
+        if (!handle) handle = dlopen("libperf_cores.so", RTLD_NOW);
+        if (handle) {
+            s_rust_summary = reinterpret_cast<FnSummaryBuf>(dlsym(handle, "nfs_perf_get_topology_summary_buf"));
+        }
+        if (!s_rust_summary) {
+            s_rust_summary = reinterpret_cast<FnSummaryBuf>(dlsym(RTLD_DEFAULT, "nfs_perf_get_topology_summary_buf"));
+        }
+    }
+
+    if (s_rust_summary) {
+        char buf[256];
+        if (s_rust_summary(buf, sizeof(buf)) > 0) {
+            return std::string(buf);
+        }
+    }
+
     if (!s_topology_initialized) initTopology();
     std::ostringstream ss;
     ss << "Total: " << s_total_cores << " cores, Perf cluster: " << s_perf_cores_count << " cores";
