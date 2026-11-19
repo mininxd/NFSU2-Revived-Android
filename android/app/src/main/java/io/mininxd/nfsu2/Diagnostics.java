@@ -62,13 +62,14 @@ final class Diagnostics {
 
     static String summary(Context context) {
         GpuDrivers.Driver driver = GpuDrivers.selected(context);
-        String apiInfo = (driver == null ? "System Vulkan" : driver.name);
+        String backend = GameOptions.getEffectiveGraphicsBackend(context);
+        String apiInfo = "opengl".equals(backend) ? "OpenGL ES" : (driver == null ? "System" : driver.name);
         return "NFSU2 " + ReleaseUpdates.installed(context)
                 + "\nAPK ABI: " + (Process.is64Bit() ? "arm64-v8a" : "armeabi-v7a")
                 + "\nDevice: " + Build.MANUFACTURER + " " + Build.MODEL
                 + "\nAndroid: " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")"
                 + "\nSoC: " + (Build.VERSION.SDK_INT >= 31 ? Build.SOC_MANUFACTURER + " " + Build.SOC_MODEL : Build.HARDWARE)
-                + "\nGraphics API: Universal Vulkan"
+                + "\nGraphics API: " + ("opengl".equals(backend) ? "OpenGL ES" : "Vulkan")
                 + "\nGPU Driver: " + apiInfo + "\n";
     }
 

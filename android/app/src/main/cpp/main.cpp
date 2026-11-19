@@ -546,10 +546,12 @@ void android_main(android_app* app) {
             auto status=host.guestWorker.status();
             if(status!=host.guestStatus){
                 host.guestStatus=status;
+                const char* rend = getenv("NFSU2_RENDERER");
+                bool isGl = rend && (strcmp(rend, "opengl") == 0 || strcmp(rend, "opengl_es") == 0);
                 unsigned major = VK_API_VERSION_MAJOR(s_vulkanApiVersion);
                 unsigned minor = VK_API_VERSION_MINOR(s_vulkanApiVersion);
                 if (major < 1 || (major == 1 && minor < 3)) { major = 1; minor = 3; }
-                std::string apiBanner = "Vulkan " + std::to_string(major) + "." + std::to_string(minor) + ": presentation active\n";
+                std::string apiBanner = isGl ? "OpenGL ES: presentation active\n" : ("Vulkan " + std::to_string(major) + "." + std::to_string(minor) + ": presentation active\n");
                 showStatus(app,("Accessible data: " + getGameRoot() + "\n" + apiBanner + status).c_str());
             }
             if (host.renderer.device&&!host.renderer.draw()) host.renderer.stop();

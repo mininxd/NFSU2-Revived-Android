@@ -32,8 +32,8 @@ public final class GameOptions {
 
     static final Option[] ALL = {
             new Option(GRAPHICS_BACKEND, "Graphics API", "auto",
-                    new String[] {"auto", "vulkan"},
-                    new String[] {"Auto (Universal Vulkan)", "System Vulkan"}),
+                    new String[] {"auto", "vulkan", "opengl"},
+                    new String[] {"Auto", "Vulkan (DXVK)", "OpenGL (ES)"}),
             new Option(RESOLUTION, "Internal Resolution", "75",
                     new String[] {"25", "30", "35", "40", "45", "50", "55", "60", "65", "70", "75", "80", "85", "90", "95", "100", "125", "150", "200"},
                     new String[] {"25%", "30%", "35%", "40%", "45%", "50%", "55%", "60%", "65%", "70%", "75%", "80%", "85%", "90%", "95%", "100%", "125%", "150%", "200%"}),
@@ -350,14 +350,45 @@ public final class GameOptions {
 
     /**
      * Resolves the effective graphics backend to use.
-     * All graphics are rendered via Universal Vulkan (DXVK), compatible with Mali, Adreno, Immortalis, and Xclipse GPUs.
+     * When "auto" is selected, checks config/graphics_api.json against the device CPU/SoC.
      */
     public static String getEffectiveGraphicsBackend(Context context) {
         String selected = get(context, GRAPHICS_BACKEND);
-        if ("vulkan".equalsIgnoreCase(selected)) {
-            return "vulkan";
+        if (!"auto".equalsIgnoreCase(selected)) {
+            return selected;
         }
-        return "auto";
+
+        String jsonStr = loadGraphicsApiJson(context);
+        if (jsonStr != null && !jsonStr.trim().isEmpty()) {
+            try {
+                org.json.JSONObject obj = new org.json.JSONObject(jsonStr);
+                java.util.List<String> cpuIds = getCpuIdentifiers();
+
+                if (obj.has("opengl")) {
+                    org.json.JSONArray gl = obj.getJSONArray("opengl");
+                    for (int i = 0; i < gl.length(); i++) {
+                        String target = gl.getString(i);
+                        for (String id : cpuIds) {
+                            if (matchesCpu(id, target)) return "opengl";
+                        }
+                    }
+                }
+
+                if (obj.has("vulkan")) {
+                    org.json.JSONArray vk = obj.getJSONArray("vulkan");
+                    for (int i = 0; i < vk.length(); i++) {
+                        String target = vk.getString(i);
+                        for (String id : cpuIds) {
+                            if (matchesCpu(id, target)) return "vulkan";
+                        }
+                    }
+                }
+            } catch (Throwable t) {
+                android.util.Log.w("NFSU2", "Failed to parse graphics_api.json: " + t.getMessage());
+            }
+        }
+
+        return "vulkan";
     }
 
     private static boolean matchesCpu(String cpuId, String target) {

@@ -74,18 +74,63 @@ impl Default for DxvkProfileConfig {
 }
 
 impl DxvkProfileConfig {
+    pub fn for_backend(backend: &str) -> Self {
+        let is_gl = backend.eq_ignore_ascii_case("opengl") || backend.eq_ignore_ascii_case("opengl_es");
+        if is_gl {
+            Self {
+                max_device_memory_mb: 2048,
+                max_shared_memory_mb: 1024,
+                general_hazards: false,
+                invariant_position: true,
+                force_sampler_spec_constants: true,
+                strict_constant_copies: true,
+                lenient_clear: true,
+                allow_discard: true,
+                allow_do_not_wait: true,
+                cached_dynamic_buffers: true,
+                cached_write_only_buffers: true,
+                device_local_constant_buffers: false,
+                tiler_mode: true,
+                enable_gpl: false,
+                enable_descriptor_buffer: false,
+                enable_descriptor_heap: false,
+                use_fp16: true,
+                enable_unified_image_layouts: false,
+                track_pipeline_lifetime: false,
+                evict_managed_on_unlock: true,
+                defer_surface_creation: true,
+                no_explicit_front_buffer: true,
+                tear_free: false,
+                max_frame_latency: 1,
+                num_compiler_threads: 2,
+            }
+        } else {
+            Self::default()
+        }
+    }
+
     /// Formats the configuration into standard dxvk.conf syntax.
     pub fn format_conf(&self) -> String {
         let mut s = String::with_capacity(2048);
         s.push_str("dxvk.enableStateCache = True\n");
         s.push_str("dxvk.enableAsync = True\n");
-        s.push_str("dxvk.gplAsyncCache = True\n");
+        if self.enable_gpl {
+            s.push_str("dxvk.enableGraphicsPipelineLibrary = True\n");
+            s.push_str("dxvk.gplAsyncCache = True\n");
+        } else {
+            s.push_str("dxvk.enableGraphicsPipelineLibrary = False\n");
+            s.push_str("dxvk.gplAsyncCache = False\n");
+        }
         s.push_str(&format!("dxvk.numCompilerThreads = {}\n", self.num_compiler_threads));
         s.push_str("dxvk.useRawSsbo = Auto\n");
         s.push_str("dxvk.tilerMode = Auto\n");
-        s.push_str("dxvk.enableGraphicsPipelineLibrary = True\n");
-        s.push_str("dxvk.enableDescriptorBuffer = Auto\n");
-        s.push_str("dxvk.enableDescriptorHeap = Auto\n");
+        if self.enable_descriptor_buffer {
+            s.push_str("dxvk.enableDescriptorBuffer = Auto\n");
+            s.push_str("dxvk.enableDescriptorHeap = Auto\n");
+        } else {
+            s.push_str("dxvk.enableDescriptorBuffer = False\n");
+            s.push_str("dxvk.enableDescriptorHeap = False\n");
+        }
         s.push_str("dxvk.enableUnifiedImageLayouts = True\n");
         s.push_str("dxvk.enableImplicitResolves = False\n");
         s.push_str("dxvk.enableMemoryDefrag = False\n");
@@ -97,7 +142,11 @@ impl DxvkProfileConfig {
         s.push_str("d3d9.lenientClear = True\n");
         s.push_str("d3d9.allowDiscard = True\n");
         s.push_str("d3d9.allowDoNotWait = True\n");
-        s.push_str("d3d9.deviceLocalConstantBuffers = Auto\n");
+        if self.device_local_constant_buffers {
+            s.push_str("d3d9.deviceLocalConstantBuffers = Auto\n");
+        } else {
+            s.push_str("d3d9.deviceLocalConstantBuffers = False\n");
+        }
         s.push_str("d3d9.strictConstantCopies = False\n");
         s.push_str("d3d9.cachedDynamicBuffers = True\n");
         s.push_str("d3d9.cachedWriteOnlyBuffers = True\n");
@@ -158,7 +207,8 @@ pub fn apply_driver_environment() {
 
     // Auto-generate dxvk.conf in game folders if accessible
     let candidate_dirs = ["/sdcard/nfsu2", "/storage/emulated/0/nfsu2", "."];
-    let config = DxvkProfileConfig::default();
+    let backend = std::env::var("NFSU2_RENDERER").unwrap_or_default();
+    let config = DxvkProfileConfig::for_backend(&backend);
     for dir in &candidate_dirs {
         let p = Path::new(dir);
         if p.is_dir() {
@@ -189,7 +239,8 @@ pub unsafe extern "C" fn nfs_dxvk_tuner_generate_config(output_dir: *const std::
 
     let dir = Path::new(path_str);
     let conf_path = dir.join("dxvk.conf");
-    let config = DxvkProfileConfig::default();
+    let backend = std::env::var("NFSU2_RENDERER").unwrap_or_default();
+    let config = DxvkProfileConfig::for_backend(&backend);
     if config.write_to_file(&conf_path).is_ok() {
         0
     } else {
@@ -212,7 +263,8 @@ pub unsafe extern "C" fn Java_io_mininxd_nfsu2_GamePerformanceBooster_nativeConf
 ) {
     apply_driver_environment();
 
-    let config = DxvkProfileConfig::default();
+    let backend = std::env::var("NFSU2_RENDERER").unwrap_or_default();
+    let config = DxvkProfileConfig::for_backend(&backend);
 
     if let Ok(cache_str) = env.get_string(&cache_dir) {
         let path_str = cache_str.to_string_lossy();
@@ -255,5 +307,15 @@ mod tests {
         assert!(formatted.contains("d3d9.useFP16 = Auto"));
         assert!(formatted.contains("d3d9.deviceLocalConstantBuffers = Auto"));
         assert!(formatted.contains("d3d9.cachedWriteOnlyBuffers = True"));
+    }
+
+    #[test]
+    fn test_dxvk_conf_opengl_backend() {
+        let conf = DxvkProfileConfig::for_backend("opengl");
+        let formatted = conf.format_conf();
+        assert!(formatted.contains("dxvk.enableGraphicsPipelineLibrary = False"));
+        assert!(formatted.contains("dxvk.enableDescriptorBuffer = False"));
+        assert!(formatted.contains("d3d9.deviceLocalConstantBuffers = False"));
+        assert!(formatted.contains("d3d9.maxFrameLatency = 1"));
     }
 }

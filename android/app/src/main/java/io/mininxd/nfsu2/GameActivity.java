@@ -600,7 +600,12 @@ public final class GameActivity extends NativeActivity {
     }
     public void setStatus(String message) {
         if (message != null) {
-            message = message.replaceAll("Vulkan ([0-9]+\\.[0-9]+).*?: presentación activa", "Vulkan $1: presentation active");
+            String backend = GameOptions.getEffectiveGraphicsBackend(this);
+            if ("opengl".equals(backend)) {
+                message = message.replaceAll("Vulkan [0-9]+\\.[0-9]+.*?: (presentación activa|presentation active)", "OpenGL ES: presentation active");
+            } else {
+                message = message.replaceAll("Vulkan ([0-9]+\\.[0-9]+).*?: presentación activa", "Vulkan $1: presentation active");
+            }
             message = message
                     .replace("Datos accesibles: memoria interna/nfsu2", "Accessible data: internal storage/nfsu2")
                     .replace("Ejecutando entrada CRT del juego…", "Executing game CRT entry…")
