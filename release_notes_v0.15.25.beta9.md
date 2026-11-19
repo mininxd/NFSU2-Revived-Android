@@ -72,12 +72,12 @@ pub unsafe extern "C" fn nfs_native_vk_present() -> c_int {
 }
 ```
 
-#### 3. Draw Distance Setting Extended (+100m Across All Presets)
-- Enhanced world streaming and geometry horizon across all presets:
-  - **Ultra Performance**: Extended to **+175m** (was +75m)
-  - **Performance**: Extended to **+275m** (was +175m)
-  - **Balanced**: Extended to **+450m** (was +350m)
-  - **Extended**: Extended to **+700m** (was +600m)
+#### 3. Draw Distance Internal Thresholds Extended (+100m Across All Presets)
+- Enhanced world streaming and geometry horizon internally across all presets (keeping clean UI option names):
+  - **Ultra Performance**: Extended to 175m (was 75m)
+  - **Performance**: Extended to 275m (was 175m)
+  - **Balanced**: Extended to 450m (was 350m)
+  - **Extended**: Extended to 700m (was 600m)
 
 #### 4. Build & Version Update
 - Bumped app `versionCode` to **90** and `versionName` to **0.15.25.beta9**.
