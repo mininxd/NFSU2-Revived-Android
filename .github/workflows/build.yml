@@ -127,7 +127,9 @@ jobs:
       - name: Build Modern DXVK Android Library (libdxvk_android.so)
         run: |
           echo "Setting up dependencies for DXVK build..."
-          sudo apt-get update && sudo apt-get install -y glslang-tools ninja-build cmake
+          for i in 1 2 3; do
+            sudo apt-get update && sudo apt-get install -y --fix-missing glslang-tools ninja-build cmake && break || sleep 5
+          done
 
           NDK_DIR=$(find "$ANDROID_HOME/ndk" "$ANDROID_NDK_ROOT" /usr/local/lib/android/sdk/ndk -maxdepth 1 -mindepth 1 2>/dev/null | sort -V | tail -n 1)
           if [ -z "$NDK_DIR" ]; then
