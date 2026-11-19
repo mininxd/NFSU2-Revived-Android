@@ -146,6 +146,9 @@ struct EglContextState {
     window: *mut c_void,
 }
 
+unsafe impl Send for EglContextState {}
+unsafe impl Sync for EglContextState {}
+
 static EGL_STATE: Mutex<Option<EglContextState>> = Mutex::new(None);
 
 unsafe fn load_egl() -> bool {
