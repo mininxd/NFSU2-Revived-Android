@@ -36,6 +36,7 @@ pub mod win32_fs;
 pub mod win32_gdi;
 pub mod win32_netapi;
 pub mod win32_shell;
+pub mod win32_shims;
 pub mod win32_tapi;
 
 pub use audio_engine::*;
@@ -65,6 +66,7 @@ pub use win32_fs::*;
 pub use win32_gdi::*;
 pub use win32_netapi::*;
 pub use win32_shell::*;
+pub use win32_shims::*;
 pub use win32_tapi::*;
 
 use async_compiler::AsyncCompilerEngine;

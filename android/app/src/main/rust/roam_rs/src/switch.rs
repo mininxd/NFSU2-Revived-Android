@@ -27,7 +27,7 @@ pub struct TcpPacketView<'a> {
     pub dport: u16,
     pub op: u8,
     pub ttl: u8,
-    pub cid: u16,
+    pub cid: u32,
     pub payload: &'a [u8],
 }
 
@@ -92,11 +92,7 @@ pub fn parse_tcp_frame(frame: &[u8]) -> Option<TcpPacketView<'_>> {
     let dport = u16::from_be_bytes([frame[14], frame[15]]);
     let op = frame[16];
     let ttl = frame[17];
-    let cid = u16::from_be_bytes([frame[18], frame[19]]);
-    let payload_len = u32::from_be_bytes([frame[20], frame[21], frame[22], frame[23]]) as usize;
-
-    let available = frame.len() - 24;
-    let actual_len = available.min(payload_len);
+    let cid = u32::from_le_bytes([frame[20], frame[21], frame[22], frame[23]]);
 
     Some(TcpPacketView {
         src_vip,
@@ -106,7 +102,7 @@ pub fn parse_tcp_frame(frame: &[u8]) -> Option<TcpPacketView<'_>> {
         op,
         ttl,
         cid,
-        payload: &frame[24..24 + actual_len],
+        payload: &frame[24..],
     })
 }
 
@@ -195,7 +191,7 @@ pub fn build_tcp_frame(
     dport: u16,
     op: u8,
     ttl: u8,
-    cid: u16,
+    cid: u32,
     payload: &[u8],
     out: &mut [u8],
 ) -> Result<usize, &'static str> {
@@ -215,9 +211,9 @@ pub fn build_tcp_frame(
     out[14..16].copy_from_slice(&dport.to_be_bytes());
     out[16] = op;
     out[17] = ttl;
-    out[18..20].copy_from_slice(&cid.to_be_bytes());
-    let payload_len = payload.len() as u32;
-    out[20..24].copy_from_slice(&payload_len.to_be_bytes());
+    out[18] = 0;
+    out[19] = 0;
+    out[20..24].copy_from_slice(&cid.to_le_bytes());
 
     out[24..total_len].copy_from_slice(payload);
     Ok(total_len)
@@ -372,7 +368,7 @@ mod tests {
         assert_eq!(parsed.dport, 80);
         assert_eq!(parsed.op, 1);
         assert_eq!(parsed.ttl, 64);
-        assert_eq!(parsed.cid, 42);
+        assert_eq!(parsed.cid, 42u32);
         assert_eq!(parsed.payload, payload);
     }
 

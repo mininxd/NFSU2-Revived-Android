@@ -21,10 +21,11 @@
   - JNI & C-ABI bindings allowing Java and native C code to bypass manual allocations.
 - [ ] **`AdhocRoamClient.java` Peer Coordinator**: Migrate peer management and state synchronization to `roam_rs`.
 
-### Wave 2: Win32 Emulation & Host Runtime
-- [ ] **`src/shims/win32_shims.c` -> `graphics_cache::win32_*`**:
+### Wave 2: Win32 Emulation & Host Runtime (Active)
+- [x] **`src/shims/win32_shims.c` -> `graphics_cache::win32_shims`**:
   - Guest module queries (`GetModuleHandleA`, `GetModuleFileNameA`)
-  - File system mapping and stdcall dispatch
+  - Guest PE RT_RCDATA resource directory traversal (`guest_find_resource`, `guest_load_resource`, `guest_sizeof_resource`)
+  - Window frame style normalization (`filter_window_long`)
 - [ ] **`guest_kernel.inc` & `guest_threads.inc`**: Memory mapping and thread pools in Rust.
 
 ### Wave 3: Input, Audio & UI
