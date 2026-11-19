@@ -434,10 +434,8 @@ public final class LauncherActivity extends Activity {
 
             // Ensure high-performance DXVK Vulkan configuration is deployed
             File targetConf = new File(root, "dxvk.conf");
-            if (!targetConf.exists() || targetConf.length() == 0) {
-                copyAssetFile(this, "dxvk.conf", targetConf);
-                android.util.Log.i("NFSU2", "Installed optimized Vulkan dxvk.conf to " + targetConf.getAbsolutePath());
-            }
+            copyAssetFile(this, "dxvk.conf", targetConf);
+            android.util.Log.i("NFSU2", "Installed optimized Vulkan dxvk.conf to " + targetConf.getAbsolutePath());
         } catch (Exception ignored) {
         }
 

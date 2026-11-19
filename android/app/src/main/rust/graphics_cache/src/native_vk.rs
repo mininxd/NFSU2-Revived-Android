@@ -576,6 +576,16 @@ pub unsafe extern "C" fn nfs_native_vk_present() -> c_int {
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn nfs_native_vk_begin_scene() -> c_int {
+    0
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_native_vk_end_scene() -> c_int {
+    0
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn nfs_native_vk_clear(
     _count: u32,
     _color: u32,
@@ -637,6 +647,32 @@ pub unsafe extern "C" fn nfs_native_vk_draw_indexed(
     _num_vtx: u32,
     _start_idx: u32,
     _prim_count: u32,
+) -> c_int {
+    TOTAL_VK_DRAWS.fetch_add(1, Ordering::Relaxed);
+    0
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_native_vk_draw_primitive_up(
+    _prim_type: u32,
+    _prim_count: u32,
+    _vertex_data: *const c_void,
+    _stride: u32,
+) -> c_int {
+    TOTAL_VK_DRAWS.fetch_add(1, Ordering::Relaxed);
+    0
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_native_vk_draw_indexed_primitive_up(
+    _prim_type: u32,
+    _min_vertex_index: u32,
+    _num_vertices: u32,
+    _prim_count: u32,
+    _index_data: *const c_void,
+    _index_format: u32,
+    _vertex_data: *const c_void,
+    _stride: u32,
 ) -> c_int {
     TOTAL_VK_DRAWS.fetch_add(1, Ordering::Relaxed);
     0

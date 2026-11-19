@@ -1029,8 +1029,8 @@ static void hook_sub_005c7ec0(void) {
                     look_process_view(view_id, cam);
                 }
                 if (dd >= 30.0f && (view_id >= 1u && view_id <= 5u)) {
-                    max_far = (view_id == 3u || view_id == 4u) ? (dd * 0.75f) : dd;
-                    if ((view_id == 3u || view_id == 4u) && max_far < 35.0f) max_far = 35.0f;
+                    max_far = (view_id == 4u) ? 70.0f : ((view_id == 3u) ? (dd * 0.75f) : dd);
+                    if (view_id == 3u && max_far < 35.0f) max_far = 35.0f;
                     if (cam && rh_mem_committed(cam + 0xC0u, 4)) {
                         if (MRF32(cam + 0xC0u) > max_far) {
                             MRF32(cam + 0xC0u) = max_far;
@@ -1063,8 +1063,12 @@ static void hook_sub_005caad0(void) {
         if (rh_mem_committed(view4 + 0x40u, 4)) {
             uint32_t cam4 = MR32(view4 + 0x40u);
             if (cam4 >= 0x10000u && rh_mem_committed(cam4 + 0xC0u, 4)) {
-                if (MRF32(cam4 + 0xC0u) < 1000.0f) {
-                    MRF32(cam4 + 0xC0u) = 10000.0f;
+                // Bound road reflection camera FarZ to 70m max.
+                // Setting 10,000m causes the entire city geometry to be drawn twice
+                // on wet/puddle world sections, overflowing Mali Valhall TBDR tile buffers.
+                float refl_far = 70.0f;
+                if (MRF32(cam4 + 0xC0u) > refl_far || MRF32(cam4 + 0xC0u) < 10.0f) {
+                    MRF32(cam4 + 0xC0u) = refl_far;
                 }
             }
         }
@@ -1130,8 +1134,8 @@ static void hook_recomp_hook(uint32_t va) {
 
         float dd = get_configured_draw_distance();
         if (dd >= 30.0f && (view >= 1u && view <= 5u)) {
-            float max_far = (view == 3u || view == 4u) ? (dd * 0.75f) : dd;
-            if ((view == 3u || view == 4u) && max_far < 35.0f) max_far = 35.0f;
+            float max_far = (view == 4u) ? 70.0f : ((view == 3u) ? (dd * 0.75f) : dd);
+            if (view == 3u && max_far < 35.0f) max_far = 35.0f;
             uint32_t esp = (g_p_esp && *g_p_esp) ? *g_p_esp : 0;
             if (esp >= 0x10000u && rh_mem_committed(esp + 0x0Cu, 4)) {
                 if (MRF32(esp + 0x0Cu) > max_far) {
