@@ -200,6 +200,10 @@ void setD3D9HostWindow(ANativeWindow* window){
             pfnSetFrameRate(window, 60.0f, 0);
         }
     }
+    static auto s_native_window = reinterpret_cast<int(*)(void*)>(resolveGraphicsCacheSymbol("nfs_native_gles_set_window"));
+    if(s_native_window) {
+        s_native_window(window);
+    }
 #endif
     dxvkAndroidSetWindow(window);
 }
@@ -359,6 +363,10 @@ uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumen
 
         auto source=static_cast<const RECT*>(pointer(args[1])),destination=static_cast<const RECT*>(pointer(args[2]));
         auto dirty=static_cast<const RGNDATA*>(pointer(args[4]));
+        static auto s_native_present = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_gles_present"));
+        if(s_native_present) {
+            s_native_present();
+        }
         return kind==2?static_cast<IDirect3DDevice9*>(object)->Present(source,destination,window,dirty):
             static_cast<IDirect3DSwapChain9*>(object)->Present(source,destination,window,dirty,args[5]);
     }

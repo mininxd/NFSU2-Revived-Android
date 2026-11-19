@@ -61,6 +61,10 @@ case 17:{*argumentCount=5;
             }
         }
     }
+    static auto s_native_present = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_gles_present"));
+    if(s_native_present) {
+        s_native_present();
+    }
     return device->Present(static_cast<const RECT*>(pointer(args[1])),static_cast<const RECT*>(pointer(args[2])),args[3]?hostWindow.load():nullptr,static_cast<const RGNDATA*>(pointer(args[4])));}
 case 18:{*argumentCount=5;IDirect3DSurface9* object4=nullptr;HRESULT status=device->GetBackBuffer(static_cast<UINT>(args[1]),static_cast<UINT>(args[2]),static_cast<D3DBACKBUFFER_TYPE>(args[3]),args[4]?&object4:nullptr);if(args[4])write(args[4],SUCCEEDED(status)?wrap(object4,Kind::Surface):0);return status;}
 case 19:{*argumentCount=3;return device->GetRasterStatus(static_cast<UINT>(args[1]),static_cast<D3DRASTER_STATUS*>(pointer(args[2])));}
@@ -99,8 +103,12 @@ case 41:{*argumentCount=1;
     static int(*s_contrast_pre)(void*) = nullptr;
     if(!s_contrast_pre) s_contrast_pre = reinterpret_cast<int(*)(void*)>(resolveGraphicsCacheSymbol("nfs_contrast_regulator_pre_frame"));
     if(s_contrast_pre) s_contrast_pre(guestBase);
+    static auto s_gles_begin = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_gles_begin_scene"));
+    if(s_gles_begin) s_gles_begin();
     return device->BeginScene();}
 case 42:{*argumentCount=1;
+    static auto s_gles_end = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_gles_end_scene"));
+    if(s_gles_end) s_gles_end();
     return device->EndScene();}
 case 43:{*argumentCount=7;
     static auto s_gles_clear = reinterpret_cast<int(*)(uint32_t,uint32_t,float,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_gles_clear"));
@@ -216,6 +224,8 @@ case 81:{*argumentCount=4;
     static int(*s_cull_test)() = nullptr;
     if(!s_cull_test) s_cull_test = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_camera_cull_test_draw"));
     if (s_cull_test && s_cull_test()) return D3D_OK;
+    static auto s_gles_draw_prim = reinterpret_cast<int(*)(uint32_t,uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_gles_draw_primitive"));
+    if(s_gles_draw_prim) s_gles_draw_prim(static_cast<uint32_t>(args[1]), static_cast<uint32_t>(args[2]), static_cast<uint32_t>(args[3]));
     return device->DrawPrimitive(static_cast<D3DPRIMITIVETYPE>(args[1]),static_cast<UINT>(args[2]),static_cast<UINT>(args[3]));}
 case 82:{*argumentCount=7;
     static int(*s_cull_test)() = nullptr;
@@ -228,11 +238,15 @@ case 83:{*argumentCount=5;
     static int(*s_cull_test)() = nullptr;
     if(!s_cull_test) s_cull_test = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_camera_cull_test_draw"));
     if (s_cull_test && s_cull_test()) return D3D_OK;
+    static auto s_gles_draw_up = reinterpret_cast<int(*)(uint32_t,uint32_t,const void*,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_gles_draw_primitive_up"));
+    if(s_gles_draw_up) s_gles_draw_up(static_cast<uint32_t>(args[1]), static_cast<uint32_t>(args[2]), static_cast<const void*>(pointer(args[3])), static_cast<uint32_t>(args[4]));
     return device->DrawPrimitiveUP(static_cast<D3DPRIMITIVETYPE>(args[1]),static_cast<UINT>(args[2]),static_cast<const void*>(pointer(args[3])),static_cast<UINT>(args[4]));}
 case 84:{*argumentCount=9;
     static int(*s_cull_test)() = nullptr;
     if(!s_cull_test) s_cull_test = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_camera_cull_test_draw"));
     if (s_cull_test && s_cull_test()) return D3D_OK;
+    static auto s_gles_draw_idx_up = reinterpret_cast<int(*)(uint32_t,uint32_t,uint32_t,uint32_t,const void*,uint32_t,const void*,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_gles_draw_indexed_primitive_up"));
+    if(s_gles_draw_idx_up) s_gles_draw_idx_up(static_cast<uint32_t>(args[1]), static_cast<uint32_t>(args[2]), static_cast<uint32_t>(args[3]), static_cast<uint32_t>(args[4]), static_cast<const void*>(pointer(args[5])), static_cast<uint32_t>(args[6]), static_cast<const void*>(pointer(args[7])), static_cast<uint32_t>(args[8]));
     return device->DrawIndexedPrimitiveUP(static_cast<D3DPRIMITIVETYPE>(args[1]),static_cast<UINT>(args[2]),static_cast<UINT>(args[3]),static_cast<UINT>(args[4]),static_cast<const void*>(pointer(args[5])),static_cast<D3DFORMAT>(args[6]),static_cast<const void*>(pointer(args[7])),static_cast<UINT>(args[8]));}
 case 85:{*argumentCount=7;return device->ProcessVertices(static_cast<UINT>(args[1]),static_cast<UINT>(args[2]),static_cast<UINT>(args[3]),nativeObject<IDirect3DVertexBuffer9>(args[4]),nativeObject<IDirect3DVertexDeclaration9>(args[5]),static_cast<DWORD>(args[6]));}
 case 86:{*argumentCount=3;IDirect3DVertexDeclaration9* object2=nullptr;noteVertexDeclaration(static_cast<const D3DVERTEXELEMENT9*>(pointer(args[1])));HRESULT status=device->CreateVertexDeclaration(static_cast<const D3DVERTEXELEMENT9*>(pointer(args[1])),args[2]?&object2:nullptr);if(args[2])write(args[2],SUCCEEDED(status)?wrap(object2,Kind::Declaration):0);return status;}

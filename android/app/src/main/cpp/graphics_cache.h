@@ -214,6 +214,24 @@ int rust_guest_heap_free(uint32_t heap_id, uint32_t address);
 uint32_t rust_guest_heap_size(uint32_t heap_id, uint32_t address);
 uint32_t rust_guest_heap_realloc(uint32_t heap_id, uint32_t flags, uint32_t address, uint32_t bytes, uint32_t* out_commit_cap, uint32_t* out_commit_slack, uint32_t* out_old_requested, int* out_is_in_place);
 
+// Direct Pure Rust OpenGL ES Backend & Native Presentation
+int nfs_native_gles_init(void);
+int nfs_native_gles_set_window(void* window);
+int nfs_native_gles_present(void);
+int nfs_native_gles_is_active(void);
+int nfs_native_gles_begin_scene(void);
+int nfs_native_gles_end_scene(void);
+int nfs_native_gles_clear(uint32_t count, uint32_t color, float z, uint32_t stencil);
+int nfs_native_gles_set_viewport(int x, int y, int width, int height);
+int nfs_native_gles_set_transform(uint32_t state, const float* matrix);
+int nfs_native_gles_set_render_state(uint32_t state, uint32_t value);
+int nfs_native_gles_set_texture(uint32_t stage, uint32_t texture_id);
+int nfs_native_gles_draw_primitive(uint32_t prim_type, uint32_t start_vertex, uint32_t prim_count);
+int nfs_native_gles_draw_indexed(uint32_t prim_type, int base_vertex_index, uint32_t min_vertex_index, uint32_t num_vertices, uint32_t start_index, uint32_t prim_count);
+int nfs_native_gles_draw_primitive_up(uint32_t prim_type, uint32_t prim_count, const void* vertex_data, uint32_t stride);
+int nfs_native_gles_draw_indexed_primitive_up(uint32_t prim_type, uint32_t min_vertex_index, uint32_t num_vertices, uint32_t prim_count, const void* index_data, uint32_t index_format, const void* vertex_data, uint32_t stride);
+void nfs_native_gles_get_stats(uint64_t* out_total_draws);
+
 #ifdef __cplusplus
 }
 #endif

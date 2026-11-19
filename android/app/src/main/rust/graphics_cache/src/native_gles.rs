@@ -58,6 +58,7 @@ pub const GL_DYNAMIC_DRAW: u32 = 0x88E8;
 pub const GL_TEXTURE_2D: u32 = 0x0DE1;
 pub const GL_TEXTURE0: u32 = 0x84C0;
 
+pub const GL_UNSIGNED_BYTE: u32 = 0x1401;
 pub const GL_UNSIGNED_SHORT: u32 = 0x1403;
 pub const GL_UNSIGNED_INT: u32 = 0x1405;
 pub const GL_FLOAT: u32 = 0x1406;
@@ -105,6 +106,88 @@ pub const D3DBLEND_DESTCOLOR: u32 = 9;
 pub const D3DBLEND_INVDESTCOLOR: u32 = 10;
 
 // ---------------------------------------------------------------------------
+// EGL Constants & Function Table
+// ---------------------------------------------------------------------------
+pub const EGL_DEFAULT_DISPLAY: *mut c_void = std::ptr::null_mut();
+pub const EGL_NO_CONTEXT: *mut c_void = std::ptr::null_mut();
+pub const EGL_NO_SURFACE: *mut c_void = std::ptr::null_mut();
+pub const EGL_NONE: i32 = 0x3038;
+pub const EGL_RED_SIZE: i32 = 0x3024;
+pub const EGL_GREEN_SIZE: i32 = 0x3023;
+pub const EGL_BLUE_SIZE: i32 = 0x3022;
+pub const EGL_ALPHA_SIZE: i32 = 0x3021;
+pub const EGL_DEPTH_SIZE: i32 = 0x3025;
+pub const EGL_STENCIL_SIZE: i32 = 0x3026;
+pub const EGL_RENDERABLE_TYPE: i32 = 0x3040;
+pub const EGL_OPENGL_ES3_BIT: i32 = 0x00000040;
+pub const EGL_OPENGL_ES2_BIT: i32 = 0x00000004;
+pub const EGL_CONTEXT_CLIENT_VERSION: i32 = 0x3098;
+
+struct EglApi {
+    egl_get_display: unsafe extern "C" fn(*mut c_void) -> *mut c_void,
+    egl_initialize: unsafe extern "C" fn(*mut c_void, *mut i32, *mut i32) -> u32,
+    egl_choose_config: unsafe extern "C" fn(*mut c_void, *const i32, *mut *mut c_void, i32, *mut i32) -> u32,
+    egl_create_window_surface: unsafe extern "C" fn(*mut c_void, *mut c_void, *mut c_void, *const i32) -> *mut c_void,
+    egl_create_context: unsafe extern "C" fn(*mut c_void, *mut c_void, *mut c_void, *const i32) -> *mut c_void,
+    egl_make_current: unsafe extern "C" fn(*mut c_void, *mut c_void, *mut c_void, *mut c_void) -> u32,
+    egl_swap_buffers: unsafe extern "C" fn(*mut c_void, *mut c_void) -> u32,
+    egl_destroy_surface: unsafe extern "C" fn(*mut c_void, *mut c_void) -> u32,
+    egl_destroy_context: unsafe extern "C" fn(*mut c_void, *mut c_void) -> u32,
+    egl_terminate: unsafe extern "C" fn(*mut c_void) -> u32,
+}
+
+static EGL_LOADED: AtomicBool = AtomicBool::new(false);
+static mut EGL_API: Option<EglApi> = None;
+
+struct EglContextState {
+    display: *mut c_void,
+    context: *mut c_void,
+    surface: *mut c_void,
+    window: *mut c_void,
+}
+
+static EGL_STATE: Mutex<Option<EglContextState>> = Mutex::new(None);
+
+unsafe fn load_egl() -> bool {
+    if EGL_LOADED.load(Ordering::Acquire) {
+        return EGL_API.is_some();
+    }
+
+    let handle = libc::dlopen(b"libEGL.so\0".as_ptr() as *const c_char, libc::RTLD_NOW);
+    if handle.is_null() {
+        EGL_LOADED.store(true, Ordering::Release);
+        return false;
+    }
+
+    macro_rules! load_egl_sym {
+        ($sym:expr) => {{
+            let ptr = libc::dlsym(handle, $sym.as_ptr() as *const c_char);
+            if ptr.is_null() {
+                return false;
+            }
+            std::mem::transmute(ptr)
+        }};
+    }
+
+    let api = EglApi {
+        egl_get_display: load_egl_sym!(b"eglGetDisplay\0"),
+        egl_initialize: load_egl_sym!(b"eglInitialize\0"),
+        egl_choose_config: load_egl_sym!(b"eglChooseConfig\0"),
+        egl_create_window_surface: load_egl_sym!(b"eglCreateWindowSurface\0"),
+        egl_create_context: load_egl_sym!(b"eglCreateContext\0"),
+        egl_make_current: load_egl_sym!(b"eglMakeCurrent\0"),
+        egl_swap_buffers: load_egl_sym!(b"eglSwapBuffers\0"),
+        egl_destroy_surface: load_egl_sym!(b"eglDestroySurface\0"),
+        egl_destroy_context: load_egl_sym!(b"eglDestroyContext\0"),
+        egl_terminate: load_egl_sym!(b"eglTerminate\0"),
+    };
+
+    EGL_API = Some(api);
+    EGL_LOADED.store(true, Ordering::Release);
+    true
+}
+
+// ---------------------------------------------------------------------------
 // GLES Dynamic Function Table
 // ---------------------------------------------------------------------------
 
@@ -126,6 +209,9 @@ struct GlesApi {
     gl_bind_buffer: unsafe extern "C" fn(u32, u32),
     gl_draw_elements: unsafe extern "C" fn(u32, i32, u32, *const c_void),
     gl_draw_arrays: unsafe extern "C" fn(u32, i32, i32),
+    gl_vertex_attrib_pointer: unsafe extern "C" fn(u32, i32, u32, u8, i32, *const c_void),
+    gl_enable_vertex_attrib_array: unsafe extern "C" fn(u32),
+    gl_disable_vertex_attrib_array: unsafe extern "C" fn(u32),
 }
 
 static GLES_LOADED: AtomicBool = AtomicBool::new(false);
@@ -179,6 +265,9 @@ unsafe fn load_gles() -> bool {
         gl_bind_buffer: load_sym!(b"glBindBuffer\0"),
         gl_draw_elements: load_sym!(b"glDrawElements\0"),
         gl_draw_arrays: load_sym!(b"glDrawArrays\0"),
+        gl_vertex_attrib_pointer: load_sym!(b"glVertexAttribPointer\0"),
+        gl_enable_vertex_attrib_array: load_sym!(b"glEnableVertexAttribArray\0"),
+        gl_disable_vertex_attrib_array: load_sym!(b"glDisableVertexAttribArray\0"),
     };
 
     GLES_API = Some(api);
@@ -523,6 +612,252 @@ pub unsafe extern "C" fn nfs_native_gles_get_stats(out_total_draws: *mut u64) {
     if !out_total_draws.is_null() {
         *out_total_draws = TOTAL_DRAWS.load(Ordering::Relaxed);
     }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_native_gles_set_window(window: *mut c_void) -> c_int {
+    if !load_egl() || !load_gles() {
+        return -1;
+    }
+    let Some(ref egl) = EGL_API else {
+        return -2;
+    };
+
+    let mut guard = EGL_STATE.lock().unwrap();
+
+    if let Some(old) = guard.take() {
+        if !old.surface.is_null() {
+            (egl.egl_destroy_surface)(old.display, old.surface);
+        }
+        if !old.context.is_null() {
+            (egl.egl_destroy_context)(old.display, old.context);
+        }
+        if !old.display.is_null() {
+            (egl.egl_terminate)(old.display);
+        }
+    }
+
+    if window.is_null() {
+        return 0;
+    }
+
+    let display = (egl.egl_get_display)(EGL_DEFAULT_DISPLAY);
+    if display.is_null() {
+        return -3;
+    }
+
+    let mut major = 0i32;
+    let mut minor = 0i32;
+    if (egl.egl_initialize)(display, &mut major, &mut minor) == 0 {
+        return -4;
+    }
+
+    let attribs = [
+        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
+        EGL_RED_SIZE, 8,
+        EGL_GREEN_SIZE, 8,
+        EGL_BLUE_SIZE, 8,
+        EGL_ALPHA_SIZE, 8,
+        EGL_DEPTH_SIZE, 24,
+        EGL_STENCIL_SIZE, 8,
+        EGL_NONE,
+    ];
+
+    let mut config: *mut c_void = std::ptr::null_mut();
+    let mut num_configs = 0i32;
+    if (egl.egl_choose_config)(display, attribs.as_ptr(), &mut config, 1, &mut num_configs) == 0 || num_configs < 1 {
+        let fallback_attribs = [
+            EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+            EGL_RED_SIZE, 8,
+            EGL_GREEN_SIZE, 8,
+            EGL_BLUE_SIZE, 8,
+            EGL_DEPTH_SIZE, 16,
+            EGL_NONE,
+        ];
+        if (egl.egl_choose_config)(display, fallback_attribs.as_ptr(), &mut config, 1, &mut num_configs) == 0 || num_configs < 1 {
+            return -5;
+        }
+    }
+
+    let context_attribs = [
+        EGL_CONTEXT_CLIENT_VERSION, 3,
+        EGL_NONE,
+    ];
+    let mut context = (egl.egl_create_context)(display, config, EGL_NO_CONTEXT, context_attribs.as_ptr());
+    if context.is_null() {
+        let es2_attribs = [
+            EGL_CONTEXT_CLIENT_VERSION, 2,
+            EGL_NONE,
+        ];
+        context = (egl.egl_create_context)(display, config, EGL_NO_CONTEXT, es2_attribs.as_ptr());
+        if context.is_null() {
+            return -6;
+        }
+    }
+
+    let surface = (egl.egl_create_window_surface)(display, config, window, std::ptr::null());
+    if surface.is_null() {
+        (egl.egl_destroy_context)(display, context);
+        return -7;
+    }
+
+    if (egl.egl_make_current)(display, surface, surface, context) == 0 {
+        (egl.egl_destroy_surface)(display, surface);
+        (egl.egl_destroy_context)(display, context);
+        return -8;
+    }
+
+    *guard = Some(EglContextState {
+        display,
+        context,
+        surface,
+        window,
+    });
+
+    0
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_native_gles_present() -> c_int {
+    let Some(ref egl) = EGL_API else {
+        return -1;
+    };
+    let guard = EGL_STATE.lock().unwrap();
+    if let Some(ref s) = *guard {
+        if !s.display.is_null() && !s.surface.is_null() {
+            (egl.egl_swap_buffers)(s.display, s.surface);
+            return 0;
+        }
+    }
+    -2
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_native_gles_draw_primitive(
+    prim_type: u32,
+    start_vertex: u32,
+    prim_count: u32,
+) -> c_int {
+    let Some(ref api) = GLES_API else {
+        return -1;
+    };
+    let (mode, count) = match prim_type {
+        4 => (GL_TRIANGLES, prim_count * 3),
+        5 => (GL_TRIANGLE_STRIP, prim_count + 2),
+        6 => (GL_TRIANGLE_FAN, prim_count + 2),
+        2 => (GL_LINES, prim_count * 2),
+        _ => return -2,
+    };
+    (api.gl_draw_arrays)(mode, start_vertex as i32, count as i32);
+    TOTAL_DRAWS.fetch_add(1, Ordering::Relaxed);
+    0
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_native_gles_is_active() -> c_int {
+    let guard = EGL_STATE.lock().unwrap();
+    if let Some(ref s) = *guard {
+        if !s.context.is_null() && !s.surface.is_null() {
+            return 1;
+        }
+    }
+    0
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_native_gles_begin_scene() -> c_int {
+    0
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_native_gles_end_scene() -> c_int {
+    0
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_native_gles_draw_primitive_up(
+    prim_type: u32,
+    prim_count: u32,
+    vertex_data: *const c_void,
+    stride: u32,
+) -> c_int {
+    if vertex_data.is_null() || stride == 0 {
+        return -1;
+    }
+    let Some(ref api) = GLES_API else {
+        return -2;
+    };
+    let (mode, count) = match prim_type {
+        4 => (GL_TRIANGLES, prim_count * 3),
+        5 => (GL_TRIANGLE_STRIP, prim_count + 2),
+        6 => (GL_TRIANGLE_FAN, prim_count + 2),
+        2 => (GL_LINES, prim_count * 2),
+        _ => return -3,
+    };
+
+    // Client pointer draw: unbind VBO so glVertexAttribPointer uses memory pointer
+    (api.gl_bind_buffer)(GL_ARRAY_BUFFER, 0);
+    (api.gl_enable_vertex_attrib_array)(0);
+    (api.gl_vertex_attrib_pointer)(0, 3, GL_FLOAT, 0, stride as i32, vertex_data);
+
+    if stride >= 20 {
+        // UV texture coordinate at offset 12 (float x, float y, float z, float u, float v)
+        let uv_ptr = (vertex_data as *const u8).add(12) as *const c_void;
+        (api.gl_enable_vertex_attrib_array)(1);
+        (api.gl_vertex_attrib_pointer)(1, 2, GL_FLOAT, 0, stride as i32, uv_ptr);
+    }
+
+    (api.gl_draw_arrays)(mode, 0, count as i32);
+    TOTAL_DRAWS.fetch_add(1, Ordering::Relaxed);
+    0
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_native_gles_draw_indexed_primitive_up(
+    prim_type: u32,
+    _min_vertex_index: u32,
+    _num_vertices: u32,
+    prim_count: u32,
+    index_data: *const c_void,
+    index_format: u32,
+    vertex_data: *const c_void,
+    stride: u32,
+) -> c_int {
+    if index_data.is_null() || vertex_data.is_null() || stride == 0 {
+        return -1;
+    }
+    let Some(ref api) = GLES_API else {
+        return -2;
+    };
+    let (mode, count) = match prim_type {
+        4 => (GL_TRIANGLES, prim_count * 3),
+        5 => (GL_TRIANGLE_STRIP, prim_count + 2),
+        6 => (GL_TRIANGLE_FAN, prim_count + 2),
+        2 => (GL_LINES, prim_count * 2),
+        _ => return -3,
+    };
+
+    (api.gl_bind_buffer)(GL_ARRAY_BUFFER, 0);
+    (api.gl_bind_buffer)(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+    (api.gl_enable_vertex_attrib_array)(0);
+    (api.gl_vertex_attrib_pointer)(0, 3, GL_FLOAT, 0, stride as i32, vertex_data);
+
+    if stride >= 20 {
+        let uv_ptr = (vertex_data as *const u8).add(12) as *const c_void;
+        (api.gl_enable_vertex_attrib_array)(1);
+        (api.gl_vertex_attrib_pointer)(1, 2, GL_FLOAT, 0, stride as i32, uv_ptr);
+    }
+
+    let gl_type = if index_format == 102 { // D3DFMT_INDEX32
+        GL_UNSIGNED_INT
+    } else {
+        GL_UNSIGNED_SHORT
+    };
+
+    (api.gl_draw_elements)(mode, count as i32, gl_type, index_data);
+    TOTAL_DRAWS.fetch_add(1, Ordering::Relaxed);
+    0
 }
 
 #[cfg(test)]
