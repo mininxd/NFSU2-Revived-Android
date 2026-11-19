@@ -102,6 +102,7 @@ pub struct VkDeviceCreateInfo {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct VkExtent2D {
     pub width: u32,
     pub height: u32,
@@ -142,6 +143,7 @@ pub struct VkPresentInfoKHR {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct VkQueueFamilyProperties {
     pub queue_flags: VkFlags,
     pub queue_count: u32,
