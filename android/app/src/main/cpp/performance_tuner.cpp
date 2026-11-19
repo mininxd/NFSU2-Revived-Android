@@ -155,7 +155,7 @@ void tuneThread(ThreadRole role, const char* name) {
             if (s_perf_cores_count > 0) {
                 sched_setaffinity(0, sizeof(cpu_set_t), &s_perf_mask);
             }
-            setpriority(PRIO_PROCESS, 0, -16);
+            setpriority(PRIO_PROCESS, 0, -20);
             break;
         }
         case ThreadRole::GUEST_AUDIO: {

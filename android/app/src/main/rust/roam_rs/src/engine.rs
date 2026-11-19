@@ -223,7 +223,7 @@ pub unsafe extern "C" fn nfs_rust_apply_engine_pacing(mem_base: *mut u8, real_el
         let effective_dt = if current_wdt > 0.0 { current_wdt } else { current_realdt };
 
         if effective_dt > 0.0 && effective_dt < real_elapsed * 0.90 {
-            let corrected = pacing_filter_dt(real_elapsed, effective_dt);
+            let corrected = pacing_filter_dt(real_elapsed, effective_dt).min(0.033333334);
             write_f32(mem_base, G_SIM_WDT_ADDR, corrected);
             write_f32(mem_base, G_SIM_REALDT_ADDR, corrected);
             write_u32(mem_base, G_SIM_STEPS_ADDR, (corrected * 1800.0) as u32);

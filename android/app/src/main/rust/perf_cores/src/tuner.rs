@@ -37,8 +37,8 @@ pub fn tune_current_thread(role: ThreadRole, name: Option<&str>) {
 
     let (mask, nice) = match role {
         ThreadRole::RenderMain => {
-            // Main rendering thread: bind to prime + mid performance cluster, urgent nice (-16)
-            (cluster.perf_cores_mask, -16)
+            // Main rendering thread: bind to prime + mid performance cluster, maximum priority nice (-20)
+            (cluster.perf_cores_mask, -20)
         }
         ThreadRole::GuestAudio => {
             // Audio thread: isolate onto dedicated mid performance cores to avoid prime core contention

@@ -202,7 +202,26 @@ void yieldGuestMachine(unsigned milliseconds=0,std::chrono::steady_clock::time_p
     if(!machineLease||!machineLease->owns_lock())throw GuestStop("Guest scheduler ownership missing");
     {auto& trace=currentTrace();trace.func=g_cur_func;trace.esp=g_esp;}
     State saved;saved.save();machineLease->unlock();
-    if(deadline!=std::chrono::steady_clock::time_point{})std::this_thread::sleep_until(deadline);
+    if(deadline!=std::chrono::steady_clock::time_point{}) {
+        auto now = std::chrono::steady_clock::now();
+        if (deadline > now) {
+            auto remaining = deadline - now;
+            // Hybrid precision pacing: if remaining > 2.5ms, sleep for (remaining - 1.5ms)
+            // so background workers can run, then active-spin the final 1.5ms using ARM yield.
+            // This prevents kernel sleep overshoots and stops Linux schedutil/PowerHAL
+            // from downclocking CPU/GPU cores into 30% low-frequency idle states!
+            if (remaining > std::chrono::microseconds(2500)) {
+                std::this_thread::sleep_for(remaining - std::chrono::microseconds(1500));
+            }
+            while (std::chrono::steady_clock::now() < deadline) {
+#if defined(__aarch64__)
+                asm volatile("yield" ::: "memory");
+#else
+                std::this_thread::yield();
+#endif
+            }
+        }
+    }
     else if(milliseconds)std::this_thread::sleep_for(std::chrono::milliseconds(milliseconds));else std::this_thread::yield();
     machineLease->lock();saved.load();
 }

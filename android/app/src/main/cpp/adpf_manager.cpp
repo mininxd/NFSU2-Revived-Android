@@ -102,7 +102,14 @@ void nfs_adpf_end_frame(void) {
     if (!s_session || !s_reportActual || s_frame_start_ns == 0) return;
     int64_t actual_duration_ns = get_time_ns() - s_frame_start_ns;
     if (actual_duration_ns > 0 && actual_duration_ns < 1000000000LL) {
-        s_reportActual(s_session, actual_duration_ns);
+        // Prevent PowerHAL from aggressively downclocking CPU/GPU to low frequencies (~30% usage throttle).
+        // By reporting at least the target frame duration, PowerHAL maintains peak/sustained clock frequencies
+        // to guarantee smooth target FPS without throttling.
+        int64_t reported = actual_duration_ns;
+        if (reported < s_target_duration_ns) {
+            reported = s_target_duration_ns;
+        }
+        s_reportActual(s_session, reported);
     }
 }
 
