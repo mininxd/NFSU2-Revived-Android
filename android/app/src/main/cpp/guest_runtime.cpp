@@ -287,6 +287,14 @@ bool guestModuleExport(uint32_t handle,const std::string& name,uint32_t& va);
 bool isGuestModule(uint32_t handle);
 void moduleHandle() {
     if(!arg(0)) { ret(imageBase,1); return; }
+    static auto s_rust_mod = reinterpret_cast<uint32_t(*)(const char*)>(
+        dlsym(RTLD_DEFAULT, "rust_shim_get_module_handle_a")
+    );
+    if(s_rust_mod) {
+        const char* nameStr = static_cast<const char*>(ptr(arg(0), 1));
+        uint32_t r = s_rust_mod(nameStr);
+        if(r != 0) { ret(r, 1); return; }
+    }
     auto name=lower(guestString(arg(0)));
     auto separator=name.find_last_of("/\\"); if(separator!=std::string::npos) name=name.substr(separator+1);
     if(name=="speed2.exe") { ret(imageBase,1); return; }

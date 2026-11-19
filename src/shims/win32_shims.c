@@ -25,6 +25,13 @@
 #define ARG(i) (*(uint32_t *)(uintptr_t)(g_esp + 4 + 4 * (i)))
 #define RET(v, nargs) do { g_eax = (uint32_t)(v); g_esp += 4 + 4 * (nargs); } while (0)
 
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((weak)) uint32_t rust_shim_get_module_handle_a(const char *name);
+__attribute__((weak)) uint32_t rust_shim_find_resource(size_t base, uint32_t name, uint32_t rtype);
+__attribute__((weak)) uint32_t rust_shim_load_resource(size_t base, uint32_t hrsrc);
+__attribute__((weak)) uint32_t rust_shim_sizeof_resource(uint32_t hrsrc);
+#endif
+
 static int is_guest_name(const char *s) {
     const char *b = strrchr(s, '\\'), *c = strrchr(s, '/');
     if (c > b) b = c;
@@ -35,6 +42,16 @@ static int is_guest_name(const char *s) {
 /* HMODULE GetModuleHandleA(LPCSTR name) */
 static void shim_GetModuleHandleA(void) {
     const char *name = (const char *)(uintptr_t)ARG(0);
+#if defined(__GNUC__) || defined(__clang__)
+    if (rust_shim_get_module_handle_a) {
+        uint32_t rust_r = rust_shim_get_module_handle_a(name);
+        if (rust_r) {
+            NFS_LOG(WIN32, "GetModuleHandleA(%s) [Rust] -> %08X", name ? name : "NULL", rust_r);
+            RET(rust_r, 1);
+            return;
+        }
+    }
+#endif
     uint32_t r;
     if (!name || is_guest_name(name)) r = NFS_GUEST_BASE;
     else r = (uint32_t)(uintptr_t)GetModuleHandleA(name);
@@ -108,6 +125,12 @@ static void rsrc_key(uint32_t arg, int wide, uintptr_t *id, wchar_t *buf, const 
 }
 
 static uint32_t guest_find_resource(uint32_t name, uint32_t type, int wide) {
+#if defined(__GNUC__) || defined(__clang__)
+    if (rust_shim_find_resource && !wide) {
+        uint32_t rust_r = rust_shim_find_resource(NFS_GUEST_BASE, name, type);
+        if (rust_r) return rust_r;
+    }
+#endif
     IMAGE_RESOURCE_DIRECTORY *root = rsrc_root();
     if (!root) return 0;
     wchar_t nb[256], tb[256];
@@ -153,6 +176,12 @@ static void shim_FindResourceW(void) {
 /* HGLOBAL LoadResource(HMODULE, HRSRC) */
 static void shim_LoadResource(void) {
     uint32_t m = ARG(0), h = ARG(1), r;
+#if defined(__GNUC__) || defined(__clang__)
+    if (rust_shim_load_resource && in_guest(h)) {
+        uint32_t rust_r = rust_shim_load_resource(NFS_GUEST_BASE, h);
+        if (rust_r) { RET(rust_r, 2); return; }
+    }
+#endif
     if (in_guest(h)) r = NFS_GUEST_BASE + ((IMAGE_RESOURCE_DATA_ENTRY *)(uintptr_t)h)->OffsetToData;
     else r = (uint32_t)(uintptr_t)LoadResource((HMODULE)(uintptr_t)m, (HRSRC)(uintptr_t)h);
     RET(r, 2);
@@ -160,6 +189,12 @@ static void shim_LoadResource(void) {
 /* DWORD SizeofResource(HMODULE, HRSRC) */
 static void shim_SizeofResource(void) {
     uint32_t m = ARG(0), h = ARG(1), r;
+#if defined(__GNUC__) || defined(__clang__)
+    if (rust_shim_sizeof_resource && in_guest(h)) {
+        uint32_t rust_r = rust_shim_sizeof_resource(h);
+        if (rust_r) { RET(rust_r, 2); return; }
+    }
+#endif
     if (in_guest(h)) r = ((IMAGE_RESOURCE_DATA_ENTRY *)(uintptr_t)h)->Size;
     else r = SizeofResource((HMODULE)(uintptr_t)m, (HRSRC)(uintptr_t)h);
     RET(r, 2);

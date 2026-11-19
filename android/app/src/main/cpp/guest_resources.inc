@@ -31,10 +31,52 @@ uint32_t locateResource(uint32_t module,uint32_t name,uint32_t type,uint32_t lan
     uint32_t dataRva=resourceDword(child),size=resourceDword(child+4);if(uint64_t(dataRva)+size>imageSize)throw GuestStop("PE resource data bounds exceeded");
     uint32_t handle=imageBase+resourceRva+child;resourceHandles.emplace(handle,ResourceRecord{imageBase+dataRva,size});return handle;
 }
-void findResource(){ret(locateResource(arg(0),arg(1),arg(2),0x409),3);}
+void findResource(){
+    static auto s_rust_find = reinterpret_cast<uint32_t(*)(size_t,uint32_t,uint32_t)>(
+        dlsym(RTLD_DEFAULT, "rust_shim_find_resource")
+    );
+    if (s_rust_find && (!arg(0) || arg(0) == imageBase)) {
+        uint32_t r = s_rust_find(imageBase, arg(1), arg(2));
+        if (r) {
+            ret(r, 3);
+            return;
+        }
+    }
+    ret(locateResource(arg(0),arg(1),arg(2),0x409),3);
+}
 void findResourceEx(){ret(locateResource(arg(0),arg(2),arg(1),arg(3)),4);}
-void loadResource(){auto found=resourceHandles.find(arg(1));if((arg(0)&&arg(0)!=imageBase)||found==resourceHandles.end()){lastError=6;ret(0,2);return;}loadedResources.emplace(found->second.address,found->second.size);ret(found->second.address,2);}
-void resourceSizeShim(){auto found=resourceHandles.find(arg(1));if((arg(0)&&arg(0)!=imageBase)||found==resourceHandles.end()){lastError=6;ret(0,2);return;}ret(found->second.size,2);}
+void loadResource(){
+    static auto s_rust_load = reinterpret_cast<uint32_t(*)(size_t,uint32_t)>(
+        dlsym(RTLD_DEFAULT, "rust_shim_load_resource")
+    );
+    if (s_rust_load && (!arg(0) || arg(0) == imageBase)) {
+        uint32_t r = s_rust_load(imageBase, arg(1));
+        if (r) {
+            loadedResources.emplace(r, 0);
+            ret(r, 2);
+            return;
+        }
+    }
+    auto found=resourceHandles.find(arg(1));
+    if((arg(0)&&arg(0)!=imageBase)||found==resourceHandles.end()){lastError=6;ret(0,2);return;}
+    loadedResources.emplace(found->second.address,found->second.size);
+    ret(found->second.address,2);
+}
+void resourceSizeShim(){
+    static auto s_rust_sizeof = reinterpret_cast<uint32_t(*)(uint32_t)>(
+        dlsym(RTLD_DEFAULT, "rust_shim_sizeof_resource")
+    );
+    if (s_rust_sizeof && (!arg(0) || arg(0) == imageBase)) {
+        uint32_t r = s_rust_sizeof(arg(1));
+        if (r) {
+            ret(r, 2);
+            return;
+        }
+    }
+    auto found=resourceHandles.find(arg(1));
+    if((arg(0)&&arg(0)!=imageBase)||found==resourceHandles.end()){lastError=6;ret(0,2);return;}
+    ret(found->second.size,2);
+}
 void lockResource(){ret(loadedResources.count(arg(0))?arg(0):0,1);}
 void freeResource(){ret(0,1);} // PE resources remain owned by the module, as on Win32.
 const std::map<std::string,recomp_func_t> resourceFunctions={

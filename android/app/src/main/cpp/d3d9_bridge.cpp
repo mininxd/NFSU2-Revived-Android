@@ -150,6 +150,7 @@ D3DFORMAT nativeTextureFormat(IDirect3DDevice9* device,D3DFORMAT format,DWORD us
 }
 void describeOriginal(uint32_t address,D3DSURFACE_DESC* desc){auto view=compressionView(address);if(view.texture&&desc)desc->Format=static_cast<D3DFORMAT>(view.texture->format);}
 }
+void* resolveGraphicsCacheSymbol(const char* name);
 void setD3D9Compatibility(bool cpuTextures,unsigned backBuffers){
     forceCpuTextures=cpuTextures;configuredBackBuffers=backBuffers<1?1u:backBuffers>3?3u:backBuffers;
 }
@@ -157,6 +158,15 @@ void configureD3D9Bridge(void* base,uint32_t (*allocator)(uint32_t),void (*deall
     guestBase=base;allocateGuest=allocator;freeGuest=deallocator;
     static auto s_tuner_env = reinterpret_cast<int(*)()>(dlsym(RTLD_DEFAULT,"nfs_dxvk_tuner_apply_environment"));
     if(s_tuner_env) s_tuner_env();
+    const char* rend = std::getenv("NFSU2_RENDERER");
+    bool isGl = rend && (std::strcmp(rend, "opengl") == 0 || std::strcmp(rend, "opengl_es") == 0);
+    if(isGl) {
+        static auto s_gles_init = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_gles_init"));
+        if(s_gles_init) {
+            int ret = s_gles_init();
+            NFS_RUNTIME_LOG(ANDROID_LOG_INFO, "NFSU2-GLES", "Native Pure Rust GLES initialized (result=%d)", ret);
+        }
+    }
 #ifdef __ANDROID__
     // android_main provides a writable private cache before creating DXVK.
     // Other bring-up callers can still run without a writable working directory.

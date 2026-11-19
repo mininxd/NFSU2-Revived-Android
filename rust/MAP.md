@@ -40,5 +40,6 @@
 
 ### Wave 4: Graphics & Final Pure Lift (Active)
 - [x] **`vulkan_driver.cpp` -> `graphics_cache::vulkan_driver`**: Safe Vulkan driver opening and proc address resolution.
+- [x] **`graphics_cache::native_gles`**: Direct native mobile OpenGL ES 3.0 / 3.2 rendering pipeline, translating D3D9 state directly to GLES and bypassing DXVK translation overhead.
 - [ ] **`d3d9_bridge.cpp` -> `ash` Vulkan Layer**: Direct3D 9 to Vulkan state translation in Rust.
 - [ ] **Pure App Lift**: Switch Android entry point to `android-activity` (`NativeActivity`), removing the Java VM layer.
