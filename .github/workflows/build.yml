@@ -2,10 +2,10 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, rustcode ]
     tags: [ 'v*' ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, rustcode ]
   workflow_dispatch:
 
 permissions:
@@ -74,6 +74,9 @@ jobs:
             echo "Building Rust graphics_cache crate..."
             cargo build --manifest-path android/app/src/main/rust/graphics_cache/Cargo.toml --target aarch64-linux-android --release && \
               cp android/app/src/main/rust/graphics_cache/target/aarch64-linux-android/release/libgraphics_cache.so android/app/src/main/jniLibs/arm64-v8a/
+
+            echo "Building Rust nfs_platform crate..."
+            cargo build --manifest-path rust/crates/nfs_platform/Cargo.toml --target aarch64-linux-android --release || true
 
             ls -lh android/app/src/main/jniLibs/arm64-v8a/lib*.so || true
           fi

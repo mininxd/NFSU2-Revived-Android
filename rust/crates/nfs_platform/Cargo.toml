@@ -1,0 +1,20 @@
+[package]
+name = "nfs_platform"
+version = "0.1.0"
+edition = "2021"
+authors = ["mininxd"]
+description = "Pure Rust platform abstraction, categorized logging, and host services for NFSU2"
+
+[lib]
+name = "nfs_platform"
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+libc = { version = "0.2", default-features = false }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

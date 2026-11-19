@@ -229,6 +229,14 @@ fn num_cpus_fallback() -> usize {
 
 // ---- C ABI Exports ---------------------------------------------------------------------------------
 
+/// Compatibility export matching roam_affinity.h (replaces C roam_affinity.c)
+#[no_mangle]
+pub extern "C" fn nfs_bind_to_perf_cores() -> c_int {
+    let cluster = CpuCluster::detect();
+    let _ = cluster.apply_affinity();
+    cluster.perf_core_count as c_int
+}
+
 /// Binds the calling process to performance cores. Returns 0 on success, or -1 on error.
 #[no_mangle]
 pub extern "C" fn nfs_perf_cores_bind() -> c_int {
