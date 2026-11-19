@@ -2,10 +2,10 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ main, rustcode ]
+    branches: [ main, arm64-compiler ]
     tags: [ 'v*' ]
   pull_request:
-    branches: [ main, rustcode ]
+    branches: [ main, arm64-compiler ]
   workflow_dispatch:
 
 permissions:

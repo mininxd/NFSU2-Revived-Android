@@ -39,7 +39,7 @@ public final class GameOptions {
                     new String[] {"25%", "30%", "35%", "40%", "45%", "50%", "55%", "60%", "65%", "70%", "75%", "80%", "85%", "90%", "95%", "100%", "125%", "150%", "200%"}),
             new Option(DRAW_DISTANCE, "Draw Distance", "performance",
                     new String[] {"ultra_performance", "performance", "balanced", "extended", "original"},
-                    new String[] {"Ultra Performance", "Performance", "Balanced", "Extended", "Original"}),
+                    new String[] {"Ultra Performance (+175m)", "Performance (+275m)", "Balanced (+450m)", "Extended (+700m)", "Original"}),
             new Option(FPS, "FPS Limit", "30",
                     new String[] {"30", "60", "90", "120", "0"},
                     new String[] {"30 FPS", "60 FPS", "90 FPS", "120 FPS", "Uncapped"}),

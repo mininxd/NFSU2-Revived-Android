@@ -6,9 +6,26 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <sched.h>
+#include <dlfcn.h>
 #include <android/log.h>
 
 int nfs_bind_to_perf_cores(void) {
+    typedef int (*FnBindPerf)(void);
+    static FnBindPerf s_rust_bind = NULL;
+    static int s_checked = 0;
+    if (!s_checked) {
+        s_checked = 1;
+        void* h = dlopen("libperf_cores.so", RTLD_NOLOAD);
+        if (!h) h = dlopen("libperf_cores.so", RTLD_NOW);
+        if (h) s_rust_bind = (FnBindPerf)dlsym(h, "nfs_perf_cores_bind");
+        if (!s_rust_bind) s_rust_bind = (FnBindPerf)dlsym(RTLD_DEFAULT, "nfs_perf_cores_bind");
+    }
+    if (s_rust_bind) {
+        int r = s_rust_bind();
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-PerfCores", "Bound process to tri-cluster performance cores via Rust engine (ret=%d)", r);
+        return r;
+    }
+
     long highest_freq = 0;
     long freqs[64] = {0};
     int total_cpus = sysconf(_SC_NPROCESSORS_CONF);
