@@ -90,8 +90,10 @@ pub extern "C" fn nfs_contrast_set_active(active: u32) {
     if active_val != last_val {
         LAST_INGAME_CONTRAST_VAL.store(active_val, Ordering::Relaxed);
         INGAME_CONTRAST_ACTIVE.store(is_active, Ordering::Relaxed);
-        if let Some(cb) = G_RAMP_CALLBACK {
-            cb(active_val);
+        unsafe {
+            if let Some(cb) = G_RAMP_CALLBACK {
+                cb(active_val);
+            }
         }
     }
 }

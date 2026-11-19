@@ -341,7 +341,7 @@ pub unsafe extern "C" fn nfs_native_gles_set_viewport(x: i32, y: i32, width: i32
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn nfs_native_gles_clear(flags: u32, color_argb: u32, z: f32, stencil: u32) -> c_int {
+pub unsafe extern "C" fn nfs_native_gles_clear(flags: u32, color_argb: u32, z: f32, _stencil: u32) -> c_int {
     let Some(ref api) = GLES_API else {
         return -1;
     };
