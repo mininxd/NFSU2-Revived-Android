@@ -11,8 +11,13 @@
 ### Wave 0: Core Foundation & Platform Services (Active)
 - [x] **ADRs & Architecture Map** (`rust/DECISIONS.md`, `rust/MAP.md`, `rust/GLOSSARY.md`)
 - [x] **`src/platform/nfs_log.c` -> `rust/crates/nfs_platform`**: Safe C-ABI logging engine for recompilation host and Android.
-- [x] **`android/app/src/main/cpp/roam/roam_affinity.c` -> `perf_cores`**: CPU cluster detection and thread pinning with C-ABI export `nfs_bind_to_perf_cores`.
-- [x] **`performance_tuner.cpp` -> `perf_cores::tuner`**: Thread role affinity and priority tuning (`RenderMain`, `GuestAudio`, `BackgroundWorker`).
+- [x] **`roam_affinity.c` & `performance_tuner.cpp` -> `perf_cores`**:
+  - Tri-cluster CPU topology detection (Prime, Mid, Little cores) via cpufreq and `/proc/cpuinfo` Cortex part identification.
+  - Role-based thread affinity and priority tuning (`RenderMain` -> Prime/Mid, `GuestAudio` -> Mid isolated, `BackgroundWorker` -> Little).
+  - C-ABI (`nfs_perf_tune_thread_role`, `nfs_perf_get_topology_summary_buf`, `nfs_bind_to_perf_cores`) and JNI bindings.
+- [x] **Graphics API Refinement**:
+  - Eliminated legacy fake "OpenGL ES" string substitutions; unified all rendering under Universal Vulkan (DXVK).
+  - Universal driver loader across Mali, Adreno, Immortalis, and Xclipse GPUs.
 
 ### Wave 1: Multiplayer & Network Protocol Engine (Active)
 - [x] **`VirtualSwitchClient.java` Packet Engine -> `roam_rs::switch`**:

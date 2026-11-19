@@ -24,26 +24,39 @@ impl ThreadRole {
 }
 
 /// Pins thread affinity and sets process/thread priority according to operational role.
-pub fn tune_current_thread(role: ThreadRole, _name: Option<&str>) {
+pub fn tune_current_thread(role: ThreadRole, name: Option<&str>) {
     let cluster = CpuCluster::detect();
+
+    if let Some(tname) = name {
+        if let Ok(cname) = std::ffi::CString::new(tname) {
+            unsafe {
+                libc::pthread_setname_np(libc::pthread_self(), cname.as_ptr());
+            }
+        }
+    }
 
     let (mask, nice) = match role {
         ThreadRole::RenderMain => {
-            // Main rendering thread: bind to prime/performance cores, high priority (-16)
+            // Main rendering thread: bind to prime + mid performance cluster, urgent nice (-16)
             (cluster.perf_cores_mask, -16)
         }
         ThreadRole::GuestAudio => {
-            // Audio thread: bind to performance cores, elevated priority (-10)
-            (cluster.perf_cores_mask, -10)
+            // Audio thread: isolate onto dedicated mid performance cores to avoid prime core contention
+            let target = if cluster.mid_cores_mask != 0 && cluster.mid_cores_mask != cluster.prime_cores_mask {
+                cluster.mid_cores_mask
+            } else {
+                cluster.perf_cores_mask
+            };
+            (target, -12)
         }
         ThreadRole::BackgroundWorker => {
-            // Background compilation/workers: all cores or lower half, standard priority (0)
-            let all_mask = if cluster.total_cores >= 64 {
-                !0u64
+            // Background workers / asset loading: allow little + mid cores, normal nice (0)
+            let target = if cluster.little_cores_mask != 0 {
+                cluster.little_cores_mask | cluster.mid_cores_mask
             } else {
                 (1u64 << cluster.total_cores) - 1
             };
-            (all_mask, 0)
+            (target, 0)
         }
     };
 
@@ -80,8 +93,11 @@ pub unsafe extern "C" fn nfs_perf_get_topology_summary_buf(buf: *mut c_char, cap
     }
     let cluster = CpuCluster::detect();
     let summary = format!(
-        "Total: {}, Perf: {} (Mask: 0x{:X})",
-        cluster.total_cores, cluster.perf_core_count, cluster.perf_cores_mask
+        "Total: {} | Prime: {} (0x{:X}) | Mid: {} (0x{:X}) | Little: {} (0x{:X})",
+        cluster.total_cores,
+        cluster.prime_core_count, cluster.prime_cores_mask,
+        cluster.mid_core_count, cluster.mid_cores_mask,
+        cluster.little_core_count, cluster.little_cores_mask
     );
     let bytes = summary.as_bytes();
     let copy_len = bytes.len().min(cap - 1);
