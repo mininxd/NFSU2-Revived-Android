@@ -4,7 +4,7 @@
 //! zero-allocation native peer registry, virtual MAC routing, and connection state management.
 
 use std::collections::HashMap;
-use std::ffi::{CStr, CString};
+use std::ffi::CStr;
 use std::os::raw::{c_char, c_int};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::RwLock;
@@ -40,13 +40,13 @@ impl PeerInfo {
 #[derive(Debug, Default)]
 pub struct PeerRegistry {
     // Keyed by uppercase hex MAC address (e.g. "02:00:1A:2B:3C:4D")
-    peers: RwLock<HashMap<String, PeerInfo>>,
+    peers: RwLock<Option<HashMap<String, PeerInfo>>>,
 }
 
 impl PeerRegistry {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
-            peers: RwLock::new(HashMap::new()),
+            peers: RwLock::new(None),
         }
     }
 
@@ -55,19 +55,22 @@ impl PeerRegistry {
         let key = format_mac(&mac);
         let peer = PeerInfo::new(name, mac, ip, virtual_port, now_ms);
         if let Ok(mut lock) = self.peers.write() {
-            lock.insert(key, peer);
+            let map = lock.get_or_insert_with(HashMap::new);
+            map.insert(key, peer);
         }
     }
 
     /// Removes a peer matching the given virtual IPv4 address.
     pub fn remove_by_ip(&self, ip: u32) -> bool {
         if let Ok(mut lock) = self.peers.write() {
-            let key_to_remove = lock
-                .iter()
-                .find(|(_, p)| p.ip == ip)
-                .map(|(k, _)| k.clone());
-            if let Some(key) = key_to_remove {
-                return lock.remove(&key).is_some();
+            if let Some(ref mut map) = *lock {
+                let key_to_remove = map
+                    .iter()
+                    .find(|(_, p)| p.ip == ip)
+                    .map(|(k, _)| k.clone());
+                if let Some(key) = key_to_remove {
+                    return map.remove(&key).is_some();
+                }
             }
         }
         false
@@ -77,7 +80,9 @@ impl PeerRegistry {
     pub fn remove_by_mac(&self, mac: &[u8; 6]) -> bool {
         let key = format_mac(mac);
         if let Ok(mut lock) = self.peers.write() {
-            return lock.remove(&key).is_some();
+            if let Some(ref mut map) = *lock {
+                return map.remove(&key).is_some();
+            }
         }
         false
     }
@@ -85,17 +90,14 @@ impl PeerRegistry {
     /// Finds peer info by MAC address.
     pub fn find_by_mac(&self, mac: &[u8; 6]) -> Option<PeerInfo> {
         let key = format_mac(mac);
-        self.peers.read().ok()?.get(&key).cloned()
+        let lock = self.peers.read().ok()?;
+        lock.as_ref()?.get(&key).cloned()
     }
 
     /// Finds peer info by IPv4 address.
     pub fn find_by_ip(&self, ip: u32) -> Option<PeerInfo> {
-        self.peers
-            .read()
-            .ok()?
-            .values()
-            .find(|p| p.ip == ip)
-            .cloned()
+        let lock = self.peers.read().ok()?;
+        lock.as_ref()?.values().find(|p| p.ip == ip).cloned()
     }
 
     /// Resolves source IPv4 address for an incoming MAC datagram.
@@ -117,23 +119,30 @@ impl PeerRegistry {
 
     /// Returns the number of currently tracked peers.
     pub fn count(&self) -> usize {
-        self.peers.read().map(|lock| lock.len()).unwrap_or(0)
+        self.peers
+            .read()
+            .ok()
+            .and_then(|lock| lock.as_ref().map(|m| m.len()))
+            .unwrap_or(0)
     }
 
     /// Returns a list snapshot of all active peers.
     pub fn all_peers(&self) -> Vec<PeerInfo> {
         self.peers
             .read()
-            .map(|lock| lock.values().cloned().collect())
+            .ok()
+            .and_then(|lock| lock.as_ref().map(|m| m.values().cloned().collect()))
             .unwrap_or_default()
     }
 
     /// Prunes stale peers that have not sent a datagram within `timeout_ms`.
     pub fn prune_stale(&self, timeout_ms: u64, now_ms: u64) -> usize {
         if let Ok(mut lock) = self.peers.write() {
-            let before = lock.len();
-            lock.retain(|_, p| now_ms.saturating_sub(p.last_seen_ms) <= timeout_ms);
-            return before.saturating_sub(lock.len());
+            if let Some(ref mut map) = *lock {
+                let before = map.len();
+                map.retain(|_, p| now_ms.saturating_sub(p.last_seen_ms) <= timeout_ms);
+                return before.saturating_sub(map.len());
+            }
         }
         0
     }
@@ -141,7 +150,9 @@ impl PeerRegistry {
     /// Clears all registered peers.
     pub fn clear(&self) {
         if let Ok(mut lock) = self.peers.write() {
-            lock.clear();
+            if let Some(ref mut map) = *lock {
+                map.clear();
+            }
         }
     }
 }
@@ -212,9 +223,7 @@ impl RoamCoordinator {
             ghost_mode: AtomicBool::new(true),
             mode: AtomicU32::new(RoamBackendMode::PrometheusAdhoc as u32),
             hub_ip: AtomicU32::new(0),
-            registry: PeerRegistry {
-                peers: RwLock::new(HashMap::new()),
-            },
+            registry: PeerRegistry::new(),
         }
     }
 }

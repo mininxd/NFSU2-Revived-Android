@@ -96,6 +96,9 @@ extern uint32_t nfs_rust_crowd_suppressed_frames(void);
 extern int nfs_rust_apply_engine_pacing(uint8_t *mem_base, float real_elapsed);
 extern void nfs_rust_set_contrast_mode(uint32_t mode);
 extern uint32_t nfs_rust_get_contrast_mode(void);
+#else
+static inline void nfs_rust_set_crowd_suppression(int enable) { (void)enable; }
+static inline int nfs_rust_apply_engine_pacing(uint8_t *mem_base, float real_elapsed) { (void)mem_base; (void)real_elapsed; return 0; }
 #endif
 
 #define G_CARPOOL_KB     0x007fa9d4u
