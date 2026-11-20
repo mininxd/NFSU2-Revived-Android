@@ -124,8 +124,8 @@ public final class GamePerformanceBooster {
             try {
                 PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
                 if (pm != null && pm.isSustainedPerformanceModeSupported()) {
-                    window.setSustainedPerformanceMode(true);
-                    Log.i(TAG, "Sustained performance mode active");
+                    window.setSustainedPerformanceMode(false);
+                    Log.i(TAG, "Sustained performance mode disabled to permit dynamic peak clocks");
                 }
             } catch (Throwable ignored) {}
         }

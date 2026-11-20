@@ -65,23 +65,10 @@ int nfs_bind_to_perf_cores(void) {
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
     int count = 0;
-    long threshold = (long)(highest_freq * 0.80);
-
-    if (highest_freq > 0) {
-        for (int i = 0; i < total_cpus; i++) {
-            if (freqs[i] >= threshold) {
-                CPU_SET(i, &cpuset);
-                count++;
-            }
-        }
-    }
-
-    if (count == 0) {
-        int start = total_cpus > 1 ? total_cpus / 2 : 0;
-        for (int i = start; i < total_cpus; i++) {
-            CPU_SET(i, &cpuset);
-            count++;
-        }
+    // Set all available cores so no cores idle and the kernel scheduler has full frequency flexibility
+    for (int i = 0; i < total_cpus; i++) {
+        CPU_SET(i, &cpuset);
+        count++;
     }
 
     sched_setaffinity(getpid(), sizeof(cpu_set_t), &cpuset);

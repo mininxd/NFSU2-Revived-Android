@@ -200,31 +200,20 @@ impl CpuCluster {
             });
         }
 
-        let mut perf_cores_mask = prime_cores_mask | mid_cores_mask;
+        let all_cores_mask = if total_cores >= 64 {
+            u64::MAX
+        } else {
+            (1u64 << total_cores) - 1
+        };
 
-        // Fallback safety if no perf cores detected
-        if perf_cores_mask == 0 {
-            if total_cores > 1 {
-                let start = total_cores / 2;
-                for id in start..total_cores {
-                    mid_cores_mask |= 1u64 << id;
-                }
-                for id in 0..start {
-                    little_cores_mask |= 1u64 << id;
-                }
-                perf_cores_mask = mid_cores_mask;
-            } else {
-                prime_cores_mask = 1;
-                perf_cores_mask = 1;
-            }
-        }
-
-        // If no prime cores distinguished from mid cores, treat all perf cores as prime
+        // All-cores unrestricted policy: allow all detected CPU cores to be utilized
+        // so no cores sit idling and Qualcomm/MediaTek governors can scale frequencies freely.
+        let perf_cores_mask = all_cores_mask;
         if prime_cores_mask == 0 {
-            prime_cores_mask = perf_cores_mask;
+            prime_cores_mask = all_cores_mask;
         }
         if mid_cores_mask == 0 {
-            mid_cores_mask = perf_cores_mask;
+            mid_cores_mask = all_cores_mask;
         }
 
         let prime_core_count = prime_cores_mask.count_ones() as usize;
@@ -259,21 +248,19 @@ impl CpuCluster {
     }
 
     /// Intelligently assigns affinity and priorities to process and threads in /proc/self/task.
+    /// Uses all available CPU cores so that no cores idle and the kernel governor can boost clock frequencies.
     pub fn apply_affinity(&self) -> Result<(), i32> {
-        let render_mask = self.perf_cores_mask; // Prime + Mid cores
-        let audio_mask = if self.mid_cores_mask != 0 && self.mid_cores_mask != self.prime_cores_mask {
-            self.mid_cores_mask // Dedicated Mid cores isolated from prime render thread
+        let all_cores_mask = if self.total_cores >= 64 {
+            u64::MAX
         } else {
-            self.perf_cores_mask
+            (1u64 << self.total_cores) - 1
         };
-        let background_mask = if self.little_cores_mask != 0 {
-            self.little_cores_mask | self.mid_cores_mask
-        } else {
-            self.perf_cores_mask
-        };
+        let render_mask = all_cores_mask; // All cores active - no idling
+        let audio_mask = all_cores_mask;
+        let background_mask = all_cores_mask;
 
         unsafe {
-            // Process-level default affinity: performance cluster
+            // Process-level default affinity: all cores
             let mask_val = render_mask as c_long;
             let _ = libc::syscall(
                 libc::SYS_sched_setaffinity,
@@ -282,56 +269,41 @@ impl CpuCluster {
                 &mask_val as *const c_long,
             );
 
-            // Calling thread affinity (RenderMain / UI thread): nice -16
+            // Calling thread affinity (RenderMain / UI thread): maximum priority nice -20
             let ret = libc::syscall(
                 libc::SYS_sched_setaffinity,
                 0 as c_int,
                 std::mem::size_of::<c_long>(),
                 &mask_val as *const c_long,
             );
-            let _ = libc::setpriority(libc::PRIO_PROCESS, libc::getpid() as u32, -16);
-            let _ = libc::setpriority(libc::PRIO_PROCESS, 0, -16);
+            let _ = libc::setpriority(libc::PRIO_PROCESS, libc::getpid() as u32, -20);
+            let _ = libc::setpriority(libc::PRIO_PROCESS, 0, -20);
 
-            // Thread-level assignment across /proc/self/task
+            // Thread-level assignment across /proc/self/task: unbind all threads to all cores
             if let Ok(entries) = fs::read_dir("/proc/self/task") {
                 for entry in entries.flatten() {
                     if let Ok(tid) = entry.file_name().to_string_lossy().parse::<i32>() {
+                        let m = all_cores_mask as c_long;
+                        let _ = libc::syscall(
+                            libc::SYS_sched_setaffinity,
+                            tid as c_int,
+                            std::mem::size_of::<c_long>(),
+                            &m as *const c_long,
+                        );
                         let comm_path = format!("/proc/self/task/{}/comm", tid);
                         if let Ok(comm) = fs::read_to_string(&comm_path) {
                             let n = comm.trim();
                             if n == "GuestBootWorker" || n == "RenderThread" || n == "main"
                                 || n.contains("MainRender") || n.contains("dxvk")
                             {
-                                // Main rendering / guest emulation: prime + mid, urgent nice -16
-                                let m = render_mask as c_long;
-                                let _ = libc::syscall(
-                                    libc::SYS_sched_setaffinity,
-                                    tid as c_int,
-                                    std::mem::size_of::<c_long>(),
-                                    &m as *const c_long,
-                                );
-                                let _ = libc::setpriority(libc::PRIO_PROCESS, tid as u32, -16);
+                                let _ = libc::setpriority(libc::PRIO_PROCESS, tid as u32, -20);
                             } else if n.starts_with("AAudio") || n.contains("audio") || n.contains("Audio") {
-                                // Real-time audio: mid performance cores, isolated from prime render contention, nice -12
-                                let m = audio_mask as c_long;
-                                let _ = libc::syscall(
-                                    libc::SYS_sched_setaffinity,
-                                    tid as c_int,
-                                    std::mem::size_of::<c_long>(),
-                                    &m as *const c_long,
-                                );
-                                let _ = libc::setpriority(libc::PRIO_PROCESS, tid as u32, -12);
-                            } else if n.contains("Worker") || n.contains("Jit") || n.contains("Heap") || n.contains("pool") {
-                                // Background worker / GC: little + mid cores, standard nice 0
-                                let m = background_mask as c_long;
-                                let _ = libc::syscall(
-                                    libc::SYS_sched_setaffinity,
-                                    tid as c_int,
-                                    std::mem::size_of::<c_long>(),
-                                    &m as *const c_long,
-                                );
-                                let _ = libc::setpriority(libc::PRIO_PROCESS, tid as u32, 0);
+                                let _ = libc::setpriority(libc::PRIO_PROCESS, tid as u32, -16);
+                            } else {
+                                let _ = libc::setpriority(libc::PRIO_PROCESS, tid as u32, -10);
                             }
+                        } else {
+                            let _ = libc::setpriority(libc::PRIO_PROCESS, tid as u32, -10);
                         }
                     }
                 }

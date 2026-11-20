@@ -210,11 +210,9 @@ public final class PerformanceCores {
         }
 
         if (mask == 0) {
-            // Universal fallback: upper half of CPU cores
-            int start = Math.max(1, totalCores / 2);
-            for (int i = start; i < totalCores; i++) {
-                mask |= (1L << i);
-            }
+            // Universal fallback: enable all CPU cores to allow the kernel EAS/WALT governor
+            // to dynamically schedule across all available cores without artificial throttling.
+            mask = (1L << totalCores) - 1;
         }
         return mask;
     }

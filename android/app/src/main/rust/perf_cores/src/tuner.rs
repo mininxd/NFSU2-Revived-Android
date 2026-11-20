@@ -35,28 +35,24 @@ pub fn tune_current_thread(role: ThreadRole, name: Option<&str>) {
         }
     }
 
+    let all_cores_mask = if cluster.total_cores >= 64 {
+        u64::MAX
+    } else {
+        (1u64 << cluster.total_cores) - 1
+    };
+
     let (mask, nice) = match role {
         ThreadRole::RenderMain => {
-            // Main rendering thread: bind to prime + mid performance cluster, maximum priority nice (-20)
-            (cluster.perf_cores_mask, -20)
+            // Main rendering thread: all cores available, maximum interactive priority nice (-20)
+            (all_cores_mask, -20)
         }
         ThreadRole::GuestAudio => {
-            // Audio thread: isolate onto dedicated mid performance cores to avoid prime core contention
-            let target = if cluster.mid_cores_mask != 0 && cluster.mid_cores_mask != cluster.prime_cores_mask {
-                cluster.mid_cores_mask
-            } else {
-                cluster.perf_cores_mask
-            };
-            (target, -12)
+            // Audio thread: all cores available, high priority nice (-16)
+            (all_cores_mask, -16)
         }
         ThreadRole::BackgroundWorker => {
-            // Background workers / asset loading: allow little + mid cores, normal nice (0)
-            let target = if cluster.little_cores_mask != 0 {
-                cluster.little_cores_mask | cluster.mid_cores_mask
-            } else {
-                (1u64 << cluster.total_cores) - 1
-            };
-            (target, 0)
+            // Background workers / JIT / asset loading: all cores available, priority nice (-10)
+            (all_cores_mask, -10)
         }
     };
 

@@ -152,22 +152,18 @@ void tuneThread(ThreadRole role, const char* name) {
 
     switch (role) {
         case ThreadRole::RENDER_MAIN: {
-            if (s_perf_cores_count > 0) {
-                sched_setaffinity(0, sizeof(cpu_set_t), &s_perf_mask);
-            }
+            sched_setaffinity(0, sizeof(cpu_set_t), &s_all_mask);
             setpriority(PRIO_PROCESS, 0, -20);
             break;
         }
         case ThreadRole::GUEST_AUDIO: {
-            if (s_perf_cores_count > 0) {
-                sched_setaffinity(0, sizeof(cpu_set_t), &s_perf_mask);
-            }
-            setpriority(PRIO_PROCESS, 0, -12);
+            sched_setaffinity(0, sizeof(cpu_set_t), &s_all_mask);
+            setpriority(PRIO_PROCESS, 0, -16);
             break;
         }
         case ThreadRole::BACKGROUND_WORKER: {
             sched_setaffinity(0, sizeof(cpu_set_t), &s_all_mask);
-            setpriority(PRIO_PROCESS, 0, 0);
+            setpriority(PRIO_PROCESS, 0, -10);
             break;
         }
     }

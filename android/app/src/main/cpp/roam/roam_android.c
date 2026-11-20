@@ -1095,10 +1095,13 @@ static void hook_sub_005caad0(void) {
     }
 
     uint32_t user_contrast = 0;
-    uint32_t user_ob = 0;
     if (do_bypass) {
+        uint32_t master_contrast = 0;
+        if (rh_mem_committed(0x00876518u, 4)) {
+            master_contrast = MR32(0x00876518u);
+        }
         if (rh_mem_committed(0x00870D00u, 4)) {
-            user_contrast = MR32(0x00870D00u);
+            user_contrast = MR32(0x00870D00u) | master_contrast;
             if (s_set_contrast_active) {
                 s_set_contrast_active(user_contrast);
             }
@@ -1107,8 +1110,10 @@ static void hook_sub_005caad0(void) {
             MR32(0x00870D00u) = 0;
         }
         if (rh_mem_committed(0x00870CFCu, 4)) {
-            user_ob = MR32(0x00870CFCu);
             MR32(0x00870CFCu) = 0;
+        }
+        if (rh_mem_committed(0x00876514u, 4)) {
+            MR32(0x00876514u) = 0;
         }
     }
 
@@ -1117,12 +1122,13 @@ static void hook_sub_005caad0(void) {
     }
 
     if (do_bypass) {
-        // Restore user settings immediately so in-game menus and player profile stay accurate
+        // Keep engine post-processing flags clamped to 0 so SPEED2.EXE never executes
+        // the heavy 3-pass ping-pong StretchRect resolve that causes the 40 FPS drop on mobile TBDR GPUs.
         if (rh_mem_committed(0x00870D00u, 4)) {
-            MR32(0x00870D00u) = user_contrast;
+            MR32(0x00870D00u) = 0;
         }
         if (rh_mem_committed(0x00870CFCu, 4)) {
-            MR32(0x00870CFCu) = user_ob;
+            MR32(0x00870CFCu) = 0;
         }
     }
 
