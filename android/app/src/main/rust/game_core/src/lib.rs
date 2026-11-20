@@ -5,12 +5,14 @@ pub mod contrast_regulator;
 pub mod garage_viewer;
 pub mod lightroom_contrast;
 pub mod nitro_manager;
+pub mod touch_hud;
 
 pub use camera_stick::*;
 pub use contrast_regulator::*;
 pub use garage_viewer::*;
 pub use lightroom_contrast::*;
 pub use nitro_manager::*;
+pub use touch_hud::*;
 
 use jni::objects::JClass;
 use jni::sys::{jboolean, jfloat, jint};
@@ -122,4 +124,52 @@ pub extern "system" fn Java_com_nfsu2_androidevolved_GameActivity_nativePointerM
 ) {
     let active = phase != 2;
     GLOBAL_GARAGE_VIEWER.set_two_finger_drag(dx, dy, active);
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_mininxd_nfsu2_RacingControlsView_nativeTouchHudPointerDown(
+    _env: JNIEnv,
+    _class: JClass,
+    finger_id: jint,
+    x: jfloat,
+    y: jfloat,
+) {
+    unsafe {
+        nfs_touch_hud_pointer_down(finger_id as u32, x, y);
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_mininxd_nfsu2_RacingControlsView_nativeTouchHudPointerMove(
+    _env: JNIEnv,
+    _class: JClass,
+    finger_id: jint,
+    x: jfloat,
+    y: jfloat,
+) {
+    unsafe {
+        nfs_touch_hud_pointer_move(finger_id as u32, x, y);
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_mininxd_nfsu2_RacingControlsView_nativeTouchHudPointerUp(
+    _env: JNIEnv,
+    _class: JClass,
+    finger_id: jint,
+) {
+    unsafe {
+        nfs_touch_hud_pointer_up(finger_id as u32);
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_mininxd_nfsu2_RacingControlsView_nativeTouchHudIsKeyDown(
+    _env: JNIEnv,
+    _class: JClass,
+    scan: jint,
+) -> jboolean {
+    unsafe {
+        (nfs_touch_hud_is_key_down(scan) != 0) as jboolean
+    }
 }

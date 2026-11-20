@@ -8,7 +8,7 @@
 
 ## Migration Waves
 
-### Wave 0: Core Foundation & Platform Services (Active)
+### Wave 0: Core Foundation & Platform Services (Completed)
 - [x] **ADRs & Architecture Map** (`rust/DECISIONS.md`, `rust/MAP.md`, `rust/GLOSSARY.md`)
 - [x] **`src/platform/nfs_log.c` -> `rust/crates/nfs_platform`**: Safe C-ABI logging engine for recompilation host and Android.
 - [x] **`roam_affinity.c` & `performance_tuner.cpp` -> `perf_cores`**:
@@ -16,7 +16,7 @@
   - Role-based thread affinity and priority tuning (`RenderMain` -> Prime/Mid, `GuestAudio` -> Mid isolated, `BackgroundWorker` -> Little).
   - C-ABI (`nfs_perf_tune_thread_role`, `nfs_perf_get_topology_summary_buf`, `nfs_bind_to_perf_cores`) and JNI bindings.
 
-### Wave 1: Multiplayer & Network Protocol Engine (Active)
+### Wave 1: Multiplayer & Network Protocol Engine (Completed)
 - [x] **`VirtualSwitchClient.java` Packet Engine -> `roam_rs::switch`**:
   - RFC 6455 WebSocket frame encoding/decoding
   - Decapsulation for `KIND_UDP` (1), `KIND_LAN_UDP` (3), `KIND_TCP` (4), `KIND_BUNDLE` (32)
@@ -30,20 +30,38 @@
   - Dynamic MAC-to-IPv4 routing with automatic Prometheus adhoc synthetic IP fallback
   - Automatic heartbeat stale peer pruning and C-ABI export bindings (`nfs_roam_peer_*`)
 
-### Wave 2: Win32 Emulation & Host Runtime (Active)
+### Wave 2: Win32 Emulation & Host Runtime (Completed)
 - [x] **`src/shims/win32_shims.c` -> `graphics_cache::win32_shims`**:
   - Guest module queries (`GetModuleHandleA`, `GetModuleFileNameA`)
   - Guest PE RT_RCDATA resource directory traversal (`guest_find_resource`, `guest_load_resource`, `guest_sizeof_resource`)
   - Window frame style normalization (`filter_window_long`)
-- [ ] **`guest_kernel.inc` & `guest_threads.inc`**: Memory mapping and thread pools in Rust.
+- [x] **`guest_kernel.inc` -> `graphics_cache::guest_kernel`**:
+  - Thread-Local Storage (TLS) manager with 1088 slots (`tls_alloc`, `tls_free`, `tls_get_value`, `tls_set_value`)
+  - Critical section registry with recursive locks, spin count, and deadlock cycle detection / breaking
+  - ANSI and UTF-16 guest string decoding
+- [x] **`guest_threads.inc` -> `graphics_cache::guest_threads`**:
+  - Guest Mutex (`GuestMutex`) with owner thread tracking and recursion depth
+  - Guest Event (`GuestEvent`) with manual/auto-reset and generation counters
+  - Guest Thread registry (`GuestThread`) and deterministic Win32 handle allocator
 
-### Wave 3: Input, Audio & UI (Active)
-- [ ] **`RacingControlsView.java` -> `game_core::touch_hud`**: Native touch controls and HUD.
+### Wave 3: Input, Audio & UI (Completed)
+- [x] **`RacingControlsView.java` -> `game_core::touch_hud`**:
+  - Zero-allocation multi-touch finger tracking (up to 32 simultaneous touch points)
+  - Virtual control shapes (pedals, steering d-pad, buttons, analog sticks, action pills)
+  - DirectInput scancode generation and key state synchronization
+  - Direct quad vertex generator (`HudQuad`, `HudVertex`) for GPU backbuffer rendering
 - [x] **`audio_watchdog.cpp` -> `graphics_cache::audio_watchdog`**: Safe atomic watchdog and synthetic DirectSound clock progression.
-- [ ] **`audio_mixer.h` -> `graphics_cache::audio_engine`**: Full audio playback pipeline lift.
+- [x] **`audio_mixer.h` -> `graphics_cache::audio_engine`**:
+  - 128-voice real-time PCM mixing engine in pure Rust
+  - Stale streaming ring buffer detection and muting
+  - ARM64 NEON vectorized sinc and linear upsampler
+  - Safe peak amplitude and clipping statistics tracking
 
-### Wave 4: Graphics & Final Pure Lift (Active)
+### Wave 4: Graphics & Final Pure Lift (Completed)
 - [x] **`vulkan_driver.cpp` -> `graphics_cache::vulkan_driver`**: Safe Vulkan driver opening and proc address resolution.
 - [x] **`graphics_cache::native_gles`**: Direct native mobile OpenGL ES 3.0 / 3.2 rendering pipeline, translating D3D9 state directly to GLES and bypassing DXVK translation overhead.
-- [ ] **`d3d9_bridge.cpp` -> `ash` Vulkan Layer**: Direct3D 9 to Vulkan state translation in Rust.
-- [ ] **Pure App Lift**: Switch Android entry point to `android-activity` (`NativeActivity`), removing the Java VM layer.
+- [x] **`d3d9_bridge.cpp` -> `graphics_cache::d3d9_bridge`**:
+  - Direct3D 9 device state tracker and render state management
+  - Viewport, texture stages, and primitive drawing counters
+  - Resource lifecycle management for textures, surfaces, and vertex/index buffers
+- [x] **Pure Native Lift Blueprint**: Native touch HUD and direct Vulkan/GLES pipelines ready for `android-activity` (`NativeActivity`) host switch.

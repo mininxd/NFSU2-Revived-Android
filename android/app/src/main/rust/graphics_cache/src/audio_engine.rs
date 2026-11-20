@@ -427,3 +427,196 @@ pub unsafe extern "C" fn nfs_audio_mixer_advance_voices(
     }
 }
 
+// ---------------------------------------------------------------------------
+// Pure Rust 128-Voice Audio Mixer Engine
+// ---------------------------------------------------------------------------
+
+pub const MAX_VOICES: usize = 128;
+
+#[derive(Clone, Debug)]
+pub struct NativeVoice {
+    pub samples: Vec<u8>,
+    pub channels: u32,
+    pub bits: u32,
+    pub rate: u32,
+    pub frequency: u32,
+    pub position: f64,
+    pub gain_l: f32,
+    pub gain_r: f32,
+    pub is_playing: bool,
+    pub is_loop: bool,
+    pub publishes: u32,
+    pub stale_frames: f64,
+}
+
+impl NativeVoice {
+    pub fn new(
+        samples: Vec<u8>,
+        channels: u32,
+        bits: u32,
+        rate: u32,
+        frequency: u32,
+        is_loop: bool,
+        gain_l: f32,
+        gain_r: f32,
+    ) -> Self {
+        Self {
+            samples,
+            channels,
+            bits,
+            rate,
+            frequency,
+            position: 0.0,
+            gain_l,
+            gain_r,
+            is_playing: true,
+            is_loop,
+            publishes: 0,
+            stale_frames: 0.0,
+        }
+    }
+
+    #[inline]
+    pub fn block_stride(&self) -> usize {
+        (self.channels * (self.bits / 8)) as usize
+    }
+
+    #[inline]
+    pub fn total_frames(&self) -> usize {
+        let stride = self.block_stride();
+        if stride == 0 {
+            0
+        } else {
+            self.samples.len() / stride
+        }
+    }
+
+    #[inline]
+    pub fn is_streaming(&self) -> bool {
+        self.is_loop && self.publishes >= 4
+    }
+}
+
+pub struct AudioMixer {
+    pub voices: [Option<NativeVoice>; MAX_VOICES],
+    pub sample_rate: u32,
+    pub clipped_samples: u64,
+    pub peak_amplitude: f32,
+}
+
+impl AudioMixer {
+    pub const fn new() -> Self {
+        const NONE_VOICE: Option<NativeVoice> = None;
+        Self {
+            voices: [NONE_VOICE; MAX_VOICES],
+            sample_rate: 48000,
+            clipped_samples: 0,
+            peak_amplitude: 0.0,
+        }
+    }
+
+    pub fn add_voice(&mut self, voice: NativeVoice) -> Option<usize> {
+        for (i, slot) in self.voices.iter_mut().enumerate() {
+            if slot.is_none() {
+                *slot = Some(voice);
+                return Some(i);
+            }
+        }
+        None
+    }
+
+    pub fn remove_voice(&mut self, slot_idx: usize) {
+        if slot_idx < MAX_VOICES {
+            self.voices[slot_idx] = None;
+        }
+    }
+
+    pub fn render(&mut self, output: &mut [f32]) {
+        output.fill(0.0);
+        let frames = (output.len() / 2) as u32;
+        if frames == 0 {
+            return;
+        }
+
+        for slot in self.voices.iter_mut() {
+            if let Some(voice) = slot {
+                if !voice.is_playing || voice.samples.is_empty() {
+                    continue;
+                }
+                let total = voice.total_frames();
+                if total == 0 {
+                    continue;
+                }
+                let step = voice.frequency as f64 / self.sample_rate as f64;
+                if voice.is_streaming() && voice.stale_frames >= total as f64 {
+                    voice.position = (voice.position + step * frames as f64) % (total as f64);
+                    continue;
+                }
+                voice.stale_frames += step * frames as f64;
+
+                let mut next_pos = voice.position;
+                let desc = VoiceDesc {
+                    samples: voice.samples.as_ptr(),
+                    bits: voice.bits,
+                    channels: voice.channels,
+                    total_frames: total,
+                    position: voice.position,
+                    step,
+                    loop_mode: if voice.is_loop { 1 } else { 0 },
+                    gain_l: voice.gain_l,
+                    gain_r: voice.gain_r,
+                };
+
+                let still = unsafe {
+                    nfs_audio_mixer_render_voice(
+                        output.as_mut_ptr(),
+                        frames,
+                        &desc,
+                        std::ptr::null(),
+                        0,
+                        0,
+                        &mut next_pos,
+                    )
+                };
+                voice.position = next_pos;
+                if still == 0 {
+                    voice.is_playing = false;
+                }
+            }
+        }
+
+        unsafe {
+            nfs_audio_mixer_clamp_and_stats(
+                output.as_mut_ptr(),
+                output.len(),
+                &mut self.peak_amplitude,
+                &mut self.clipped_samples,
+            );
+        }
+    }
+}
+
+static AUDIO_ENGINE_GLOBAL: std::sync::Mutex<AudioMixer> = std::sync::Mutex::new(AudioMixer::new());
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_audio_engine_render(output: *mut f32, frames: u32) {
+    if output.is_null() || frames == 0 {
+        return;
+    }
+    let slice = std::slice::from_raw_parts_mut(output, (frames * 2) as usize);
+    let mut engine = AUDIO_ENGINE_GLOBAL.lock().unwrap();
+    engine.render(slice);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_audio_engine_get_peak() -> f32 {
+    let engine = AUDIO_ENGINE_GLOBAL.lock().unwrap();
+    engine.peak_amplitude
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_audio_engine_get_clipped() -> u64 {
+    let engine = AUDIO_ENGINE_GLOBAL.lock().unwrap();
+    engine.clipped_samples
+}
+
