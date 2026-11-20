@@ -45,10 +45,10 @@ public final class AndroidGameManagerBridge {
                 if (gm != null) {
                     int fps = (targetFps > 0) ? targetFps : 60;
                     GameState gameState = new GameState(
-                            false,                          // isLoading
-                            GameState.MODE_GAMEPLAY,        // mode
-                            GameState.MODE_NONE,            // qualityMode
-                            fps                             // targetFps
+                            false,                                          // isLoading
+                            GameState.MODE_GAMEPLAY_UNINTERRUPTIBLE,        // mode (uninterruptible active gameplay)
+                            GameState.MODE_NONE,                            // qualityMode
+                            fps                                             // targetFps
                     );
                     gm.setGameState(gameState);
                     Log.i(TAG, "Notified Android GameManager of active gameplay at " + fps + " FPS target");
