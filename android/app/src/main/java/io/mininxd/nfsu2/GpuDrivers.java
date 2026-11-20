@@ -59,33 +59,27 @@ final class GpuDrivers {
         return result;
     }
 
+    public static final String SYSTEM_DRIVER_ID = "system";
+
     static String selectedId(Context context) {
-        return GameOptions.prefs(context).getString("gpu_driver", "");
+        return GameOptions.prefs(context).getString("gpu_driver", SYSTEM_DRIVER_ID);
     }
 
     static Driver selected(Context context) {
         String id = selectedId(context);
-        List<Driver> all = list(context);
-        if (!id.isEmpty()) {
-            for (Driver driver : all) if (driver.id.equals(id)) return driver;
+        if (id.isEmpty() || SYSTEM_DRIVER_ID.equals(id)) {
+            return null;
         }
-
-        // Auto-select PanVK for Mali or Turnip for Adreno if not explicitly chosen
-        if (id.isEmpty() && !all.isEmpty()) {
-            for (Driver driver : all) {
-                if (driver.name.toLowerCase(Locale.ROOT).contains("panvk") ||
-                    driver.library.toLowerCase(Locale.ROOT).contains("panfrost")) {
-                    select(context, driver.id);
-                    Log.i(TAG, "Auto-selected PanVK Vulkan driver for Mali GPU: " + driver.name);
-                    return driver;
-                }
-            }
+        List<Driver> all = list(context);
+        for (Driver driver : all) {
+            if (driver.id.equals(id)) return driver;
         }
         return null;
     }
 
     static void select(Context context, String id) {
-        GameOptions.prefs(context).edit().putString("gpu_driver", id).apply();
+        String val = (id == null || id.isEmpty()) ? SYSTEM_DRIVER_ID : id;
+        GameOptions.prefs(context).edit().putString("gpu_driver", val).apply();
     }
 
     /**

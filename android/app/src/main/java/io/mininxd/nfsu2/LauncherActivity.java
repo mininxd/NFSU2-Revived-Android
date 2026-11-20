@@ -792,7 +792,7 @@ public final class LauncherActivity extends Activity {
         }
         new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle("Vulkan Driver")
                 .setSingleChoiceItems(names, selected, (dialog, which) -> {
-                    GpuDrivers.select(this, which == 0 ? "" : drivers.get(which - 1).id);
+                    GpuDrivers.select(this, which == 0 ? GpuDrivers.SYSTEM_DRIVER_ID : drivers.get(which - 1).id);
                     refreshOptions(); dialog.dismiss();
                 })
                 .setPositiveButton("Import ZIP", (dialog, which) -> startActivityForResult(
@@ -863,7 +863,7 @@ public final class LauncherActivity extends Activity {
                     .setTitle("Driver Check")
                     .setMessage(text.toString())
                     .setPositiveButton("OK", null)
-                    .setNeutralButton("Use system driver", (dialog, which) -> { GpuDrivers.select(this, ""); refreshOptions(); })
+                    .setNeutralButton("Use system driver", (dialog, which) -> { GpuDrivers.select(this, GpuDrivers.SYSTEM_DRIVER_ID); refreshOptions(); })
                     .setNegativeButton(wantedToPlay ? "Play anyway" : null, wantedToPlay ? (dialog, which) -> launch() : null)
                     .show();
         } catch (Exception error) { message("Driver Check", "Invalid diagnostic: " + error.getMessage()); }
