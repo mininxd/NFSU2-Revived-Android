@@ -142,17 +142,22 @@ void serviceGuestSound(){
     if(xruns>soundLastXruns&&burst>0&&size<soundFrames(soundMaximumMs))
         AAudioStream_setBufferSizeInFrames(soundStream,std::min(size+burst,soundFrames(soundMaximumMs)));
     if(xruns>=0)soundLastXruns=xruns;
-    uint64_t clipped;float peak;unsigned active=0;double publishGapMs=0,ringMs=0;
-    {std::lock_guard<std::mutex> lock(soundMixer.mutex);
-        clipped=soundMixer.clippedSamples;peak=soundMixer.peakAmplitude;
-        soundMixer.clippedSamples=0;soundMixer.peakAmplitude=0;
-        for(const auto& voice:soundMixer.voices)if(voice&&voice->playing)++active;
-        for(auto& item:soundObjects){auto& object=item.second;auto& voice=object.voice;
-            if(voice&&voice->playing&&voice->loop){
-                publishGapMs=std::max(publishGapMs,double(object.maxPublishGap.count())/1000);
-                ringMs=std::max(ringMs,1000.0*voice->samples.size()/voice->block()/voice->frequency);
+    uint64_t clipped=0;float peak=0;unsigned active=0;double publishGapMs=0,ringMs=0;
+    {
+        std::unique_lock<std::mutex> lock(soundMixer.mutex, std::try_to_lock);
+        if(lock.owns_lock()){
+            clipped=soundMixer.clippedSamples;peak=soundMixer.peakAmplitude;
+            soundMixer.clippedSamples=0;soundMixer.peakAmplitude=0;
+            for(const auto& voice:soundMixer.voices)if(voice&&voice->playing.load(std::memory_order_relaxed))++active;
+            for(auto& item:soundObjects){auto& object=item.second;auto& voice=object.voice;
+                if(voice&&voice->playing.load(std::memory_order_relaxed)&&voice->loop.load(std::memory_order_relaxed)){
+                    publishGapMs=std::max(publishGapMs,double(object.maxPublishGap.count())/1000);
+                    ringMs=std::max(ringMs,1000.0*voice->samples.size()/voice->block()/voice->frequency.load(std::memory_order_relaxed));
+                }
+                object.maxPublishGap={};
             }
-            object.maxPublishGap={};}}
+        }
+    }
     NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSMW","Audio producer: maxPublishGap=%.2f ms ring=%.2f ms",publishGapMs,ringMs);
     NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSMW","Audio mix: active=%u peak=%.4f clipped=%llu",active,double(peak),static_cast<unsigned long long>(clipped));
     NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSMW","Audio health: xruns=%d buffer=%d/%d burst=%d rate=%u callbackPeak=%u us mode=%d",
@@ -365,8 +370,8 @@ void soundDispatch(){
             auto& origObj=it->second;
             auto dupVoice=std::make_shared<PcmVoice>();
             *dupVoice=*origObj.voice;
-            dupVoice->playing=false;
-            dupVoice->position=0;
+            dupVoice->playing.store(false, std::memory_order_relaxed);
+            dupVoice->position.store(0, std::memory_order_relaxed);
             if(!soundMixer.add(dupVoice)){ret(0x8878000a,3);return;}
             uint32_t dupBuffer=createSoundObject(2,origObj.flags);
             auto& created=soundObjects.at(dupBuffer);
@@ -393,14 +398,15 @@ void soundDispatch(){
     case 3:{uint32_t out=arg(1);if(!out||read32(out)!=20){ret(0x80070057,2);return;}write32(out+4,(object.flags&~4u)|8u);write32(out+8,uint32_t(voice->samples.size()));write32(out+12,0);write32(out+16,0);ret(0,2);return;}
     case 4:{
         nfs_audio_watchdog::serviceSyntheticClock(soundMixer);
-        std::lock_guard<std::mutex> lock(soundMixer.mutex);uint32_t bytes=uint32_t(voice->samples.size());
+        uint32_t bytes=uint32_t(voice->samples.size());
         uint32_t play=0,write=0;
+        double cur_pos=voice->position.load(std::memory_order_relaxed);
         static auto s_calc_cursors = reinterpret_cast<void(*)(double,uint32_t,uint32_t,uint32_t,uint32_t*,uint32_t*)>(
             dlsym(RTLD_DEFAULT,"nfs_dsound_calc_cursors"));
         if(s_calc_cursors){
-            s_calc_cursors(voice->position,voice->block(),bytes,soundMixer.rate,&play,&write);
+            s_calc_cursors(cur_pos,voice->block(),bytes,soundMixer.rate,&play,&write);
         }else{
-            play=uint32_t(voice->position)*voice->block();
+            play=uint32_t(cur_pos)*voice->block();
             write=bytes?(play+soundMixer.rate/100*voice->block())%bytes:0;
         }
         if(arg(1))write32(arg(1),play);if(arg(2))write32(arg(2),write);ret(0,3);return;}
@@ -421,7 +427,7 @@ void soundDispatch(){
         ret(0, 4); return;
     }
     case 6:case 7:case 8:case 9:{if(!arg(1)){ret(0x80004003,2);return;}
-        std::lock_guard<std::mutex> lock(soundMixer.mutex);write32(arg(1),method==6?object.volume:method==7?object.pan:method==8?voice->frequency:(voice->playing?1u|(voice->loop?4u:0u):0u));ret(0,2);return;}
+        write32(arg(1),method==6?object.volume:method==7?object.pan:method==8?voice->frequency.load(std::memory_order_relaxed):(voice->playing.load(std::memory_order_relaxed)?1u|(voice->loop.load(std::memory_order_relaxed)?4u:0u):0u));ret(0,2);return;}
     case 10:{ // Initialize
         ret(0, 3); return;
     }
@@ -429,11 +435,7 @@ void soundDispatch(){
         nfs_audio_watchdog::serviceSyntheticClock(soundMixer);
         uint32_t bytes=uint32_t(voice->samples.size()),offset=arg(1),length=arg(2),flags=arg(7);
         if(!bytes||(flags&~3u)||!arg(3)||!arg(4)){ret(0x80070057,8);return;}
-        uint32_t cur_pos=0;
-        {
-            std::lock_guard<std::mutex> lock(soundMixer.mutex);
-            cur_pos=uint32_t(voice->position)*voice->block();
-        }
+        uint32_t cur_pos=uint32_t(voice->position.load(std::memory_order_relaxed))*voice->block();
         uint32_t resolved_off=offset,first=0,second=0;
         static auto s_calc_lock = reinterpret_cast<int(*)(uint32_t,uint32_t,uint32_t,uint32_t,uint32_t,uint32_t,uint32_t,uint32_t*,uint32_t*,uint32_t*)>(
             dlsym(RTLD_DEFAULT,"nfs_dsound_calc_lock_slices"));
@@ -450,11 +452,11 @@ void soundDispatch(){
         if(second&&(!arg(5)||!arg(6))){ret(0x80070057,8);return;}
         object.locked=true;object.lockOffset=resolved_off;object.lockBytes=length;
         write32(arg(3),object.guestSamples+resolved_off);write32(arg(4),first);if(arg(5))write32(arg(5),second?object.guestSamples:0);if(arg(6))write32(arg(6),second);ret(0,8);return;}
-    case 12:{if(arg(1)||arg(2)||arg(3)&~1u){ret(0x80070057,4);return;}std::lock_guard<std::mutex> lock(soundMixer.mutex);voice->loop=arg(3)&1;voice->playing=true;voice->staleFrames=0;ret(0,4);return;}
-    case 13:{if(arg(1)>=voice->samples.size()||arg(1)%voice->block()){ret(0x80070057,2);return;}std::lock_guard<std::mutex> lock(soundMixer.mutex);voice->position=arg(1)/voice->block();voice->staleFrames=0;ret(0,2);return;}
+    case 12:{if(arg(1)||arg(2)||arg(3)&~1u){ret(0x80070057,4);return;}voice->loop.store((arg(3)&1)!=0,std::memory_order_relaxed);voice->playing.store(true,std::memory_order_release);voice->staleFrames=0;ret(0,4);return;}
+    case 13:{if(arg(1)>=voice->samples.size()||arg(1)%voice->block()){ret(0x80070057,2);return;}voice->position.store(arg(1)/voice->block(),std::memory_order_relaxed);voice->staleFrames=0;ret(0,2);return;}
     case 14:{if(!(object.flags&1)){ret(0x80070057,2);return;}std::lock_guard<std::mutex> lock(soundMixer.mutex);ret(soundFormat(arg(1),*voice)?0:soundBadFormat,2);return;}
     case 15:case 16:{int32_t value=int32_t(arg(1));if(value < -10000||value>(method==15?0:10000)){ret(0x80070057,2);return;}
-        std::lock_guard<std::mutex> lock(soundMixer.mutex);if(method==15)object.volume=arg(1);else object.pan=arg(1);
+        if(method==15)object.volume=arg(1);else object.pan=arg(1);
         float left=1.0f,right=1.0f;
         static auto s_calc_gain = reinterpret_cast<void(*)(int32_t,int32_t,float*,float*)>(
             dlsym(RTLD_DEFAULT,"nfs_dsound_calc_volume_pan_gains"));
@@ -465,9 +467,9 @@ void soundDispatch(){
             left=gain*(pan>0?std::pow(10.f,-pan/2000.f):1);
             right=gain*(pan<0?std::pow(10.f,pan/2000.f):1);
         }
-        voice->left=left;voice->right=right;ret(0,2);return;}
-    case 17:{uint32_t frequency=arg(1)?arg(1):voice->rate;if(frequency<100||frequency>200000){ret(0x80070057,2);return;}std::lock_guard<std::mutex> lock(soundMixer.mutex);voice->frequency=frequency;ret(0,2);return;}
-    case 18:{std::lock_guard<std::mutex> lock(soundMixer.mutex);voice->playing=false;ret(0,1);return;}
+        voice->left.store(left,std::memory_order_relaxed);voice->right.store(right,std::memory_order_relaxed);ret(0,2);return;}
+    case 17:{uint32_t frequency=arg(1)?arg(1):voice->rate;if(frequency<100||frequency>200000){ret(0x80070057,2);return;}voice->frequency.store(frequency,std::memory_order_relaxed);ret(0,2);return;}
+    case 18:{voice->playing.store(false,std::memory_order_release);ret(0,1);return;}
     case 19:{
         nfs_audio_watchdog::serviceSyntheticClock(soundMixer);
         uint32_t bytes=uint32_t(voice->samples.size());

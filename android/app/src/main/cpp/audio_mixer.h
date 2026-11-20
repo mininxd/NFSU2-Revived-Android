@@ -3,6 +3,7 @@
 #include <vector>
 #include <memory>
 #include <mutex>
+#include <atomic>
 #include <cstdint>
 #include <cmath>
 #include <algorithm>
@@ -11,10 +12,11 @@
 #include "graphics_cache.h"
 struct PcmVoice {
     std::vector<uint8_t> samples;
-    unsigned channels=2,bits=16,rate=48000,frequency=48000;
-    double position=0;
-    float left=1,right=1;
-    bool playing=false,loop=false;
+    unsigned channels=2,bits=16,rate=48000;
+    std::atomic<uint32_t> frequency{48000};
+    std::atomic<double> position{0};
+    std::atomic<float> left{1.0f}, right{1.0f};
+    std::atomic<bool> playing{false}, loop{false};
     // Streaming: a looping buffer the guest rewrites while it plays (music,
     // speech, the engine mix). Frames played since the last rewrite; once that
     // passes the whole ring the guest is not keeping up (loading screens hold
@@ -23,8 +25,38 @@ struct PcmVoice {
     // become streaming and keep looping.
     unsigned publishes=0;
     double staleFrames=0;
-    bool streaming()const{return loop&&publishes>=4;}
-    void published(){staleFrames=0;if(playing)++publishes;}
+
+    PcmVoice() = default;
+    PcmVoice(const PcmVoice& o)
+        : samples(o.samples), channels(o.channels), bits(o.bits), rate(o.rate),
+          frequency(o.frequency.load(std::memory_order_relaxed)),
+          position(o.position.load(std::memory_order_relaxed)),
+          left(o.left.load(std::memory_order_relaxed)),
+          right(o.right.load(std::memory_order_relaxed)),
+          playing(o.playing.load(std::memory_order_relaxed)),
+          loop(o.loop.load(std::memory_order_relaxed)),
+          publishes(o.publishes), staleFrames(o.staleFrames) {}
+
+    PcmVoice& operator=(const PcmVoice& o) {
+        if (this != &o) {
+            samples = o.samples;
+            channels = o.channels;
+            bits = o.bits;
+            rate = o.rate;
+            frequency.store(o.frequency.load(std::memory_order_relaxed), std::memory_order_relaxed);
+            position.store(o.position.load(std::memory_order_relaxed), std::memory_order_relaxed);
+            left.store(o.left.load(std::memory_order_relaxed), std::memory_order_relaxed);
+            right.store(o.right.load(std::memory_order_relaxed), std::memory_order_relaxed);
+            playing.store(o.playing.load(std::memory_order_relaxed), std::memory_order_relaxed);
+            loop.store(o.loop.load(std::memory_order_relaxed), std::memory_order_relaxed);
+            publishes = o.publishes;
+            staleFrames = o.staleFrames;
+        }
+        return *this;
+    }
+
+    bool streaming()const{return loop.load(std::memory_order_relaxed)&&publishes>=4;}
+    void published(){staleFrames=0;if(playing.load(std::memory_order_relaxed))++publishes;}
     unsigned block()const{return channels*(bits/8);}
 };
 class PcmMixer {
@@ -49,17 +81,27 @@ public:
     void render(float* output,unsigned frames){
         std::fill(output,output+frames*2,0.f);
         const auto& kernel=nfs_audio::upsampleKernel();
-        // The guest holds this lock only for short copies of the regions it
-        // unlocked and for cursor queries, so waiting is bounded. Skipping a
-        // burst instead output silence and left every play cursor where it
-        // was, so the game's view of what had played drifted from what had.
-        std::lock_guard<std::mutex> lock(mutex);
+        // The real-time audio callback must never suffer priority inversion
+        // or block indefinitely on the guest emulation thread.
+        std::unique_lock<std::mutex> lock(mutex, std::defer_lock);
+        bool acquired = false;
+        for(int spin=0; spin<10; ++spin){
+            if(lock.try_lock()){ acquired = true; break; }
+            #if defined(__aarch64__)
+            asm volatile("yield");
+            #endif
+        }
+        if(!acquired){
+            // Guest is actively uploading a buffer slice; avoid underrun stall.
+            return;
+        }
         for(auto& voice:voices){
-            if(!voice||!voice->playing||voice->samples.empty())continue;
+            if(!voice||!voice->playing.load(std::memory_order_relaxed)||voice->samples.empty())continue;
             size_t count=voice->samples.size()/voice->block();if(!count)continue;
-            double step=double(voice->frequency)/rate;
+            double step=double(voice->frequency.load(std::memory_order_relaxed))/rate;
+            double cur_pos=voice->position.load(std::memory_order_relaxed);
             if(voice->streaming()&&voice->staleFrames>=double(count)){
-                voice->position=std::fmod(voice->position+step*frames,double(count));
+                voice->position.store(std::fmod(cur_pos+step*frames,double(count)), std::memory_order_relaxed);
                 continue;
             }
             voice->staleFrames+=step*frames;
@@ -72,13 +114,13 @@ public:
                 desc.bits = voice->bits;
                 desc.channels = voice->channels;
                 desc.total_frames = count;
-                desc.position = voice->position;
+                desc.position = cur_pos;
                 desc.step = step;
-                desc.loop_mode = voice->loop ? 1 : 0;
-                desc.gain_l = voice->left;
-                desc.gain_r = voice->right;
+                desc.loop_mode = voice->loop.load(std::memory_order_relaxed) ? 1 : 0;
+                desc.gain_l = voice->left.load(std::memory_order_relaxed);
+                desc.gain_r = voice->right.load(std::memory_order_relaxed);
 
-                double next_pos = voice->position;
+                double next_pos = cur_pos;
                 int still = s_render_voice(
                     output, frames, &desc,
                     kernel.weights[0].data(),
@@ -86,14 +128,26 @@ public:
                     nfs_audio::UpsampleKernel::taps,
                     &next_pos
                 );
-                voice->position = next_pos;
-                if(!still) { voice->playing = false; }
+                voice->position.store(next_pos, std::memory_order_relaxed);
+                if(!still) { voice->playing.store(false, std::memory_order_relaxed); }
                 continue;
             }
             for(unsigned frame=0;frame<frames;++frame){
-                if(voice->position>=count){if(voice->loop)voice->position=std::fmod(voice->position,double(count));else{voice->playing=false;voice->position=0;break;}}
-                size_t a=size_t(voice->position),b=a+1;float fraction=float(voice->position-a);
-                if(b==count)b=voice->loop?0:a;
+                cur_pos=voice->position.load(std::memory_order_relaxed);
+                if(cur_pos>=count){
+                    if(voice->loop.load(std::memory_order_relaxed)) {
+                        cur_pos=std::fmod(cur_pos,double(count));
+                        voice->position.store(cur_pos, std::memory_order_relaxed);
+                    } else {
+                        voice->playing.store(false, std::memory_order_relaxed);
+                        voice->position.store(0, std::memory_order_relaxed);
+                        break;
+                    }
+                }
+                size_t a=size_t(cur_pos),b=a+1;float fraction=float(cur_pos-a);
+                if(b==count)b=voice->loop.load(std::memory_order_relaxed)?0:a;
+                float v_left = voice->left.load(std::memory_order_relaxed);
+                float v_right = voice->right.load(std::memory_order_relaxed);
                 if(step<1){
                     float phase=fraction*nfs_audio::UpsampleKernel::phases;
                     unsigned index=std::min(unsigned(phase),nfs_audio::UpsampleKernel::phases-1);
@@ -102,7 +156,7 @@ public:
                     for(unsigned tap=0;tap<nfs_audio::UpsampleKernel::taps;++tap){
                         int64_t source=int64_t(a)+int(tap)-7;
                         if(source<0||uint64_t(source)>=count){
-                            if(voice->loop){source%=int64_t(count);if(source<0)source+=count;}
+                            if(voice->loop.load(std::memory_order_relaxed)){source%=int64_t(count);if(source<0)source+=count;}
                             else source=std::clamp(source,int64_t(0),int64_t(count)-1);
                         }
                         samples_l[tap]=sample(*voice,size_t(source),0);
@@ -117,26 +171,26 @@ public:
                             left+=samples_l[tap]*weight;right+=samples_r[tap]*weight;
                         }
                     }
-                    output[frame*2]+=left*voice->left;output[frame*2+1]+=right*voice->right;
+                    output[frame*2]+=left*v_left;output[frame*2+1]+=right*v_right;
                 }else {
                     static auto s_render_linear = reinterpret_cast<int(*)(
                         float*, uint32_t, const uint8_t*, uint32_t, uint32_t, size_t, double, double, int, float, float, double*
                     )>(dlsym(RTLD_DEFAULT, "nfs_audio_mixer_render_linear"));
                     if (s_render_linear) {
-                        double next_pos = voice->position;
+                        double next_pos = cur_pos;
                         int still = s_render_linear(
                             output + frame * 2, frames - frame,
                             voice->samples.data(), voice->bits, voice->channels, count,
-                            voice->position, step, voice->loop ? 1 : 0,
-                            voice->left, voice->right, &next_pos
+                            cur_pos, step, voice->loop.load(std::memory_order_relaxed) ? 1 : 0,
+                            v_left, v_right, &next_pos
                         );
-                        voice->position = next_pos;
-                        if (!still) { voice->playing = false; }
+                        voice->position.store(next_pos, std::memory_order_relaxed);
+                        if (!still) { voice->playing.store(false, std::memory_order_relaxed); }
                         break;
                     }
                     for(unsigned channel=0;channel<2;++channel){float first=sample(*voice,a,channel),second=sample(*voice,b,channel);
-                        output[frame*2+channel]+=(first+(second-first)*fraction)*(channel?voice->right:voice->left);}
-                    voice->position+=step;
+                        output[frame*2+channel]+=(first+(second-first)*fraction)*(channel?v_right:v_left);}
+                    voice->position.store(cur_pos+step, std::memory_order_relaxed);
                 }
             }
         }
@@ -155,7 +209,8 @@ public:
     }
     void advance(unsigned frames){
         if(!frames) return;
-        std::lock_guard<std::mutex> lock(mutex);
+        std::unique_lock<std::mutex> lock(mutex, std::defer_lock);
+        if(!lock.try_lock()) return;
         static auto s_advance_voices = reinterpret_cast<void(*)(VoiceAdvanceState*, size_t, uint32_t)>(
             dlsym(RTLD_DEFAULT, "nfs_audio_mixer_advance_voices")
         );
@@ -164,14 +219,14 @@ public:
             std::array<PcmVoice*, 128> active_ptrs{};
             size_t batch_count = 0;
             for(auto& voice:voices){
-                if(!voice||!voice->playing||voice->samples.empty())continue;
+                if(!voice||!voice->playing.load(std::memory_order_relaxed)||voice->samples.empty())continue;
                 size_t count=voice->samples.size()/voice->block();if(!count)continue;
                 auto& st = batch[batch_count];
-                st.position = voice->position;
+                st.position = voice->position.load(std::memory_order_relaxed);
                 st.stale_frames = voice->staleFrames;
-                st.step = double(voice->frequency)/rate;
+                st.step = double(voice->frequency.load(std::memory_order_relaxed))/rate;
                 st.count = count;
-                st.loop_mode = voice->loop ? 1 : 0;
+                st.loop_mode = voice->loop.load(std::memory_order_relaxed) ? 1 : 0;
                 st.is_streaming = voice->streaming() ? 1 : 0;
                 st.is_playing = 1;
                 active_ptrs[batch_count] = voice.get();
@@ -181,28 +236,31 @@ public:
                 s_advance_voices(batch.data(), batch_count, frames);
                 for(size_t i=0; i<batch_count; ++i){
                     auto* v = active_ptrs[i];
-                    v->position = batch[i].position;
+                    v->position.store(batch[i].position, std::memory_order_relaxed);
                     v->staleFrames = batch[i].stale_frames;
                     if(!batch[i].is_playing){
-                        v->playing = false;
+                        v->playing.store(false, std::memory_order_relaxed);
                     }
                 }
                 return;
             }
         }
         for(auto& voice:voices){
-            if(!voice||!voice->playing||voice->samples.empty())continue;
+            if(!voice||!voice->playing.load(std::memory_order_relaxed)||voice->samples.empty())continue;
             size_t count=voice->samples.size()/voice->block();if(!count)continue;
-            double step=double(voice->frequency)/rate;
+            double step=double(voice->frequency.load(std::memory_order_relaxed))/rate;
+            double cur_pos=voice->position.load(std::memory_order_relaxed);
             if(voice->streaming()&&voice->staleFrames>=double(count)){
-                voice->position=std::fmod(voice->position+step*frames,double(count));
+                voice->position.store(std::fmod(cur_pos+step*frames,double(count)), std::memory_order_relaxed);
                 continue;
             }
             voice->staleFrames+=step*frames;
-            voice->position+=step*frames;
-            if(voice->position>=count){
-                if(voice->loop) voice->position=std::fmod(voice->position,double(count));
-                else{voice->playing=false;voice->position=0;}
+            cur_pos+=step*frames;
+            if(cur_pos>=count){
+                if(voice->loop.load(std::memory_order_relaxed)) voice->position.store(std::fmod(cur_pos,double(count)), std::memory_order_relaxed);
+                else{voice->playing.store(false, std::memory_order_relaxed);voice->position.store(0, std::memory_order_relaxed);}
+            } else {
+                voice->position.store(cur_pos, std::memory_order_relaxed);
             }
         }
     }
