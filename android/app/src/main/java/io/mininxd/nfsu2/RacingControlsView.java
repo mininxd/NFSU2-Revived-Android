@@ -176,6 +176,35 @@ final class RacingControlsView extends View {
     private long orbitIndicatorStartTime = 0;
     private float orbitIndicatorAlpha = 0f;
 
+    // Drag trailing effect
+    private static final int DRAG_TRAIL_LEN = 12;
+    private final float[] dragTrailX = new float[DRAG_TRAIL_LEN];
+    private final float[] dragTrailY = new float[DRAG_TRAIL_LEN];
+    private final long[] dragTrailTime = new long[DRAG_TRAIL_LEN];
+    private int dragTrailCount = 0;
+    private int dragTrailHead = 0;
+
+    private void recordDragTrail(float x, float y, long now) {
+        if (dragTrailCount > 0) {
+            int latest = (dragTrailHead - 1 + DRAG_TRAIL_LEN) % DRAG_TRAIL_LEN;
+            float dx = x - dragTrailX[latest];
+            float dy = y - dragTrailY[latest];
+            if ((dx * dx + dy * dy) < 4f) return;
+        }
+        dragTrailX[dragTrailHead] = x;
+        dragTrailY[dragTrailHead] = y;
+        dragTrailTime[dragTrailHead] = now;
+        dragTrailHead = (dragTrailHead + 1) % DRAG_TRAIL_LEN;
+        if (dragTrailCount < DRAG_TRAIL_LEN) {
+            dragTrailCount++;
+        }
+    }
+
+    private void resetDragTrail() {
+        dragTrailCount = 0;
+        dragTrailHead = 0;
+    }
+
     // Single-tap / mouse click ripple effect
     private boolean tapRippleActive = false;
     private float tapRippleX = 0f, tapRippleY = 0f;
@@ -196,6 +225,7 @@ final class RacingControlsView extends View {
                 float gy = safeMenuGestureGetY();
                 orbitIndicatorX = gx;
                 orbitIndicatorY = gy;
+                recordDragTrail(gx, gy, now);
                 invalidate();
                 if (pointerMiddle != null && getWidth() > 0 && getHeight() > 0) {
                     try {
@@ -767,14 +797,32 @@ final class RacingControlsView extends View {
             }
 
             if (orbitIndicatorAlpha > 0.01f) {
-                int a = Math.round(orbitIndicatorAlpha * 210);
+                // 25% base opacity for solid circle
+                int a = Math.round(orbitIndicatorAlpha * 255 * 0.25f);
                 float x = orbitIndicatorX;
                 float y = orbitIndicatorY;
 
                 Paint solidPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
                 solidPaint.setStyle(Paint.Style.FILL);
-                solidPaint.setColor((a << 24) | (COLOR_LIME & 0x00FFFFFF));
 
+                // Trailing effect for dragging
+                if (orbitIndicatorEngaged && dragTrailCount > 1) {
+                    for (int i = 0; i < dragTrailCount; i++) {
+                        int idx = (dragTrailHead - dragTrailCount + i + DRAG_TRAIL_LEN) % DRAG_TRAIL_LEN;
+                        long age = now - dragTrailTime[idx];
+                        if (age > 240) continue;
+                        float ageFade = 1.0f - (age / 240f);
+                        float ratio = (float) (i + 1) / (float) dragTrailCount;
+                        float tRadius = (3f + ratio * 6.5f) * ageFade;
+                        int tAlpha = Math.round(ratio * ageFade * a);
+                        if (tAlpha > 0) {
+                            solidPaint.setColor((tAlpha << 24) | (COLOR_LIME & 0x00FFFFFF));
+                            canvas.drawCircle(dragTrailX[idx], dragTrailY[idx], tRadius, solidPaint);
+                        }
+                    }
+                }
+
+                solidPaint.setColor((a << 24) | (COLOR_LIME & 0x00FFFFFF));
                 float radius = orbitIndicatorEngaged ? 10f : 6f + (now - orbitIndicatorStartTime) * 0.04f;
                 radius = Math.min(radius, 10f);
                 canvas.drawCircle(x, y, radius, solidPaint);
@@ -1738,6 +1786,7 @@ final class RacingControlsView extends View {
         removeCallbacks(menuHoldRunnable);
         orbitIndicatorActive = false;
         orbitIndicatorEngaged = false;
+        resetDragTrail();
         safeMenuGestureReset();
         if (menuDragging) {
             menuDragging = false;
@@ -1783,6 +1832,7 @@ final class RacingControlsView extends View {
         if (e.getPointerCount() >= 2) {
             orbitIndicatorActive = false;
             orbitIndicatorEngaged = false;
+            resetDragTrail();
             float p0x = e.getX(0), p0y = e.getY(0);
             float p1x = e.getX(1), p1y = e.getY(1);
             float midX = (p0x + p1x) * 0.5f;
@@ -1834,6 +1884,7 @@ final class RacingControlsView extends View {
         if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_POINTER_DOWN) {
             removeCallbacks(menuHoldRunnable);
             menuDragging = false;
+            resetDragTrail();
             orbitIndicatorX = x;
             orbitIndicatorY = y;
             orbitIndicatorStartTime = now;
@@ -1858,6 +1909,7 @@ final class RacingControlsView extends View {
                     float gy = safeMenuGestureGetY();
                     orbitIndicatorX = gx;
                     orbitIndicatorY = gy;
+                    recordDragTrail(gx, gy, now);
                     float dx = safeMenuGestureGetDx();
                     float dy = safeMenuGestureGetDy();
                     if (pointerMiddle != null && w > 0 && h > 0) {
@@ -1874,6 +1926,7 @@ final class RacingControlsView extends View {
             removeCallbacks(menuHoldRunnable);
             orbitIndicatorActive = false;
             orbitIndicatorEngaged = false;
+            resetDragTrail();
             invalidate();
             int res = safeMenuGestureProcess(action, id, x, y, now, w, h);
             if (res == GESTURE_CLICK) {
@@ -1902,6 +1955,7 @@ final class RacingControlsView extends View {
             removeCallbacks(menuHoldRunnable);
             orbitIndicatorActive = false;
             orbitIndicatorEngaged = false;
+            resetDragTrail();
             safeMenuGestureReset();
             if (menuDragging) {
                 menuDragging = false;
