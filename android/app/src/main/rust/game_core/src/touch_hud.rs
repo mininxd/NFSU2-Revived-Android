@@ -4,7 +4,6 @@
 //! zero-allocation multi-touch finger tracking, DirectInput scancode generation,
 //! and screen-space vertex quad synthesis for direct GLES/Vulkan rendering.
 
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::RwLock;
 
 // ---------------------------------------------------------------------------
@@ -234,15 +233,18 @@ impl TouchHudEngine {
             return;
         }
 
+        let mut hit = None;
         for (idx, ctrl) in self.controls.iter_mut().enumerate() {
             if ctrl.contains(x, y) {
                 ctrl.held_count += 1;
                 ctrl.active_finger = finger_id as i32;
-                self.finger_map[finger_id] = Some(idx);
-                let scan = ctrl.scan;
-                self.apply_key_down(scan);
+                hit = Some((idx, ctrl.scan));
                 break;
             }
+        }
+        if let Some((idx, scan)) = hit {
+            self.finger_map[finger_id] = Some(idx);
+            self.apply_key_down(scan);
         }
     }
 
@@ -251,16 +253,21 @@ impl TouchHudEngine {
             return;
         }
 
+        let mut steering = None;
         if let Some(ctrl_idx) = self.finger_map[finger_id] {
             if let Some(ctrl) = self.controls.get_mut(ctrl_idx) {
                 if ctrl.scan == CTRL_STICK {
                     let (cx, _) = ctrl.center();
                     let radius = ctrl.w * 0.5;
                     let delta = (x - cx) / radius;
-                    ctrl.steering = delta.clamp(-1.0, 1.0);
-                    self.apply_steering_keys(ctrl.steering);
+                    let st = delta.clamp(-1.0, 1.0);
+                    ctrl.steering = st;
+                    steering = Some(st);
                 }
             }
+        }
+        if let Some(st) = steering {
+            self.apply_steering_keys(st);
         }
     }
 
@@ -269,17 +276,20 @@ impl TouchHudEngine {
             return;
         }
 
+        let mut key_to_release = None;
         if let Some(ctrl_idx) = self.finger_map[finger_id].take() {
             if let Some(ctrl) = self.controls.get_mut(ctrl_idx) {
                 if ctrl.held_count > 0 {
                     ctrl.held_count -= 1;
                     if ctrl.held_count == 0 {
                         ctrl.active_finger = -1;
-                        let scan = ctrl.scan;
-                        self.apply_key_up(scan);
+                        key_to_release = Some(ctrl.scan);
                     }
                 }
             }
+        }
+        if let Some(scan) = key_to_release {
+            self.apply_key_up(scan);
         }
     }
 

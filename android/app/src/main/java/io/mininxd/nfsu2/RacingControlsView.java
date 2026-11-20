@@ -67,10 +67,14 @@ final class RacingControlsView extends View {
     private int twoFingerId2 = -1;
     private float twoFingerLastMidX, twoFingerLastMidY;
 
+    private static boolean sGameCoreLoaded = false;
     static {
         try {
             System.loadLibrary("game_core");
-        } catch (Throwable ignored) {}
+            sGameCoreLoaded = true;
+        } catch (Throwable ignored) {
+            sGameCoreLoaded = false;
+        }
     }
 
     private static final int GESTURE_NONE = 0;
@@ -87,17 +91,78 @@ final class RacingControlsView extends View {
     private static native float nativeMenuGestureGetDx();
     private static native float nativeMenuGestureGetDy();
 
+    private static void safeMenuGestureReset() {
+        if (!sGameCoreLoaded) return;
+        try {
+            nativeMenuGestureReset();
+        } catch (Throwable ignored) {}
+    }
+
+    private static int safeMenuGestureProcess(int action, int pointerId, float x, float y, long timeMs, float width, float height) {
+        if (!sGameCoreLoaded) return GESTURE_NONE;
+        try {
+            return nativeMenuGestureProcess(action, pointerId, x, y, timeMs, width, height);
+        } catch (Throwable ignored) {
+            return GESTURE_NONE;
+        }
+    }
+
+    private static int safeMenuGestureCheckTimeout(long timeMs) {
+        if (!sGameCoreLoaded) return GESTURE_NONE;
+        try {
+            return nativeMenuGestureCheckTimeout(timeMs);
+        } catch (Throwable ignored) {
+            return GESTURE_NONE;
+        }
+    }
+
+    private static float safeMenuGestureGetX() {
+        if (!sGameCoreLoaded) return 0f;
+        try {
+            return nativeMenuGestureGetX();
+        } catch (Throwable ignored) {
+            return 0f;
+        }
+    }
+
+    private static float safeMenuGestureGetY() {
+        if (!sGameCoreLoaded) return 0f;
+        try {
+            return nativeMenuGestureGetY();
+        } catch (Throwable ignored) {
+            return 0f;
+        }
+    }
+
+    private static float safeMenuGestureGetDx() {
+        if (!sGameCoreLoaded) return 0f;
+        try {
+            return nativeMenuGestureGetDx();
+        } catch (Throwable ignored) {
+            return 0f;
+        }
+    }
+
+    private static float safeMenuGestureGetDy() {
+        if (!sGameCoreLoaded) return 0f;
+        try {
+            return nativeMenuGestureGetDy();
+        } catch (Throwable ignored) {
+            return 0f;
+        }
+    }
+
     private boolean menuDragging = false;
     private final Runnable menuHoldRunnable = new Runnable() {
         @Override
         public void run() {
             if (racing) return;
             long now = SystemClock.uptimeMillis();
-            int res = nativeMenuGestureCheckTimeout(now);
+            int res = safeMenuGestureCheckTimeout(now);
             if (res == GESTURE_DRAG_START) {
                 menuDragging = true;
-                float gx = nativeMenuGestureGetX();
-                float gy = nativeMenuGestureGetY();
+                float gx = safeMenuGestureGetX();
+                float gy = safeMenuGestureGetY();
                 if (pointerMiddle != null && getWidth() > 0 && getHeight() > 0) {
                     try {
                         pointerMiddle.touch(gx / getWidth(), gy / getHeight(), 0, 0f, 0f);
@@ -1559,7 +1624,7 @@ final class RacingControlsView extends View {
     void releaseAll() {
         removeCallbacks(nitroWatcher);
         removeCallbacks(menuHoldRunnable);
-        nativeMenuGestureReset();
+        safeMenuGestureReset();
         if (menuDragging) {
             menuDragging = false;
             if (pointerMiddle != null && getWidth() > 0 && getHeight() > 0) {
@@ -1609,7 +1674,7 @@ final class RacingControlsView extends View {
 
             if (!twoFingerActive) {
                 removeCallbacks(menuHoldRunnable);
-                nativeMenuGestureReset();
+                safeMenuGestureReset();
                 twoFingerActive = true;
                 twoFingerId1 = e.getPointerId(0);
                 twoFingerId2 = e.getPointerId(1);
@@ -1653,22 +1718,22 @@ final class RacingControlsView extends View {
         if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_POINTER_DOWN) {
             removeCallbacks(menuHoldRunnable);
             menuDragging = false;
-            nativeMenuGestureProcess(action, id, x, y, now, w, h);
+            safeMenuGestureProcess(action, id, x, y, now, w, h);
             postDelayed(menuHoldRunnable, 105);
             return true;
         } else if (action == MotionEvent.ACTION_MOVE) {
             boolean moved = false;
             for (int i = 0; i < e.getPointerCount(); i++) {
                 int pid = e.getPointerId(i);
-                int res = nativeMenuGestureProcess(action, pid, e.getX(i), e.getY(i), now, w, h);
+                int res = safeMenuGestureProcess(action, pid, e.getX(i), e.getY(i), now, w, h);
                 if (res == GESTURE_DRAG_MOVE) {
                     removeCallbacks(menuHoldRunnable);
                     menuDragging = true;
                     moved = true;
-                    float gx = nativeMenuGestureGetX();
-                    float gy = nativeMenuGestureGetY();
-                    float dx = nativeMenuGestureGetDx();
-                    float dy = nativeMenuGestureGetDy();
+                    float gx = safeMenuGestureGetX();
+                    float gy = safeMenuGestureGetY();
+                    float dx = safeMenuGestureGetDx();
+                    float dy = safeMenuGestureGetDy();
                     if (pointerMiddle != null && w > 0 && h > 0) {
                         try {
                             pointerMiddle.touch(gx / w, gy / h, 1, dx, dy);
@@ -1680,10 +1745,10 @@ final class RacingControlsView extends View {
             return moved || menuDragging;
         } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP) {
             removeCallbacks(menuHoldRunnable);
-            int res = nativeMenuGestureProcess(action, id, x, y, now, w, h);
+            int res = safeMenuGestureProcess(action, id, x, y, now, w, h);
             if (res == GESTURE_CLICK) {
-                final float gx = nativeMenuGestureGetX();
-                final float gy = nativeMenuGestureGetY();
+                final float gx = safeMenuGestureGetX();
+                final float gy = safeMenuGestureGetY();
                 pointerTouch(gx, gy, 0);
                 postDelayed(new Runnable() {
                     @Override
@@ -1693,8 +1758,8 @@ final class RacingControlsView extends View {
                 }, 35);
             } else if (res == GESTURE_DRAG_END || menuDragging) {
                 menuDragging = false;
-                float gx = nativeMenuGestureGetX();
-                float gy = nativeMenuGestureGetY();
+                float gx = safeMenuGestureGetX();
+                float gy = safeMenuGestureGetY();
                 if (pointerMiddle != null && w > 0 && h > 0) {
                     try {
                         pointerMiddle.touch(gx / w, gy / h, 2, 0f, 0f);
@@ -1705,7 +1770,7 @@ final class RacingControlsView extends View {
             return true;
         } else if (action == MotionEvent.ACTION_CANCEL) {
             removeCallbacks(menuHoldRunnable);
-            nativeMenuGestureReset();
+            safeMenuGestureReset();
             if (menuDragging) {
                 menuDragging = false;
                 if (pointerMiddle != null && w > 0 && h > 0) {

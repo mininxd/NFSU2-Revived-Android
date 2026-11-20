@@ -10,8 +10,7 @@
 //!   feedback halos for the Android touch controls.
 
 use std::os::raw::c_int;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
-use std::time::Instant;
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64};
 
 use jni::objects::JClass;
 use jni::sys::{jboolean, jfloat, jint};

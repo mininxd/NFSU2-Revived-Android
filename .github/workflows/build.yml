@@ -80,6 +80,7 @@ jobs:
 
             echo "Verifying compiled Rust shared libraries..."
             ls -lh android/app/src/main/jniLibs/arm64-v8a/lib*.so
+            test -f android/app/src/main/jniLibs/arm64-v8a/libgame_core.so
             test -f android/app/src/main/jniLibs/arm64-v8a/libgraphics_cache.so
             test -f android/app/src/main/jniLibs/arm64-v8a/libperf_cores.so
             test -f android/app/src/main/jniLibs/arm64-v8a/libroam_rs.so
