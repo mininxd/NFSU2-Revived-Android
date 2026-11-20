@@ -12,8 +12,10 @@
 //! thread pinning so the guest emulation, Vulkan presentation, and audio pipeline
 //! run on their optimal cores.
 
+pub mod adpf;
 pub mod steering_pacer;
 pub mod tuner;
+pub use adpf::*;
 pub use steering_pacer::*;
 pub use tuner::*;
 

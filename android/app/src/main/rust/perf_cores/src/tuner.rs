@@ -77,6 +77,16 @@ pub fn tune_current_thread(role: ThreadRole, name: Option<&str>) {
 // ---------------------------------------------------------------------------
 
 #[no_mangle]
+pub unsafe extern "C" fn nfs_perf_init_topology() {
+    let _ = CpuCluster::detect();
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_perf_tune_thread(role: c_int, name: *const c_char) {
+    nfs_perf_tune_thread_role(role, name);
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn nfs_perf_tune_thread_role(role: c_int, name: *const c_char) {
     let name_str = if !name.is_null() {
         CStr::from_ptr(name).to_str().ok()

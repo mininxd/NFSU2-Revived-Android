@@ -66,12 +66,12 @@ public final class GamePerformanceBooster {
                 PerformanceCores.bindToPerformanceCores();
             }
 
-            // 2. Native Rust DXVK profile generation and driver environment setup
-            File cacheDir = new File(activity.getCacheDir(), "dxvk-v2");
+            // 2. Native Rust driver environment setup
+            File cacheDir = new File(activity.getCacheDir(), "graphics-cache");
             if (nativeDxvkLoaded) {
                 try {
                     nativeConfigureDxvkAndDriver(cacheDir.getAbsolutePath(), "/sdcard/nfsu2");
-                    Log.i(TAG, "Configured low-overhead DXVK profile via native Rust tuner");
+                    Log.i(TAG, "Configured native Rust graphics tuner and driver environment");
                 } catch (Throwable t) {
                     Log.w(TAG, "nativeConfigureDxvkAndDriver failed: " + t.getMessage());
                 }

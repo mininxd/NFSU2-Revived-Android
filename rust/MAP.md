@@ -65,3 +65,15 @@
   - Viewport, texture stages, and primitive drawing counters
   - Resource lifecycle management for textures, surfaces, and vertex/index buffers
 - [x] **Pure Native Lift Blueprint**: Native touch HUD and direct Vulkan/GLES pipelines ready for `android-activity` (`NativeActivity`) host switch.
+
+### Wave 5: Direct Performance Governor & Native System Services (Completed)
+- [x] **`adpf_manager.cpp` -> `perf_cores::adpf`**:
+  - Android Dynamic Performance Framework (ADPF) hint session in pure Rust.
+  - Zero-allocation monotonic frame duration calculation and PowerHAL feedback.
+- [x] **`audio_watchdog.cpp` -> `graphics_cache::audio_watchdog`**:
+  - Full atomic AAudio callback stall detection and synthetic DirectSound clock progression in safe Rust.
+- [x] **`performance_tuner.cpp` -> `perf_cores::tuner`**:
+  - Direct pure Rust tri-cluster CPU core affinity pinning and thread priority configuration.
+- [x] **Complete DXVK Severance & Native Rendering**:
+  - Elimination of `ports/dxvk_android` and `ports/dxvk_modules`.
+  - Native Direct3D 9 COM implementation in `native_d3d9` and pure Rust `graphics_cache`.

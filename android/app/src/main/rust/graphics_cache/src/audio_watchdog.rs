@@ -85,6 +85,31 @@ pub fn calculate_synthetic_advance(sample_rate: u32) -> u32 {
 // ---------------------------------------------------------------------------
 
 #[no_mangle]
+pub extern "C" fn nfs_audio_watchdog_notify() {
+    notify_callback_rendered();
+}
+
+#[no_mangle]
+pub extern "C" fn nfs_audio_watchdog_stalled() -> i32 {
+    if is_callback_stalled() { 1 } else { 0 }
+}
+
+#[no_mangle]
+pub extern "C" fn nfs_audio_watchdog_can_reconnect() -> i32 {
+    if can_attempt_reconnect() { 1 } else { 0 }
+}
+
+#[no_mangle]
+pub extern "C" fn nfs_audio_watchdog_record_reconnect() {
+    record_reconnect_attempt();
+}
+
+#[no_mangle]
+pub extern "C" fn nfs_audio_watchdog_synthetic_advance(sample_rate: u32) -> u32 {
+    calculate_synthetic_advance(sample_rate)
+}
+
+#[no_mangle]
 pub extern "C" fn rust_audio_watchdog_notify() {
     notify_callback_rendered();
 }
