@@ -807,7 +807,9 @@ public final class LauncherActivity extends Activity {
         playAfterProbe = thenPlay;
         play.setEnabled(false);
         try {
-            startActivityForResult(new Intent(this, GpuProbeActivity.class), REQUEST_DRIVER_PROBE);
+            Intent intent = new Intent(this, GpuProbeActivity.class);
+            intent.putExtra("backend", GameOptions.getEffectiveGraphicsBackend(this));
+            startActivityForResult(intent, REQUEST_DRIVER_PROBE);
         } catch (Exception error) {
             play.setEnabled(true);
             playAfterProbe = false;
@@ -828,9 +830,22 @@ public final class LauncherActivity extends Activity {
 
             StringBuilder text = new StringBuilder();
             if (failed) {
-                text.append("Could not use driver: ").append(gpu.optString("probeError", "error initializing Vulkan."));
+                text.append("Could not use driver: ").append(gpu.optString("probeError", "error initializing graphics driver."));
             } else {
-                text.append("Graphics API:\n• Direct3D 9 via DXVK (Vulkan ").append(gpu.optString("vulkan", "1.1+")).append(")\n\n");
+                String backend = gpu.optString("backend", "");
+                if (backend.isEmpty()) {
+                    backend = GameOptions.getEffectiveGraphicsBackend(this);
+                }
+                boolean isGles = "opengl".equalsIgnoreCase(backend) || gpu.has("gles");
+
+                if (isGles) {
+                    text.append("Graphics API:\n• Direct3D 9 via Native OpenGL ES (")
+                            .append(gpu.optString("gles", "3.0+")).append(")\n\n");
+                } else {
+                    text.append("Graphics API:\n• Direct3D 9 via Native Vulkan (Vulkan ")
+                            .append(gpu.optString("vulkan", "1.1+")).append(")\n\n");
+                }
+
                 text.append("GPU Renderer:\n• ").append(gpu.optString("gpu", "Unknown GPU")).append("\n\n");
 
                 String driver = gpu.optString("driverName", "—").trim();

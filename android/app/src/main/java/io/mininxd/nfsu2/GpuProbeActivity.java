@@ -21,8 +21,15 @@ import org.json.JSONObject;
 public final class GpuProbeActivity extends Activity {
     private static final String TAG = "NFSU2_GpuProbe";
     private static boolean nativeLoaded = false;
+    private static boolean rustLoaded = false;
 
     static {
+        try {
+            System.loadLibrary("graphics_cache");
+            rustLoaded = true;
+        } catch (Throwable t) {
+            Log.d(TAG, "libgraphics_cache.so not available for probe: " + t.getMessage());
+        }
         try {
             System.loadLibrary("nfsu2_diagnostics");
             nativeLoaded = true;
@@ -33,13 +40,24 @@ public final class GpuProbeActivity extends Activity {
     }
 
     public static native String nativeGpuReport(String hooks, String temp, String directory, String library);
+    public static native String nativeProbeGles();
 
     private boolean finished;
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
+        String backend = getIntent().getStringExtra("backend");
+        if (backend == null || backend.isEmpty()) {
+            backend = GameOptions.getEffectiveGraphicsBackend(this);
+        }
+        final String effectiveBackend = backend;
+
         TextView status = new TextView(this);
-        status.setText("Checking GPU & Vulkan driver…");
+        if ("opengl".equalsIgnoreCase(effectiveBackend)) {
+            status.setText("Checking GPU & OpenGL ES driver…");
+        } else {
+            status.setText("Checking GPU & Vulkan driver…");
+        }
         status.setTextColor(0xFFFFFFFF); status.setTextSize(18);
         status.setGravity(android.view.Gravity.CENTER); status.setBackgroundColor(0xFF0B0F14);
         setContentView(status);
@@ -47,20 +65,65 @@ public final class GpuProbeActivity extends Activity {
         main.postDelayed(() -> finishReport("{\"probeError\":\"Driver test timed out after 20 seconds\",\"driverLoadFailed\":true}"), 20000);
         String[] loader = GpuDrivers.loaderArguments(this);
         new Thread(() -> {
-            String result;
-            if (nativeLoaded) {
-                try {
-                    result = nativeGpuReport(loader[0], loader[1], loader[2], loader[3]);
-                } catch (Throwable error) {
-                    Log.w(TAG, "Native driver probe failed, falling back to system query", error);
-                    result = getSystemVulkanReport();
+            String result = null;
+            if ("opengl".equalsIgnoreCase(effectiveBackend)) {
+                if (rustLoaded) {
+                    try {
+                        result = nativeProbeGles();
+                    } catch (Throwable t) {
+                        Log.w(TAG, "Rust nativeProbeGles failed: " + t.getMessage());
+                    }
+                }
+                if (result == null || result.isEmpty()) {
+                    result = getSystemGlesReport();
                 }
             } else {
-                result = getSystemVulkanReport();
+                if (nativeLoaded) {
+                    try {
+                        result = nativeGpuReport(loader[0], loader[1], loader[2], loader[3]);
+                    } catch (Throwable error) {
+                        Log.w(TAG, "Native driver probe failed, falling back to system query", error);
+                        result = getSystemVulkanReport();
+                    }
+                } else {
+                    result = getSystemVulkanReport();
+                }
             }
-            String report = result;
+            final String report = result;
             main.post(() -> finishReport(report));
-        }, "VulkanDriverProbe").start();
+        }, "DriverProbe").start();
+    }
+
+    private String getSystemGlesReport() {
+        try {
+            JSONObject obj = new JSONObject();
+            android.app.ActivityManager am = (android.app.ActivityManager) getSystemService(ACTIVITY_SERVICE);
+            android.content.pm.ConfigurationInfo info = am != null ? am.getDeviceConfigurationInfo() : null;
+            String glVer = info != null ? info.getGlEsVersion() : "3.0";
+
+            String gpuName = Build.HARDWARE != null && !Build.HARDWARE.isEmpty() ? Build.HARDWARE : "System GPU";
+            if (Build.VERSION.SDK_INT >= 31 && Build.SOC_MODEL != null && !Build.SOC_MODEL.isEmpty()) {
+                gpuName = Build.SOC_MODEL + " (" + gpuName + ")";
+            }
+
+            obj.put("backend", "opengl");
+            obj.put("api", "OpenGL ES");
+            obj.put("gles", glVer);
+            obj.put("gpu", gpuName);
+            obj.put("vendorId", 0);
+            obj.put("requestedDriver", "system");
+            obj.put("driverName", "System OpenGL ES (" + Build.MANUFACTURER + ")");
+            obj.put("driverInfo", "GLES " + glVer);
+            obj.put("logicalDeviceResult", 0);
+            obj.put("driverLoadFailed", false);
+            obj.put("bcTextures", true);
+            obj.put("vertexFormatsMissing", "");
+            obj.put("compatible", true);
+            obj.put("missing", new JSONArray());
+            return obj.toString();
+        } catch (Exception e) {
+            return "{\"backend\":\"opengl\",\"probeError\":\"" + e.getMessage() + "\",\"driverLoadFailed\":true}";
+        }
     }
 
     private String getSystemVulkanReport() {
@@ -83,7 +146,7 @@ public final class GpuProbeActivity extends Activity {
             }
 
             if (version == 0) {
-                return "{\"probeError\":\"Vulkan is not supported on this device.\",\"driverLoadFailed\":true}";
+                return "{\"backend\":\"vulkan\",\"probeError\":\"Vulkan is not supported on this device.\",\"driverLoadFailed\":true}";
             }
 
             int major = version >> 22;
@@ -95,6 +158,8 @@ public final class GpuProbeActivity extends Activity {
             if (Build.VERSION.SDK_INT >= 31 && Build.SOC_MODEL != null && !Build.SOC_MODEL.isEmpty()) {
                 gpuName = Build.SOC_MODEL + " (" + gpuName + ")";
             }
+            obj.put("backend", "vulkan");
+            obj.put("api", "Vulkan");
             obj.put("gpu", gpuName);
             obj.put("vulkan", verStr);
             obj.put("vendorId", 0);

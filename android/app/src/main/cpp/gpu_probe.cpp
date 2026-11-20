@@ -146,7 +146,7 @@ std::string probe(const char* hooks, const char* temp, const char* directory, co
     }
 
     std::ostringstream out;
-    out << "{\"gpu\":" << json(props.deviceName)
+    out << "{\"backend\":\"vulkan\",\"api\":\"Vulkan\",\"gpu\":" << json(props.deviceName)
         << ",\"vulkan\":" << json(std::to_string(VK_VERSION_MAJOR(apiVer)) + "." +
                std::to_string(VK_VERSION_MINOR(apiVer)) + "." + std::to_string(VK_VERSION_PATCH(apiVer)))
         << ",\"vendorId\":" << props.vendorID

@@ -36,7 +36,7 @@ public final class GameActivity extends NativeActivity {
         "Welcome to Need for Speed Underground 2 Revived.\r\n\r\n" +
         "Engine Architecture & Core:\r\n" +
         "- Lifted Core: Original SPEED2.EXE x86 binary statically lifted to native 64-bit ARM64 C and Rust.\r\n" +
-        "- Graphics Pipeline: Mobile DXVK Vulkan & GLES translation with dynamic GPU command deduplication.\r\n" +
+        "- Graphics Pipeline: 100% Native Mobile Direct3D 9 Engine with Vulkan & GLES acceleration.\r\n" +
         "- Audio Subsystem: Low-latency AAudio driver with DirectSound buffer cursor tracking running on pure Rust.\r\n" +
         "- Preservation Project: Developed as an open-source fan preservation effort. Source code available on GitHub:\r\n" +
         "  https://github.com/mininxd/NFSU2-Revived-Android\r\n\r\n" +
