@@ -36,6 +36,17 @@ public final class GameLog {
     private static final int MAX_MEMORY_LINES = 1000;
     private static final long MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 
+    private static volatile boolean nativeLoaded = false;
+    static {
+        try {
+            System.loadLibrary("perf_cores");
+            nativeLoaded = true;
+        } catch (Throwable ignored) {}
+    }
+
+    private static native void nativeRingLog(String level, String tag, String msg);
+    private static native byte[] nativeRingGetBytes();
+
     private static volatile Context appContext = null;
     private static final Deque<String> memoryBuffer = new ArrayDeque<>(MAX_MEMORY_LINES);
     private static final ExecutorService writerExecutor = Executors.newSingleThreadExecutor(r -> {
@@ -60,6 +71,11 @@ public final class GameLog {
     public static void e(String tag, String msg) { log("ERROR", tag, msg); }
 
     public static void log(String level, String tag, String msg) {
+        if (nativeLoaded) {
+            try {
+                nativeRingLog(level, tag, msg);
+            } catch (Throwable ignored) {}
+        }
         String timestamp = DATE_FORMAT.format(new Date());
         String line = String.format(Locale.US, "[%s] [%s/%s]: %s", timestamp, level, tag, msg);
 
@@ -371,6 +387,12 @@ public final class GameLog {
     }
 
     public static byte[] getLogBytes(Context ctx) {
+        if (nativeLoaded) {
+            try {
+                byte[] ring = nativeRingGetBytes();
+                if (ring != null && ring.length > 0) return ring;
+            } catch (Throwable ignored) {}
+        }
         String full = getFullLogText(ctx);
         return full != null ? full.getBytes(java.nio.charset.StandardCharsets.UTF_8) : new byte[0];
     }

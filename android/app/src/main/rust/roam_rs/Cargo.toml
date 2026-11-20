@@ -11,6 +11,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [dependencies]
 libc = { version = "0.2", default-features = false }
+jni = { version = "0.21", default-features = false }
 
 [profile.release]
 opt-level = 3

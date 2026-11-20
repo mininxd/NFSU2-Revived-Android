@@ -8,6 +8,23 @@ import android.content.SharedPreferences;
  * runtime before the guest boots; changing one takes effect on the next PLAY.
  */
 public final class GameOptions {
+    private static volatile boolean nativeLoaded = false;
+    static {
+        try {
+            System.loadLibrary("graphics_cache");
+            nativeLoaded = true;
+        } catch (Throwable ignored) {}
+        try {
+            System.loadLibrary("game_core");
+            nativeLoaded = true;
+        } catch (Throwable ignored) {}
+    }
+
+    private static native boolean nativeSyncWidescreenIni(String path, int resX, int resY, int hudMode, int aspect, int skipIntro, int cutsceneBorders, int padSupport, String feScale);
+    private static native boolean nativeSyncWidescreenDat(String path, boolean logsEnabled);
+    private static native boolean nativeSyncExtraOptionsIni(String path, boolean regional, boolean lapCtrl, boolean oppCtrl, boolean lapPct, boolean drift, boolean fixes, boolean menu);
+    private static native int nativeDetectRegion(String gameRoot);
+
     static final class Option {
         final String key, title, defaultValue;
         final String[] values, labels;
@@ -150,6 +167,15 @@ public final class GameOptions {
      * with the European SKU. Returns 1 (EU) if found, -1 (game default / NA) otherwise.
      */
     static int detectRegionFromFiles(Context context) {
+        if (nativeLoaded) {
+            try {
+                int detected = nativeDetectRegion(LauncherActivity.gameRoot());
+                if (detected != -1) {
+                    android.util.Log.i("NFSU2", "Region auto-detect via native game_core: found GLOBALTEXTURESROW.BIN → EU (1)");
+                    return detected;
+                }
+            } catch (Throwable ignored) {}
+        }
         try {
             String[] candidates = {
                 LauncherActivity.gameRoot() + "/GLOBALTEXTURESROW.BIN",
@@ -639,6 +665,15 @@ public final class GameOptions {
             }
             if (!datFile.isFile()) return;
 
+            if (nativeLoaded) {
+                try {
+                    if (nativeSyncWidescreenDat(datFile.getAbsolutePath(), logsEnabled)) {
+                        android.util.Log.i("NFSU2", "Synchronized WidescreenFix.dat layout via native game_core (logsEnabled=" + logsEnabled + ")");
+                        return;
+                    }
+                } catch (Throwable ignored) {}
+            }
+
             java.util.List<String> lines = new java.util.ArrayList<>();
             boolean changed = false;
             try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(datFile))) {
@@ -744,12 +779,6 @@ public final class GameOptions {
             }
             if (!iniFile.isFile()) return;
 
-            java.util.List<String> lines = new java.util.ArrayList<>();
-            try (java.io.BufferedReader br = new java.io.BufferedReader(new java.io.FileReader(iniFile))) {
-                String line;
-                while ((line = br.readLine()) != null) lines.add(line);
-            }
-
             boolean regional = getExtraOption(context, "regional_cars", true);
             boolean lapCtrl = getExtraOption(context, "lap_controller", true);
             boolean oppCtrl = getExtraOption(context, "opponent_controller", true);
@@ -757,6 +786,21 @@ public final class GameOptions {
             boolean drift = getExtraOption(context, "drift_tweaks", true);
             boolean fixes = getExtraOption(context, "fixes_3d", true);
             boolean menu = getExtraOption(context, "menu_enhancements", true);
+
+            if (nativeLoaded) {
+                try {
+                    if (nativeSyncExtraOptionsIni(iniFile.getAbsolutePath(), regional, lapCtrl, oppCtrl, lapPct, drift, fixes, menu)) {
+                        android.util.Log.i("NFSU2", "Synchronized Extra Options settings via native game_core in " + iniFile.getAbsolutePath());
+                        return;
+                    }
+                } catch (Throwable ignored) {}
+            }
+
+            java.util.List<String> lines = new java.util.ArrayList<>();
+            try (java.io.BufferedReader br = new java.io.BufferedReader(new java.io.FileReader(iniFile))) {
+                String line;
+                while ((line = br.readLine()) != null) lines.add(line);
+            }
 
             java.util.List<String> out = new java.util.ArrayList<>();
             for (String l : lines) {

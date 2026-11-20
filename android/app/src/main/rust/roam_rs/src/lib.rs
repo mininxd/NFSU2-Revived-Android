@@ -13,6 +13,7 @@ pub mod sync_guard;
 pub mod switch;
 pub mod postoffice;
 pub mod peer;
+pub mod classic_online;
 
 pub use crc::*;
 pub use hash::*;
@@ -27,3 +28,4 @@ pub use sync_guard::*;
 pub use switch::*;
 pub use postoffice::*;
 pub use peer::*;
+pub use classic_online::*;

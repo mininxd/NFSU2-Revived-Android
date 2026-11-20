@@ -29,6 +29,22 @@ import io.mininxd.nfsu2.GameOptions;
  */
 public final class EahubClassicOnline {
     private static final String TAG = "EahubClassic";
+    private static boolean nativeLoaded = false;
+
+    static {
+        try {
+            System.loadLibrary("roam_rs");
+            nativeLoaded = true;
+        } catch (Throwable t1) {
+            try {
+                System.loadLibrary("nfsu2_roam");
+                nativeLoaded = true;
+            } catch (Throwable ignored) {}
+        }
+    }
+
+    private static native boolean nativeShouldUseLocalBridge(String server);
+    private static native boolean nativeProbePort(String host, int port, int timeoutMs);
 
     /** Port the classic Redirector listens on (plain TCP, SSL asterisk stripped). */
     public static final int PORT_REDIRECTOR = 20920;
@@ -51,6 +67,11 @@ public final class EahubClassicOnline {
      */
     public static boolean shouldUseLocalBridge(String server) {
         if (server == null || server.trim().isEmpty()) return false;
+        if (nativeLoaded) {
+            try {
+                return nativeShouldUseLocalBridge(server);
+            } catch (Throwable ignored) {}
+        }
         if (GameOptions.isEahubClassic(server)) return false;
         return ServerApiClient.isWsHost(server);
     }
@@ -78,6 +99,17 @@ public final class EahubClassicOnline {
      * with {@link #PROBE_TIMEOUT_MS} timeout. Returns true on successful connect.
      */
     public static boolean probePort(String host, int port) {
+        if (nativeLoaded) {
+            try {
+                boolean ok = nativeProbePort(host, port, PROBE_TIMEOUT_MS);
+                if (ok) {
+                    NetLog.success(TAG, "Classic native probe OK: " + host + ":" + port);
+                } else {
+                    NetLog.fail(TAG, "Classic native probe failed: " + host + ":" + port);
+                }
+                return ok;
+            } catch (Throwable ignored) {}
+        }
         try (java.net.Socket sock = new java.net.Socket()) {
             sock.connect(new java.net.InetSocketAddress(host, port), PROBE_TIMEOUT_MS);
             NetLog.success(TAG, "Classic probe OK: " + host + ":" + port);

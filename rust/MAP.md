@@ -77,3 +77,18 @@
 - [x] **Complete DXVK Severance & Native Rendering**:
   - Elimination of `ports/dxvk_android` and `ports/dxvk_modules`.
   - Native Direct3D 9 COM implementation in `native_d3d9` and pure Rust `graphics_cache`.
+
+### Wave 6: Online Network Routing, Settings Engine & Zero-Overhead Ring Logging (Completed)
+- [x] **`EahubClassicOnline.java` -> `roam_rs::classic_online`**:
+  - Direct TCP reachability socket probe with timeout in pure Rust (`probe_port`).
+  - Classic EA Nation vs WebSocket bridge routing classifier (`should_use_local_bridge`, `is_eahub_classic`).
+  - Safe JNI bindings (`nativeShouldUseLocalBridge`, `nativeProbePort`).
+- [x] **`GameOptions.java` -> `game_core::settings` & `graphics_cache::settings_engine`**:
+  - In-place configuration parsing and file mutation for `NFSUnderground2.WidescreenFix.ini`, `NFSUnderground2.WidescreenFix.dat`, and `NFSU2ExtraOptionsSettings.ini`.
+  - Native EU/NA region asset detection via `GLOBALTEXTURESROW.BIN` probe.
+  - Safe JNI bindings (`nativeSyncWidescreenIni`, `nativeSyncWidescreenDat`, `nativeSyncExtraOptionsIni`, `nativeDetectRegion`).
+- [x] **`GameLog.java` & `NetLog.java` -> `perf_cores::logger`**:
+  - 1024-entry zero-allocation lock-free in-memory circular ring buffer in safe Rust.
+  - Microsecond-precision epoch timestamp generation and categorized entry tracking.
+  - Eliminates JVM garbage collection pauses during high-frequency networking and racing inputs.
+  - JNI bindings (`nativeRingLog`, `nativeRingGetBytes`).

@@ -45,6 +45,17 @@ public final class NetLog {
     private static final int MAX_MEMORY_LINES = 1000;
     private static final long MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 
+    private static volatile boolean nativeLoaded = false;
+    static {
+        try {
+            System.loadLibrary("perf_cores");
+            nativeLoaded = true;
+        } catch (Throwable ignored) {}
+    }
+
+    private static native void nativeRingLog(String level, String tag, String msg);
+    private static native byte[] nativeRingGetBytes();
+
     private static volatile Context appContext = null;
     private static final Deque<String> memoryBuffer = new ArrayDeque<>(MAX_MEMORY_LINES);
     private static final ExecutorService fileWriterExecutor = Executors.newSingleThreadExecutor(r -> {
@@ -109,6 +120,11 @@ public final class NetLog {
     }
 
     public static void log(String level, String tag, String msg) {
+        if (nativeLoaded) {
+            try {
+                nativeRingLog(level, tag, msg);
+            } catch (Throwable ignored) {}
+        }
         String timestamp;
         synchronized (DATE_FORMAT) {
             timestamp = DATE_FORMAT.format(new Date());
@@ -243,6 +259,12 @@ public final class NetLog {
     }
 
     public static byte[] getLogBytes(Context ctx) {
+        if (nativeLoaded) {
+            try {
+                byte[] ring = nativeRingGetBytes();
+                if (ring != null && ring.length > 0) return ring;
+            } catch (Throwable ignored) {}
+        }
         File file = getPrimaryLogFile(ctx);
         if (file == null || !file.exists() || file.length() == 0) {
             File sdcard = new File(new File(Environment.getExternalStorageDirectory(), "NFSU2"), "net_log.txt");
