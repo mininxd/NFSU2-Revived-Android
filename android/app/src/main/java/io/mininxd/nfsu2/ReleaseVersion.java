@@ -96,11 +96,12 @@ final class ReleaseVersion {
         if (remoteTag == null || remoteTag.trim().isEmpty()) return false;
         if (sameVersion(remoteTag, installedVersion)) return false;
 
-        if (isBetaChannel && isPrerelease) {
-            // Beta channel forces users onto latest pre-release until installed is on the exact same version
-            return true;
+        // If not on beta channel, ignore pre-releases
+        if (!isBetaChannel && isPrerelease) {
+            return false;
         }
 
+        // Only offer an update if the remote version is strictly newer than installed
         return newer(remoteTag, installedVersion);
     }
 

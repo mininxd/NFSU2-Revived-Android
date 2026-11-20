@@ -166,23 +166,22 @@ final class ReleaseUpdates {
 
             if (rawJson.startsWith("[")) {
                 JSONArray releases = new JSONArray(rawJson);
-                if (isBeta) {
-                    for (int i = 0; i < releases.length(); i++) {
-                        JSONObject r = releases.getJSONObject(i);
-                        if (r.optBoolean("draft")) continue;
-                        if (r.optBoolean("prerelease")) {
-                            selectedRelease = r;
-                            break;
-                        }
-                    }
-                }
-                if (selectedRelease == null) {
-                    for (int i = 0; i < releases.length(); i++) {
-                        JSONObject r = releases.getJSONObject(i);
-                        if (r.optBoolean("draft")) continue;
-                        if (!isBeta && r.optBoolean("prerelease")) continue;
+                for (int i = 0; i < releases.length(); i++) {
+                    JSONObject r = releases.getJSONObject(i);
+                    if (r.optBoolean("draft")) continue;
+                    boolean isPre = r.optBoolean("prerelease");
+                    if (!isBeta && isPre) continue;
+
+                    String tag = r.optString("tag_name", "");
+                    if (tag.isEmpty()) continue;
+
+                    if (selectedRelease == null) {
                         selectedRelease = r;
-                        break;
+                    } else {
+                        String selectedTag = selectedRelease.optString("tag_name", "");
+                        if (ReleaseVersion.newer(tag, selectedTag)) {
+                            selectedRelease = r;
+                        }
                     }
                 }
             } else if (rawJson.startsWith("{")) {
