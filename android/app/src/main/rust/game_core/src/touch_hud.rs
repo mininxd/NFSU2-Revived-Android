@@ -423,3 +423,48 @@ pub unsafe extern "C" fn nfs_touch_hud_set_racing_mode(racing: u32) {
 pub unsafe extern "C" fn nfs_touch_hud_set_opacity(opacity: f32) {
     with_hud(|hud| hud.set_opacity(opacity));
 }
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_touch_hud_sync_keys(key_cb: Option<unsafe extern "C" fn(u32, u32)>) {
+    if let Some(cb) = key_cb {
+        with_hud(|hud| {
+            for (scan, &down) in hud.key_states.iter().enumerate() {
+                cb(scan as u32, if down { 1 } else { 0 });
+            }
+        });
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_touch_hud_process_motion(
+    action: i32,
+    pointer_id: i32,
+    x: f32,
+    y: f32,
+    key_cb: Option<unsafe extern "C" fn(u32, u32)>,
+) {
+    let action_masked = action & 0xFF;
+    with_hud(|hud| {
+        match action_masked {
+            0 | 5 => {
+                hud.pointer_down(pointer_id as usize, x, y);
+            }
+            1 | 6 => {
+                hud.pointer_up(pointer_id as usize);
+            }
+            2 => {
+                hud.pointer_move(pointer_id as usize, x, y);
+            }
+            3 => {
+                hud.release_all();
+            }
+            _ => {}
+        }
+
+        if let Some(cb) = key_cb {
+            for (scan, &down) in hud.key_states.iter().enumerate() {
+                cb(scan as u32, if down { 1 } else { 0 });
+            }
+        }
+    });
+}

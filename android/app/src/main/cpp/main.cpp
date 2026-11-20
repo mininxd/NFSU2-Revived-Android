@@ -319,10 +319,54 @@ static void notePadUse(const AInputEvent* event){
         if(AMotionEvent_getAxisValue(event,axis,0)>.3f){gamepadUsed=true;return;}
 }
 extern "C" JNIEXPORT jboolean JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeGamepadUsed(JNIEnv*,jclass){return gamepadUsed.exchange(false)?JNI_TRUE:JNI_FALSE;}
+
+static void nativeSetGuestKeyAdapter(uint32_t scan, uint32_t down) {
+    setGuestKey(scan, down != 0);
+}
+
+static auto get_touch_hud_process() {
+    static auto s_proc = reinterpret_cast<void(*)(int32_t, int32_t, float, float, void(*)(uint32_t, uint32_t))>(
+        dlsym(RTLD_DEFAULT, "nfs_touch_hud_process_motion")
+    );
+    return s_proc;
+}
+
+static auto get_touch_hud_resize() {
+    static auto s_res = reinterpret_cast<void(*)(float, float)>(
+        dlsym(RTLD_DEFAULT, "nfs_touch_hud_resize")
+    );
+    return s_res;
+}
+
 static int32_t onInput(android_app*,AInputEvent* event){
     int32_t type=AInputEvent_getType(event);
     gamepad.setKeyEmulation(!guestGamepadInUse());
     if(type==AINPUT_EVENT_TYPE_MOTION){
+        int32_t source = AInputEvent_getSource(event);
+        if((source & AINPUT_SOURCE_TOUCHSCREEN) == AINPUT_SOURCE_TOUCHSCREEN){
+            auto proc = get_touch_hud_process();
+            if(proc){
+                int32_t action = AMotionEvent_getAction(event);
+                int32_t actionCode = action & AMOTION_EVENT_ACTION_MASK;
+                size_t pointerIndex = (action & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK) >> AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT;
+                int32_t pointerId = AMotionEvent_getPointerId(event, pointerIndex);
+                float x = AMotionEvent_getX(event, pointerIndex);
+                float y = AMotionEvent_getY(event, pointerIndex);
+
+                if(actionCode == AMOTION_EVENT_ACTION_MOVE){
+                    size_t count = AMotionEvent_getPointerCount(event);
+                    for(size_t i = 0; i < count; ++i){
+                        int32_t pid = AMotionEvent_getPointerId(event, i);
+                        float px = AMotionEvent_getX(event, i);
+                        float py = AMotionEvent_getY(event, i);
+                        proc(actionCode, pid, px, py, nativeSetGuestKeyAdapter);
+                    }
+                } else {
+                    proc(actionCode, pointerId, x, y, nativeSetGuestKeyAdapter);
+                }
+                return 1;
+            }
+        }
         if(!acceptedGamepad(event))return 0;
         bool handled=gamepad.motion(event,guestDrivingControls(),setPadKey);if(handled){notePadUse(event);publishPad();}return handled?1:0;
     }
@@ -537,6 +581,10 @@ void android_main(android_app* app) {
                 }else{
                     host.renderer.start(app->window);
                     setGuestDisplaySize(host.renderer.extent.width,host.renderer.extent.height);
+                }
+                auto res = get_touch_hud_resize();
+                if (res) {
+                    res(float(ANativeWindow_getWidth(app->window)), float(ANativeWindow_getHeight(app->window)));
                 }
                 if (!host.guestAttempted) {
                     host.guestAttempted = true;
