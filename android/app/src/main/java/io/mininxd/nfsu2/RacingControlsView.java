@@ -979,20 +979,20 @@ final class RacingControlsView extends View {
         text.setColor(ink);
         bitmapPaint.setAlpha(Math.max(0, Math.min(255, Math.round(255f * effectiveOpacity))));
 
-        drawIcon(canvas, c, cx, cy, r, on);
+        drawIcon(canvas, c, cx, cy, r, on, effectiveOpacity);
     }
 
-    private void drawIcon(Canvas canvas, Control c, float cx, float cy, float r, boolean on) {
+    private void drawIcon(Canvas canvas, Control c, float cx, float cy, float r, boolean on, float effectiveOpacity) {
         float s = r * 0.44f;
         line.setStrokeWidth(Math.max(2.0f, r * 0.08f));
 
         switch (c.icon) {
             case "gas":
-                glyph(canvas, "GAS", cx, cy + 2f, 18f, on);
+                glyph(canvas, "GAS", cx, cy + 2f, 18f, on, effectiveOpacity);
                 chevron(canvas, cx, cy - s * 0.9f, s * 0.6f, true);
                 break;
             case "brake":
-                glyph(canvas, "BRAKE", cx, cy + 2f, 15f, on);
+                glyph(canvas, "BRAKE", cx, cy + 2f, 15f, on, effectiveOpacity);
                 chevron(canvas, cx, cy - s * 0.75f, s * 0.55f, false);
                 break;
             case "nitro":
@@ -1006,13 +1006,15 @@ final class RacingControlsView extends View {
 
                 if (on) {
                     // Distinct halos: Cyan for Purge at 0 km/h, Lime for Boost at speed
-                    int haloBg = (nitroState == 1) ? 0x5500E5FF : 0x5539FF14;
-                    int haloStroke = (nitroState == 1) ? 0xFF00E5FF : COLOR_LIME;
+                    int haloBg = applyAlpha((nitroState == 1) ? 0x5500E5FF : 0x5539FF14, effectiveOpacity);
+                    int haloStroke = applyAlpha((nitroState == 1) ? 0xFF00E5FF : COLOR_LIME, effectiveOpacity);
                     fill.setColor(haloBg);
                     canvas.drawCircle(cx, cy, r * 1.22f, fill);
                     line.setColor(haloStroke);
                     line.setStrokeWidth(2.5f);
                     canvas.drawCircle(cx, cy, r * 1.15f, line);
+                    fill.setColor(applyAlpha(on ? COLOR_LIME : COLOR_TEXT, effectiveOpacity));
+                    line.setColor(applyAlpha(on ? COLOR_LIME : COLOR_TEXT, effectiveOpacity));
                 }
 
                 if (nitroBitmap != null) {
@@ -1024,7 +1026,7 @@ final class RacingControlsView extends View {
                     canvas.drawBitmap(nitroBitmap, null, nitroDestRect, bitmapPaint);
                 } else {
                     String label = (nitroState == 1) ? "PURGE" : "NOS";
-                    glyph(canvas, label, cx, cy, (nitroState == 1) ? 12f : 17f, on);
+                    glyph(canvas, label, cx, cy, (nitroState == 1) ? 12f : 17f, on, effectiveOpacity);
                 }
                 break;
             case "drift":
@@ -1035,7 +1037,7 @@ final class RacingControlsView extends View {
                     driftDestRect.set(cx - bw / 2f, cy - bh / 2f, cx + bw / 2f, cy + bh / 2f);
                     canvas.drawBitmap(driftBitmap, null, driftDestRect, bitmapPaint);
                 } else {
-                    glyph(canvas, "DRIFT", cx, cy, 11f, on || driftActive);
+                    glyph(canvas, "DRIFT", cx, cy, 11f, on || driftActive, effectiveOpacity);
                 }
                 break;
             case "status":
@@ -1060,7 +1062,7 @@ final class RacingControlsView extends View {
                     liftDestRect.set(cx - bw / 2f, cy - bh / 2f, cx + bw / 2f, cy + bh / 2f);
                     canvas.drawBitmap(liftBitmap, null, liftDestRect, bitmapPaint);
                 } else {
-                    glyph(canvas, "LIFT", cx, cy, 12f, on);
+                    glyph(canvas, "LIFT", cx, cy, 12f, on, effectiveOpacity);
                     chevron(canvas, cx, cy - s * 0.65f, s * 0.48f, true);
                 }
                 break;
@@ -1072,24 +1074,25 @@ final class RacingControlsView extends View {
                     bounceDestRect.set(cx - bw / 2f, cy - bh / 2f, cx + bw / 2f, cy + bh / 2f);
                     canvas.drawBitmap(bounceBitmap, null, bounceDestRect, bitmapPaint);
                 } else {
-                    glyph(canvas, "BOUNCE", cx, cy, 9f, on);
+                    glyph(canvas, "BOUNCE", cx, cy, 9f, on, effectiveOpacity);
                     chevron(canvas, cx, cy - s * 0.65f, s * 0.42f, true);
                     chevron(canvas, cx, cy - s * 0.38f, s * 0.42f, true);
                 }
                 break;
             case "hb":
                 text.setTextSize(12f);
+                text.setColor(applyAlpha(on ? COLOR_LIME : COLOR_TEXT, effectiveOpacity));
                 canvas.drawText("HAND", cx, cy - 3f, text);
                 canvas.drawText("BRAKE", cx, cy + 12f, text);
                 break;
             case "start":
-                glyph(canvas, "START", cx, cy, 15f, on);
+                glyph(canvas, "START", cx, cy, 15f, on, effectiveOpacity);
                 break;
             case "accept":
-                glyph(canvas, "OK", cx, cy, 16f, on);
+                glyph(canvas, "OK", cx, cy, 16f, on, effectiveOpacity);
                 break;
             case "back":
-                glyph(canvas, "BACK", cx, cy, 16f, on);
+                glyph(canvas, "BACK", cx, cy, 16f, on, effectiveOpacity);
                 break;
             case "left":
                 drawArrow(canvas, cx, cy, s * 1.15f, 2);
@@ -1194,7 +1197,7 @@ final class RacingControlsView extends View {
                 canvas.drawLine(cx - s * 0.4f, cy + s * 0.34f, cx + s * 0.4f, cy + s * 0.34f, line);
                 break;
             default:
-                glyph(canvas, c.icon, cx, cy, r * (c.icon.length() == 1 ? 1.0f : 0.6f), on);
+                glyph(canvas, c.icon, cx, cy, r * (c.icon.length() == 1 ? 1.0f : 0.6f), on, effectiveOpacity);
                 break;
         }
     }
@@ -1243,8 +1246,12 @@ final class RacingControlsView extends View {
     }
 
     private void glyph(Canvas canvas, String value, float x, float y, float size, boolean on) {
+        glyph(canvas, value, x, y, size, on, 1.0f);
+    }
+
+    private void glyph(Canvas canvas, String value, float x, float y, float size, boolean on, float effectiveOpacity) {
         text.setTextSize(size);
-        text.setColor(on ? COLOR_LIME : COLOR_TEXT);
+        text.setColor(applyAlpha(on ? COLOR_LIME : COLOR_TEXT, effectiveOpacity));
         canvas.drawText(value, x, y - (text.ascent() + text.descent()) / 2f, text);
     }
 
