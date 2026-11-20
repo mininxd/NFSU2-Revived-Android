@@ -41,6 +41,8 @@ pub struct GarageViewerEngine {
     two_finger_active: AtomicBool,
     two_finger_dx: AtomicI32,
     two_finger_dy: AtomicI32,
+    zoom_delta: AtomicI32,
+    reset_requested: AtomicBool,
     angular_momentum: Mutex<f32>, // degrees per second for inertial scroll
     last_frame_time: Mutex<Option<Instant>>,
     last_viewer_addr: AtomicU32,
@@ -54,10 +56,23 @@ impl GarageViewerEngine {
             two_finger_active: AtomicBool::new(false),
             two_finger_dx: AtomicI32::new(0),
             two_finger_dy: AtomicI32::new(0),
+            zoom_delta: AtomicI32::new(0),
+            reset_requested: AtomicBool::new(false),
             angular_momentum: Mutex::new(0.0),
             last_frame_time: Mutex::new(None),
             last_viewer_addr: AtomicU32::new(0),
         }
+    }
+
+    /// Sets pinch-to-zoom camera distance delta.
+    pub fn set_zoom_delta(&self, delta: f32) {
+        let idelta = (delta.clamp(-2.0, 2.0) * 10000.0) as i32;
+        self.zoom_delta.fetch_add(idelta, Ordering::AcqRel);
+    }
+
+    /// Requests camera & car to snap back to default 3/4 showroom angle.
+    pub fn request_reset_view(&self) {
+        self.reset_requested.store(true, Ordering::Release);
     }
 
     /// Sets right analog stick input from gamepad.
@@ -124,6 +139,43 @@ impl GarageViewerEngine {
         let dy = idy as f32 / 10000.0;
 
         let mut interacted = false;
+
+        // Double-tap quick snap to 3/4 showroom angle
+        if self.reset_requested.swap(false, Ordering::AcqRel) {
+            *angle_ptr = 45.0; // Iconic front 3/4 showroom angle
+            if let Ok(mut mom) = self.angular_momentum.lock() {
+                *mom = 0.0;
+            }
+            let cam_ptr = guest_base.add((viewer_va + VW_CAMERA) as usize) as *const u32;
+            let cam = *cam_ptr;
+            if cam >= 0x10000 && cam < 0x7ffff000 {
+                let h_ptr = guest_base.add((cam + CAM_HEIGHT) as usize) as *mut f32;
+                *h_ptr = 0.85;
+                let r_ptr = guest_base.add((cam + 0xac) as usize) as *mut f32;
+                if *r_ptr > 0.5 && *r_ptr < 30.0 {
+                    *r_ptr = 4.8;
+                }
+            }
+            *turn_ptr = 0.0;
+            *tilt_ptr = 0.0;
+            interacted = true;
+        }
+
+        // Pinch-to-zoom camera distance adjustment
+        let zoom_idx = self.zoom_delta.swap(0, Ordering::AcqRel);
+        if zoom_idx != 0 {
+            let zoom_d = zoom_idx as f32 / 10000.0;
+            let cam_ptr = guest_base.add((viewer_va + VW_CAMERA) as usize) as *const u32;
+            let cam = *cam_ptr;
+            if cam >= 0x10000 && cam < 0x7ffff000 {
+                let r_ptr = guest_base.add((cam + 0xac) as usize) as *mut f32;
+                if *r_ptr > 0.5 && *r_ptr < 30.0 {
+                    let new_r = (*r_ptr - zoom_d * 3.5).clamp(1.8, 8.5);
+                    *r_ptr = new_r;
+                }
+            }
+            interacted = true;
+        }
 
         if active {
             // Native Direct Delta Scroll:
@@ -238,6 +290,16 @@ pub extern "C" fn nfs_garage_stick_input(x: f32, y: f32) {
 #[no_mangle]
 pub extern "C" fn nfs_garage_two_finger_drag(dx: f32, dy: f32, active: i32) {
     GLOBAL_GARAGE_VIEWER.set_two_finger_drag(dx, dy, active != 0);
+}
+
+#[no_mangle]
+pub extern "C" fn nfs_garage_zoom(delta: f32) {
+    GLOBAL_GARAGE_VIEWER.set_zoom_delta(delta);
+}
+
+#[no_mangle]
+pub extern "C" fn nfs_garage_reset_view() {
+    GLOBAL_GARAGE_VIEWER.request_reset_view();
 }
 
 #[no_mangle]

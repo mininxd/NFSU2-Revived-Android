@@ -152,6 +152,43 @@ final class RacingControlsView extends View {
         }
     }
 
+    private static native void nativeGarageZoom(float delta);
+    private static native void nativeGarageResetView();
+
+    private static void safeGarageZoom(float delta) {
+        if (!sGameCoreLoaded) return;
+        try {
+            nativeGarageZoom(delta);
+        } catch (Throwable ignored) {}
+    }
+
+    private static void safeGarageResetView() {
+        if (!sGameCoreLoaded) return;
+        try {
+            nativeGarageResetView();
+        } catch (Throwable ignored) {}
+    }
+
+    // 3D Showroom Gesture Visual Affordances & Haptics
+    private boolean orbitIndicatorActive = false;
+    private boolean orbitIndicatorEngaged = false;
+    private float orbitIndicatorX = 0f, orbitIndicatorY = 0f;
+    private long orbitIndicatorStartTime = 0;
+    private float orbitIndicatorAlpha = 0f;
+
+    // Double-tap quick snap
+    private long lastShowroomTapTime = 0;
+    private float lastShowroomTapX = 0f, lastShowroomTapY = 0f;
+    private Runnable pendingSingleClickRunnable = null;
+
+    // Showroom snap visual burst
+    private boolean snapBurstActive = false;
+    private float snapBurstX = 0f, snapBurstY = 0f;
+    private long snapBurstStartTime = 0;
+
+    // Pinch-to-zoom detector
+    private android.view.ScaleGestureDetector showroomScaleDetector;
+
     private boolean menuDragging = false;
     private final Runnable menuHoldRunnable = new Runnable() {
         @Override
@@ -161,8 +198,13 @@ final class RacingControlsView extends View {
             int res = safeMenuGestureCheckTimeout(now);
             if (res == GESTURE_DRAG_START) {
                 menuDragging = true;
+                orbitIndicatorEngaged = true;
+                performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
                 float gx = safeMenuGestureGetX();
                 float gy = safeMenuGestureGetY();
+                orbitIndicatorX = gx;
+                orbitIndicatorY = gy;
+                invalidate();
                 if (pointerMiddle != null && getWidth() > 0 && getHeight() > 0) {
                     try {
                         pointerMiddle.touch(gx / getWidth(), gy / getHeight(), 0, 0f, 0f);
@@ -405,6 +447,21 @@ final class RacingControlsView extends View {
 
         setContentDescription("Game controls");
         setHapticFeedbackEnabled(true);
+
+        try {
+            showroomScaleDetector = new android.view.ScaleGestureDetector(context, new android.view.ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                @Override
+                public boolean onScale(android.view.ScaleGestureDetector detector) {
+                    if (!racing) {
+                        float factor = detector.getScaleFactor();
+                        float delta = (factor - 1.0f) * 1.8f;
+                        safeGarageZoom(delta);
+                        return true;
+                    }
+                    return false;
+                }
+            });
+        } catch (Throwable ignored) {}
 
         line.setStyle(Paint.Style.STROKE);
         line.setStrokeCap(Paint.Cap.ROUND);
@@ -675,6 +732,83 @@ final class RacingControlsView extends View {
             drawToolbarButton(canvas, new RectF(cx + 75, ty + 50, cx + 205, ty + 88), "OPACITY (" + Math.round(controlOpacity * 100) + "%)", 0xE0162534, 0xAA5AC8FA, 0xFF5AC8FA);
         }
         canvas.restore();
+
+        // 3D Showroom Visual Affordances (Orbit Hold Ring & Quick Snap Burst)
+        drawShowroomAffordances(canvas);
+    }
+
+    private void drawShowroomAffordances(Canvas canvas) {
+        if (racing) return;
+        long now = SystemClock.uptimeMillis();
+
+        // 1. Double-Tap Quick Snap Burst Effect
+        if (snapBurstActive) {
+            long elapsed = now - snapBurstStartTime;
+            if (elapsed < 350) {
+                float progress = elapsed / 350f;
+                int alpha = Math.round((1f - progress) * 180);
+                float radius = 30f + progress * 70f;
+                Paint snapPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                snapPaint.setStyle(Paint.Style.STROKE);
+                snapPaint.setStrokeWidth(3f * (1f - progress));
+                snapPaint.setColor((alpha << 24) | (COLOR_LIME & 0x00FFFFFF));
+                canvas.drawCircle(snapBurstX, snapBurstY, radius, snapPaint);
+                invalidate();
+            } else {
+                snapBurstActive = false;
+            }
+        }
+
+        // 2. 1-Finger Orbit Hold Indicator & Rotating Reticle
+        if (orbitIndicatorActive || orbitIndicatorAlpha > 0.01f) {
+            if (orbitIndicatorActive) {
+                if (orbitIndicatorEngaged) {
+                    orbitIndicatorAlpha = Math.min(1.0f, orbitIndicatorAlpha + 0.15f);
+                } else {
+                    long holdElapsed = now - orbitIndicatorStartTime;
+                    float progress = Math.min(1.0f, holdElapsed / 100f);
+                    orbitIndicatorAlpha = progress * 0.75f;
+                }
+            } else {
+                orbitIndicatorAlpha = Math.max(0.0f, orbitIndicatorAlpha - 0.12f);
+            }
+
+            if (orbitIndicatorAlpha > 0.01f) {
+                int a = Math.round(orbitIndicatorAlpha * 255);
+                float x = orbitIndicatorX;
+                float y = orbitIndicatorY;
+
+                Paint orbitPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+                // Central focal point
+                orbitPaint.setStyle(Paint.Style.FILL);
+                orbitPaint.setColor(((a / 2) << 24) | (COLOR_LIME & 0x00FFFFFF));
+                canvas.drawCircle(x, y, 5f, orbitPaint);
+
+                // Outer rotating ring
+                orbitPaint.setStyle(Paint.Style.STROKE);
+                orbitPaint.setStrokeWidth(2.5f);
+                orbitPaint.setColor((a << 24) | (COLOR_LIME & 0x00FFFFFF));
+
+                float baseRadius = orbitIndicatorEngaged ? 36f : 24f + (now - orbitIndicatorStartTime) * 0.12f;
+                baseRadius = Math.min(baseRadius, 38f);
+                canvas.drawCircle(x, y, baseRadius, orbitPaint);
+
+                // Four orbital compass tick marks when engaged in 3D rotation
+                if (orbitIndicatorEngaged) {
+                    orbitPaint.setStrokeWidth(2f);
+                    float tickLen = 6f;
+                    canvas.drawLine(x - baseRadius - tickLen, y, x - baseRadius + 2f, y, orbitPaint);
+                    canvas.drawLine(x + baseRadius - 2f, y, x + baseRadius + tickLen, y, orbitPaint);
+                    canvas.drawLine(x, y - baseRadius - tickLen, x, y - baseRadius + 2f, orbitPaint);
+                    canvas.drawLine(x, y + baseRadius - 2f, x, y + baseRadius + tickLen, y, orbitPaint);
+                }
+
+                if (orbitIndicatorActive || orbitIndicatorAlpha > 0.01f) {
+                    invalidate();
+                }
+            }
+        }
     }
 
     private static int applyAlpha(int color, float opacity) {
@@ -1624,6 +1758,12 @@ final class RacingControlsView extends View {
     void releaseAll() {
         removeCallbacks(nitroWatcher);
         removeCallbacks(menuHoldRunnable);
+        if (pendingSingleClickRunnable != null) {
+            removeCallbacks(pendingSingleClickRunnable);
+            pendingSingleClickRunnable = null;
+        }
+        orbitIndicatorActive = false;
+        orbitIndicatorEngaged = false;
         safeMenuGestureReset();
         if (menuDragging) {
             menuDragging = false;
@@ -1665,8 +1805,16 @@ final class RacingControlsView extends View {
         long now = SystemClock.uptimeMillis();
         float w = getWidth(), h = getHeight();
 
+        if (showroomScaleDetector != null) {
+            try {
+                showroomScaleDetector.onTouchEvent(e);
+            } catch (Throwable ignored) {}
+        }
+
         // Direct two-finger tracking
         if (e.getPointerCount() >= 2) {
+            orbitIndicatorActive = false;
+            orbitIndicatorEngaged = false;
             float p0x = e.getX(0), p0y = e.getY(0);
             float p1x = e.getX(1), p1y = e.getY(1);
             float midX = (p0x + p1x) * 0.5f;
@@ -1674,6 +1822,10 @@ final class RacingControlsView extends View {
 
             if (!twoFingerActive) {
                 removeCallbacks(menuHoldRunnable);
+                if (pendingSingleClickRunnable != null) {
+                    removeCallbacks(pendingSingleClickRunnable);
+                    pendingSingleClickRunnable = null;
+                }
                 safeMenuGestureReset();
                 twoFingerActive = true;
                 twoFingerId1 = e.getPointerId(0);
@@ -1716,10 +1868,36 @@ final class RacingControlsView extends View {
 
         // Single-finger gesture disambiguation in pure Rust (Hold >100ms = Drag/Rotate, Tap <100ms = Click)
         if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_POINTER_DOWN) {
+            if ((now - lastShowroomTapTime) < 320 && Math.hypot(x - lastShowroomTapX, y - lastShowroomTapY) < 60f) {
+                if (pendingSingleClickRunnable != null) {
+                    removeCallbacks(pendingSingleClickRunnable);
+                    pendingSingleClickRunnable = null;
+                }
+                lastShowroomTapTime = 0;
+                removeCallbacks(menuHoldRunnable);
+                safeMenuGestureReset();
+                safeGarageResetView();
+                performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                snapBurstActive = true;
+                snapBurstX = x;
+                snapBurstY = y;
+                snapBurstStartTime = now;
+                orbitIndicatorActive = false;
+                orbitIndicatorEngaged = false;
+                invalidate();
+                return true;
+            }
+
             removeCallbacks(menuHoldRunnable);
             menuDragging = false;
+            orbitIndicatorX = x;
+            orbitIndicatorY = y;
+            orbitIndicatorStartTime = now;
+            orbitIndicatorActive = true;
+            orbitIndicatorEngaged = false;
             safeMenuGestureProcess(action, id, x, y, now, w, h);
             postDelayed(menuHoldRunnable, 105);
+            invalidate();
             return true;
         } else if (action == MotionEvent.ACTION_MOVE) {
             boolean moved = false;
@@ -1728,10 +1906,18 @@ final class RacingControlsView extends View {
                 int res = safeMenuGestureProcess(action, pid, e.getX(i), e.getY(i), now, w, h);
                 if (res == GESTURE_DRAG_MOVE) {
                     removeCallbacks(menuHoldRunnable);
+                    if (pendingSingleClickRunnable != null) {
+                        removeCallbacks(pendingSingleClickRunnable);
+                        pendingSingleClickRunnable = null;
+                    }
                     menuDragging = true;
                     moved = true;
+                    orbitIndicatorEngaged = true;
+                    orbitIndicatorActive = true;
                     float gx = safeMenuGestureGetX();
                     float gy = safeMenuGestureGetY();
+                    orbitIndicatorX = gx;
+                    orbitIndicatorY = gy;
                     float dx = safeMenuGestureGetDx();
                     float dy = safeMenuGestureGetDy();
                     if (pointerMiddle != null && w > 0 && h > 0) {
@@ -1740,24 +1926,42 @@ final class RacingControlsView extends View {
                         } catch (Throwable ignored) {}
                     }
                     AdhocRoamClient.handleRightStick(dx * 40f, dy * 40f);
+                    invalidate();
                 }
             }
             return moved || menuDragging;
         } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP) {
             removeCallbacks(menuHoldRunnable);
+            orbitIndicatorActive = false;
+            orbitIndicatorEngaged = false;
+            invalidate();
             int res = safeMenuGestureProcess(action, id, x, y, now, w, h);
             if (res == GESTURE_CLICK) {
                 final float gx = safeMenuGestureGetX();
                 final float gy = safeMenuGestureGetY();
-                pointerTouch(gx, gy, 0);
-                postDelayed(new Runnable() {
+                lastShowroomTapTime = now;
+                lastShowroomTapX = gx;
+                lastShowroomTapY = gy;
+                if (pendingSingleClickRunnable != null) {
+                    removeCallbacks(pendingSingleClickRunnable);
+                }
+                pendingSingleClickRunnable = new Runnable() {
                     @Override
                     public void run() {
-                        pointerTouch(gx, gy, 2);
+                        pointerTouch(gx, gy, 0);
+                        postDelayed(new Runnable() {
+                            @Override
+                            public void run() {
+                                pointerTouch(gx, gy, 2);
+                            }
+                        }, 35);
+                        pendingSingleClickRunnable = null;
                     }
-                }, 35);
+                };
+                postDelayed(pendingSingleClickRunnable, 140);
             } else if (res == GESTURE_DRAG_END || menuDragging) {
                 menuDragging = false;
+                lastShowroomTapTime = 0;
                 float gx = safeMenuGestureGetX();
                 float gy = safeMenuGestureGetY();
                 if (pointerMiddle != null && w > 0 && h > 0) {
@@ -1770,6 +1974,12 @@ final class RacingControlsView extends View {
             return true;
         } else if (action == MotionEvent.ACTION_CANCEL) {
             removeCallbacks(menuHoldRunnable);
+            if (pendingSingleClickRunnable != null) {
+                removeCallbacks(pendingSingleClickRunnable);
+                pendingSingleClickRunnable = null;
+            }
+            orbitIndicatorActive = false;
+            orbitIndicatorEngaged = false;
             safeMenuGestureReset();
             if (menuDragging) {
                 menuDragging = false;
@@ -1780,6 +1990,7 @@ final class RacingControlsView extends View {
                 }
                 AdhocRoamClient.handleRightStick(0f, 0f);
             }
+            invalidate();
             return true;
         }
         return false;

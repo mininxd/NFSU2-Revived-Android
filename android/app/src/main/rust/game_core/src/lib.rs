@@ -262,9 +262,35 @@ pub extern "system" fn Java_com_nfsu2_androidevolved_RacingControlsView_nativeMe
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_nfsu2_androidevolved_RacingControlsView_nativeMenuGestureGetDy(
+pub extern "system" fn Java_io_mininxd_nfsu2_RacingControlsView_nativeGarageZoom(
+    _env: JNIEnv,
+    _class: JClass,
+    delta: jfloat,
+) {
+    nfs_garage_zoom(delta);
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_mininxd_nfsu2_RacingControlsView_nativeGarageResetView(
+    _env: JNIEnv,
+    _class: JClass,
+) {
+    nfs_garage_reset_view();
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_nfsu2_androidevolved_RacingControlsView_nativeGarageZoom(
     env: JNIEnv,
     class: JClass,
-) -> jfloat {
-    Java_io_mininxd_nfsu2_RacingControlsView_nativeMenuGestureGetDy(env, class)
+    delta: jfloat,
+) {
+    Java_io_mininxd_nfsu2_RacingControlsView_nativeGarageZoom(env, class, delta);
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_nfsu2_androidevolved_RacingControlsView_nativeGarageResetView(
+    env: JNIEnv,
+    class: JClass,
+) {
+    Java_io_mininxd_nfsu2_RacingControlsView_nativeGarageResetView(env, class);
 }
