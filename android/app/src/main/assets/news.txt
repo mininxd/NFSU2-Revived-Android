@@ -3,7 +3,7 @@ Welcome to Need for Speed Underground 2 Revived.
 
 Engine Architecture & Core:
 - Lifted Core: Original SPEED2.EXE x86 binary statically lifted to native 64-bit ARM64 C and Rust.
-- Graphics Pipeline: 100% Native Mobile Direct3D 9 Engine with Vulkan & GLES acceleration.
+- Graphics Pipeline: Direct3D 9 with Vulkan & OpenGL ES acceleration.
 - Audio Subsystem: Low-latency AAudio driver with DirectSound buffer cursor tracking running on pure Rust.
 - Preservation Project: Developed as an open-source fan preservation effort. Source code available on GitHub:
   https://github.com/mininxd/NFSU2-Revived-Android

@@ -1,17 +1,17 @@
 ### What's New in v1.0
 
-> **Major Milestone: Complete Transition to 100% Native Mobile Graphics (DXVK Removed)**
+> **Major Milestone: Transition to Direct Vulkan & OpenGL ES Pipeline (DXVK Removed)**
 >
 > Starting with **v1.0**, **NFSU2 Revived no longer uses DXVK**. 
 >
-> The desktop DXVK translation layer has been completely eliminated in favor of a custom, 100% native Direct3D 9 execution pipeline designed specifically for Android and mobile tile-based GPUs. Rendering commands now dispatch directly to native Vulkan 1.3 and OpenGL ES through our high-performance pure Rust state engine (`graphics_cache`). This major architectural milestone eliminates desktop DXVK descriptor overhead, wipes out translation-induced shader stutters during races, significantly lowers RAM consumption, and dramatically speeds up game startup times.
+> The desktop DXVK translation layer has been completely eliminated in favor of a Direct3D 9 execution pipeline designed for Android and mobile GPUs. Rendering commands now dispatch directly to Vulkan 1.3 and OpenGL ES through the pure Rust `graphics_cache` engine. This eliminates desktop DXVK descriptor overhead, removes translation-induced shader stutters during races, significantly lowers RAM consumption, and speeds up game startup times.
 
 ---
 
-#### 1. 100% Native Direct3D 9 Rendering Pipeline (DXVK Removed)
+#### 1. Direct3D 9 Rendering Pipeline (DXVK Removed)
 - **Elimination of DXVK Translation Overhead**:
   - Completely stripped the legacy desktop `dxvk_android` and `dxvk_modules` translation layers from the codebase.
-  - Implemented a lean, direct native Direct3D 9 COM interface (`native_d3d9.cpp`) that routes directly to native Vulkan 1.3 and GLES state machines in pure Rust.
+  - Implemented a lean Direct3D 9 COM interface (`native_d3d9.cpp`) that routes directly to Vulkan 1.3 and GLES state machines in pure Rust.
   - Replaced generic desktop descriptor pools and shader translation caches with direct mobile memory management, drastically cutting RAM overhead and eliminating shader compilation hitching during races.
 - **Pure Rust Graphics Pipeline State (`graphics_cache`)**:
   - Draw primitive dispatch, viewport management, depth/stencil state, and blend equations are now managed entirely by `graphics_cache`.

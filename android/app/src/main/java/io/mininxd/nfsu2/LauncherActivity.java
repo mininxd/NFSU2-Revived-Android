@@ -839,10 +839,10 @@ public final class LauncherActivity extends Activity {
                 boolean isGles = "opengl".equalsIgnoreCase(backend) || gpu.has("gles");
 
                 if (isGles) {
-                    text.append("Graphics API:\n• Direct3D 9 via Native OpenGL ES (")
+                    text.append("Graphics API:\n• Direct3D 9 via OpenGL ES (")
                             .append(gpu.optString("gles", "3.0+")).append(")\n\n");
                 } else {
-                    text.append("Graphics API:\n• Direct3D 9 via Native Vulkan (Vulkan ")
+                    text.append("Graphics API:\n• Direct3D 9 via Vulkan (")
                             .append(gpu.optString("vulkan", "1.1+")).append(")\n\n");
                 }
 

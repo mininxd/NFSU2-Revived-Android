@@ -50,7 +50,7 @@ public final class GameOptions {
     static final Option[] ALL = {
             new Option(GRAPHICS_BACKEND, "Graphics API", "auto",
                     new String[] {"auto", "vulkan", "opengl"},
-                    new String[] {"Auto", "Vulkan (Native)", "OpenGL (ES)"}),
+                    new String[] {"Auto", "Vulkan", "OpenGL (ES)"}),
             new Option(RESOLUTION, "Internal Resolution", "75",
                     new String[] {"25", "30", "35", "40", "45", "50", "55", "60", "65", "70", "75", "80", "85", "90", "95", "100", "125", "150", "200"},
                     new String[] {"25%", "30%", "35%", "40%", "45%", "50%", "55%", "60%", "65%", "70%", "75%", "80%", "85%", "90%", "95%", "100%", "125%", "150%", "200%"}),
