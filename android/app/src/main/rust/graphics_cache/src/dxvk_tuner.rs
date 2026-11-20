@@ -138,6 +138,8 @@ impl DxvkProfileConfig {
 
         s.push_str("d3d9.deferSurfaceCreation = True\n");
         s.push_str("d3d9.tearFree = False\n");
+        s.push_str("d3d9.presentInterval = 0\n");
+        s.push_str("dxgi.syncInterval = 0\n");
         s.push_str(&format!("d3d9.maxFrameLatency = {}\n", self.max_frame_latency));
         s.push_str("d3d9.lenientClear = True\n");
         s.push_str("d3d9.allowDiscard = True\n");

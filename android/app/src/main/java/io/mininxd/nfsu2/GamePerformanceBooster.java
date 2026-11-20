@@ -78,6 +78,7 @@ public final class GamePerformanceBooster {
             }
 
             // 3. Android platform frame scheduler & sustained performance hooks
+            AndroidGameManagerBridge.setGameplayMode(activity, 60);
             configureAndroidGameManager(activity);
             enableSustainedPerformance(activity, window);
 

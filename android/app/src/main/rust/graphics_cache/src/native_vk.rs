@@ -480,7 +480,7 @@ pub unsafe extern "C" fn nfs_native_vk_set_window(window: *mut c_void) -> c_int 
     (api.vk_get_device_queue)(device, queue_family_index, 0, &mut queue);
 
     // 4. Create Swapchain
-    let swapchain_info = VkSwapchainCreateInfoKHR {
+    let mut swapchain_info = VkSwapchainCreateInfoKHR {
         s_type: VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
         p_next: std::ptr::null(),
         flags: 0,
@@ -496,19 +496,27 @@ pub unsafe extern "C" fn nfs_native_vk_set_window(window: *mut c_void) -> c_int 
         p_queue_family_indices: std::ptr::null(),
         pre_transform: 1, // IDENTITY
         composite_alpha: VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR,
-        present_mode: VK_PRESENT_MODE_FIFO_KHR,
+        present_mode: VK_PRESENT_MODE_MAILBOX_KHR,
         clipped: 1,
         old_swapchain: 0,
     };
 
     let mut swapchain: u64 = 0;
     if (api.vk_create_swapchain_khr)(device, &swapchain_info, std::ptr::null(), &mut swapchain) != VK_SUCCESS {
-        // Fallback to B8G8R8A8 if R8G8B8A8 fails on driver
-        let mut fallback_info = swapchain_info;
-        fallback_info.image_format = VK_FORMAT_B8G8R8A8_UNORM;
-        fallback_info.composite_alpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-        if (api.vk_create_swapchain_khr)(device, &fallback_info, std::ptr::null(), &mut swapchain) != VK_SUCCESS {
-            return -7;
+        // Fallback 1: try standard FIFO if Mailbox is unsupported
+        swapchain_info.present_mode = VK_PRESENT_MODE_FIFO_KHR;
+        if (api.vk_create_swapchain_khr)(device, &swapchain_info, std::ptr::null(), &mut swapchain) != VK_SUCCESS {
+            // Fallback 2: B8G8R8A8 if R8G8B8A8 fails on driver
+            let mut fallback_info = swapchain_info;
+            fallback_info.image_format = VK_FORMAT_B8G8R8A8_UNORM;
+            fallback_info.composite_alpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+            fallback_info.present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
+            if (api.vk_create_swapchain_khr)(device, &fallback_info, std::ptr::null(), &mut swapchain) != VK_SUCCESS {
+                fallback_info.present_mode = VK_PRESENT_MODE_FIFO_KHR;
+                if (api.vk_create_swapchain_khr)(device, &fallback_info, std::ptr::null(), &mut swapchain) != VK_SUCCESS {
+                    return -7;
+                }
+            }
         }
     }
 
