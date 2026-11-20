@@ -169,7 +169,8 @@ public final class GameOptions {
     static int detectRegionFromFiles(Context context) {
         if (nativeLoaded) {
             try {
-                int detected = nativeDetectRegion(LauncherActivity.gameRoot());
+                java.io.File gr = LauncherActivity.gameRoot();
+                int detected = nativeDetectRegion(gr != null ? gr.getAbsolutePath() : "");
                 if (detected != -1) {
                     android.util.Log.i("NFSU2", "Region auto-detect via native game_core: found GLOBALTEXTURESROW.BIN → EU (1)");
                     return detected;
