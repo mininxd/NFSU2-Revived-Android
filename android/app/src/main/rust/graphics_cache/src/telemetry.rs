@@ -45,25 +45,44 @@ pub extern "C" fn nfs_telemetry_record_present(timestamp_ns: u64) {
 
     let idx = RING_HEAD.fetch_add(1, Ordering::Relaxed) & RING_MASK;
     FRAME_TIMESTAMPS[idx].store(ts, Ordering::Relaxed);
-    TOTAL_FRAMES_RECORDED.fetch_add(1, Ordering::Relaxed);
+    let total = TOTAL_FRAMES_RECORDED.fetch_add(1, Ordering::Relaxed) + 1;
 
-    // Calculate rolling FPS over the last 60 frames (or available frames)
-    let head = RING_HEAD.load(Ordering::Relaxed);
-    let window = 60.min(RING_SIZE);
-    if head >= window {
-        let curr_idx = (head - 1) & RING_MASK;
-        let past_idx = (head - window) & RING_MASK;
+    // Calculate rolling FPS over available frames (from 2 up to 60 frames)
+    if total >= 2 {
+        let window = (total as usize).min(60);
+        let curr_idx = idx;
+        let past_idx = idx.wrapping_sub(window - 1) & RING_MASK;
         let t_curr = FRAME_TIMESTAMPS[curr_idx].load(Ordering::Relaxed);
         let t_past = FRAME_TIMESTAMPS[past_idx].load(Ordering::Relaxed);
 
         if t_curr > t_past {
             let duration_ns = t_curr - t_past;
             let duration_sec = (duration_ns as f64) / 1_000_000_000.0;
-            if duration_sec > 0.001 {
+            if duration_sec > 0.0001 {
                 let fps = ((window - 1) as f64 / duration_sec) as f32;
                 let frame_time_ms = (duration_sec * 1000.0 / (window - 1) as f64) as f32;
                 LAST_FPS.store(fps.clamp(0.0, 360.0).to_bits(), Ordering::Relaxed);
                 LAST_FRAME_TIME_MS.store(frame_time_ms.clamp(0.0, 1000.0).to_bits(), Ordering::Relaxed);
+            }
+        }
+
+        // Also record single frame duration to FrameMetricsEngine in game_core if loaded
+        let prev_idx = idx.wrapping_sub(1) & RING_MASK;
+        let t_prev = FRAME_TIMESTAMPS[prev_idx].load(Ordering::Relaxed);
+        if t_curr > t_prev && t_prev > 0 {
+            let single_dur_ns = t_curr - t_prev;
+            static mut RECORD_FN: Option<extern "C" fn(u64)> = None;
+            static INIT: std::sync::Once = std::sync::Once::new();
+            INIT.call_once(|| unsafe {
+                let sym = libc::dlsym(libc::RTLD_DEFAULT, b"nfs_metrics_record_frame\0".as_ptr() as *const _);
+                if !sym.is_null() {
+                    RECORD_FN = Some(std::mem::transmute(sym));
+                }
+            });
+            unsafe {
+                if let Some(f) = RECORD_FN {
+                    f(single_dur_ns);
+                }
             }
         }
     }

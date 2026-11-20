@@ -43,6 +43,11 @@ public final class DiagnosticOverlay {
         } catch (Throwable t) {
             android.util.Log.w("NFSU2", "DiagnosticOverlay: libgraphics_cache load: " + t.getMessage());
         }
+        try {
+            System.loadLibrary("game_core");
+        } catch (Throwable t) {
+            android.util.Log.w("NFSU2", "DiagnosticOverlay: libgame_core load: " + t.getMessage());
+        }
     }
 
     private final Activity activity;
@@ -327,6 +332,7 @@ public final class DiagnosticOverlay {
                                     liveGameFps = measuredFps;
                                     lastFrameDurationMs = 1000.0f / measuredFps;
                                     calculatedFromNative = true;
+                                    safeRecordFrameDuration((long)(1_000_000_000L / Math.max(1.0f, measuredFps)));
                                 }
                             }
                             lastNativeFrameCount = currentNativeFrames;
@@ -366,6 +372,7 @@ public final class DiagnosticOverlay {
                     }
                     if (telemetryBuffer[1] > 0.0f) {
                         lastFrameDurationMs = telemetryBuffer[1];
+                        safeRecordFrameDuration((long)(telemetryBuffer[1] * 1_000_000.0f));
                     }
                 }
             } catch (Throwable ignored) {}
@@ -382,21 +389,24 @@ public final class DiagnosticOverlay {
 
     private void updateStats() {
         float fps = liveGameFps;
+        float frameTimeMs = (lastFrameDurationMs > 0.0f) ? lastFrameDurationMs : ((fps > 0.0f) ? (1000.0f / fps) : 0.0f);
+        float p1Low = 0.0f;
+        if (safeGetFrameMetrics(frameMetricsBuffer)) {
+            if (frameMetricsBuffer[1] > 0.5f) {
+                fps = frameMetricsBuffer[1];
+                frameTimeMs = frameMetricsBuffer[4];
+                p1Low = frameMetricsBuffer[2];
+            }
+        }
         if (fps <= 0.0f) {
             try {
                 fps = Integer.parseInt(GameOptions.get(activity, GameOptions.FPS));
             } catch (Exception ignored) {
                 fps = 60.0f;
             }
-        }
-        float frameTimeMs = (lastFrameDurationMs > 0.0f) ? lastFrameDurationMs : ((fps > 0.0f) ? (1000.0f / fps) : 0.0f);
-        float p1Low = 0.0f;
-        if (safeGetFrameMetrics(frameMetricsBuffer)) {
-            if (frameMetricsBuffer[0] > 0.0f) {
-                fps = frameMetricsBuffer[1];
-                frameTimeMs = frameMetricsBuffer[4];
+            if (frameTimeMs <= 0.0f) {
+                frameTimeMs = 1000.0f / fps;
             }
-            p1Low = frameMetricsBuffer[2];
         }
         String fpsStr = (fps >= 100.0f) ? String.format(Locale.US, "%.0f", fps) : String.format(Locale.US, "%.1f", fps);
 

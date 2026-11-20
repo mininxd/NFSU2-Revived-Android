@@ -371,6 +371,17 @@ void d3dDispatch(){
             if(!s_roam_tick)s_roam_tick=reinterpret_cast<void(*)()>(dlsym(RTLD_DEFAULT,"nfs_roam_frame_tick"));
         }
         if(s_roam_tick)s_roam_tick();
+        static uint64_t s_last_token_ns = 0;
+        struct timespec ts_t;
+        clock_gettime(CLOCK_MONOTONIC, &ts_t);
+        uint64_t now_token_ns = (uint64_t)ts_t.tv_sec * 1000000000ULL + (uint64_t)ts_t.tv_nsec;
+        if (s_last_token_ns > 0 && now_token_ns > s_last_token_ns) {
+            uint64_t dur_ns = now_token_ns - s_last_token_ns;
+            static void(*s_metrics_tok)(uint64_t) = nullptr;
+            if(!s_metrics_tok) s_metrics_tok = reinterpret_cast<void(*)(uint64_t)>(dlsym(RTLD_DEFAULT, "nfs_metrics_record_frame"));
+            if(s_metrics_tok) s_metrics_tok(dur_ns);
+        }
+        s_last_token_ns = now_token_ns;
         updateDumbAIState();
         serviceGuestSound();
         lastPresentMs=steadyMs();

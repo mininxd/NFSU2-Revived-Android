@@ -361,12 +361,20 @@ uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumen
         if(s_cam_restore) s_cam_restore(guestBase);
         static void(*s_telemetry_present)(uint64_t) = nullptr;
         if(!s_telemetry_present) s_telemetry_present = reinterpret_cast<void(*)(uint64_t)>(resolveGraphicsCacheSymbol("nfs_telemetry_record_present"));
+        struct timespec ts;
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        uint64_t now_ns = (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
         if(s_telemetry_present) {
-            struct timespec ts;
-            clock_gettime(CLOCK_MONOTONIC, &ts);
-            uint64_t now_ns = (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
             s_telemetry_present(now_ns);
         }
+        static uint64_t s_last_present_ns = 0;
+        if (s_last_present_ns > 0 && now_ns > s_last_present_ns) {
+            uint64_t frame_dur_ns = now_ns - s_last_present_ns;
+            static void(*s_metrics_record)(uint64_t) = nullptr;
+            if(!s_metrics_record) s_metrics_record = reinterpret_cast<void(*)(uint64_t)>(resolveGraphicsCacheSymbol("nfs_metrics_record_frame"));
+            if(s_metrics_record) s_metrics_record(frame_dur_ns);
+        }
+        s_last_present_ns = now_ns;
         static int(*s_contrast_post)(void*) = nullptr;
         if(!s_contrast_post) s_contrast_post = reinterpret_cast<int(*)(void*)>(resolveGraphicsCacheSymbol("nfs_contrast_regulator_post_frame"));
         if(s_contrast_post) s_contrast_post(guestBase);

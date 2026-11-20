@@ -523,7 +523,9 @@ pub unsafe extern "system" fn Java_io_mininxd_nfsu2_DiagnosticOverlay_nativeGetF
         return 0;
     }
     let mut metrics = [0.0f32; 6];
-    GLOBAL_FRAME_METRICS.compute_metrics(&mut metrics);
+    if !GLOBAL_FRAME_METRICS.compute_metrics(&mut metrics) {
+        return 0;
+    }
     let j_arr = JFloatArray::from_raw(out_array);
     if env.set_float_array_region(&j_arr, 0, &metrics).is_ok() {
         1

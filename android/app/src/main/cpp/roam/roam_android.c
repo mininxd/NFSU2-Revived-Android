@@ -1706,6 +1706,17 @@ __attribute__((visibility("default"))) void nfs_roam_frame_tick(void) {
         nfs_bind_to_perf_cores();
     }
     g_frame_count++;
+    static uint64_t s_last_tick_ns = 0;
+    struct timespec ts_tick;
+    clock_gettime(CLOCK_MONOTONIC, &ts_tick);
+    uint64_t now_tick_ns = (uint64_t)ts_tick.tv_sec * 1000000000ULL + (uint64_t)ts_tick.tv_nsec;
+    if (s_last_tick_ns > 0 && now_tick_ns > s_last_tick_ns) {
+        uint64_t tick_dur_ns = now_tick_ns - s_last_tick_ns;
+        static void(*s_metrics_record_roam)(uint64_t) = NULL;
+        if (!s_metrics_record_roam) s_metrics_record_roam = (void(*)(uint64_t))dlsym(RTLD_DEFAULT, "nfs_metrics_record_frame");
+        if (s_metrics_record_roam) s_metrics_record_roam(tick_dur_ns);
+    }
+    s_last_tick_ns = now_tick_ns;
     hiddenraces_frame_tick();
     extraoptions_frame_tick();
     lobby_frame_tick();

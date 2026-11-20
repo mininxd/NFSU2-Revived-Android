@@ -46,20 +46,21 @@ impl FrameMetricsEngine {
 
     /// Computes telemetry metrics into an array:
     /// `[current_fps, avg_fps, p1_low_fps, p01_low_fps, frame_time_ms, jitter_ms]`
-    pub fn compute_metrics(&self, out: &mut [f32; 6]) {
+    /// Returns true if valid frame metrics were calculated, or false if insufficient frames.
+    pub fn compute_metrics(&self, out: &mut [f32; 6]) -> bool {
         let rb = match self.durations_ns.lock() {
             Ok(g) => g,
-            Err(_) => return,
+            Err(_) => return false,
         };
 
-        if rb.count == 0 {
-            out[0] = 60.0;
-            out[1] = 60.0;
-            out[2] = 60.0;
-            out[3] = 60.0;
-            out[4] = 16.6;
+        if rb.count < 2 {
+            out[0] = 0.0;
+            out[1] = 0.0;
+            out[2] = 0.0;
+            out[3] = 0.0;
+            out[4] = 0.0;
             out[5] = 0.0;
-            return;
+            return false;
         }
 
         let n = rb.count;
@@ -106,6 +107,7 @@ impl FrameMetricsEngine {
         out[3] = p01_low_fps as f32;
         out[4] = (last_ns as f32) / 1_000_000.0;
         out[5] = jitter_ms as f32;
+        true
     }
 }
 
