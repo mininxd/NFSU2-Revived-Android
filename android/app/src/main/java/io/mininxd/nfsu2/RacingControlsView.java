@@ -169,25 +169,17 @@ final class RacingControlsView extends View {
         } catch (Throwable ignored) {}
     }
 
-    // 3D Showroom Gesture Visual Affordances & Haptics
+    // Showroom Gesture Visual Affordances
     private boolean orbitIndicatorActive = false;
     private boolean orbitIndicatorEngaged = false;
     private float orbitIndicatorX = 0f, orbitIndicatorY = 0f;
     private long orbitIndicatorStartTime = 0;
     private float orbitIndicatorAlpha = 0f;
 
-    // Double-tap quick snap
-    private long lastShowroomTapTime = 0;
-    private float lastShowroomTapX = 0f, lastShowroomTapY = 0f;
-    private Runnable pendingSingleClickRunnable = null;
-
-    // Showroom snap visual burst
-    private boolean snapBurstActive = false;
-    private float snapBurstX = 0f, snapBurstY = 0f;
-    private long snapBurstStartTime = 0;
-
-    // Pinch-to-zoom detector
-    private android.view.ScaleGestureDetector showroomScaleDetector;
+    // Single-tap / mouse click ripple effect
+    private boolean tapRippleActive = false;
+    private float tapRippleX = 0f, tapRippleY = 0f;
+    private long tapRippleStartTime = 0;
 
     private boolean menuDragging = false;
     private final Runnable menuHoldRunnable = new Runnable() {
@@ -447,21 +439,6 @@ final class RacingControlsView extends View {
 
         setContentDescription("Game controls");
         setHapticFeedbackEnabled(true);
-
-        try {
-            showroomScaleDetector = new android.view.ScaleGestureDetector(context, new android.view.ScaleGestureDetector.SimpleOnScaleGestureListener() {
-                @Override
-                public boolean onScale(android.view.ScaleGestureDetector detector) {
-                    if (!racing) {
-                        float factor = detector.getScaleFactor();
-                        float delta = (factor - 1.0f) * 1.8f;
-                        safeGarageZoom(delta);
-                        return true;
-                    }
-                    return false;
-                }
-            });
-        } catch (Throwable ignored) {}
 
         line.setStyle(Paint.Style.STROKE);
         line.setStrokeCap(Paint.Cap.ROUND);
@@ -737,29 +714,45 @@ final class RacingControlsView extends View {
         drawShowroomAffordances(canvas);
     }
 
+    private void triggerTapRipple(float x, float y) {
+        tapRippleActive = true;
+        tapRippleX = x;
+        tapRippleY = y;
+        tapRippleStartTime = SystemClock.uptimeMillis();
+        invalidate();
+    }
+
     private void drawShowroomAffordances(Canvas canvas) {
         if (racing) return;
         long now = SystemClock.uptimeMillis();
 
-        // 1. Double-Tap Quick Snap Burst Effect
-        if (snapBurstActive) {
-            long elapsed = now - snapBurstStartTime;
-            if (elapsed < 350) {
-                float progress = elapsed / 350f;
-                int alpha = Math.round((1f - progress) * 180);
-                float radius = 30f + progress * 70f;
-                Paint snapPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-                snapPaint.setStyle(Paint.Style.STROKE);
-                snapPaint.setStrokeWidth(3f * (1f - progress));
-                snapPaint.setColor((alpha << 24) | (COLOR_LIME & 0x00FFFFFF));
-                canvas.drawCircle(snapBurstX, snapBurstY, radius, snapPaint);
+        // 1. Single-Tap / Mouse Click Ripple Effect
+        if (tapRippleActive) {
+            long elapsed = now - tapRippleStartTime;
+            if (elapsed < 260) {
+                float progress = elapsed / 260f;
+                int alpha = Math.round((1f - progress) * 190);
+                float radius = 5f + progress * 26f;
+                Paint ripplePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                ripplePaint.setStyle(Paint.Style.STROKE);
+                ripplePaint.setStrokeWidth(2.2f * (1f - progress));
+                ripplePaint.setColor((alpha << 24) | (COLOR_LIME & 0x00FFFFFF));
+                canvas.drawCircle(tapRippleX, tapRippleY, radius, ripplePaint);
+
+                if (progress < 0.40f) {
+                    Paint corePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                    corePaint.setStyle(Paint.Style.FILL);
+                    int coreAlpha = Math.round((1f - progress / 0.40f) * 150);
+                    corePaint.setColor((coreAlpha << 24) | (COLOR_LIME & 0x00FFFFFF));
+                    canvas.drawCircle(tapRippleX, tapRippleY, 5f * (1f - progress / 0.40f), corePaint);
+                }
                 invalidate();
             } else {
-                snapBurstActive = false;
+                tapRippleActive = false;
             }
         }
 
-        // 2. 1-Finger Orbit Hold Indicator & Rotating Reticle
+        // 2. Compact Solid Round Hold Indicator
         if (orbitIndicatorActive || orbitIndicatorAlpha > 0.01f) {
             if (orbitIndicatorActive) {
                 if (orbitIndicatorEngaged) {
@@ -774,35 +767,17 @@ final class RacingControlsView extends View {
             }
 
             if (orbitIndicatorAlpha > 0.01f) {
-                int a = Math.round(orbitIndicatorAlpha * 255);
+                int a = Math.round(orbitIndicatorAlpha * 210);
                 float x = orbitIndicatorX;
                 float y = orbitIndicatorY;
 
-                Paint orbitPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                Paint solidPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                solidPaint.setStyle(Paint.Style.FILL);
+                solidPaint.setColor((a << 24) | (COLOR_LIME & 0x00FFFFFF));
 
-                // Central focal point
-                orbitPaint.setStyle(Paint.Style.FILL);
-                orbitPaint.setColor(((a / 2) << 24) | (COLOR_LIME & 0x00FFFFFF));
-                canvas.drawCircle(x, y, 5f, orbitPaint);
-
-                // Outer rotating ring
-                orbitPaint.setStyle(Paint.Style.STROKE);
-                orbitPaint.setStrokeWidth(2.5f);
-                orbitPaint.setColor((a << 24) | (COLOR_LIME & 0x00FFFFFF));
-
-                float baseRadius = orbitIndicatorEngaged ? 36f : 24f + (now - orbitIndicatorStartTime) * 0.12f;
-                baseRadius = Math.min(baseRadius, 38f);
-                canvas.drawCircle(x, y, baseRadius, orbitPaint);
-
-                // Four orbital compass tick marks when engaged in 3D rotation
-                if (orbitIndicatorEngaged) {
-                    orbitPaint.setStrokeWidth(2f);
-                    float tickLen = 6f;
-                    canvas.drawLine(x - baseRadius - tickLen, y, x - baseRadius + 2f, y, orbitPaint);
-                    canvas.drawLine(x + baseRadius - 2f, y, x + baseRadius + tickLen, y, orbitPaint);
-                    canvas.drawLine(x, y - baseRadius - tickLen, x, y - baseRadius + 2f, orbitPaint);
-                    canvas.drawLine(x, y + baseRadius - 2f, x, y + baseRadius + tickLen, orbitPaint);
-                }
+                float radius = orbitIndicatorEngaged ? 10f : 6f + (now - orbitIndicatorStartTime) * 0.04f;
+                radius = Math.min(radius, 10f);
+                canvas.drawCircle(x, y, radius, solidPaint);
 
                 if (orbitIndicatorActive || orbitIndicatorAlpha > 0.01f) {
                     invalidate();
@@ -1715,6 +1690,9 @@ final class RacingControlsView extends View {
 
     private void pointerTouch(float x, float y, int phase) {
         if (pointer == null || getWidth() == 0 || getHeight() == 0) return;
+        if (phase == 0) {
+            triggerTapRipple(x, y);
+        }
         if (phase == 1 && Math.abs(x - pointerX) < 2f && Math.abs(y - pointerY) < 2f) return;
         pointerX = x;
         pointerY = y;
@@ -1758,10 +1736,6 @@ final class RacingControlsView extends View {
     void releaseAll() {
         removeCallbacks(nitroWatcher);
         removeCallbacks(menuHoldRunnable);
-        if (pendingSingleClickRunnable != null) {
-            removeCallbacks(pendingSingleClickRunnable);
-            pendingSingleClickRunnable = null;
-        }
         orbitIndicatorActive = false;
         orbitIndicatorEngaged = false;
         safeMenuGestureReset();
@@ -1805,12 +1779,6 @@ final class RacingControlsView extends View {
         long now = SystemClock.uptimeMillis();
         float w = getWidth(), h = getHeight();
 
-        if (showroomScaleDetector != null) {
-            try {
-                showroomScaleDetector.onTouchEvent(e);
-            } catch (Throwable ignored) {}
-        }
-
         // Direct two-finger tracking
         if (e.getPointerCount() >= 2) {
             orbitIndicatorActive = false;
@@ -1822,10 +1790,6 @@ final class RacingControlsView extends View {
 
             if (!twoFingerActive) {
                 removeCallbacks(menuHoldRunnable);
-                if (pendingSingleClickRunnable != null) {
-                    removeCallbacks(pendingSingleClickRunnable);
-                    pendingSingleClickRunnable = null;
-                }
                 safeMenuGestureReset();
                 twoFingerActive = true;
                 twoFingerId1 = e.getPointerId(0);
@@ -1868,26 +1832,6 @@ final class RacingControlsView extends View {
 
         // Single-finger gesture disambiguation in pure Rust (Hold >100ms = Drag/Rotate, Tap <100ms = Click)
         if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_POINTER_DOWN) {
-            if ((now - lastShowroomTapTime) < 320 && Math.hypot(x - lastShowroomTapX, y - lastShowroomTapY) < 60f) {
-                if (pendingSingleClickRunnable != null) {
-                    removeCallbacks(pendingSingleClickRunnable);
-                    pendingSingleClickRunnable = null;
-                }
-                lastShowroomTapTime = 0;
-                removeCallbacks(menuHoldRunnable);
-                safeMenuGestureReset();
-                safeGarageResetView();
-                performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
-                snapBurstActive = true;
-                snapBurstX = x;
-                snapBurstY = y;
-                snapBurstStartTime = now;
-                orbitIndicatorActive = false;
-                orbitIndicatorEngaged = false;
-                invalidate();
-                return true;
-            }
-
             removeCallbacks(menuHoldRunnable);
             menuDragging = false;
             orbitIndicatorX = x;
@@ -1906,10 +1850,6 @@ final class RacingControlsView extends View {
                 int res = safeMenuGestureProcess(action, pid, e.getX(i), e.getY(i), now, w, h);
                 if (res == GESTURE_DRAG_MOVE) {
                     removeCallbacks(menuHoldRunnable);
-                    if (pendingSingleClickRunnable != null) {
-                        removeCallbacks(pendingSingleClickRunnable);
-                        pendingSingleClickRunnable = null;
-                    }
                     menuDragging = true;
                     moved = true;
                     orbitIndicatorEngaged = true;
@@ -1939,29 +1879,15 @@ final class RacingControlsView extends View {
             if (res == GESTURE_CLICK) {
                 final float gx = safeMenuGestureGetX();
                 final float gy = safeMenuGestureGetY();
-                lastShowroomTapTime = now;
-                lastShowroomTapX = gx;
-                lastShowroomTapY = gy;
-                if (pendingSingleClickRunnable != null) {
-                    removeCallbacks(pendingSingleClickRunnable);
-                }
-                pendingSingleClickRunnable = new Runnable() {
+                pointerTouch(gx, gy, 0);
+                postDelayed(new Runnable() {
                     @Override
                     public void run() {
-                        pointerTouch(gx, gy, 0);
-                        postDelayed(new Runnable() {
-                            @Override
-                            public void run() {
-                                pointerTouch(gx, gy, 2);
-                            }
-                        }, 35);
-                        pendingSingleClickRunnable = null;
+                        pointerTouch(gx, gy, 2);
                     }
-                };
-                postDelayed(pendingSingleClickRunnable, 140);
+                }, 35);
             } else if (res == GESTURE_DRAG_END || menuDragging) {
                 menuDragging = false;
-                lastShowroomTapTime = 0;
                 float gx = safeMenuGestureGetX();
                 float gy = safeMenuGestureGetY();
                 if (pointerMiddle != null && w > 0 && h > 0) {
@@ -1974,10 +1900,6 @@ final class RacingControlsView extends View {
             return true;
         } else if (action == MotionEvent.ACTION_CANCEL) {
             removeCallbacks(menuHoldRunnable);
-            if (pendingSingleClickRunnable != null) {
-                removeCallbacks(pendingSingleClickRunnable);
-                pendingSingleClickRunnable = null;
-            }
             orbitIndicatorActive = false;
             orbitIndicatorEngaged = false;
             safeMenuGestureReset();
