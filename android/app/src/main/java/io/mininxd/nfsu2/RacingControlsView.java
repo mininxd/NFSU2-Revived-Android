@@ -801,7 +801,7 @@ final class RacingControlsView extends View {
                     canvas.drawLine(x - baseRadius - tickLen, y, x - baseRadius + 2f, y, orbitPaint);
                     canvas.drawLine(x + baseRadius - 2f, y, x + baseRadius + tickLen, y, orbitPaint);
                     canvas.drawLine(x, y - baseRadius - tickLen, x, y - baseRadius + 2f, orbitPaint);
-                    canvas.drawLine(x, y + baseRadius - 2f, x, y + baseRadius + tickLen, y, orbitPaint);
+                    canvas.drawLine(x, y + baseRadius - 2f, x, y + baseRadius + tickLen, orbitPaint);
                 }
 
                 if (orbitIndicatorActive || orbitIndicatorAlpha > 0.01f) {
