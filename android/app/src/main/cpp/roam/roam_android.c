@@ -802,7 +802,7 @@ static void hook_sub_004a5d90(void) {
 
     int busy = (rh_mem_committed(G_FE_BUSY, 4) && MR32(G_FE_BUSY) != 0);
 
-    if ((x == 0.f && y == 0.f) || busy) {
+    if (x == 0.f && y == 0.f) {
         if (turning == v) {
             MRF32(v + VW_TURN) = 0.f;
             MRF32(v + VW_TILT) = 0.f;
@@ -1470,10 +1470,13 @@ static void roam_android_install_hooks(void) {
     // Also update k_functions dispatch table
     uintptr_t k_4a = lib_base + 0x9778160;
     if (*(uint32_t *)k_4a == 0x004a5d90) {
+        if (!s_orig_4a5d90) {
+            s_orig_4a5d90 = *(void **)(k_4a + 8);
+        }
         uintptr_t page = k_4a & ~((uintptr_t)page_sz - 1);
         mprotect((void *)page, page_sz * 2, PROT_READ | PROT_WRITE);
         *(void **)(k_4a + 8) = (void *)hook_sub_004a5d90;
-        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Updated k_functions[0x004a5d90]");
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Updated k_functions[0x004a5d90] (orig: %p)", s_orig_4a5d90);
     }
 
     uintptr_t k_5c = lib_base + 0x9793cd0;

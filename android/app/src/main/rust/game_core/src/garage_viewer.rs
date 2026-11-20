@@ -100,16 +100,6 @@ impl GarageViewerEngine {
 
         self.last_viewer_addr.store(viewer_va, Ordering::Release);
 
-        // Check if frontend is busy (e.g. GenericDialog.fng is up)
-        let fe_busy_ptr = guest_base.add(G_FE_BUSY as usize) as *const u32;
-        if *fe_busy_ptr != 0 {
-            let turn_ptr = guest_base.add((viewer_va + VW_TURN) as usize) as *mut f32;
-            let tilt_ptr = guest_base.add((viewer_va + VW_TILT) as usize) as *mut f32;
-            *turn_ptr = 0.0;
-            *tilt_ptr = 0.0;
-            return;
-        }
-
         let now = Instant::now();
         let dt = {
             if let Ok(mut guard) = self.last_frame_time.lock() {
