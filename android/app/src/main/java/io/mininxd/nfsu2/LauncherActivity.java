@@ -781,7 +781,6 @@ public final class LauncherActivity extends Activity {
     }
 
     private void chooseDriver() {
-        GpuDrivers.autoDiscoverStorageDrivers(this);
         List<GpuDrivers.Driver> drivers = GpuDrivers.list(this);
         String[] names = new String[drivers.size() + 1];
         names[0] = "System default driver";
@@ -790,20 +789,22 @@ public final class LauncherActivity extends Activity {
             names[i + 1] = drivers.get(i).name;
             if (drivers.get(i).id.equals(GpuDrivers.selectedId(this))) selected = i + 1;
         }
-        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle("Vulkan Driver")
+        AlertDialog.Builder builder = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle("Vulkan Driver")
                 .setSingleChoiceItems(names, selected, (dialog, which) -> {
                     GpuDrivers.select(this, which == 0 ? GpuDrivers.SYSTEM_DRIVER_ID : drivers.get(which - 1).id);
                     refreshOptions(); dialog.dismiss();
                 })
                 .setPositiveButton("Import ZIP", (dialog, which) -> startActivityForResult(
                         new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE),
-                        REQUEST_DRIVER_ZIP))
-                .setNeutralButton("Scan Storage", (dialog, which) -> {
-                    GpuDrivers.autoDiscoverStorageDrivers(this);
-                    refreshOptions();
-                    chooseDriver();
-                })
-                .setNegativeButton("Back", null).show();
+                        REQUEST_DRIVER_ZIP));
+        if (!drivers.isEmpty()) {
+            builder.setNeutralButton("Delete Custom Drivers", (dialog, which) -> {
+                GpuDrivers.clearAll(this);
+                refreshOptions();
+                message("Vulkan Driver", "All custom drivers removed. Using system default driver.");
+            });
+        }
+        builder.setNegativeButton("Back", null).show();
     }
 
 

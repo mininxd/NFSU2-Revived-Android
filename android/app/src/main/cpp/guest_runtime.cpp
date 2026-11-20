@@ -1249,10 +1249,13 @@ void setGuestPointerMiddle(float x,float y,int phase,float dx,float dy){
     {
         std::lock_guard<std::mutex> lock(inputMutex);
         inputMouseButtons[2]=(phase!=2)?0x80:0;
-        int32_t mx=int32_t(dx*(renderWidth?renderWidth:640));
-        int32_t my=int32_t(dy*(renderHeight?renderHeight:480));
+        int32_t mx=int32_t(dx*(renderWidth?renderWidth:640)*2.5f);
+        int32_t my=int32_t(dy*(renderHeight?renderHeight:480)*2.5f);
         inputMouseX+=mx;
         inputMouseY+=my;
+    }
+    if(memory&&memory->writable(0x008763f7u,1)){
+        *static_cast<uint8_t*>(ptr(0x008763f7u,1))=(phase!=2)?1:0;
     }
     enqueueGuestPointerMiddle(phase);
 }

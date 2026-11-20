@@ -54,34 +54,6 @@ pub extern "system" fn Java_io_mininxd_nfsu2_GameActivity_nativeGarageTwoFingerD
 }
 
 #[no_mangle]
-pub extern "system" fn Java_io_mininxd_nfsu2_GameActivity_nativePointerMiddle(
-    _env: JNIEnv,
-    _class: JClass,
-    _x: jfloat,
-    _y: jfloat,
-    phase: jint,
-    dx: jfloat,
-    dy: jfloat,
-) {
-    let active = phase != 2;
-    GLOBAL_GARAGE_VIEWER.set_two_finger_drag(dx, dy, active);
-}
-
-#[no_mangle]
-pub extern "system" fn Java_io_mininxd_nfsu2_GameActivity_nativeDirectPointerMiddle(
-    _env: JNIEnv,
-    _class: JClass,
-    _x: jfloat,
-    _y: jfloat,
-    phase: jint,
-    dx: jfloat,
-    dy: jfloat,
-) {
-    let active = phase != 2;
-    GLOBAL_GARAGE_VIEWER.set_two_finger_drag(dx, dy, active);
-}
-
-#[no_mangle]
 pub extern "system" fn Java_com_nfsu2_androidevolved_GameActivity_nativeCameraStickInput(
     _env: JNIEnv,
     _class: JClass,
@@ -110,20 +82,6 @@ pub extern "system" fn Java_com_nfsu2_androidevolved_GameActivity_nativeGarageTw
     active: jboolean,
 ) {
     GLOBAL_GARAGE_VIEWER.set_two_finger_drag(dx, dy, active != 0);
-}
-
-#[no_mangle]
-pub extern "system" fn Java_com_nfsu2_androidevolved_GameActivity_nativePointerMiddle(
-    _env: JNIEnv,
-    _class: JClass,
-    _x: jfloat,
-    _y: jfloat,
-    phase: jint,
-    dx: jfloat,
-    dy: jfloat,
-) {
-    let active = phase != 2;
-    GLOBAL_GARAGE_VIEWER.set_two_finger_drag(dx, dy, active);
 }
 
 #[no_mangle]

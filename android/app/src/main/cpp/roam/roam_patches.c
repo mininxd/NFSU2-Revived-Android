@@ -122,6 +122,20 @@ void extraoptions_init_patches(void) {
         MR32(0x007F7C50u) = 0xFFFFFFFFu; // CIVIC
         MR32(0x007F7C54u) = 0xFFFFFFFFu; // RSX
     }
+    // Quick Race car select loop limit: 0x1C (28 cars, includes 106 & Corsa)
+    if (rh_mem_committed(0x004FEB9Du, 1)) {
+        MR8(0x004FEB9Du) = 0x1C;
+    }
+    // Career mode starter cars count (adds 106 and Corsa into car lot)
+    if (rh_mem_committed(0x007F6DBEu, 2)) {
+        MR8(0x007F6DBEu) = 0x07;
+        MR8(0x007F6DBFu) = 0x06;
+    }
+    // Profile regional cars unlock flag at 0x00532908: mov eax, 1 (b8 01 00 00 00)
+    if (rh_mem_committed(0x00532908u, 5)) {
+        MR8(0x00532908u) = 0xB8;
+        MR32(0x00532909u) = 0x00000001;
+    }
 
     // Unlock all customization parts at start
     const char *e_parts = getenv("NFSU2_UNLOCK_PARTS");
