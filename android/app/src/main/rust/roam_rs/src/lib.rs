@@ -12,6 +12,7 @@ pub mod engine;
 pub mod sync_guard;
 pub mod switch;
 pub mod postoffice;
+pub mod peer;
 
 pub use crc::*;
 pub use hash::*;
@@ -25,3 +26,4 @@ pub use engine::*;
 pub use sync_guard::*;
 pub use switch::*;
 pub use postoffice::*;
+pub use peer::*;

@@ -24,7 +24,11 @@
 - [x] **`AdhocPostofficeClient.java` Protocol Engine -> `roam_rs::postoffice`**:
   - Binary opcodes: `OPCODE_PING`, `OPCODE_LOGIN`, `OPCODE_CONNECT`, `OPCODE_DISCONNECT`, `OPCODE_CONNECT_BSSID`, `OPCODE_CHAT`
   - Postoffice PDP 24-byte registration and 14-byte datagram header parsing.
-- [ ] **`AdhocRoamClient.java` Peer Coordinator**: Migrate peer management and state synchronization to `roam_rs`.
+- [x] **`AdhocRoamClient.java` Peer Coordinator -> `roam_rs::peer`**:
+  - Thread-safe native peer registry (`PeerRegistry`) and connection state machine (`RoamCoordinator`)
+  - Virtual MAC generation, validation, and zero-allocation string parsing/formatting
+  - Dynamic MAC-to-IPv4 routing with automatic Prometheus adhoc synthetic IP fallback
+  - Automatic heartbeat stale peer pruning and C-ABI export bindings (`nfs_roam_peer_*`)
 
 ### Wave 2: Win32 Emulation & Host Runtime (Active)
 - [x] **`src/shims/win32_shims.c` -> `graphics_cache::win32_shims`**:
