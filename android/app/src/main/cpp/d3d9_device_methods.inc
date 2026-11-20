@@ -153,11 +153,20 @@ case 44:{*argumentCount=3;
         if(s_cull_proj) s_cull_proj(reinterpret_cast<const float*>(matrix));
         static int(*s_cull_bypass)() = nullptr;
         if(!s_cull_bypass) s_cull_bypass = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_camera_cull_is_bypassed"));
+        static int(*s_cull_is_td)() = nullptr;
+        if(!s_cull_is_td) s_cull_is_td = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_camera_cull_is_top_down"));
+        static int(*s_cull_is_or)() = nullptr;
+        if(!s_cull_is_or) s_cull_is_or = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_camera_cull_is_ortho"));
+        static int(*s_cull_is_sub)() = nullptr;
+        if(!s_cull_is_sub) s_cull_is_sub = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_camera_cull_is_sub_viewport"));
         static float(*s_cull_get_far)() = nullptr;
         if(!s_cull_get_far) s_cull_get_far = reinterpret_cast<float(*)()>(resolveGraphicsCacheSymbol("nfs_camera_cull_get_far_distance"));
         float farDist = s_cull_get_far ? s_cull_get_far() : 0.0f;
         int bypassed = s_cull_bypass ? s_cull_bypass() : 0;
-        if(farDist >= 30.0f && !bypassed && matrix->_34 == 1.0f && matrix->_33 > 1.0f){
+        int is_special_cam = (s_cull_is_td && s_cull_is_td()) ||
+                             (s_cull_is_or && s_cull_is_or()) ||
+                             (s_cull_is_sub && s_cull_is_sub());
+        if(farDist >= 30.0f && !bypassed && !is_special_cam && matrix->_34 == 1.0f && matrix->_33 > 1.0f){
             float zn = -matrix->_43 / matrix->_33;
             if(zn > 0.01f && zn < farDist){
                 float currentZf = (matrix->_33 > 1.0001f) ? (zn * matrix->_33 / (matrix->_33 - 1.0f)) : 10000.0f;
@@ -190,6 +199,18 @@ case 47:{*argumentCount=2;
     auto vp=static_cast<const D3DVIEWPORT9*>(pointer(args[1]));
     if(s_filter_vp && vp && s_filter_vp(reinterpret_cast<const uint32_t*>(vp))){
         return D3D_OK;
+    }
+    if(vp) {
+        static void(*s_cull_sub_vp)(int) = nullptr;
+        if(!s_cull_sub_vp) s_cull_sub_vp = reinterpret_cast<void(*)(int)>(resolveGraphicsCacheSymbol("nfs_camera_cull_set_sub_viewport"));
+        if(s_cull_sub_vp) {
+            static uint32_t s_max_vp_w = 0, s_max_vp_h = 0;
+            if (vp->Width > s_max_vp_w) s_max_vp_w = vp->Width;
+            if (vp->Height > s_max_vp_h) s_max_vp_h = vp->Height;
+            int is_sub = (s_max_vp_w > 0 && s_max_vp_h > 0 &&
+                          (vp->Width < (s_max_vp_w * 3 / 4) || vp->Height < (s_max_vp_h * 3 / 4))) ? 1 : 0;
+            s_cull_sub_vp(is_sub);
+        }
     }
     static auto s_vk_vp = reinterpret_cast<int(*)(int,int,int,int)>(resolveGraphicsCacheSymbol("nfs_native_vk_set_viewport"));
     if(s_vk_vp && vp && s_vk_vp(vp->X, vp->Y, vp->Width, vp->Height) == 0) return D3D_OK;

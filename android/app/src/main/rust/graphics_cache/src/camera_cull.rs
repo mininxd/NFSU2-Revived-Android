@@ -50,6 +50,7 @@ pub struct CameraCullEngine {
     is_ortho: AtomicBool,
     is_screen_space: AtomicBool,
     is_top_down: AtomicBool,
+    is_sub_viewport: AtomicBool,
     bypass: AtomicBool,
     // Metrics
     total_draws: AtomicU64,
@@ -88,6 +89,7 @@ impl CameraCullEngine {
             is_ortho: AtomicBool::new(false),
             is_screen_space: AtomicBool::new(false),
             is_top_down: AtomicBool::new(false),
+            is_sub_viewport: AtomicBool::new(false),
             bypass: AtomicBool::new(false),
             total_draws: AtomicU64::new(0),
             culled_draws: AtomicU64::new(0),
@@ -168,18 +170,25 @@ impl CameraCullEngine {
         self.v32.store(m[14].to_bits(), Ordering::Relaxed);
         self.view_valid.store(true, Ordering::Release);
 
-        // Detect top-down camera (e.g. minimap radar pass):
-        // Horizontal look vector squared (m[2]^2 + m[6]^2) < 0.15 indicates view direction is vertical (looking down).
-        let horiz_sq = m[2] * m[2] + m[6] * m[6];
-        self.is_top_down.store(horiz_sq < 0.15, Ordering::Release);
+        // Detect top-down / overhead camera (e.g. minimap radar pass or fullscreen world map):
+        // In D3D row-major matrices, eye-space forward vector in world coordinates is (m[2], m[6], m[10]).
+        // Looking down along world vertical (Z-up or Y-up) results in:
+        // 1. Steep vertical component (|m[10]| > 0.35 if Z-up, or |m[6]| > 0.35 if Y-up), or
+        // 2. Small horizontal component (m[2]^2 + m[6]^2 < 0.60 if Z-up, or m[2]^2 + m[10]^2 < 0.60 if Y-up).
+        let z_steep = m[10].abs() > 0.35;
+        let y_steep = m[6].abs() > 0.35;
+        let horiz_z_sq = m[2] * m[2] + m[6] * m[6];
+        let horiz_y_sq = m[2] * m[2] + m[10] * m[10];
+        let top_down = z_steep || y_steep || (horiz_z_sq < 0.60) || (horiz_y_sq < 0.60);
+        self.is_top_down.store(top_down, Ordering::Release);
     }
 
     /// Updates D3DTS_PROJECTION matrix, detecting orthographic vs perspective projections.
     pub fn update_proj_matrix(&self, m: &[f32; 16]) {
         // In DirectX projection matrix:
         // Perspective has m[11] == 1.0 (or -1.0) and m[15] == 0.0.
-        // Orthographic has m[11] == 0.0 and m[15] == 1.0.
-        let ortho = (m[11].abs() < 1e-4) && ((m[15] - 1.0).abs() < 1e-3);
+        // Orthographic has m[11] == 0.0 and m[15] != 0.0.
+        let ortho = m[11].abs() < 1e-3;
         self.is_ortho.store(ortho, Ordering::Release);
 
         if !ortho && m[0].abs() > 1e-4 && m[5].abs() > 1e-4 {
@@ -212,6 +221,17 @@ impl CameraCullEngine {
         self.is_screen_space.store(is_screen, Ordering::Release);
     }
 
+    /// Sets whether the active rendering viewport is a sub-viewport (minimap radar, rearview mirror).
+    #[inline]
+    pub fn set_sub_viewport(&self, is_sub: bool) {
+        self.is_sub_viewport.store(is_sub, Ordering::Release);
+    }
+
+    #[inline]
+    pub fn is_sub_viewport(&self) -> bool {
+        self.is_sub_viewport.load(Ordering::Relaxed)
+    }
+
     /// Sets explicit cull bypass flag (e.g. during minimap radar rendering pass).
     #[inline]
     pub fn set_bypass(&self, bypass: bool) {
@@ -240,11 +260,13 @@ impl CameraCullEngine {
             return false;
         }
 
-        // Never cull 2D screen-space primitives (UI, HUD, minimap, speedometer)
-        // or orthographic / top-down cameras (minimap radar)
+        // Never cull 2D screen-space primitives (UI, HUD, minimap, speedometer),
+        // orthographic / top-down cameras (minimap radar, world map),
+        // or sub-viewport rendering passes (radar minimap PIP, rearview mirror)
         if self.is_screen_space.load(Ordering::Relaxed)
             || self.is_ortho.load(Ordering::Relaxed)
             || self.is_top_down.load(Ordering::Relaxed)
+            || self.is_sub_viewport.load(Ordering::Relaxed)
         {
             return false;
         }
@@ -423,6 +445,26 @@ pub unsafe extern "C" fn nfs_camera_cull_update_world(world_ptr: *const f32) {
 #[no_mangle]
 pub unsafe extern "C" fn nfs_camera_cull_set_screen_space(is_screen_space: i32) {
     GLOBAL_CAMERA_CULL.set_screen_space(is_screen_space != 0);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_camera_cull_set_sub_viewport(is_sub: i32) {
+    GLOBAL_CAMERA_CULL.set_sub_viewport(is_sub != 0);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_camera_cull_is_top_down() -> i32 {
+    if GLOBAL_CAMERA_CULL.is_top_down.load(Ordering::Relaxed) { 1 } else { 0 }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_camera_cull_is_ortho() -> i32 {
+    if GLOBAL_CAMERA_CULL.is_ortho.load(Ordering::Relaxed) { 1 } else { 0 }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn nfs_camera_cull_is_sub_viewport() -> i32 {
+    if GLOBAL_CAMERA_CULL.is_sub_viewport() { 1 } else { 0 }
 }
 
 #[no_mangle]
@@ -607,8 +649,16 @@ mod tests {
         top_down_view[5] = 0.0;
         top_down_view[10] = 1.0; // looking down
         top_down_view[15] = 1.0;
-        // column 2: m[2]=0, m[6]=0, m[10]=1 -> horiz_sq = 0.0 < 0.15
         engine.update_view_matrix(&top_down_view);
         assert!(!engine.test_draw());
+
+        // 3. Sub-viewport radar minimap pass (preserves all draw calls regardless of camera)
+        let engine_sub = CameraCullEngine::new();
+        engine_sub.set_enabled(true);
+        engine_sub.update_camera([0.0, 0.0, 0.0], [0.0, 0.0, 1.0]);
+        engine_sub.update_world_matrix(&world_back);
+        assert!(engine_sub.test_draw()); // Culled when not sub-viewport
+        engine_sub.set_sub_viewport(true);
+        assert!(!engine_sub.test_draw()); // Not culled in sub-viewport!
     }
 }

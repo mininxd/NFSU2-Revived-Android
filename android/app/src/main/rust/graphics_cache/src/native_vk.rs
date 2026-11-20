@@ -577,11 +577,17 @@ pub unsafe extern "C" fn nfs_native_vk_present() -> c_int {
 
 #[no_mangle]
 pub unsafe extern "C" fn nfs_native_vk_begin_scene() -> c_int {
+    if nfs_native_vk_is_active() == 0 {
+        return -1;
+    }
     0
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn nfs_native_vk_end_scene() -> c_int {
+    if nfs_native_vk_is_active() == 0 {
+        return -1;
+    }
     0
 }
 
@@ -592,6 +598,9 @@ pub unsafe extern "C" fn nfs_native_vk_clear(
     _z: f32,
     _stencil: u32,
 ) -> c_int {
+    if nfs_native_vk_is_active() == 0 {
+        return -1;
+    }
     0
 }
 
@@ -602,6 +611,9 @@ pub unsafe extern "C" fn nfs_native_vk_set_viewport(
     _width: i32,
     _height: i32,
 ) -> c_int {
+    if nfs_native_vk_is_active() == 0 {
+        return -1;
+    }
     0
 }
 
@@ -610,6 +622,9 @@ pub unsafe extern "C" fn nfs_native_vk_set_transform(
     _state: u32,
     _matrix: *const f32,
 ) -> c_int {
+    if nfs_native_vk_is_active() == 0 {
+        return -1;
+    }
     0
 }
 
@@ -618,6 +633,9 @@ pub unsafe extern "C" fn nfs_native_vk_set_render_state(
     _state: u32,
     _value: u32,
 ) -> c_int {
+    if nfs_native_vk_is_active() == 0 {
+        return -1;
+    }
     0
 }
 
@@ -626,6 +644,9 @@ pub unsafe extern "C" fn nfs_native_vk_set_texture(
     _stage: u32,
     _texture_id: u32,
 ) -> c_int {
+    if nfs_native_vk_is_active() == 0 {
+        return -1;
+    }
     0
 }
 
@@ -635,8 +656,11 @@ pub unsafe extern "C" fn nfs_native_vk_draw_primitive(
     _start_vertex: u32,
     _prim_count: u32,
 ) -> c_int {
+    if nfs_native_vk_is_active() == 0 {
+        return -1;
+    }
     TOTAL_VK_DRAWS.fetch_add(1, Ordering::Relaxed);
-    0
+    -1
 }
 
 #[no_mangle]
@@ -648,8 +672,11 @@ pub unsafe extern "C" fn nfs_native_vk_draw_indexed(
     _start_idx: u32,
     _prim_count: u32,
 ) -> c_int {
+    if nfs_native_vk_is_active() == 0 {
+        return -1;
+    }
     TOTAL_VK_DRAWS.fetch_add(1, Ordering::Relaxed);
-    0
+    -1
 }
 
 #[no_mangle]
@@ -659,8 +686,11 @@ pub unsafe extern "C" fn nfs_native_vk_draw_primitive_up(
     _vertex_data: *const c_void,
     _stride: u32,
 ) -> c_int {
+    if nfs_native_vk_is_active() == 0 {
+        return -1;
+    }
     TOTAL_VK_DRAWS.fetch_add(1, Ordering::Relaxed);
-    0
+    -1
 }
 
 #[no_mangle]
@@ -674,8 +704,11 @@ pub unsafe extern "C" fn nfs_native_vk_draw_indexed_primitive_up(
     _vertex_data: *const c_void,
     _stride: u32,
 ) -> c_int {
+    if nfs_native_vk_is_active() == 0 {
+        return -1;
+    }
     TOTAL_VK_DRAWS.fetch_add(1, Ordering::Relaxed);
-    0
+    -1
 }
 
 #[no_mangle]
