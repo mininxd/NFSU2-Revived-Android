@@ -16,10 +16,12 @@ pub mod adpf;
 pub mod steering_pacer;
 pub mod tuner;
 pub mod logger;
+pub mod soc_tuner;
 pub use adpf::*;
 pub use steering_pacer::*;
 pub use tuner::*;
 pub use logger::*;
+pub use soc_tuner::*;
 
 use std::fs;
 use std::os::raw::{c_int, c_long};
@@ -206,14 +208,15 @@ impl CpuCluster {
             (1u64 << total_cores) - 1
         };
 
-        // All-cores unrestricted policy: allow all detected CPU cores to be utilized
-        // so no cores sit idling and Qualcomm/MediaTek governors can scale frequencies freely.
-        let perf_cores_mask = all_cores_mask;
+        let mut perf_cores_mask = prime_cores_mask | mid_cores_mask;
+        if perf_cores_mask == 0 {
+            perf_cores_mask = all_cores_mask;
+        }
         if prime_cores_mask == 0 {
-            prime_cores_mask = all_cores_mask;
+            prime_cores_mask = perf_cores_mask;
         }
         if mid_cores_mask == 0 {
-            mid_cores_mask = all_cores_mask;
+            mid_cores_mask = perf_cores_mask;
         }
 
         let prime_core_count = prime_cores_mask.count_ones() as usize;
@@ -296,6 +299,17 @@ impl CpuCluster {
                             if n == "GuestBootWorker" || n == "RenderThread" || n == "main"
                                 || n.contains("MainRender") || n.contains("dxvk")
                             {
+                                let perf_m = if self.perf_cores_mask != 0 {
+                                    self.perf_cores_mask as c_long
+                                } else {
+                                    all_cores_mask as c_long
+                                };
+                                let _ = libc::syscall(
+                                    libc::SYS_sched_setaffinity,
+                                    tid as c_int,
+                                    std::mem::size_of::<c_long>(),
+                                    &perf_m as *const c_long,
+                                );
                                 let _ = libc::setpriority(libc::PRIO_PROCESS, tid as u32, -20);
                             } else if n.starts_with("AAudio") || n.contains("audio") || n.contains("Audio") {
                                 let _ = libc::setpriority(libc::PRIO_PROCESS, tid as u32, -16);

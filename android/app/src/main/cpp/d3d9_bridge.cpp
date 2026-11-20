@@ -318,9 +318,18 @@ void setD3D9HostWindow(ANativeWindow* window){
     hostWindow=window;
 #ifdef __ANDROID__
     if(window){
+        typedef int32_t (*PFN_ANativeWindow_setFrameRateWithChangeFrameRateStrategy)(ANativeWindow*, float, int8_t, int8_t);
         typedef int32_t (*PFN_ANativeWindow_setFrameRate)(ANativeWindow*, float, int8_t);
-        static auto pfnSetFrameRate = reinterpret_cast<PFN_ANativeWindow_setFrameRate>(dlsym(RTLD_DEFAULT, "ANativeWindow_setFrameRate"));
-        if(pfnSetFrameRate){
+        static auto pfnStrategy = reinterpret_cast<PFN_ANativeWindow_setFrameRateWithChangeFrameRateStrategy>(
+            dlsym(RTLD_DEFAULT, "ANativeWindow_setFrameRateWithChangeFrameRateStrategy"));
+        static auto pfnSetFrameRate = reinterpret_cast<PFN_ANativeWindow_setFrameRate>(
+            dlsym(RTLD_DEFAULT, "ANativeWindow_setFrameRate"));
+
+        if(pfnStrategy){
+            // ANATIVEWINDOW_FRAME_RATE_COMPATIBILITY_DEFAULT = 0
+            // ANATIVEWINDOW_CHANGE_FRAME_RATE_ALWAYS = 1
+            pfnStrategy(window, 60.0f, 0, 1);
+        } else if(pfnSetFrameRate){
             pfnSetFrameRate(window, 60.0f, 0);
         }
     }

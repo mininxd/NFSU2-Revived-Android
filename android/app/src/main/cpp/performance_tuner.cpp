@@ -152,7 +152,11 @@ void tuneThread(ThreadRole role, const char* name) {
 
     switch (role) {
         case ThreadRole::RENDER_MAIN: {
-            sched_setaffinity(0, sizeof(cpu_set_t), &s_all_mask);
+            if (s_perf_cores_count > 0) {
+                sched_setaffinity(0, sizeof(cpu_set_t), &s_perf_mask);
+            } else {
+                sched_setaffinity(0, sizeof(cpu_set_t), &s_all_mask);
+            }
             setpriority(PRIO_PROCESS, 0, -20);
             break;
         }

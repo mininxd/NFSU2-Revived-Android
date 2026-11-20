@@ -206,6 +206,12 @@ public final class GameOptions {
             if ("ps2".equals(value)) value = "console";
             else if ("default".equals(value) || "xbox".equals(value)) value = "port";
         }
+        if (FPS.equals(key)) {
+            // Automatic migration of legacy 30 FPS default to 60 FPS
+            if ("30".equals(value) && !prefs(context).getBoolean("fps_explicitly_set_v2", false)) {
+                value = "60";
+            }
+        }
         if (WIDESCREEN.equals(key) && ("stretched".equals(value) || "hud".equals(value))) value = "off";
         for (String allowed : o.values) if (allowed.equals(value)) return value;
         return o.defaultValue;
@@ -217,6 +223,9 @@ public final class GameOptions {
     }
 
     static void set(Context context, String key, String value) {
+        if (FPS.equals(key)) {
+            prefs(context).edit().putBoolean("fps_explicitly_set_v2", true).apply();
+        }
         prefs(context).edit().putString(key, value).apply();
     }
 
