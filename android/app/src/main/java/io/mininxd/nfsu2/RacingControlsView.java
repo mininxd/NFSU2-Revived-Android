@@ -154,6 +154,64 @@ final class RacingControlsView extends View {
 
     private static native void nativeGarageZoom(float delta);
     private static native void nativeGarageResetView();
+    private static native float nativeCalculateSCurve(float rawX, float centerX, float halfWidth, float scale, float deadzone);
+    private static native void nativeAutoDimTouch(long nowMs);
+    private static native void nativeAutoDimSetGamepad(boolean active);
+    private static native float nativeAutoDimUpdate(long nowMs, long idleTimeoutMs, float minOpacity);
+    private static native void nativeAutoDimReset();
+
+    private static float safeCalculateSCurve(float rawX, float centerX, float halfWidth, float scale, float deadzone) {
+        if (!sGameCoreLoaded) {
+            return PerformanceCores.calculateSteeringProgressive(rawX, centerX, halfWidth, scale, deadzone);
+        }
+        try {
+            return nativeCalculateSCurve(rawX, centerX, halfWidth, scale, deadzone);
+        } catch (Throwable ignored) {
+            return PerformanceCores.calculateSteeringProgressive(rawX, centerX, halfWidth, scale, deadzone);
+        }
+    }
+
+    private static void safeAutoDimTouch(long nowMs) {
+        if (!sGameCoreLoaded) return;
+        try {
+            nativeAutoDimTouch(nowMs);
+        } catch (Throwable ignored) {}
+    }
+
+    private static void safeAutoDimSetGamepad(boolean active) {
+        if (!sGameCoreLoaded) return;
+        try {
+            nativeAutoDimSetGamepad(active);
+        } catch (Throwable ignored) {}
+    }
+
+    private static float safeAutoDimUpdate(long nowMs, long idleTimeoutMs, float minOpacity) {
+        if (!sGameCoreLoaded) return 1.0f;
+        try {
+            return nativeAutoDimUpdate(nowMs, idleTimeoutMs, minOpacity);
+        } catch (Throwable ignored) {
+            return 1.0f;
+        }
+    }
+
+    private static void safeAutoDimReset() {
+        if (!sGameCoreLoaded) return;
+        try {
+            nativeAutoDimReset();
+        } catch (Throwable ignored) {}
+    }
+
+    // Auto-Dim Controls State
+    private float currentDimFactor = 1.0f;
+    private boolean autoDimEnabled = true;
+
+    public void notifyGamepadActive(boolean active) {
+        safeAutoDimSetGamepad(active);
+        if (active && currentDimFactor > 0.20f) {
+            currentDimFactor = Math.max(0.15f, currentDimFactor - 0.15f);
+            invalidate();
+        }
+    }
 
     private static void safeGarageZoom(float delta) {
         if (!sGameCoreLoaded) return;
@@ -687,6 +745,20 @@ final class RacingControlsView extends View {
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         if (hiddenByGamepad && !editing) return;
+
+        long now = SystemClock.uptimeMillis();
+        if (autoDimEnabled && !editing && racing) {
+            float nextDim = safeAutoDimUpdate(now, 3500L, 0.15f);
+            if (Math.abs(nextDim - currentDimFactor) > 0.005f) {
+                currentDimFactor = nextDim;
+                invalidate();
+            } else {
+                currentDimFactor = nextDim;
+            }
+        } else {
+            currentDimFactor = 1.0f;
+        }
+
         canvas.save();
         canvas.scale(scale, scale);
         if (editing) canvas.drawColor(0x77000000);
@@ -869,7 +941,7 @@ final class RacingControlsView extends View {
         float cx = c.area.centerX(), cy = c.area.centerY();
         float r = Math.min(c.area.width(), c.area.height()) / 2f;
 
-        float op = (c.scan == EDIT) ? Math.max(0.40f, controlOpacity) : controlOpacity;
+        float op = (c.scan == EDIT) ? Math.max(0.40f, controlOpacity) : (controlOpacity * currentDimFactor);
         float effectiveOpacity = on ? Math.min(1.0f, op * 1.4f + 0.15f) : op;
         if (editing) effectiveOpacity = 1.0f;
 
@@ -1723,7 +1795,7 @@ final class RacingControlsView extends View {
     }
 
     private void steer(Control c, float x) {
-        c.steering = PerformanceCores.calculateSteering(x, c.area.centerX(), c.area.width() / 2f, scale);
+        c.steering = safeCalculateSCurve(x, c.area.centerX(), c.area.width() / 2f, scale, 0.04f);
         keys.set(keyLeft, c.steering < -0.18f);
         keys.set(keyRight, c.steering > 0.18f);
     }
@@ -1974,6 +2046,12 @@ final class RacingControlsView extends View {
 
     @Override
     public boolean onTouchEvent(MotionEvent e) {
+        long now = SystemClock.uptimeMillis();
+        safeAutoDimTouch(now);
+        if (currentDimFactor < 0.95f) {
+            currentDimFactor = 1.0f;
+            invalidate();
+        }
         if (editing) return editTouch(e);
         int action = e.getActionMasked(), index = e.getActionIndex(), id = e.getPointerId(index);
 

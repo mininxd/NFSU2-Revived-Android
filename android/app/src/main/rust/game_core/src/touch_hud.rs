@@ -4,6 +4,7 @@
 //! zero-allocation multi-touch finger tracking, DirectInput scancode generation,
 //! and screen-space vertex quad synthesis for direct GLES/Vulkan rendering.
 
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering};
 use std::sync::RwLock;
 
 // ---------------------------------------------------------------------------
@@ -477,4 +478,108 @@ pub unsafe extern "C" fn nfs_touch_hud_process_motion(
             }
         }
     });
+}
+
+// ---------------------------------------------------------------------------
+// Auto-Dim Engine and Progressive S-Curve Steering
+// ---------------------------------------------------------------------------
+
+pub struct AutoDimEngine {
+    last_interaction_ms: AtomicU64,
+    gamepad_active: AtomicBool,
+    current_dim_x1000: AtomicI32,
+}
+
+impl AutoDimEngine {
+    pub const fn new() -> Self {
+        Self {
+            last_interaction_ms: AtomicU64::new(0),
+            gamepad_active: AtomicBool::new(false),
+            current_dim_x1000: AtomicI32::new(1000),
+        }
+    }
+
+    pub fn record_touch(&self, now_ms: u64) {
+        self.last_interaction_ms.store(now_ms, Ordering::Release);
+        self.gamepad_active.store(false, Ordering::Release);
+        self.current_dim_x1000.store(1000, Ordering::Release);
+    }
+
+    pub fn set_gamepad_active(&self, active: bool) {
+        self.gamepad_active.store(active, Ordering::Release);
+    }
+
+    pub fn update_dim(&self, now_ms: u64, idle_timeout_ms: u64, min_opacity: f32) -> f32 {
+        let last = self.last_interaction_ms.load(Ordering::Acquire);
+        let gamepad = self.gamepad_active.load(Ordering::Acquire);
+        let mut cur = self.current_dim_x1000.load(Ordering::Acquire) as f32 / 1000.0;
+
+        let target = if gamepad || (last > 0 && now_ms.saturating_sub(last) > idle_timeout_ms) {
+            min_opacity.clamp(0.0, 0.40)
+        } else {
+            1.0
+        };
+
+        if (cur - target).abs() > 0.01 {
+            cur += (target - cur) * 0.12;
+            self.current_dim_x1000.store((cur * 1000.0) as i32, Ordering::Release);
+        } else {
+            cur = target;
+            self.current_dim_x1000.store((target * 1000.0) as i32, Ordering::Release);
+        }
+
+        cur
+    }
+
+    pub fn reset(&self) {
+        self.last_interaction_ms.store(0, Ordering::Release);
+        self.gamepad_active.store(false, Ordering::Release);
+        self.current_dim_x1000.store(1000, Ordering::Release);
+    }
+}
+
+pub static GLOBAL_AUTO_DIM: AutoDimEngine = AutoDimEngine::new();
+
+/// Calculates progressive S-curve steering deflection for touch controls.
+#[inline]
+pub fn calculate_scurve_steering(raw_x: f32, center_x: f32, half_width: f32, scale: f32, deadzone: f32) -> f32 {
+    if scale <= 0.0 || half_width <= 0.0 {
+        return 0.0;
+    }
+    let norm = ((raw_x / scale) - center_x) / half_width;
+    let clamped = norm.clamp(-1.0, 1.0);
+    let abs_val = clamped.abs();
+    let dz = deadzone.clamp(0.0, 0.40);
+    if abs_val <= dz {
+        return 0.0;
+    }
+    let scaled = (abs_val - dz) / (1.0 - dz);
+    // S-curve: 35% linear + 65% cubic
+    let curved = 0.35 * scaled + 0.65 * scaled * scaled * scaled;
+    if clamped < 0.0 { -curved } else { curved }
+}
+
+#[no_mangle]
+pub extern "C" fn nfs_touch_scurve(raw_x: f32, center_x: f32, half_width: f32, scale: f32, deadzone: f32) -> f32 {
+    calculate_scurve_steering(raw_x, center_x, half_width, scale, deadzone)
+}
+
+#[no_mangle]
+pub extern "C" fn nfs_autodim_touch(now_ms: u64) {
+    GLOBAL_AUTO_DIM.record_touch(now_ms);
+}
+
+#[no_mangle]
+pub extern "C" fn nfs_autodim_set_gamepad(active: i32) {
+    GLOBAL_AUTO_DIM.set_gamepad_active(active != 0);
+}
+
+#[no_mangle]
+pub extern "C" fn nfs_autodim_update(now_ms: u64, idle_timeout_ms: u64, min_opacity: f32) -> f32 {
+    GLOBAL_AUTO_DIM.update_dim(now_ms, idle_timeout_ms, min_opacity)
+}
+
+#[no_mangle]
+pub extern "C" fn nfs_autodim_reset() {
+    GLOBAL_AUTO_DIM.reset();
 }

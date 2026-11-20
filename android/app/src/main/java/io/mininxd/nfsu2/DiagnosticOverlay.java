@@ -69,8 +69,25 @@ public final class DiagnosticOverlay {
 
     // Native pure Rust telemetry buffer [fps, frame_time_ms, cpu_percent, gpu_busy]
     private final float[] telemetryBuffer = new float[4];
+    private final float[] frameMetricsBuffer = new float[6];
     public static native boolean nativeGetTelemetry(float[] outArray);
     public static native void nativeRecordPresent(long frameDurationNs);
+    public static native void nativeRecordFrameDuration(long durationNs);
+    public static native boolean nativeGetFrameMetrics(float[] outArray);
+
+    private static void safeRecordFrameDuration(long durationNs) {
+        try {
+            nativeRecordFrameDuration(durationNs);
+        } catch (Throwable ignored) {}
+    }
+
+    private static boolean safeGetFrameMetrics(float[] outArray) {
+        try {
+            return nativeGetFrameMetrics(outArray);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
 
     // CPU measurement state
     private long prevTotal = 0;
@@ -168,6 +185,7 @@ public final class DiagnosticOverlay {
                     long totalNs = frameMetrics.getMetric(FrameMetrics.TOTAL_DURATION);
                     if (totalNs > 0) {
                         lastFrameDurationMs = totalNs / 1_000_000.0f;
+                        safeRecordFrameDuration(totalNs);
                     }
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         try {
@@ -372,6 +390,14 @@ public final class DiagnosticOverlay {
             }
         }
         float frameTimeMs = (lastFrameDurationMs > 0.0f) ? lastFrameDurationMs : ((fps > 0.0f) ? (1000.0f / fps) : 0.0f);
+        float p1Low = 0.0f;
+        if (safeGetFrameMetrics(frameMetricsBuffer)) {
+            if (frameMetricsBuffer[0] > 0.0f) {
+                fps = frameMetricsBuffer[1];
+                frameTimeMs = frameMetricsBuffer[4];
+            }
+            p1Low = frameMetricsBuffer[2];
+        }
         String fpsStr = (fps >= 100.0f) ? String.format(Locale.US, "%.0f", fps) : String.format(Locale.US, "%.1f", fps);
 
         float cpu = (telemetryBuffer[2] > 0.0f) ? telemetryBuffer[2] : sampleCpuUsage();
@@ -431,7 +457,11 @@ public final class DiagnosticOverlay {
 
         if (isFull()) {
             StringBuilder sb = new StringBuilder();
-            sb.append("fps: ").append(fpsStr).append(" (").append(String.format(Locale.US, "%.1f ms", frameTimeMs)).append(")\n");
+            sb.append("fps: ").append(fpsStr);
+            if (p1Low > 0.0f) {
+                sb.append(" (1% low: ").append(Math.round(p1Low)).append(")");
+            }
+            sb.append(" (").append(String.format(Locale.US, "%.1f ms", frameTimeMs)).append(")\n");
 
             if (GameOptions.isRoamEnabled(activity)) {
                 if (adhocConnected) {

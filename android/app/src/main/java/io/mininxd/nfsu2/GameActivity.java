@@ -112,6 +112,44 @@ public final class GameActivity extends NativeActivity {
     private boolean statusHidden;
     private Runnable statusHideTask;
     private final boolean[] touchKeys=new boolean[256],sentKeys=new boolean[256];
+
+    private static native float nativeTiltProcess(float rawHorizontal, float sensitivity, boolean invert, float deadzone);
+    private static native void nativeTiltCalibrate();
+    private static native void nativeTiltReset();
+    private static native float nativeDInputRadialX(float x, float y, float deadzone, float curveWeight);
+    private static native float nativeDInputRadialY(float x, float y, float deadzone, float curveWeight);
+
+    private static float safeTiltProcess(float rawHorizontal, float sensitivity, boolean invert, float deadzone) {
+        try {
+            return nativeTiltProcess(rawHorizontal, sensitivity, invert, deadzone);
+        } catch (Throwable ignored) {
+            float turn = rawHorizontal * sensitivity * (invert ? -1 : 1);
+            return Math.max(-1f, Math.min(1f, turn));
+        }
+    }
+
+    private static void safeTiltCalibrate() {
+        try {
+            nativeTiltCalibrate();
+        } catch (Throwable ignored) {}
+    }
+
+    private static float safeDInputRadialX(float x, float y, float deadzone, float curveWeight) {
+        try {
+            return nativeDInputRadialX(x, y, deadzone, curveWeight);
+        } catch (Throwable ignored) {
+            return Math.abs(x) > deadzone ? x : 0f;
+        }
+    }
+
+    private static float safeDInputRadialY(float x, float y, float deadzone, float curveWeight) {
+        try {
+            return nativeDInputRadialY(x, y, deadzone, curveWeight);
+        } catch (Throwable ignored) {
+            return Math.abs(y) > deadzone ? y : 0f;
+        }
+    }
+
     private boolean tiltLeft,tiltRight,tiltEnabled,tiltCalibrate=true;
     private float tiltFiltered,tiltNeutral,tiltSensitivity=1;
     private boolean tiltInvert;
@@ -123,11 +161,15 @@ public final class GameActivity extends NativeActivity {
             int rotation=getWindowManager().getDefaultDisplay().getRotation();
             float horizontal=rotation==android.view.Surface.ROTATION_90?-event.values[1]:
                     rotation==android.view.Surface.ROTATION_270?event.values[1]:event.values[0];
-            if(tiltCalibrate) {tiltNeutral=horizontal;tiltFiltered=horizontal;tiltCalibrate=false;}
-            tiltFiltered+=.2f*(horizontal-tiltFiltered);
-            float turn=(tiltFiltered-tiltNeutral)*tiltSensitivity*(tiltInvert?-1:1);
+            if(tiltCalibrate) {
+                tiltNeutral=horizontal;
+                tiltFiltered=horizontal;
+                tiltCalibrate=false;
+                safeTiltCalibrate();
+            }
+            float turn = safeTiltProcess(horizontal, tiltSensitivity, tiltInvert, 0.04f);
             if(!foreground||!hasWindowFocus()||!tiltEnabled||touchControls==null||!touchControls.isDriving()) {setTiltKeys(false,false);return;}
-            setTiltKeys(turn<-(tiltLeft?.5f:.8f),turn>(tiltRight?.5f:.8f));
+            setTiltKeys(turn < -0.15f, turn > 0.15f);
         }
     };
     private int keyLeft = 0xcb;
@@ -900,6 +942,9 @@ public final class GameActivity extends NativeActivity {
     public boolean onGenericMotionEvent(android.view.MotionEvent event) {
         if ((event.getSource() & android.view.InputDevice.SOURCE_JOYSTICK) == android.view.InputDevice.SOURCE_JOYSTICK
                 && event.getAction() == android.view.MotionEvent.ACTION_MOVE) {
+            if (touchControls != null) {
+                touchControls.notifyGamepadActive(true);
+            }
             float rx_z = event.getAxisValue(android.view.MotionEvent.AXIS_Z);
             float rx_rot = event.getAxisValue(android.view.MotionEvent.AXIS_RX);
             float rx = Math.abs(rx_rot) >= Math.abs(rx_z) ? rx_rot : rx_z;
@@ -907,11 +952,10 @@ public final class GameActivity extends NativeActivity {
             float ry_z = event.getAxisValue(android.view.MotionEvent.AXIS_RZ);
             float ry_rot = event.getAxisValue(android.view.MotionEvent.AXIS_RY);
             float ry = Math.abs(ry_rot) >= Math.abs(ry_z) ? ry_rot : ry_z;
-            if (Math.abs(rx) > 0.15f || Math.abs(ry) > 0.15f) {
-                AdhocRoamClient.handleRightStick(rx, ry);
-            } else {
-                AdhocRoamClient.handleRightStick(0f, 0f);
-            }
+
+            float shapedX = safeDInputRadialX(rx, ry, 0.08f, 0.65f);
+            float shapedY = safeDInputRadialY(rx, ry, 0.08f, 0.65f);
+            AdhocRoamClient.handleRightStick(shapedX, shapedY);
         }
         return super.onGenericMotionEvent(event);
     }

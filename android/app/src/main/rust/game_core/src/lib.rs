@@ -2,22 +2,28 @@
 
 pub mod camera_stick;
 pub mod contrast_regulator;
+pub mod dinput_bridge;
+pub mod frame_metrics;
 pub mod garage_viewer;
 pub mod lightroom_contrast;
 pub mod menu_gesture;
 pub mod nitro_manager;
+pub mod tilt_fusion;
 pub mod touch_hud;
 
 pub use camera_stick::*;
 pub use contrast_regulator::*;
+pub use dinput_bridge::*;
+pub use frame_metrics::*;
 pub use garage_viewer::*;
 pub use lightroom_contrast::*;
 pub use menu_gesture::*;
 pub use nitro_manager::*;
+pub use tilt_fusion::*;
 pub use touch_hud::*;
 
-use jni::objects::JClass;
-use jni::sys::{jboolean, jfloat, jint, jlong};
+use jni::objects::{JClass, JFloatArray};
+use jni::sys::{jboolean, jfloat, jfloatArray, jint, jlong};
 use jni::JNIEnv;
 
 // ---------------------------------------------------------------------------
@@ -293,4 +299,244 @@ pub extern "system" fn Java_com_nfsu2_androidevolved_RacingControlsView_nativeGa
     class: JClass,
 ) {
     Java_io_mininxd_nfsu2_RacingControlsView_nativeGarageResetView(env, class);
+}
+
+// ---------------------------------------------------------------------------
+// Tilt Fusion JNI
+// ---------------------------------------------------------------------------
+
+#[no_mangle]
+pub extern "system" fn Java_io_mininxd_nfsu2_GameActivity_nativeTiltProcess(
+    _env: JNIEnv,
+    _class: JClass,
+    raw_horizontal: jfloat,
+    sensitivity: jfloat,
+    invert: jboolean,
+    deadzone: jfloat,
+) -> jfloat {
+    nfs_tilt_process(raw_horizontal, sensitivity, invert as i32, deadzone)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_mininxd_nfsu2_GameActivity_nativeTiltCalibrate(
+    _env: JNIEnv,
+    _class: JClass,
+) {
+    nfs_tilt_calibrate();
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_mininxd_nfsu2_GameActivity_nativeTiltReset(
+    _env: JNIEnv,
+    _class: JClass,
+) {
+    nfs_tilt_reset();
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_nfsu2_androidevolved_GameActivity_nativeTiltProcess(
+    env: JNIEnv,
+    class: JClass,
+    raw_horizontal: jfloat,
+    sensitivity: jfloat,
+    invert: jboolean,
+    deadzone: jfloat,
+) -> jfloat {
+    Java_io_mininxd_nfsu2_GameActivity_nativeTiltProcess(env, class, raw_horizontal, sensitivity, invert, deadzone)
+}
+
+// ---------------------------------------------------------------------------
+// Touch S-Curve & Auto-Dim JNI
+// ---------------------------------------------------------------------------
+
+#[no_mangle]
+pub extern "system" fn Java_io_mininxd_nfsu2_RacingControlsView_nativeCalculateSCurve(
+    _env: JNIEnv,
+    _class: JClass,
+    raw_x: jfloat,
+    center_x: jfloat,
+    half_width: jfloat,
+    scale: jfloat,
+    deadzone: jfloat,
+) -> jfloat {
+    nfs_touch_scurve(raw_x, center_x, half_width, scale, deadzone)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_mininxd_nfsu2_RacingControlsView_nativeAutoDimTouch(
+    _env: JNIEnv,
+    _class: JClass,
+    now_ms: jlong,
+) {
+    nfs_autodim_touch(now_ms as u64);
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_mininxd_nfsu2_RacingControlsView_nativeAutoDimSetGamepad(
+    _env: JNIEnv,
+    _class: JClass,
+    active: jboolean,
+) {
+    nfs_autodim_set_gamepad(active as i32);
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_mininxd_nfsu2_RacingControlsView_nativeAutoDimUpdate(
+    _env: JNIEnv,
+    _class: JClass,
+    now_ms: jlong,
+    idle_timeout_ms: jlong,
+    min_opacity: jfloat,
+) -> jfloat {
+    nfs_autodim_update(now_ms as u64, idle_timeout_ms as u64, min_opacity)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_mininxd_nfsu2_RacingControlsView_nativeAutoDimReset(
+    _env: JNIEnv,
+    _class: JClass,
+) {
+    nfs_autodim_reset();
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_nfsu2_androidevolved_RacingControlsView_nativeCalculateSCurve(
+    env: JNIEnv,
+    class: JClass,
+    raw_x: jfloat,
+    center_x: jfloat,
+    half_width: jfloat,
+    scale: jfloat,
+    deadzone: jfloat,
+) -> jfloat {
+    Java_io_mininxd_nfsu2_RacingControlsView_nativeCalculateSCurve(env, class, raw_x, center_x, half_width, scale, deadzone)
+}
+
+// ---------------------------------------------------------------------------
+// Gamepad DirectInput Bridge JNI
+// ---------------------------------------------------------------------------
+
+#[no_mangle]
+pub extern "system" fn Java_io_mininxd_nfsu2_GameActivity_nativeDInputRadialX(
+    _env: JNIEnv,
+    _class: JClass,
+    x: jfloat,
+    y: jfloat,
+    deadzone: jfloat,
+    curve_weight: jfloat,
+) -> jfloat {
+    nfs_dinput_radial_x(x, y, deadzone, curve_weight)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_mininxd_nfsu2_GameActivity_nativeDInputRadialY(
+    _env: JNIEnv,
+    _class: JClass,
+    x: jfloat,
+    y: jfloat,
+    deadzone: jfloat,
+    curve_weight: jfloat,
+) -> jfloat {
+    nfs_dinput_radial_y(x, y, deadzone, curve_weight)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_nfsu2_androidevolved_GameActivity_nativeDInputRadialX(
+    env: JNIEnv,
+    class: JClass,
+    x: jfloat,
+    y: jfloat,
+    deadzone: jfloat,
+    curve_weight: jfloat,
+) -> jfloat {
+    Java_io_mininxd_nfsu2_GameActivity_nativeDInputRadialX(env, class, x, y, deadzone, curve_weight)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_nfsu2_androidevolved_GameActivity_nativeDInputRadialY(
+    env: JNIEnv,
+    class: JClass,
+    x: jfloat,
+    y: jfloat,
+    deadzone: jfloat,
+    curve_weight: jfloat,
+) -> jfloat {
+    Java_io_mininxd_nfsu2_GameActivity_nativeDInputRadialY(env, class, x, y, deadzone, curve_weight)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_mininxd_nfsu2_RacingControlsView_nativeDInputRadialX(
+    _env: JNIEnv,
+    _class: JClass,
+    x: jfloat,
+    y: jfloat,
+    deadzone: jfloat,
+    curve_weight: jfloat,
+) -> jfloat {
+    nfs_dinput_radial_x(x, y, deadzone, curve_weight)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_mininxd_nfsu2_RacingControlsView_nativeDInputRadialY(
+    _env: JNIEnv,
+    _class: JClass,
+    x: jfloat,
+    y: jfloat,
+    deadzone: jfloat,
+    curve_weight: jfloat,
+) -> jfloat {
+    nfs_dinput_radial_y(x, y, deadzone, curve_weight)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_mininxd_nfsu2_RacingControlsView_nativeDInputTrigger(
+    _env: JNIEnv,
+    _class: JClass,
+    raw: jfloat,
+    deadzone: jfloat,
+) -> jfloat {
+    nfs_dinput_trigger(raw, deadzone)
+}
+
+// ---------------------------------------------------------------------------
+// Frame Metrics JNI
+// ---------------------------------------------------------------------------
+
+#[no_mangle]
+pub extern "system" fn Java_io_mininxd_nfsu2_DiagnosticOverlay_nativeRecordFrameDuration(
+    _env: JNIEnv,
+    _class: JClass,
+    duration_ns: jlong,
+) {
+    if duration_ns > 0 {
+        nfs_metrics_record_frame(duration_ns as u64);
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_mininxd_nfsu2_DiagnosticOverlay_nativeGetFrameMetrics(
+    mut env: JNIEnv,
+    _class: JClass,
+    out_array: jfloatArray,
+) -> jboolean {
+    if out_array.is_null() {
+        return 0;
+    }
+    let mut metrics = [0.0f32; 6];
+    GLOBAL_FRAME_METRICS.compute_metrics(&mut metrics);
+    let j_arr = JFloatArray::from_raw(out_array);
+    if env.set_float_array_region(&j_arr, 0, &metrics).is_ok() {
+        1
+    } else {
+        0
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "system" fn Java_com_nfsu2_androidevolved_DiagnosticOverlay_nativeGetFrameMetrics(
+    env: JNIEnv,
+    class: JClass,
+    out_array: jfloatArray,
+) -> jboolean {
+    Java_io_mininxd_nfsu2_DiagnosticOverlay_nativeGetFrameMetrics(env, class, out_array)
 }
