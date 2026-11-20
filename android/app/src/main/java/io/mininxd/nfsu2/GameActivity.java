@@ -45,9 +45,6 @@ public final class GameActivity extends NativeActivity {
 
     static {
         try {
-            System.loadLibrary("dxvk_android");
-        } catch (Throwable ignored) {}
-        try {
             System.loadLibrary("game_core");
         } catch (Throwable ignored) {}
         try {

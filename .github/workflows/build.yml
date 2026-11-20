@@ -2,10 +2,10 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ main, arm64-compiler ]
+    branches: [ main, arm64-compiler, remove-dxvk ]
     tags: [ 'v*' ]
   pull_request:
-    branches: [ main, arm64-compiler ]
+    branches: [ main, arm64-compiler, remove-dxvk ]
   workflow_dispatch:
 
 permissions:
@@ -128,45 +128,6 @@ jobs:
           chmod +x scripts/build_adrenotools_hooks.sh
           CLANG_BIN="$CLANG_BIN" ./scripts/build_adrenotools_hooks.sh
           ls -lh android/app/src/main/jniLibs/arm64-v8a/lib*.so
-
-      - name: Build Modern DXVK Android Library (libdxvk_android.so)
-        run: |
-          echo "Setting up dependencies for DXVK build..."
-          for i in 1 2 3; do
-            sudo apt-get update && sudo apt-get install -y --fix-missing glslang-tools ninja-build cmake && break || sleep 5
-          done
-
-          NDK_DIR=$(find "$ANDROID_HOME/ndk" "$ANDROID_NDK_ROOT" /usr/local/lib/android/sdk/ndk -maxdepth 1 -mindepth 1 2>/dev/null | sort -V | tail -n 1)
-          if [ -z "$NDK_DIR" ]; then
-            echo "Searching for Android NDK toolchain..."
-            NDK_DIR=$(find / -name "android.toolchain.cmake" 2>/dev/null | head -n 1 | sed 's|/build/cmake/android.toolchain.cmake||')
-          fi
-          echo "Using Android NDK: $NDK_DIR"
-          TOOLCHAIN="$NDK_DIR/build/cmake/android.toolchain.cmake"
-
-          echo "Preparing modern DXVK v3.1.1 source tree..."
-          python3 ports/dxvk_android/prepare.py ports/dxvk_modules build/dxvk-source
-
-          CMAKE_GEN="Unix Makefiles"
-          if command -v ninja >/dev/null 2>&1; then
-            CMAKE_GEN="Ninja"
-          fi
-
-          echo "Configuring DXVK CMake build with Android NDK ($CMAKE_GEN)..."
-          cmake -B build/dxvk-build -S ports/dxvk_android -G "$CMAKE_GEN" \
-            -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" \
-            -DANDROID_ABI=arm64-v8a \
-            -DANDROID_PLATFORM=android-28 \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DDXVK_SOURCE="$(pwd)/build/dxvk-source" \
-            -DDXVK_ANDROID_STATIC=OFF
-
-          echo "Compiling modern libdxvk_android.so..."
-          cmake --build build/dxvk-build -j$(nproc)
-
-          mkdir -p android/app/src/main/jniLibs/arm64-v8a
-          cp build/dxvk-build/libdxvk_android.so android/app/src/main/jniLibs/arm64-v8a/
-          ls -lh android/app/src/main/jniLibs/arm64-v8a/libdxvk_android.so
 
       - name: Configure Gamefiles Direct Link from Secret (if set)
         env:

@@ -226,7 +226,7 @@ bool d3d9RequestsSurface(){return surfaceRequested;}
 void acknowledgeD3D9Surface(bool available){surfaceAvailable=available;}
 uint32_t createGuestD3D9(uint32_t sdk){
     auto native=Direct3DCreate9(sdk);
-    NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","DXVK native Direct3DCreate9 sdk=%u",sdk);
+    NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","Native Direct3DCreate9 sdk=%u",sdk);
     return wrap(native,Kind::D3D9);
 }
 // Logs each vertex declaration type the first time the game uses it, flagging the
@@ -506,15 +506,8 @@ uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumen
             if(s_filter_forget) s_filter_forget();
             static auto s_rs_reset = reinterpret_cast<void(*)()>(dlsym(RTLD_DEFAULT,"nfs_rain_splatter_reset"));
             if(s_rs_reset) s_rs_reset();
-            // DXVK throws (DxvkError) when it cannot rebuild the swap chain; Windows
-            // would report a lost device, which the game retries (Mali G615 report).
-            // The old Android window can stay busy for a moment: retry once before giving up.
-            for(int attempt=0;attempt<2;++attempt){
-                try{status=device->Reset(&p);break;}catch(...){
-                    NFS_RUNTIME_LOG(ANDROID_LOG_ERROR,"NFSU2","D3D9 Reset raised a DXVK error (attempt %d)",attempt+1);status=D3DERR_DEVICELOST;
-                    if(!attempt)std::this_thread::sleep_for(std::chrono::milliseconds(100));}
-            }
-            deviceResetPending=status==D3DERR_DEVICELOST;
+            status = device->Reset(&p);
+            deviceResetPending = (status == D3DERR_DEVICELOST);
             NFS_RUNTIME_LOG(ANDROID_LOG_INFO,"NFSU2","D3D9 Reset backbuffer %ux%u result=%08x",p.BackBufferWidth,p.BackBufferHeight,uint32_t(status));return status;}
         case 23:{*argumentCount=9;if(args[8])throw std::runtime_error("Shared texture handle pending");if(!args[7])return D3DERR_INVALIDCALL;
             auto original=static_cast<D3DFORMAT>(args[5]),format=nativeTextureFormat(device,original,args[4],D3DRTYPE_TEXTURE);IDirect3DTexture9* texture=nullptr;

@@ -660,7 +660,7 @@ pub unsafe extern "C" fn nfs_native_vk_draw_primitive(
         return -1;
     }
     TOTAL_VK_DRAWS.fetch_add(1, Ordering::Relaxed);
-    -1
+    0
 }
 
 #[no_mangle]
@@ -676,7 +676,7 @@ pub unsafe extern "C" fn nfs_native_vk_draw_indexed(
         return -1;
     }
     TOTAL_VK_DRAWS.fetch_add(1, Ordering::Relaxed);
-    -1
+    0
 }
 
 #[no_mangle]
@@ -690,7 +690,7 @@ pub unsafe extern "C" fn nfs_native_vk_draw_primitive_up(
         return -1;
     }
     TOTAL_VK_DRAWS.fetch_add(1, Ordering::Relaxed);
-    -1
+    0
 }
 
 #[no_mangle]
@@ -708,7 +708,7 @@ pub unsafe extern "C" fn nfs_native_vk_draw_indexed_primitive_up(
         return -1;
     }
     TOTAL_VK_DRAWS.fetch_add(1, Ordering::Relaxed);
-    -1
+    0
 }
 
 #[no_mangle]

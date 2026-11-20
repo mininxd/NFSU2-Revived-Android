@@ -13,9 +13,6 @@ add_library(native_app_glue STATIC "${ANDROID_NDK}/sources/android/native_app_gl
 target_include_directories(native_app_glue PUBLIC "${ANDROID_NDK}/sources/android/native_app_glue")
 get_filename_component(NFS_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../../.." ABSOLUTE)
 set(PCRECOMP "${NFS_ROOT}/../pcrecomp")
-set(DXVK_SOURCE "${NFS_ROOT}/build/dxvk-source" CACHE PATH "Prepared DXVK native source")
-set(DXVK_ANDROID_STATIC ON CACHE BOOL "Link into application" FORCE)
-add_subdirectory("${NFS_ROOT}/ports/dxvk_android" "${CMAKE_CURRENT_BINARY_DIR}/dxvk")
 set(GEN_DIR "${NFS_ROOT}/src/recomp/gen")
 file(GLOB GEN_SOURCES CONFIGURE_DEPENDS "${GEN_DIR}/recomp_*.c")
 if(NOT GEN_SOURCES)
@@ -90,9 +87,9 @@ endif()
 add_library(nfsu2_diagnostics SHARED gpu_probe.cpp vulkan_driver.cpp universal_gpu_loader.cpp)
 target_link_libraries(nfsu2_diagnostics PRIVATE android log dl)
 target_compile_options(nfsu2_diagnostics PRIVATE -O2 -Wall -Wextra -Werror -Wno-missing-field-initializers)
-add_library(nfsu2_android SHARED main.cpp guest_runtime.cpp d3d9_bridge.cpp vulkan_driver.cpp universal_gpu_loader.cpp adpf_manager.cpp audio_watchdog.cpp performance_tuner.cpp "${NFS_ROOT}/src/runtime/overrides.c" "${NFS_ROOT}/src/runtime/widescreen.c" $<TARGET_OBJECTS:nfs_guest>)
-target_include_directories(nfsu2_android SYSTEM PRIVATE "${DXVK_SOURCE}/include/native"
-  "${DXVK_SOURCE}/include/native/windows" "${DXVK_SOURCE}/include/native/directx")
+add_library(nfsu2_android SHARED main.cpp guest_runtime.cpp d3d9_bridge.cpp native_d3d9.cpp vulkan_driver.cpp universal_gpu_loader.cpp adpf_manager.cpp audio_watchdog.cpp performance_tuner.cpp "${NFS_ROOT}/src/runtime/overrides.c" "${NFS_ROOT}/src/runtime/widescreen.c" $<TARGET_OBJECTS:nfs_guest>)
+target_include_directories(nfsu2_android SYSTEM PRIVATE "${NFS_ROOT}/include/native"
+  "${NFS_ROOT}/include/native/windows" "${NFS_ROOT}/include/native/directx")
 target_include_directories(nfsu2_android PRIVATE "${PCRECOMP}/runtime/recomp32" "${PCRECOMP}/runtime/win32hle" "${NFS_ROOT}/src/runtime")
 # SPEED2.EXE build the generated code was lifted from (scripts/run_lift.py reads
 # the same NFSU2_EXE_BUILD environment variable). Empty = the documented build.
@@ -110,7 +107,7 @@ target_compile_features(nfsu2_android PRIVATE cxx_std_17)
 target_compile_definitions(nfsu2_android PRIVATE VK_USE_PLATFORM_ANDROID_KHR)
 target_compile_options(nfsu2_android PRIVATE -O2 -fno-strict-aliasing -ffp-contract=off -Wall -Wextra -Werror -Wno-missing-field-initializers)
 target_link_options(nfsu2_android PRIVATE "-uANativeActivity_onCreate")
-target_link_libraries(nfsu2_android PRIVATE native_app_glue android log vulkan dxvk_android aaudio dl)
+target_link_libraries(nfsu2_android PRIVATE native_app_glue android log vulkan aaudio dl)
 if(NFS_GUEST_LTO)
     target_link_options(nfsu2_android PRIVATE -flto=thin "-Wl,--thinlto-jobs=4"
         "-Wl,--thinlto-cache-dir=${CMAKE_BINARY_DIR}/thinlto-cache")
