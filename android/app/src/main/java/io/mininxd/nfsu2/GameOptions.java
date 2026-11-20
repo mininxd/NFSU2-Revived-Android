@@ -57,7 +57,7 @@ public final class GameOptions {
             new Option(DRAW_DISTANCE, "Draw Distance", "original",
                     new String[] {"ultra_performance", "performance", "balanced", "extended", "original"},
                     new String[] {"Ultra Performance", "Performance", "Balanced", "Extended", "Original"}),
-            new Option(FPS, "FPS Limit", "30",
+            new Option(FPS, "FPS Limit", "60",
                     new String[] {"30", "60", "90", "120", "0"},
                     new String[] {"30 FPS", "60 FPS", "90 FPS", "120 FPS", "Uncapped"}),
             new Option(DISPLAY_LOGS, "Display Logs", "off",

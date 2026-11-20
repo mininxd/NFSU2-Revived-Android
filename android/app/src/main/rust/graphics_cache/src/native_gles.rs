@@ -134,6 +134,7 @@ struct EglApi {
     egl_destroy_surface: unsafe extern "C" fn(*mut c_void, *mut c_void) -> u32,
     egl_destroy_context: unsafe extern "C" fn(*mut c_void, *mut c_void) -> u32,
     egl_terminate: unsafe extern "C" fn(*mut c_void) -> u32,
+    egl_swap_interval: unsafe extern "C" fn(*mut c_void, i32) -> u32,
 }
 
 static EGL_LOADED: AtomicBool = AtomicBool::new(false);
@@ -183,6 +184,7 @@ unsafe fn load_egl() -> bool {
         egl_destroy_surface: load_egl_sym!(b"eglDestroySurface\0"),
         egl_destroy_context: load_egl_sym!(b"eglDestroyContext\0"),
         egl_terminate: load_egl_sym!(b"eglTerminate\0"),
+        egl_swap_interval: load_egl_sym!(b"eglSwapInterval\0"),
     };
 
     EGL_API = Some(api);
@@ -709,6 +711,8 @@ pub unsafe extern "C" fn nfs_native_gles_set_window(window: *mut c_void) -> c_in
         (egl.egl_destroy_context)(display, context);
         return -8;
     }
+
+    (egl.egl_swap_interval)(display, 0);
 
     *guard = Some(EglContextState {
         display,

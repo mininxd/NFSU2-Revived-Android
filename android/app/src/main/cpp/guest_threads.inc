@@ -207,7 +207,14 @@ void runGuestTimers(){
     while(!stopRequested){
         checkGuestProgress();std::shared_ptr<GuestTimer> next;
         for(const auto& entry:timerHandles)if(!entry.second->cancelled&&(!next||entry.second->due<next->due))next=entry.second;
-        if(!next||std::chrono::steady_clock::now()<next->due){yieldGuestMachine(1);continue;}
+        if(!next){yieldGuestMachine(5);continue;}
+        auto now=std::chrono::steady_clock::now();
+        if(now<next->due){
+            auto remaining_ms=std::chrono::duration_cast<std::chrono::milliseconds>(next->due-now).count();
+            unsigned sleep_ms=static_cast<unsigned>(std::clamp(remaining_ms,1LL,20LL));
+            yieldGuestMachine(sleep_ms);
+            continue;
+        }
         next->running=true;runningTimerId=next->id;
         if(next->isEvent){
             signalGuestEventHandle(next->callback);

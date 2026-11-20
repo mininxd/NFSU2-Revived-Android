@@ -101,6 +101,7 @@ case 36:{*argumentCount=7;IDirect3DSurface9* object5=nullptr;if(args[6])throw st
 case 37:{*argumentCount=3;
     static auto s_rs_rt = reinterpret_cast<void(*)(uint32_t)>(dlsym(RTLD_DEFAULT,"nfs_rain_splatter_notify_render_target"));
     if(s_rs_rt) s_rs_rt(args[2]);
+    s_fast_d3d9_filter.notifyRtChange();
     return device->SetRenderTarget(static_cast<DWORD>(args[1]),nativeObject<IDirect3DSurface9>(args[2]));}
 case 38:{*argumentCount=3;IDirect3DSurface9* object2=nullptr;HRESULT status=device->GetRenderTarget(static_cast<DWORD>(args[1]),args[2]?&object2:nullptr);if(args[2])write(args[2],SUCCEEDED(status)?wrap(object2,Kind::Surface):0);return status;}
 case 39:{*argumentCount=2;

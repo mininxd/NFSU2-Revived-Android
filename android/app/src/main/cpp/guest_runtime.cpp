@@ -248,7 +248,7 @@ void checkGuestProgress() {
     if((++checkpoints&63u)==0){
         auto now=std::chrono::steady_clock::now();
         if(now>bootDeadline)throw GuestStop("CRT bring-up time budget reached at "+hex(g_cur_func));
-        auto slice=renderThread?std::chrono::microseconds(16000):std::chrono::microseconds(1000);
+        auto slice=renderThread?std::chrono::microseconds(50000):std::chrono::microseconds(2000);
         if(now-machine.acquired>=slice&&machine.hasWaiters()){
             yieldGuestMachine();
             if(renderThread){++renderYields;renderWait+=std::chrono::steady_clock::now()-now;}
@@ -396,6 +396,7 @@ void d3dDispatch(){
             // machine while this thread waits. Late frames incur no extra delay.
             renderThread=true;
             if(deadline>now)yieldGuestMachine(0,deadline);
+            else if(machine.hasWaiters())yieldGuestMachine(0);
         } else {
             // Window temporarily unavailable or device lost during incoming call / backgrounding.
             // Sleep 16ms so the guest doesn't spin at 100% CPU starving audio/compositor threads.
