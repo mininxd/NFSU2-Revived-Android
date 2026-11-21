@@ -7,6 +7,7 @@
 #include <dirent.h>
 #include <sched.h>
 #include <dlfcn.h>
+#include <sys/resource.h>
 #include <android/log.h>
 
 int nfs_bind_to_perf_cores(void) {
@@ -65,16 +66,37 @@ int nfs_bind_to_perf_cores(void) {
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
     int count = 0;
-    // Set all available cores so no cores idle and the kernel scheduler has full frequency flexibility
-    for (int i = 0; i < total_cpus; i++) {
-        CPU_SET(i, &cpuset);
-        count++;
+
+    // Filter performance cores (Prime + Mid clusters)
+    // On big.LITTLE / tri-cluster architectures, cores with >= 70% of max frequency or capacity
+    // represent the mid/big and prime cores, while little efficiency cores are excluded.
+    long threshold = (long)(highest_freq * 0.70);
+    if (highest_freq > 0) {
+        for (int i = 0; i < total_cpus; i++) {
+            if (freqs[i] >= threshold) {
+                CPU_SET(i, &cpuset);
+                count++;
+            }
+        }
     }
+
+    // Safety fallback: if thresholding produced 0 cores or all cores, use all cores
+    if (count == 0) {
+        for (int i = 0; i < total_cpus; i++) {
+            CPU_SET(i, &cpuset);
+            count++;
+        }
+    }
+
+    // Elevate priority of the process & calling thread to highest real-time interactive priority (-20)
+    // so EAS / WALT governors prioritize scheduling and rapidly ramp up CPU clocks.
+    setpriority(PRIO_PROCESS, getpid(), -20);
+    setpriority(PRIO_PROCESS, 0, -20);
 
     sched_setaffinity(getpid(), sizeof(cpu_set_t), &cpuset);
     int ret = sched_setaffinity(0, sizeof(cpu_set_t), &cpuset);
 
-    // Apply performance core affinity to all worker threads of the process
+    // Apply performance core affinity and elevated priority to all worker threads of the process
     DIR *d = opendir("/proc/self/task");
     if (d) {
         struct dirent *de;
@@ -82,10 +104,11 @@ int nfs_bind_to_perf_cores(void) {
             int tid = atoi(de->d_name);
             if (tid > 0) {
                 sched_setaffinity(tid, sizeof(cpu_set_t), &cpuset);
+                setpriority(PRIO_PROCESS, tid, -20);
             }
         }
         closedir(d);
     }
-    __android_log_print(ANDROID_LOG_INFO, "NFSU2-PerfCores", "Bound process and threads to %d performance cores (ret=%d)", count, ret);
+    __android_log_print(ANDROID_LOG_INFO, "NFSU2-PerfCores", "Bound process and threads to %d performance cores (highest_freq=%ld, ret=%d)", count, highest_freq, ret);
     return ret;
 }

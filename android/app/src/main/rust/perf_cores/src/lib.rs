@@ -258,12 +258,15 @@ impl CpuCluster {
         } else {
             (1u64 << self.total_cores) - 1
         };
-        let render_mask = all_cores_mask; // All cores active - no idling
-        let audio_mask = all_cores_mask;
-        let background_mask = all_cores_mask;
+        let perf_mask = if self.perf_cores_mask != 0 {
+            self.perf_cores_mask
+        } else {
+            all_cores_mask
+        };
+        let render_mask = perf_mask;
 
         unsafe {
-            // Process-level default affinity: all cores
+            // Process-level default affinity: performance cores (or all cores fallback)
             let mask_val = render_mask as c_long;
             let _ = libc::syscall(
                 libc::SYS_sched_setaffinity,
@@ -282,42 +285,35 @@ impl CpuCluster {
             let _ = libc::setpriority(libc::PRIO_PROCESS, libc::getpid() as u32, -20);
             let _ = libc::setpriority(libc::PRIO_PROCESS, 0, -20);
 
-            // Thread-level assignment across /proc/self/task: unbind all threads to all cores
+            // Thread-level assignment across /proc/self/task:
             if let Ok(entries) = fs::read_dir("/proc/self/task") {
                 for entry in entries.flatten() {
                     if let Ok(tid) = entry.file_name().to_string_lossy().parse::<i32>() {
-                        let m = all_cores_mask as c_long;
+                        let comm_path = format!("/proc/self/task/{}/comm", tid);
+                        let is_audio = if let Ok(comm) = fs::read_to_string(&comm_path) {
+                            let n = comm.trim();
+                            n.starts_with("AAudio") || n.contains("audio") || n.contains("Audio")
+                        } else {
+                            false
+                        };
+
+                        let m = if is_audio {
+                            all_cores_mask as c_long
+                        } else {
+                            perf_mask as c_long
+                        };
+
                         let _ = libc::syscall(
                             libc::SYS_sched_setaffinity,
                             tid as c_int,
                             std::mem::size_of::<c_long>(),
                             &m as *const c_long,
                         );
-                        let comm_path = format!("/proc/self/task/{}/comm", tid);
-                        if let Ok(comm) = fs::read_to_string(&comm_path) {
-                            let n = comm.trim();
-                            if n == "GuestBootWorker" || n == "RenderThread" || n == "main"
-                                || n.contains("MainRender") || n.contains("dxvk")
-                            {
-                                let perf_m = if self.perf_cores_mask != 0 {
-                                    self.perf_cores_mask as c_long
-                                } else {
-                                    all_cores_mask as c_long
-                                };
-                                let _ = libc::syscall(
-                                    libc::SYS_sched_setaffinity,
-                                    tid as c_int,
-                                    std::mem::size_of::<c_long>(),
-                                    &perf_m as *const c_long,
-                                );
-                                let _ = libc::setpriority(libc::PRIO_PROCESS, tid as u32, -20);
-                            } else if n.starts_with("AAudio") || n.contains("audio") || n.contains("Audio") {
-                                let _ = libc::setpriority(libc::PRIO_PROCESS, tid as u32, -16);
-                            } else {
-                                let _ = libc::setpriority(libc::PRIO_PROCESS, tid as u32, -10);
-                            }
+
+                        if is_audio {
+                            let _ = libc::setpriority(libc::PRIO_PROCESS, tid as u32, -16);
                         } else {
-                            let _ = libc::setpriority(libc::PRIO_PROCESS, tid as u32, -10);
+                            let _ = libc::setpriority(libc::PRIO_PROCESS, tid as u32, -20);
                         }
                     }
                 }
