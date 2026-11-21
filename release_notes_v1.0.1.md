@@ -25,5 +25,15 @@
 - **Lock-Free Telemetry Profiling**:
   - `serviceGuestSound()` now uses `std::try_to_lock` for debug stats logging, ensuring end-of-frame telemetry never blocks or hiccups active audio playback.
 
-#### 3. Build & Version Details
+#### 3. Launcher Presets & Custom Game Location
+- **One-Tap Graphics Presets**:
+  - Added dedicated preset buttons directly below the PLAY button on the launcher:
+    - **Performance**: 50% Internal Resolution, Performance Draw Distance (175m).
+    - **Balanced**: 70% Internal Resolution, Extended Draw Distance (600m).
+    - **Original**: 100% Native Resolution, Original Draw Distance (unclamped).
+- **Custom Game Folder Selection**:
+  - When storage permissions are granted but game files are missing or placed in a custom directory (e.g. `/sdcard/Games/NFSU2` or external SD card), the launcher displays a `"Choose Game Folder (Custom Location)"` button.
+  - Integrates with Android Storage Access Framework (`ACTION_OPEN_DOCUMENT_TREE`) and direct absolute path entry, persisting custom locations and auto-detecting `SPEED2.EXE`.
+
+#### 4. Build & Version Details
 - Bumped `versionCode` to **101** and `versionName` to **1.0.1**.

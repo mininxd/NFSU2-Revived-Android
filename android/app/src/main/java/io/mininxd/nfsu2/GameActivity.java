@@ -402,6 +402,7 @@ public final class GameActivity extends NativeActivity {
     }
     @Override protected void onCreate(Bundle saved) {
         super.onCreate(saved);
+        LauncherActivity.sAppContext = getApplicationContext();
         s_instance = this;
         refreshNewsAsync();
         GameOptions.syncWidescreenIni(this);

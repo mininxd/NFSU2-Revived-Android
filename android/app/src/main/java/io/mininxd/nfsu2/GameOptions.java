@@ -45,7 +45,8 @@ public final class GameOptions {
             STARTUP_MOVIES = "intro", CUTSCENE_BORDERS = "cutscene_borders",
             ROAM_CARS_LIMIT = "roam_max_cars", ROAM_CREW = "roam_crew",
             GRAPHICS_BACKEND = "graphics_backend", DRAW_DISTANCE = "draw_distance",
-            TRACKSIDE_CROWDS = "trackside_crowds", REGION = "region", SPEEDOMETER = "speedometer", PAD_LAYOUT = "pad_layout";
+            TRACKSIDE_CROWDS = "trackside_crowds", REGION = "region", SPEEDOMETER = "speedometer", PAD_LAYOUT = "pad_layout",
+            CUSTOM_GAME_DIR = "custom_game_dir";
 
     static final Option[] ALL = {
             new Option(GRAPHICS_BACKEND, "Graphics API", "auto",

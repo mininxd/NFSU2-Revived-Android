@@ -38,7 +38,7 @@ import java.util.concurrent.Executors;
  * right (Vulkan driver, resolution, frame cap, widescreen, compatibility).
  */
 public final class LauncherActivity extends Activity {
-    private static final int REQUEST_DRIVER_ZIP = 45, REQUEST_DRIVER_PROBE = 46;
+    private static final int REQUEST_DRIVER_ZIP = 45, REQUEST_DRIVER_PROBE = 46, REQUEST_CHOOSE_FOLDER = 47;
     // NFSU2 Revived Theme (inspired by nfsu2-web: dark asphalt, carbon grey, electric lime).
     private static final int ACCENT = 0xFFC8F088; // NFSU2 menu electric lime
     private static final int BG_PANEL = 0xFF1C1C1C;
@@ -65,7 +65,10 @@ public final class LauncherActivity extends Activity {
 
     private LinearLayout checksList, optionsList;
     private TextView status;
-    private Button play, access, downloadFiles;
+    private Button play, access, downloadFiles, chooseLocation;
+    private Button btnPresetPerformance, btnPresetBalanced, btnPresetOriginal;
+    public static Context sAppContext = null;
+    public static String sCustomGamePath = null;
     private boolean playAfterProbe, checkingUpdates, resumed;
     private String updateLaterTag;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
@@ -122,6 +125,8 @@ public final class LauncherActivity extends Activity {
 
     @Override protected void onCreate(Bundle saved) {
         super.onCreate(saved);
+        sAppContext = getApplicationContext();
+        sCustomGamePath = GameOptions.prefs(this).getString(GameOptions.CUSTOM_GAME_DIR, null);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             android.view.WindowManager.LayoutParams lp = getWindow().getAttributes();
             lp.layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
@@ -231,11 +236,48 @@ public final class LauncherActivity extends Activity {
         playParams.topMargin = dp(8);
         left.addView(play, playParams);
 
+        // Presets: Low, High, Original
+        LinearLayout presetContainer = new LinearLayout(this);
+        presetContainer.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams pcParams = new LinearLayout.LayoutParams(-1, -2);
+        pcParams.topMargin = dp(6);
+        left.addView(presetContainer, pcParams);
+
+        TextView presetHeader = label("GRAPHICS PRESET", 11, TEXT_HINT, true);
+        presetHeader.setPadding(dp(2), 0, 0, dp(3));
+        presetContainer.addView(presetHeader);
+
+        LinearLayout presetRow = new LinearLayout(this);
+        presetRow.setOrientation(LinearLayout.HORIZONTAL);
+        presetRow.setGravity(Gravity.CENTER_VERTICAL);
+        presetContainer.addView(presetRow, new LinearLayout.LayoutParams(-1, dp(36)));
+
+        btnPresetPerformance = presetButton("Performance", "performance");
+        btnPresetBalanced = presetButton("Balanced", "balanced");
+        btnPresetOriginal = presetButton("Original", "original");
+
+        LinearLayout.LayoutParams pBtnLp1 = new LinearLayout.LayoutParams(0, -1, 1f);
+        pBtnLp1.rightMargin = dp(4);
+        presetRow.addView(btnPresetPerformance, pBtnLp1);
+
+        LinearLayout.LayoutParams pBtnLp2 = new LinearLayout.LayoutParams(0, -1, 1f);
+        pBtnLp2.rightMargin = dp(4);
+        presetRow.addView(btnPresetBalanced, pBtnLp2);
+
+        LinearLayout.LayoutParams pBtnLp3 = new LinearLayout.LayoutParams(0, -1, 1f);
+        presetRow.addView(btnPresetOriginal, pBtnLp3);
+
         access = actionButton("Allow access to internal storage/nfsu2", false);
         access.setOnClickListener(view -> requestAccess());
         LinearLayout.LayoutParams accessParams = new LinearLayout.LayoutParams(-1, dp(46));
-        accessParams.topMargin = dp(10);
+        accessParams.topMargin = dp(8);
         left.addView(access, accessParams);
+
+        chooseLocation = actionButton("Choose Game Folder (Custom Location)", false);
+        chooseLocation.setOnClickListener(view -> showChooseLocationDialog());
+        LinearLayout.LayoutParams chooseParams = new LinearLayout.LayoutParams(-1, dp(46));
+        chooseParams.topMargin = dp(8);
+        left.addView(chooseLocation, chooseParams);
 
         downloadFiles = actionButton("Download Game Data", false);
         downloadFiles.setOnClickListener(view -> startDownloadOrExtractGameData());
@@ -276,11 +318,13 @@ public final class LauncherActivity extends Activity {
             if (!(allowed && new File(root, folder).isDirectory())) missing.append(missing.length() == 0 ? "" : ", ").append(folder);
         addCheck(missing.length() == 0 ? "Game folders" : "Missing folders: " + missing, missing.length() == 0, true);
         boolean ready = exe && !languages().isEmpty();
+        String displayPath = root.getAbsolutePath();
         status.setText(!allowed ? "Allow file access to read internal storage/nfsu2."
-                : ready ? "Internal storage/nfsu2" : "Copy your game files to internal storage/nfsu2.");
+                : ready ? ("Location: " + displayPath) : ("Game not found in " + displayPath + ".\nCopy game files or select custom folder."));
         play.setEnabled(ready);
         play.setAlpha(ready ? 1f : .45f);
         access.setVisibility(allowed ? View.GONE : View.VISIBLE);
+        chooseLocation.setVisibility(allowed && !ready ? View.VISIBLE : View.GONE);
 
         String dlUrl = getGamefilesUrl();
         File localCacheZip = new File(Environment.getExternalStorageDirectory(), "cache/NFSU2_GameFiles.zip");
@@ -290,6 +334,7 @@ public final class LauncherActivity extends Activity {
             downloadFiles.setText(localCacheZip.isFile() ? "Install Game Data (Found in /sdcard/cache)" : "Download & Install Game Data");
         }
 
+        updatePresetButtons(GameOptions.prefs(this).getString("active_preset", "original"));
         refreshOptions();
     }
 
@@ -489,6 +534,7 @@ public final class LauncherActivity extends Activity {
         if (android.os.Process.is64Bit())
             optionsList.addView(optionRow("Vulkan Driver", driver == null ? "System default" : driver.name, this::chooseDriver));
         optionsList.addView(optionRow("Check driver", "GPU, graphics API & driver info", () -> probeDriver(false)));
+        optionsList.addView(optionRow("Game Location", gameRoot().getName(), this::showChooseLocationDialog));
         optionsList.addView(optionRow("Language", languageLabel(), this::chooseLanguage));
         for (GameOptions.Option option : GameOptions.ALL)
             optionsList.addView(optionRow(option.title, option.label(GameOptions.get(this, option.key)), () -> chooseOption(option)));
@@ -589,6 +635,8 @@ public final class LauncherActivity extends Activity {
                     if (GameOptions.WIDESCREEN.equals(option.key) || GameOptions.MINIMAP.equals(option.key)) {
                         GameOptions.applyWidescreenPatchFile(this);
                     }
+                    GameOptions.prefs(this).edit().putString("active_preset", "custom").apply();
+                    updatePresetButtons("custom");
                     dialog.dismiss(); refreshOptions();
                 }).setNegativeButton("Cancel", null).show();
     }
@@ -899,6 +947,20 @@ public final class LauncherActivity extends Activity {
                     main.post(() -> { refresh(); message("Vulkan Driver", "Could not import driver: " + error.getMessage()); });
                 }
             });
+        } else if (requestCode == REQUEST_CHOOSE_FOLDER && resultCode == RESULT_OK && data != null && data.getData() != null) {
+            Uri treeUri = data.getData();
+            try {
+                getContentResolver().takePersistableUriPermission(treeUri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            } catch (Throwable ignored) {}
+            String path = getPathFromTreeUri(treeUri);
+            if (path != null) {
+                File dir = new File(path);
+                setCustomGameRoot(dir);
+                refresh();
+            } else {
+                message("Custom Location", "Could not resolve storage path from selected folder. You can enter the path directly.");
+            }
         }
     }
 
@@ -1113,12 +1175,186 @@ public final class LauncherActivity extends Activity {
                 .putStringArrayListExtra("cheats", GameOptions.getActiveCheatCodes(this)));
     }
 
+    // ---- Presets & Custom Location --------------------------------------------------------------------
+
+    private Button presetButton(String title, String presetId) {
+        Button b = new Button(this);
+        b.setText(title);
+        b.setAllCaps(false);
+        b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        b.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD_ITALIC));
+        b.setOnClickListener(v -> applyPreset(presetId));
+        b.setStateListAnimator(null);
+        return b;
+    }
+
+    private void updatePresetButtons(String activePreset) {
+        if (btnPresetPerformance == null || btnPresetBalanced == null || btnPresetOriginal == null) return;
+        setPresetButtonState(btnPresetPerformance, "performance".equalsIgnoreCase(activePreset));
+        setPresetButtonState(btnPresetBalanced, "balanced".equalsIgnoreCase(activePreset));
+        setPresetButtonState(btnPresetOriginal, "original".equalsIgnoreCase(activePreset));
+    }
+
+    private void setPresetButtonState(Button b, boolean active) {
+        b.setTextColor(active ? 0xFF0D1A04 : Color.WHITE);
+        GradientDrawable bg = new GradientDrawable();
+        if (active) {
+            bg.setColor(ACCENT);
+        } else {
+            bg.setColor(BG_FIELD);
+            bg.setStroke(dp(1), STROKE_FIELD);
+        }
+        bg.setCornerRadius(dp(8));
+        b.setBackground(bg);
+    }
+
+    private void applyPreset(String preset) {
+        android.content.SharedPreferences.Editor ed = GameOptions.prefs(this).edit();
+        ed.putString("active_preset", preset);
+        if ("performance".equalsIgnoreCase(preset)) {
+            ed.putString(GameOptions.DRAW_DISTANCE, "performance");
+            ed.putString(GameOptions.RESOLUTION, "50");
+        } else if ("balanced".equalsIgnoreCase(preset)) {
+            ed.putString(GameOptions.DRAW_DISTANCE, "extended");
+            ed.putString(GameOptions.RESOLUTION, "70");
+        } else if ("original".equalsIgnoreCase(preset)) {
+            ed.putString(GameOptions.DRAW_DISTANCE, "original");
+            ed.putString(GameOptions.RESOLUTION, "100");
+        }
+        ed.apply();
+        updatePresetButtons(preset);
+        refreshOptions();
+    }
+
+    private void showChooseLocationDialog() {
+        File current = gameRoot();
+        android.widget.EditText input = new android.widget.EditText(this);
+        input.setSingleLine(true);
+        input.setText(current.getAbsolutePath());
+        input.setSelection(input.getText().length());
+
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        int pad = dp(18);
+        layout.setPadding(pad, dp(10), pad, dp(4));
+
+        TextView hint = label("Enter folder path or tap Browse to select from file manager:", 12, TEXT_MUTED, false);
+        hint.setPadding(0, 0, 0, dp(6));
+        layout.addView(hint);
+        layout.addView(input);
+
+        Button browseBtn = actionButton("Browse Folders…", false);
+        LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(-1, dp(40));
+        btnLp.topMargin = dp(8);
+        layout.addView(browseBtn, btnLp);
+
+        AlertDialog dialog = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Select Game Folder")
+                .setView(layout)
+                .setPositiveButton("Save", (d, which) -> {
+                    String p = input.getText().toString().trim();
+                    if (!p.isEmpty()) {
+                        File f = new File(p);
+                        setCustomGameRoot(f);
+                        refresh();
+                    }
+                })
+                .setNeutralButton("Reset Default", (d, which) -> {
+                    GameOptions.prefs(this).edit().remove(GameOptions.CUSTOM_GAME_DIR).apply();
+                    sCustomGamePath = null;
+                    refresh();
+                })
+                .setNegativeButton("Cancel", null)
+                .create();
+
+        browseBtn.setOnClickListener(v -> {
+            dialog.dismiss();
+            launchFolderPicker();
+        });
+
+        dialog.show();
+    }
+
+    private void launchFolderPicker() {
+        try {
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            startActivityForResult(intent, REQUEST_CHOOSE_FOLDER);
+        } catch (Exception e) {
+            message("Folder Picker", "Could not launch folder picker: " + e.getMessage());
+        }
+    }
+
+    private void setCustomGameRoot(File dir) {
+        if (dir == null) return;
+        if (!dir.exists()) dir.mkdirs();
+        File actual = dir;
+        if (!new File(actual, "SPEED2.EXE").isFile() && new File(actual, "NFSU2/SPEED2.EXE").isFile()) {
+            actual = new File(actual, "NFSU2");
+        } else if (!new File(actual, "SPEED2.EXE").isFile() && new File(actual, "nfsu2/SPEED2.EXE").isFile()) {
+            actual = new File(actual, "nfsu2");
+        }
+        GameOptions.prefs(this).edit().putString(GameOptions.CUSTOM_GAME_DIR, actual.getAbsolutePath()).apply();
+        sCustomGamePath = actual.getAbsolutePath();
+        android.util.Log.i("NFSU2", "Custom game root set to: " + actual.getAbsolutePath());
+    }
+
+    private static String getPathFromTreeUri(Uri uri) {
+        if (uri == null) return null;
+        try {
+            String docId = null;
+            if (Build.VERSION.SDK_INT >= 21) {
+                docId = android.provider.DocumentsContract.getTreeDocumentId(uri);
+            }
+            if (docId == null) docId = uri.getPath();
+            if (docId != null) {
+                int colon = docId.indexOf(':');
+                String type = colon >= 0 ? docId.substring(0, colon) : docId;
+                String rel = colon >= 0 ? docId.substring(colon + 1) : "";
+                if ("primary".equalsIgnoreCase(type) || type.endsWith("primary")) {
+                    File ext = Environment.getExternalStorageDirectory();
+                    return rel.isEmpty() ? ext.getAbsolutePath() : new File(ext, rel).getAbsolutePath();
+                } else if (type.startsWith("/tree/")) {
+                    String sub = type.substring("/tree/".length());
+                    int subColon = sub.indexOf(':');
+                    if (subColon >= 0 && "primary".equalsIgnoreCase(sub.substring(0, subColon))) {
+                        File ext = Environment.getExternalStorageDirectory();
+                        String r = sub.substring(subColon + 1);
+                        return r.isEmpty() ? ext.getAbsolutePath() : new File(ext, r).getAbsolutePath();
+                    }
+                }
+                File extDir = new File("/storage/" + type + (rel.isEmpty() ? "" : "/" + rel));
+                if (extDir.exists() || extDir.isDirectory()) {
+                    return extDir.getAbsolutePath();
+                }
+            }
+        } catch (Throwable t) {
+            android.util.Log.w("NFSU2", "Failed to resolve tree uri: " + uri, t);
+        }
+        return null;
+    }
+
     // ---- Storage ---------------------------------------------------------------------------------------
 
-    public static File gameRoot() {
+    public static File gameRoot(Context context) {
+        if (context != null) {
+            String custom = GameOptions.prefs(context).getString(GameOptions.CUSTOM_GAME_DIR, null);
+            if (custom != null && !custom.trim().isEmpty()) {
+                File f = new File(custom.trim());
+                if (f.isDirectory()) return f;
+            }
+        }
+        if (sCustomGamePath != null && !sCustomGamePath.trim().isEmpty()) {
+            File f = new File(sCustomGamePath.trim());
+            if (f.isDirectory()) return f;
+        }
         File f = new File(Environment.getExternalStorageDirectory(), "NFSU2");
         if (f.isDirectory()) return f;
         return new File(Environment.getExternalStorageDirectory(), "nfsu2");
+    }
+
+    public static File gameRoot() {
+        return gameRoot(sAppContext);
     }
 
     private boolean allowed() {
