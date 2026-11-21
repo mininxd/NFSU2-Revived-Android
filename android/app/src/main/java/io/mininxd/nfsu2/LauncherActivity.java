@@ -273,7 +273,7 @@ public final class LauncherActivity extends Activity {
         accessParams.topMargin = dp(8);
         left.addView(access, accessParams);
 
-        chooseLocation = actionButton("Choose Game Folder (Custom Location)", false);
+        chooseLocation = actionButton("Choose Game Folder", false);
         chooseLocation.setOnClickListener(view -> showChooseLocationDialog());
         LinearLayout.LayoutParams chooseParams = new LinearLayout.LayoutParams(-1, dp(46));
         chooseParams.topMargin = dp(8);

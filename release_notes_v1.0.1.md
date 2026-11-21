@@ -32,7 +32,7 @@
     - **Balanced**: 70% Internal Resolution, Extended Draw Distance (600m).
     - **Original**: 100% Native Resolution, Original Draw Distance (unclamped).
 - **Custom Game Folder Selection**:
-  - When storage permissions are granted but game files are missing or placed in a custom directory (e.g. `/sdcard/Games/NFSU2` or external SD card), the launcher displays a `"Choose Game Folder (Custom Location)"` button.
+  - When storage permissions are granted but game files are missing or placed in a custom directory (e.g. `/sdcard/Games/NFSU2` or external SD card), the launcher displays a `"Choose Game Folder"` button.
   - Integrates with Android Storage Access Framework (`ACTION_OPEN_DOCUMENT_TREE`) and direct absolute path entry, persisting custom locations and auto-detecting `SPEED2.EXE`.
 
 #### 4. Build & Version Details
