@@ -23,7 +23,7 @@
 - **Fixed `graphics_cache` Build**: Fixed compilation syntax error in `d3d9_bridge.rs`, restoring compilation and deployment of `libgraphics_cache.so`.
 - **Automatic ASI Mod Detection (`dinput8.dll` / `NFSU2ExtraOptions.asi`)**:
   - Automatically detects `dinput8.dll` and `scripts/NFSU2ExtraOptions.asi` placed in the game root directory.
-  - Transparently activates native Extra Options patches and exposes the "Extra Options" setting card in the Launcher menu.
+  - Transparently activates native Extra Options patches in the game engine in the background when the mod files are present.
   - Multi-path INI discovery: checks `<game_root>/scripts/NFSU2ExtraOptionsSettings.ini`, `<game_root>/NFSU2ExtraOptionsSettings.ini`, `/sdcard/nfsu2/`, and `/sdcard/cache/` with case-insensitive path fallbacks.
 
 ### 5. Version Bump

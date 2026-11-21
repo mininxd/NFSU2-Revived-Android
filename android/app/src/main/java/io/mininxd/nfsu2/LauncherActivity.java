@@ -528,7 +528,7 @@ public final class LauncherActivity extends Activity {
             optionsList.addView(optionRow(option.title, option.label(GameOptions.get(this, option.key)), () -> chooseOption(option)));
         // Hidden for clean release (Extra Options enabled by default):
         // optionsList.addView(optionRow("Cheat Codes", cheatCodesSummary(), this::chooseCheatCodes));
-        optionsList.addView(optionRow("Extra Options", extraOptionsSummary(), this::chooseExtraOptions));
+        // optionsList.addView(optionRow("Extra Options", extraOptionsSummary(), this::chooseExtraOptions));
         // optionsList.addView(optionRow("Freeroam Online (beta)", GameOptions.isRoamEnabled(this) ? "On" : "Off", this::toggleFreeRoam));
         // optionsList.addView(optionRow("Ghost Mode", GameOptions.isGhostModeEnabled(this) ? "On" : "Off", this::toggleGhostMode));
         optionsList.addView(optionRow("Online Server", serverStatusSummary(), this::chooseOnlineServer));
@@ -674,12 +674,6 @@ public final class LauncherActivity extends Activity {
     private String extraOptionsSummary() {
         boolean enabled = GameOptions.isExtraOptionsEnabled(this);
         if (!enabled) return "Disabled";
-        File root = gameRoot();
-        boolean hasDinput = new File(root, "dinput8.dll").exists();
-        boolean hasAsi = new File(root, "scripts/NFSU2ExtraOptions.asi").exists() || new File(root, "NFSU2ExtraOptions.asi").exists();
-        if (hasDinput || hasAsi) {
-            return "Active (dinput8.dll & ExOpts detected)";
-        }
         return "Active (Regional Cars, Laps 0-127, Opponents 0-5, 3D Fixes)";
     }
 

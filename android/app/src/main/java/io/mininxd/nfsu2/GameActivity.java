@@ -1,5 +1,6 @@
 package io.mininxd.nfsu2;
 
+import java.io.File;
 import android.app.NativeActivity;
 import android.os.Build;
 import android.os.Environment;
