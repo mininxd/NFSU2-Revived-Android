@@ -4,8 +4,20 @@ import java.net.DatagramSocket;
 
 /**
  * Representation of a connected peer in the Free Roam network.
+ * Powered by pure Rust roam_rs native peer formatting.
  */
 public class Peer {
+    private static boolean nativeLoaded = false;
+
+    static {
+        try {
+            System.loadLibrary("roam_rs");
+            nativeLoaded = true;
+        } catch (Throwable ignored) {}
+    }
+
+    public static native String nativeFormatMac(byte[] mac);
+
     public final String name;
     public final byte[] mac;
     public final int ip;
@@ -28,6 +40,11 @@ public class Peer {
 
     public String getMacString() {
         if (mac == null || mac.length < 6) return "00:00:00:00:00:00";
+        if (nativeLoaded) {
+            try {
+                return nativeFormatMac(mac);
+            } catch (Throwable ignored) {}
+        }
         return String.format("%02X:%02X:%02X:%02X:%02X:%02X",
                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     }

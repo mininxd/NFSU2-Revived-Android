@@ -48,6 +48,11 @@ public final class DiagnosticOverlay {
         } catch (Throwable t) {
             android.util.Log.w("NFSU2", "DiagnosticOverlay: libgame_core load: " + t.getMessage());
         }
+        try {
+            System.loadLibrary("perf_cores");
+        } catch (Throwable t) {
+            android.util.Log.w("NFSU2", "DiagnosticOverlay: libperf_cores load: " + t.getMessage());
+        }
     }
 
     private final Activity activity;
@@ -79,6 +84,31 @@ public final class DiagnosticOverlay {
     public static native void nativeRecordPresent(long frameDurationNs);
     public static native void nativeRecordFrameDuration(long durationNs);
     public static native boolean nativeGetFrameMetrics(float[] outArray);
+    public static native String nativeFormatOverlayText(
+            boolean isFull,
+            float fps,
+            float p1Low,
+            float frameTimeMs,
+            float cpuPercent,
+            float gpuPercent,
+            long usedMb,
+            long totalMb,
+            boolean roamEnabled,
+            boolean adhocConnected,
+            boolean isRacing,
+            int onRaceCount,
+            String racersCsv,
+            int displayOnline,
+            String serverHost,
+            String roomName,
+            int roomRoam,
+            int totalRoam,
+            int totalServer,
+            String connStatus,
+            String gpuDriver,
+            String cpuModel,
+            String systemPlatform
+    );
 
     private static void safeRecordFrameDuration(long durationNs) {
         try {
@@ -464,6 +494,46 @@ public final class DiagnosticOverlay {
         } else {
             displayOnline = onlineCount;
         }
+
+        StringBuilder racersSb = new StringBuilder();
+        for (int i = 0; i < racers.size(); i++) {
+            if (i > 0) racersSb.append(", ");
+            racersSb.append(racers.get(i));
+        }
+        String racersCsv = racersSb.toString();
+        float gpu = getGpuUsagePercent();
+
+        try {
+            String nativeText = nativeFormatOverlayText(
+                    isFull(),
+                    fps,
+                    p1Low,
+                    frameTimeMs,
+                    cpu,
+                    gpu,
+                    usedMb,
+                    totalMb,
+                    GameOptions.isRoamEnabled(activity),
+                    adhocConnected,
+                    isRacing,
+                    onRaceCount,
+                    racersCsv,
+                    displayOnline,
+                    roamClient.getServerHost(),
+                    room != null ? room : "",
+                    roomRoam,
+                    totalRoam,
+                    totalServer,
+                    roamClient.getConnectionStatus(),
+                    gpuDriverName != null ? gpuDriverName : "",
+                    cpuModel != null ? cpuModel : "",
+                    systemPlatform != null ? systemPlatform : ""
+            );
+            if (nativeText != null && !nativeText.isEmpty()) {
+                textView.setText(nativeText);
+                return;
+            }
+        } catch (Throwable ignored) {}
 
         if (isFull()) {
             StringBuilder sb = new StringBuilder();

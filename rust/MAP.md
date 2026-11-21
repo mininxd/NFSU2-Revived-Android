@@ -142,3 +142,19 @@
   - Fast zero-allocation logcat threadtime line compactor (`compact_threadtime_line`).
   - Zero-regex diagnostic log filter (`is_key_line`, `is_noise_line`, `filter_diagnostics_log`).
   - Safe JNI bindings (`nativeFilterLogSummary`).
+
+### Wave 10: Platform GameManager AGDK, Zero-GC Telemetry HUD & Native Peer Routing (Completed)
+- [x] **`AndroidGameManagerBridge.java` -> `perf_cores::game_manager`**:
+  - Pure Rust Android GameManager & GameState AGDK platform integration (`set_game_state_uninterruptible`, `set_game_state_loading`).
+  - Prevents compositor down-throttling to 30Hz and forces 60+ FPS scheduling without Java reflection overhead.
+  - Keeps display awake (`FLAG_KEEP_SCREEN_ON`) via native Window flags.
+  - Safe JNI bindings (`nativeSetGameplayMode`, `nativeSetLoadingMode`).
+- [x] **`DiagnosticOverlay.java` -> `perf_cores::diagnostics`**:
+  - Pure Rust telemetry overlay formatter (`format_overlay_text`) replacing heavy Java `StringBuilder` and `String.format` GC spikes on the UI thread every 1000ms.
+  - Supports both full telemetry inspector and compact in-game racing HUD.
+  - Safe JNI bindings (`nativeFormatOverlayText`).
+- [x] **`net/Peer.java` & `AdhocRoamClient.java` -> `roam_rs::peer`**:
+  - Pure Rust MAC string formatting (`format_mac`) eliminating repetitive Java heap allocations.
+  - Safe virtual MAC generation (`generate_virtual_mac`) with locally administered unicast bit.
+  - Native Prometheus Adhoc synthetic IP routing (`resolve_source_ip`).
+  - Safe JNI bindings (`nativeFormatMac`, `nativeGenerateVirtualMac`, `nativeResolveSourceIp`).

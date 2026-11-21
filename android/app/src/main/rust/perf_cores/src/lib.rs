@@ -18,12 +18,14 @@ pub mod tuner;
 pub mod logger;
 pub mod soc_tuner;
 pub mod diagnostics;
+pub mod game_manager;
 pub use adpf::*;
 pub use steering_pacer::*;
 pub use tuner::*;
 pub use logger::*;
 pub use soc_tuner::*;
 pub use diagnostics::*;
+pub use game_manager::*;
 
 use std::fs;
 use std::os::raw::{c_int, c_long};

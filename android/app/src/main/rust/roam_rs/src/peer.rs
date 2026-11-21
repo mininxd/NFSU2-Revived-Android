@@ -8,6 +8,9 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::RwLock;
+use jni::objects::{JByteArray, JClass};
+use jni::sys::{jbyteArray, jint, jstring};
+use jni::JNIEnv;
 
 /// Representation of an active network peer in Free Roam.
 #[repr(C)]
@@ -325,6 +328,95 @@ pub extern "C" fn nfs_roam_coord_set_hub_ip(hub_ip: u32) {
 #[no_mangle]
 pub extern "C" fn nfs_roam_coord_get_hub_ip() -> u32 {
     COORDINATOR.hub_ip.load(Ordering::Acquire)
+}
+
+// ---------------------------------------------------------------------------
+// JNI Exports for io.mininxd.nfsu2.net.Peer and io.mininxd.nfsu2.AdhocRoamClient
+// ---------------------------------------------------------------------------
+
+#[no_mangle]
+pub extern "system" fn Java_io_mininxd_nfsu2_net_Peer_nativeFormatMac(
+    mut env: JNIEnv,
+    _class: JClass,
+    mac_bytes: JByteArray,
+) -> jstring {
+    if mac_bytes.is_null() {
+        return env.new_string("00:00:00:00:00:00").map(|s| s.into_raw()).unwrap_or(std::ptr::null_mut());
+    }
+    let mut buf = [0i8; 6];
+    if env.get_byte_array_region(&mac_bytes, 0, &mut buf).is_ok() {
+        let ubuf = [
+            buf[0] as u8,
+            buf[1] as u8,
+            buf[2] as u8,
+            buf[3] as u8,
+            buf[4] as u8,
+            buf[5] as u8,
+        ];
+        let s = format_mac(&ubuf);
+        return env.new_string(s).map(|s| s.into_raw()).unwrap_or(std::ptr::null_mut());
+    }
+    std::ptr::null_mut()
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_mininxd_nfsu2_AdhocRoamClient_nativeFormatMac(
+    env: JNIEnv,
+    class: JClass,
+    mac_bytes: JByteArray,
+) -> jstring {
+    Java_io_mininxd_nfsu2_net_Peer_nativeFormatMac(env, class, mac_bytes)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_mininxd_nfsu2_AdhocRoamClient_nativeGenerateVirtualMac(
+    env: JNIEnv,
+    _class: JClass,
+) -> jbyteArray {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0x123456789ABCDEF0);
+    let mac = generate_virtual_mac(now);
+    let i8_buf = [
+        mac[0] as i8,
+        mac[1] as i8,
+        mac[2] as i8,
+        mac[3] as i8,
+        mac[4] as i8,
+        mac[5] as i8,
+    ];
+    if let Ok(jarr) = env.new_byte_array(6) {
+        let _ = env.set_byte_array_region(&jarr, 0, &i8_buf);
+        jarr.into_raw()
+    } else {
+        std::ptr::null_mut()
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_mininxd_nfsu2_AdhocRoamClient_nativeResolveSourceIp(
+    mut env: JNIEnv,
+    _class: JClass,
+    mac_bytes: JByteArray,
+) -> jint {
+    if mac_bytes.is_null() {
+        return 0;
+    }
+    let mut buf = [0i8; 6];
+    if env.get_byte_array_region(&mac_bytes, 0, &mut buf).is_ok() {
+        let ubuf = [
+            buf[0] as u8,
+            buf[1] as u8,
+            buf[2] as u8,
+            buf[3] as u8,
+            buf[4] as u8,
+            buf[5] as u8,
+        ];
+        REGISTRY.resolve_source_ip(&ubuf) as jint
+    } else {
+        0
+    }
 }
 
 // ---------------------------------------------------------------------------

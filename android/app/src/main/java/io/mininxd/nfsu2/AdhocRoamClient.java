@@ -106,17 +106,17 @@ public final class AdhocRoamClient {
         }
     }
 
-    public static void nativeSetFrameLimit(int fps) {
-        if (RoamNativeBridge.isLoaded()) {
-            try {
-                RoamNativeBridge.nativeSetFrameLimit(fps);
-            } catch (Throwable t) {
-                Log.d(TAG, "nativeSetFrameLimit: " + t.getMessage());
-            }
-        }
-    }
+    public static native void nativeSetFrameLimit(int fps);
+    public static native String nativeFormatMac(byte[] mac);
+    public static native byte[] nativeGenerateVirtualMac();
+    public static native int nativeResolveSourceIp(byte[] mac);
 
     static {
+        try {
+            System.loadLibrary("roam_rs");
+        } catch (Throwable t) {
+            Log.d(TAG, "libroam_rs not loaded directly: " + t.getMessage());
+        }
         try {
             System.loadLibrary("nfsu2_roam");
         } catch (Throwable t) {
@@ -266,8 +266,16 @@ public final class AdhocRoamClient {
             public void onDatagramReceived(byte[] srcMac, byte[] payload) {
                 String key = formatMac(srcMac);
                 Peer p = peers.get(key);
-                int srcIp = (p != null && p.ip != 0) ? p.ip :
-                        (((srcMac[2] & 0xFF) << 24) | ((srcMac[3] & 0xFF) << 16) | ((srcMac[4] & 0xFF) << 8) | (srcMac[5] & 0xFF));
+                int srcIp = 0;
+                if (p != null && p.ip != 0) {
+                    srcIp = p.ip;
+                } else {
+                    try {
+                        srcIp = nativeResolveSourceIp(srcMac);
+                    } catch (Throwable ignored) {
+                        srcIp = (((srcMac[2] & 0xFF) << 24) | ((srcMac[3] & 0xFF) << 16) | ((srcMac[4] & 0xFF) << 8) | (srcMac[5] & 0xFF));
+                    }
+                }
                 if (RoamNativeBridge.isLoaded()) {
                     try {
                         nativeRoamReceive(srcIp, DEFAULT_GAME_PORT, payload);
@@ -473,19 +481,25 @@ public final class AdhocRoamClient {
     }
 
     private void trackWsPeer(int srcVip) {
-        String key = String.format("%02X:%02X:%02X:%02X:%02X:%02X",
-                0x02, 0x77, (srcVip >> 24) & 0xFF, (srcVip >> 16) & 0xFF, (srcVip >> 8) & 0xFF, srcVip & 0xFF);
+        byte[] mac = new byte[] { 0x02, 0x77, (byte) (srcVip >> 24), (byte) (srcVip >> 16), (byte) (srcVip >> 8), (byte) srcVip };
+        String key = formatMac(mac);
         Peer existing = peers.get(key);
         if (existing != null) {
             existing.lastSeen = System.currentTimeMillis();
             return;
         }
-        byte[] mac = new byte[] { 0x02, 0x77, (byte) (srcVip >> 24), (byte) (srcVip >> 16), (byte) (srcVip >> 8), (byte) srcVip };
         Peer p = new Peer("Player", mac, srcVip, 0);
         peers.put(key, p);
     }
 
     private byte[] getOrCreateVirtualMac(Context context) {
+        if (context == null) {
+            try {
+                return nativeGenerateVirtualMac();
+            } catch (Throwable ignored) {
+                return new byte[] { 0x02, 0x00, 0x0A, 0x4D, 0x00, 0x01 };
+            }
+        }
         SharedPreferences prefs = context.getSharedPreferences("nfsu2_adhoc", Context.MODE_PRIVATE);
         String saved = prefs.getString("virtual_mac", null);
         if (saved != null && saved.length() == 12) {
@@ -498,9 +512,14 @@ public final class AdhocRoamClient {
             } catch (Exception ignored) {}
         }
 
-        byte[] mac = new byte[6];
-        new SecureRandom().nextBytes(mac);
-        mac[0] = (byte) ((mac[0] & 0xFE) | 0x02); // Locally administered unicast
+        byte[] mac;
+        try {
+            mac = nativeGenerateVirtualMac();
+        } catch (Throwable ignored) {
+            mac = new byte[6];
+            new SecureRandom().nextBytes(mac);
+            mac[0] = (byte) ((mac[0] & 0xFE) | 0x02); // Locally administered unicast
+        }
 
         StringBuilder sb = new StringBuilder();
         for (byte b : mac) sb.append(String.format("%02X", b));
@@ -510,7 +529,11 @@ public final class AdhocRoamClient {
 
     private static String formatMac(byte[] mac) {
         if (mac == null || mac.length < 6) return "00:00:00:00:00:00";
-        return String.format("%02X:%02X:%02X:%02X:%02X:%02X",
-                mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+        try {
+            return nativeFormatMac(mac);
+        } catch (Throwable ignored) {
+            return String.format("%02X:%02X:%02X:%02X:%02X:%02X",
+                    mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+        }
     }
 }
