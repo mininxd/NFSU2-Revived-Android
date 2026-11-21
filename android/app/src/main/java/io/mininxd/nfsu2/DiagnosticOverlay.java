@@ -575,7 +575,6 @@ public final class DiagnosticOverlay {
             }
 
             sb.append(String.format(Locale.US, "cpu_usage: %.1f%%\n", cpu));
-            float gpu = getGpuUsagePercent();
             sb.append(String.format(Locale.US, "gpu_usage: %.0f%%\n", gpu));
             // Display system info directly without "system:" label prefix
             sb.append(gpuDriverName).append(", ").append(cpuModel).append(", ").append(systemPlatform).append('\n');
@@ -583,7 +582,6 @@ public final class DiagnosticOverlay {
             textView.setText(sb.toString());
         } else {
             // Compact Mode: sleek right-aligned HUD
-            float gpu = getGpuUsagePercent();
             if (adhocConnected) {
                 if (isRacing) {
                     String text = String.format(Locale.US,
