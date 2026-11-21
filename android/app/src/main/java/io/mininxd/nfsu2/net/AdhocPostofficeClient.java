@@ -28,6 +28,19 @@ import io.mininxd.nfsu2.GameOptions;
 public final class AdhocPostofficeClient {
     private static final String TAG = "AdhocPostoffice";
 
+    private static volatile boolean nativeLoaded = false;
+    static {
+        try {
+            System.loadLibrary("roam_rs");
+            nativeLoaded = true;
+        } catch (Throwable ignored) {}
+    }
+
+    private static native byte[] nativeBuildLogin(String name, byte[] mac);
+    private static native byte[] nativeBuildConnectBssid(byte[] bssid);
+    private static native byte[] nativeBuildInitPdp(byte[] localMac, int port);
+    private static native boolean nativeParseDgramHeader(byte[] header, byte[] outMac, int[] outInfo);
+
     private static final byte OPCODE_PING = 0;
     private static final byte OPCODE_LOGIN = 1;
     private static final byte OPCODE_CONNECT = 2;
@@ -269,31 +282,53 @@ public final class AdhocPostofficeClient {
                     }
                     InputStream in = new BufferedInputStream(postofficeSocket.getInputStream());
 
-                    ByteBuffer initBuf = ByteBuffer.allocate(24).order(ByteOrder.LITTLE_ENDIAN);
-                    initBuf.putInt(AEMU_POSTOFFICE_INIT_PDP);
-                    initBuf.put(localMac);
-                    initBuf.putShort((short) 0);
-                    initBuf.putShort((short) DEFAULT_GAME_PORT);
-                    initBuf.put(new byte[8]);
-                    initBuf.putShort((short) 0);
+                    byte[] initBytes = null;
+                    if (nativeLoaded) {
+                        try {
+                            initBytes = nativeBuildInitPdp(localMac, DEFAULT_GAME_PORT);
+                        } catch (Throwable ignored) {}
+                    }
+                    if (initBytes == null) {
+                        ByteBuffer initBuf = ByteBuffer.allocate(24).order(ByteOrder.LITTLE_ENDIAN);
+                        initBuf.putInt(AEMU_POSTOFFICE_INIT_PDP);
+                        initBuf.put(localMac);
+                        initBuf.putShort((short) 0);
+                        initBuf.putShort((short) DEFAULT_GAME_PORT);
+                        initBuf.put(new byte[8]);
+                        initBuf.putShort((short) 0);
+                        initBytes = initBuf.array();
+                    }
 
                     synchronized (this) {
-                        postofficeOut.write(initBuf.array());
+                        postofficeOut.write(initBytes);
                         postofficeOut.flush();
                     }
 
                     Log.i(TAG, "Postoffice PDP registered on port " + DEFAULT_GAME_PORT);
 
                     byte[] header = new byte[14];
+                    byte[] parsedMac = new byte[6];
+                    int[] parsedInfo = new int[2];
+
                     while (running.get()) {
                         readBytes(in, header, 14);
 
-                        ByteBuffer hb = ByteBuffer.wrap(header).order(ByteOrder.LITTLE_ENDIAN);
-                        byte[] srcMac = new byte[6];
-                        hb.get(srcMac);
-                        hb.getShort();
-                        int srcPort = hb.getShort() & 0xFFFF;
-                        int size = hb.getInt();
+                        byte[] srcMac;
+                        int srcPort;
+                        int size;
+
+                        if (nativeLoaded && nativeParseDgramHeader(header, parsedMac, parsedInfo)) {
+                            srcMac = parsedMac.clone();
+                            srcPort = parsedInfo[0];
+                            size = parsedInfo[1];
+                        } else {
+                            ByteBuffer hb = ByteBuffer.wrap(header).order(ByteOrder.LITTLE_ENDIAN);
+                            srcMac = new byte[6];
+                            hb.get(srcMac);
+                            hb.getShort();
+                            srcPort = hb.getShort() & 0xFFFF;
+                            size = hb.getInt();
+                        }
 
                         if (size <= 0 || size > 65535) break;
 

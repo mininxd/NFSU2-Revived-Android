@@ -31,6 +31,16 @@ import java.util.zip.ZipOutputStream;
  * Download/NFSU2 and /sdcard/NFSU2. A crash autosaves that ZIP when the launcher comes back.
  */
 final class Diagnostics {
+    private static volatile boolean nativeLoaded = false;
+    static {
+        try {
+            System.loadLibrary("perf_cores");
+            nativeLoaded = true;
+        } catch (Throwable ignored) {}
+    }
+
+    private static native String nativeFilterLogSummary(String rawLog);
+
     static final String ISSUES = "https://github.com/mininxd/NFSU2-Revived-Android/issues/new";
     private static final int LIMIT = 4 * 1024 * 1024;
     private static final String PREFS = "nfsu2_diagnostics";
@@ -134,10 +144,36 @@ final class Diagnostics {
     static Uri issueUri(Context context, String crash, String zipLocation) {
         List<String> key = new java.util.ArrayList<>(), tail = new java.util.ArrayList<>();
         String lastFrame = null;
-        for (String line : logTail(0).split("\n")) {
-            if (line.contains("presentation")) lastFrame = compact(line);
-            if (KEY_LINE.matcher(line).find()) key.add(compact(line));
-            else if (line.contains(" NFSU2 ") && !NOISE.matcher(line).find()) tail.add(compact(line));
+
+        boolean handledNatively = false;
+        if (nativeLoaded) {
+            try {
+                String summary = nativeFilterLogSummary(logTail(0));
+                if (summary != null && !summary.isEmpty()) {
+                    String[] divs = summary.split("---DIV---\n");
+                    if (divs.length >= 3) {
+                        String keySection = divs[0].replaceFirst("^KEY:\n", "");
+                        for (String l : keySection.split("\n")) {
+                            if (!l.trim().isEmpty()) key.add(l.trim());
+                        }
+                        String tailSection = divs[1].replaceFirst("^TAIL:\n", "");
+                        for (String l : tailSection.split("\n")) {
+                            if (!l.trim().isEmpty()) tail.add(l.trim());
+                        }
+                        String frameSection = divs[2].replaceFirst("^FRAME:\n", "").trim();
+                        if (!frameSection.isEmpty()) lastFrame = frameSection;
+                        handledNatively = true;
+                    }
+                }
+            } catch (Throwable ignored) {}
+        }
+
+        if (!handledNatively) {
+            for (String line : logTail(0).split("\n")) {
+                if (line.contains("presentation")) lastFrame = compact(line);
+                if (KEY_LINE.matcher(line).find()) key.add(compact(line));
+                else if (line.contains(" NFSU2 ") && !NOISE.matcher(line).find()) tail.add(compact(line));
+            }
         }
         if (key.size() > 35) key = key.subList(key.size() - 35, key.size());
         if (tail.size() > 60) tail = tail.subList(tail.size() - 60, tail.size());

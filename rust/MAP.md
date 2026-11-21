@@ -127,3 +127,18 @@
   - Server URL resolver and WebSocket host classifier (`resolve_http_base_url`, `is_ws_host`).
   - Lightweight JSON player statistics parser for `/players` endpoint (`parse_player_stats`).
   - Safe JNI bindings (`nativeRoomHash`, `nativeGetHttpBaseUrl`, `nativeIsWsHost`, `nativeParsePlayersJson`).
+
+### Wave 9: Virtual Switch Framing, Postoffice PDP Engine & Native Crash Diagnostics (Completed)
+- [x] **`VirtualSwitchClient.java` -> `roam_rs::switch`**:
+  - Zero-allocation RFC 6455 WebSocket client framing and masking engine (`build_ws_frame`).
+  - Fast KIND_UDP (1) datagram encoder (`build_udp_frame`) and parser (`parse_udp_frame`).
+  - Eliminates Java `ByteBuffer.allocate()` and `ByteArrayOutputStream` GC spikes during multiplayer.
+  - Safe JNI bindings (`nativeBuildWsFrame`, `nativeBuildUdpFrame`, `nativeParseUdpFrame`).
+- [x] **`AdhocPostofficeClient.java` -> `roam_rs::postoffice`**:
+  - Prometheus Adhoc protocol packet builders: LOGIN, CONNECT_BSSID, and INIT_PDP.
+  - Zero-copy 14-byte Postoffice datagram header decoder (`parse_postoffice_dgram_header`).
+  - Safe JNI bindings (`nativeBuildLogin`, `nativeBuildConnectBssid`, `nativeBuildInitPdp`, `nativeParseDgramHeader`).
+- [x] **`Diagnostics.java` -> `perf_cores::diagnostics`**:
+  - Fast zero-allocation logcat threadtime line compactor (`compact_threadtime_line`).
+  - Zero-regex diagnostic log filter (`is_key_line`, `is_noise_line`, `filter_diagnostics_log`).
+  - Safe JNI bindings (`nativeFilterLogSummary`).

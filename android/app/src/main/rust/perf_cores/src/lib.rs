@@ -17,11 +17,13 @@ pub mod steering_pacer;
 pub mod tuner;
 pub mod logger;
 pub mod soc_tuner;
+pub mod diagnostics;
 pub use adpf::*;
 pub use steering_pacer::*;
 pub use tuner::*;
 pub use logger::*;
 pub use soc_tuner::*;
+pub use diagnostics::*;
 
 use std::fs;
 use std::os::raw::{c_int, c_long};

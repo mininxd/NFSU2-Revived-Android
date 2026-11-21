@@ -125,6 +125,112 @@ pub fn build_postoffice_dgram_header(
     Ok(TOTAL)
 }
 
+// ---- JNI Exports for AdhocPostofficeClient --------------------------------
+
+#[no_mangle]
+pub extern "system" fn Java_io_mininxd_nfsu2_net_AdhocPostofficeClient_nativeBuildLogin(
+    mut env: jni::JNIEnv,
+    _class: jni::objects::JClass,
+    name: jni::objects::JString,
+    mac: jni::objects::JByteArray,
+) -> jni::sys::jbyteArray {
+    let name_str = match env.get_string(&name) {
+        Ok(s) => s.to_string_lossy().to_string(),
+        Err(_) => return std::ptr::null_mut(),
+    };
+    let mac_vec = match env.convert_byte_array(&mac) {
+        Ok(v) => v,
+        Err(_) => return std::ptr::null_mut(),
+    };
+    if mac_vec.len() < 6 {
+        return std::ptr::null_mut();
+    }
+    let mut mac_arr = [0u8; 6];
+    mac_arr.copy_from_slice(&mac_vec[..6]);
+
+    let mut buf = [0u8; 135];
+    if let Ok(written) = build_adhoc_login(&name_str, &mac_arr, &mut buf) {
+        env.byte_array_from_slice(&buf[..written]).map(|a| a.into_raw()).unwrap_or(std::ptr::null_mut())
+    } else {
+        std::ptr::null_mut()
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_mininxd_nfsu2_net_AdhocPostofficeClient_nativeBuildConnectBssid(
+    mut env: jni::JNIEnv,
+    _class: jni::objects::JClass,
+    bssid: jni::objects::JByteArray,
+) -> jni::sys::jbyteArray {
+    let b_vec = match env.convert_byte_array(&bssid) {
+        Ok(v) => v,
+        Err(_) => return std::ptr::null_mut(),
+    };
+    if b_vec.len() < 6 {
+        return std::ptr::null_mut();
+    }
+    let mut b_arr = [0u8; 6];
+    b_arr.copy_from_slice(&b_vec[..6]);
+
+    let mut buf = [0u8; 7];
+    if let Ok(written) = build_adhoc_connect_bssid(&b_arr, &mut buf) {
+        env.byte_array_from_slice(&buf[..written]).map(|a| a.into_raw()).unwrap_or(std::ptr::null_mut())
+    } else {
+        std::ptr::null_mut()
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_mininxd_nfsu2_net_AdhocPostofficeClient_nativeBuildInitPdp(
+    mut env: jni::JNIEnv,
+    _class: jni::objects::JClass,
+    local_mac: jni::objects::JByteArray,
+    port: jni::sys::jint,
+) -> jni::sys::jbyteArray {
+    let m_vec = match env.convert_byte_array(&local_mac) {
+        Ok(v) => v,
+        Err(_) => return std::ptr::null_mut(),
+    };
+    if m_vec.len() < 6 {
+        return std::ptr::null_mut();
+    }
+    let mut m_arr = [0u8; 6];
+    m_arr.copy_from_slice(&m_vec[..6]);
+
+    let mut buf = [0u8; 24];
+    if let Ok(written) = build_postoffice_init_pdp(&m_arr, port as u16, &mut buf) {
+        env.byte_array_from_slice(&buf[..written]).map(|a| a.into_raw()).unwrap_or(std::ptr::null_mut())
+    } else {
+        std::ptr::null_mut()
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_mininxd_nfsu2_net_AdhocPostofficeClient_nativeParseDgramHeader(
+    mut env: jni::JNIEnv,
+    _class: jni::objects::JClass,
+    header: jni::objects::JByteArray,
+    out_mac: jni::objects::JByteArray,
+    out_info: jni::objects::JIntArray,
+) -> jni::sys::jboolean {
+    if header.is_null() || out_mac.is_null() || out_info.is_null() {
+        return 0;
+    }
+    let h_vec = match env.convert_byte_array(&header) {
+        Ok(v) => v,
+        Err(_) => return 0,
+    };
+    if let Some((mac, port, len)) = parse_postoffice_dgram_header(&h_vec) {
+        let i8_mac = unsafe { std::slice::from_raw_parts(mac.as_ptr() as *const i8, 6) };
+        let _ = env.set_byte_array_region(&out_mac, 0, i8_mac);
+        let info = [port as i32, len as i32];
+        let _ = env.set_int_array_region(&out_info, 0, &info);
+        1
+    } else {
+        0
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

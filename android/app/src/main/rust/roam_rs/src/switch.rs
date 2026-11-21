@@ -326,6 +326,98 @@ pub unsafe extern "C" fn roam_switch_parse_udp(
     }
 }
 
+// ---- JNI Exports for VirtualSwitchClient ----------------------------------
+
+#[no_mangle]
+pub extern "system" fn Java_io_mininxd_nfsu2_net_VirtualSwitchClient_nativeBuildWsFrame(
+    env: jni::JNIEnv,
+    _class: jni::objects::JClass,
+    opcode: jni::sys::jint,
+    payload: jni::objects::JByteArray,
+    mask: jni::objects::JByteArray,
+) -> jni::sys::jbyteArray {
+    let payload_vec = if !payload.is_null() {
+        env.convert_byte_array(&payload).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    let mask_arr = if !mask.is_null() {
+        let m_vec = env.convert_byte_array(&mask).unwrap_or_default();
+        if m_vec.len() >= 4 {
+            Some([m_vec[0], m_vec[1], m_vec[2], m_vec[3]])
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let mut out = vec![0u8; 14 + payload_vec.len()];
+    match build_ws_frame(opcode as u8, &payload_vec, mask_arr, &mut out) {
+        Ok(written) => {
+            out.truncate(written);
+            match env.byte_array_from_slice(&out) {
+                Ok(arr) => arr.into_raw(),
+                Err(_) => std::ptr::null_mut(),
+            }
+        }
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_mininxd_nfsu2_net_VirtualSwitchClient_nativeBuildUdpFrame(
+    env: jni::JNIEnv,
+    _class: jni::objects::JClass,
+    src_vip: jni::sys::jint,
+    dst_vip: jni::sys::jint,
+    dport: jni::sys::jint,
+    payload: jni::objects::JByteArray,
+) -> jni::sys::jbyteArray {
+    let payload_vec = if !payload.is_null() {
+        env.convert_byte_array(&payload).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    let mut out = vec![0u8; 16 + payload_vec.len()];
+    match build_udp_frame(src_vip as u32, dst_vip as u32, dport as u16, &payload_vec, &mut out) {
+        Ok(written) => {
+            out.truncate(written);
+            match env.byte_array_from_slice(&out) {
+                Ok(arr) => arr.into_raw(),
+                Err(_) => std::ptr::null_mut(),
+            }
+        }
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_mininxd_nfsu2_net_VirtualSwitchClient_nativeParseUdpFrame(
+    mut env: jni::JNIEnv,
+    _class: jni::objects::JClass,
+    frame: jni::objects::JByteArray,
+    out_info: jni::objects::JIntArray,
+) -> jni::sys::jbyteArray {
+    if frame.is_null() || out_info.is_null() {
+        return std::ptr::null_mut();
+    }
+    let frame_vec = match env.convert_byte_array(&frame) {
+        Ok(v) => v,
+        Err(_) => return std::ptr::null_mut(),
+    };
+    if let Some(view) = parse_udp_frame(&frame_vec) {
+        let info = [view.src_vip as i32, view.sport as i32];
+        let _ = env.set_int_array_region(&out_info, 0, &info);
+        match env.byte_array_from_slice(view.payload) {
+            Ok(arr) => arr.into_raw(),
+            Err(_) => std::ptr::null_mut(),
+        }
+    } else {
+        std::ptr::null_mut()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

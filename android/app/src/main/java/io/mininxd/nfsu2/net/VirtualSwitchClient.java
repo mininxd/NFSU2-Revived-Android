@@ -35,6 +35,18 @@ import javax.net.ssl.SSLSocketFactory;
 public final class VirtualSwitchClient {
     private static final String TAG = "VirtualSwitchClient";
 
+    private static volatile boolean nativeLoaded = false;
+    static {
+        try {
+            System.loadLibrary("roam_rs");
+            nativeLoaded = true;
+        } catch (Throwable ignored) {}
+    }
+
+    private static native byte[] nativeBuildWsFrame(int opcode, byte[] payload, byte[] mask);
+    private static native byte[] nativeBuildUdpFrame(int srcVip, int dstVip, int dport, byte[] payload);
+    private static native byte[] nativeParseUdpFrame(byte[] frame, int[] outInfo);
+
     public static final int DEFAULT_GAME_PORT = 47210;
     public static final int KIND_UDP = 1;
     public static final int KIND_LAN_UDP = 3;
@@ -479,6 +491,16 @@ public final class VirtualSwitchClient {
     public synchronized void sendDgram(int dstVip, int dport, byte[] payload) {
         if (!running.get() || wsOut == null || payload == null || payload.length == 0 || myVirtualIp == 0) return;
         try {
+            int destPort = (dport != 0 ? dport : DEFAULT_GAME_PORT);
+            if (nativeLoaded) {
+                byte[] frame = nativeBuildUdpFrame(myVirtualIp, dstVip, destPort, payload);
+                if (frame != null && frame.length > 0) {
+                    sendWsFrame(2, frame);
+                    NetLog.i(TAG, "Sent switch UDP dgram to " + NetLog.ipStr(dstVip) + ":" + destPort
+                            + " (len=" + payload.length + ")");
+                    return;
+                }
+            }
             ByteBuffer buf = ByteBuffer.allocate(16 + payload.length);
             buf.put((byte) KIND_UDP);
             buf.put((byte) 0);
@@ -487,11 +509,11 @@ public final class VirtualSwitchClient {
             buf.putInt(myVirtualIp);
             buf.putInt(dstVip);
             buf.putShort((short) DEFAULT_GAME_PORT);
-            buf.putShort((short) (dport != 0 ? dport : DEFAULT_GAME_PORT));
+            buf.putShort((short) destPort);
             buf.put(payload);
 
             sendWsFrame(2, buf.array());
-            NetLog.i(TAG, "Sent switch UDP dgram to " + NetLog.ipStr(dstVip) + ":" + (dport != 0 ? dport : DEFAULT_GAME_PORT)
+            NetLog.i(TAG, "Sent switch UDP dgram to " + NetLog.ipStr(dstVip) + ":" + destPort
                     + " (len=" + payload.length + ")");
         } catch (Exception e) {
             Log.d(TAG, "sendDgram failed: " + e.getMessage());
@@ -517,6 +539,18 @@ public final class VirtualSwitchClient {
         if (wsOut == null || payload == null) return;
         byte[] mask = new byte[4];
         new SecureRandom().nextBytes(mask);
+
+        if (nativeLoaded) {
+            try {
+                byte[] raw = nativeBuildWsFrame(opcode, payload, mask);
+                if (raw != null && raw.length > 0) {
+                    wsOut.write(raw);
+                    wsOut.flush();
+                    return;
+                }
+            } catch (Throwable ignored) {}
+        }
+
         int len = payload.length;
 
         ByteArrayOutputStream baos = new ByteArrayOutputStream(len + 14);
