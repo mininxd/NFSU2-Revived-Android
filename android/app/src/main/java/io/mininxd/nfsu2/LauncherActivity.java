@@ -307,12 +307,12 @@ public final class LauncherActivity extends Activity {
         }
         boolean ready = exe && !languages().isEmpty();
         String displayPath = root.getAbsolutePath();
-        status.setText(!allowed ? "Allow file access to read internal storage/nfsu2."
-                : ready ? ("Location: " + displayPath) : ("Game not found in " + displayPath + ".\nCopy game files or select custom folder."));
+        status.setText(ready ? displayPath : "");
+        status.setVisibility(ready ? View.VISIBLE : View.GONE);
         play.setEnabled(ready);
         play.setAlpha(ready ? 1f : .45f);
         access.setVisibility(allowed ? View.GONE : View.VISIBLE);
-        chooseLocation.setVisibility(allowed ? View.VISIBLE : View.GONE);
+        chooseLocation.setVisibility(allowed && !ready ? View.VISIBLE : View.GONE);
 
         String dlUrl = getGamefilesUrl();
         File localCacheZip = new File(Environment.getExternalStorageDirectory(), "cache/NFSU2_GameFiles.zip");
