@@ -215,3 +215,55 @@ impl Drop for PipelineCacheManager {
         let _ = fs::remove_file(&self.marker_path);
     }
 }
+
+/// Atomically backs up and resets the graphics pipeline cache directory.
+/// Renames `<cache_dir>/<dir_name>` to `<cache_dir>/<dir_name>-reset-<timestamp>`.
+pub fn rotate_and_reset_cache_dir(cache_dir: &str, dir_name: &str) -> Result<String, String> {
+    let base = Path::new(cache_dir);
+    let target = base.join(dir_name);
+    if !target.exists() {
+        return Ok(String::new());
+    }
+    if !target.is_dir() {
+        return Err("Cache path exists but is not a directory".into());
+    }
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let backup_name = format!("{}-reset-{}", dir_name, now);
+    let backup_path = base.join(&backup_name);
+
+    fs::rename(&target, &backup_path).map_err(|e| format!("Failed to rename cache directory: {}", e))?;
+    Ok(backup_name)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn Java_io_mininxd_nfsu2_GraphicsCache_nativeResetCache(
+    mut env: jni::JNIEnv,
+    _class: jni::objects::JClass,
+    j_cache_dir: jni::sys::jstring,
+    j_dir_name: jni::sys::jstring,
+) -> jni::sys::jstring {
+    if j_cache_dir.is_null() || j_dir_name.is_null() {
+        return std::ptr::null_mut();
+    }
+    let cache_dir: String = match env.get_string(&jni::objects::JString::from_raw(j_cache_dir)) {
+        Ok(s) => s.into(),
+        Err(_) => return std::ptr::null_mut(),
+    };
+    let dir_name: String = match env.get_string(&jni::objects::JString::from_raw(j_dir_name)) {
+        Ok(s) => s.into(),
+        Err(_) => return std::ptr::null_mut(),
+    };
+    match rotate_and_reset_cache_dir(&cache_dir, &dir_name) {
+        Ok(b) => {
+            let res = if b.is_empty() { "OK" } else { &b };
+            env.new_string(res).map(|s| s.into_raw()).unwrap_or(std::ptr::null_mut())
+        }
+        Err(e) => {
+            let err_msg = format!("ERROR: {}", e);
+            env.new_string(err_msg).map(|s| s.into_raw()).unwrap_or(std::ptr::null_mut())
+        }
+    }
+}

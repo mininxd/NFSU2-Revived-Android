@@ -15,6 +15,17 @@ import org.json.JSONObject;
 public final class QuickChatManager {
     private static final String TAG = "QuickChatManager";
 
+    private static volatile boolean nativeLoaded = false;
+    static {
+        try {
+            System.loadLibrary("roam_rs");
+            nativeLoaded = true;
+        } catch (Throwable ignored) {}
+    }
+
+    private static native String nativeFormatReceivedChat(String json);
+    private static native int nativeStickToGroup(float x, float y, float deadzone);
+
     public static final String[][] QUICK_CHAT_GROUPS = {
         { "Hey!", "Nice car!", "Thanks!", "Bye!" },           // Group 0: Up / Hi
         { "Yes", "No", "Sorry!", "lol" },                     // Group 1: Right / Reply
@@ -80,6 +91,15 @@ public final class QuickChatManager {
 
     public static void onQuickChatReceived(String json) {
         if (json == null || json.isEmpty()) return;
+        if (nativeLoaded) {
+            try {
+                String formatted = nativeFormatReceivedChat(json);
+                if (formatted != null && !formatted.isEmpty()) {
+                    showToast(formatted);
+                    return;
+                }
+            } catch (Throwable ignored) {}
+        }
         try {
             JSONObject obj = new JSONObject(json);
             if (obj.has("group")) {

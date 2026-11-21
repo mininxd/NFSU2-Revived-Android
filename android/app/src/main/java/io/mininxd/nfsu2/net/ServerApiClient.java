@@ -25,6 +25,19 @@ import io.mininxd.nfsu2.GameOptions;
 public final class ServerApiClient {
     private static final String TAG = "ServerApiClient";
 
+    private static volatile boolean nativeLoaded = false;
+    static {
+        try {
+            System.loadLibrary("roam_rs");
+            nativeLoaded = true;
+        } catch (Throwable ignored) {}
+    }
+
+    private static native int nativeRoomHash(String name);
+    private static native String nativeGetHttpBaseUrl(String host, String defaultHost);
+    private static native boolean nativeIsWsHost(String host);
+    private static native int nativeParsePlayersJson(String json, int roomHash, int[] outStats);
+
     public interface StatsCallback {
         void onStatsUpdated(int total, int roam, int online, int room);
     }
@@ -50,6 +63,12 @@ public final class ServerApiClient {
     public void setRoomRoamPlayers(int count) { if (count >= 0) this.roomRoamPlayers = count; }
 
     public static String getHttpBaseUrl(String hostInput) {
+        if (nativeLoaded) {
+            try {
+                String url = nativeGetHttpBaseUrl(hostInput, GameOptions.DEFAULT_ROAM_SERVER);
+                if (url != null && !url.isEmpty()) return url;
+            } catch (Throwable ignored) {}
+        }
         if (hostInput == null || hostInput.trim().isEmpty()) {
             hostInput = GameOptions.DEFAULT_ROAM_SERVER;
         }
@@ -88,6 +107,11 @@ public final class ServerApiClient {
      * Empty string returns 0 (the public open world).
      */
     public static int roomHash(String name) {
+        if (nativeLoaded) {
+            try {
+                return nativeRoomHash(name);
+            } catch (Throwable ignored) {}
+        }
         if (name == null || name.trim().isEmpty()) return 0;
         int h = 0x811c9dc5;
         int kept = 0;
@@ -104,6 +128,11 @@ public final class ServerApiClient {
     }
 
     public static boolean isWsHost(String host) {
+        if (nativeLoaded) {
+            try {
+                return nativeIsWsHost(host);
+            } catch (Throwable ignored) {}
+        }
         if (host == null) return false;
         String h = host.toLowerCase().trim();
         if (h.startsWith("ws://") || h.startsWith("wss://") || h.startsWith("http://") || h.startsWith("https://")) {
@@ -195,11 +224,24 @@ public final class ServerApiClient {
                         }
                         in.close();
 
-                        JSONObject obj = new JSONObject(baos.toString(StandardCharsets.UTF_8.name()));
-                        int p = obj.optInt("players", -1);
-                        int r = obj.optInt("roam", -1);
-                        int on = obj.optInt("online", -1);
-                        int rm = obj.has("room") ? obj.optInt("room", -1) : r;
+                        String jsonStr = baos.toString(StandardCharsets.UTF_8.name());
+                        int p = -1, r = -1, on = -1, rm = -1;
+                        if (nativeLoaded) {
+                            int[] stats = new int[4];
+                            if (nativeParsePlayersJson(jsonStr, hash, stats) != 0) {
+                                p = stats[0];
+                                r = stats[1];
+                                on = stats[2];
+                                rm = stats[3];
+                            }
+                        }
+                        if (p == -1 && r == -1) {
+                            JSONObject obj = new JSONObject(jsonStr);
+                            p = obj.optInt("players", -1);
+                            r = obj.optInt("roam", -1);
+                            on = obj.optInt("online", -1);
+                            rm = obj.has("room") ? obj.optInt("room", -1) : r;
+                        }
 
                         if (p >= 0) totalServerPlayers = p;
                         if (r >= 0) totalRoamPlayers = r;

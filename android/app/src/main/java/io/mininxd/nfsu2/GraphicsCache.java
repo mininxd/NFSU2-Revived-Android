@@ -9,6 +9,16 @@ import java.util.List;
 
 /** Only disposable graphics caches in this application's private cache directory. */
 final class GraphicsCache {
+    private static volatile boolean nativeLoaded = false;
+    static {
+        try {
+            System.loadLibrary("graphics_cache");
+            nativeLoaded = true;
+        } catch (Throwable ignored) {}
+    }
+
+    private static native String nativeResetCache(String cacheDir, String dirName);
+
     // Keep in sync with configurePipelineCache() in main.cpp. Epoch 2 excludes
     // caches from the previous DXVK preparation; those files remain untouched.
     static final String DIRECTORY = "dxvk-v2";
@@ -28,11 +38,22 @@ final class GraphicsCache {
             if (running != null) for (ActivityManager.RunningAppProcessInfo process : running)
                 if (process.uid == Process.myUid() && process.processName.equals(activity.getPackageName() + ":game"))
                     Process.killProcess(process.pid);
-            File cache = new File(activity.getCacheDir(), DIRECTORY);
-            if (cache.exists()) {
-                File backup = new File(activity.getCacheDir(), DIRECTORY + "-reset-" + System.currentTimeMillis());
-                if (!cache.isDirectory() || !cache.renameTo(backup))
-                    throw new IllegalStateException("Could not reset graphics cache.");
+            if (nativeLoaded) {
+                try {
+                    String res = nativeResetCache(activity.getCacheDir().getAbsolutePath(), DIRECTORY);
+                    if (res != null && res.startsWith("ERROR:")) {
+                        throw new IllegalStateException(res.substring(6).trim());
+                    }
+                } catch (RuntimeException re) {
+                    throw re;
+                } catch (Throwable ignored) {}
+            } else {
+                File cache = new File(activity.getCacheDir(), DIRECTORY);
+                if (cache.exists()) {
+                    File backup = new File(activity.getCacheDir(), DIRECTORY + "-reset-" + System.currentTimeMillis());
+                    if (!cache.isDirectory() || !cache.renameTo(backup))
+                        throw new IllegalStateException("Could not reset graphics cache.");
+                }
             }
             new AlertDialog.Builder(activity).setTitle("Graphics cache ready")
                     .setMessage("Next startup will generate a new cache. Previous cache is backed up in app private cache.")

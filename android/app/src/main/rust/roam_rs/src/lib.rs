@@ -15,6 +15,8 @@ pub mod postoffice;
 pub mod peer;
 pub mod classic_online;
 pub mod local_bridge;
+pub mod quick_chat;
+pub mod server_api;
 
 pub use crc::*;
 pub use hash::*;
@@ -31,3 +33,5 @@ pub use postoffice::*;
 pub use peer::*;
 pub use classic_online::*;
 pub use local_bridge::*;
+pub use quick_chat::*;
+pub use server_api::*;

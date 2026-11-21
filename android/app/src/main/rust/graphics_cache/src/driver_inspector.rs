@@ -217,6 +217,99 @@ pub unsafe extern "C" fn Java_io_mininxd_nfsu2_DriverArchive_nativeDeleteRecursi
     if fs::remove_dir_all(path).is_ok() { 1 } else { 0 }
 }
 
+/// Discovers installed GPU driver packages in the specified root directory.
+/// Returns a newline-separated list where each entry is tab-separated:
+/// `id\tname\tload_dir\tlibrary_name`
+pub fn scan_gpu_drivers(root_dir: &str) -> String {
+    let root = Path::new(root_dir);
+    if !root.is_dir() {
+        return String::new();
+    }
+
+    let entries = match fs::read_dir(root) {
+        Ok(e) => e,
+        Err(_) => return String::new(),
+    };
+
+    let mut out = String::with_capacity(512);
+
+    for entry in entries.flatten() {
+        let dir = entry.path();
+        if !dir.is_dir() {
+            continue;
+        }
+
+        let dir_name = match dir.file_name().and_then(|n| n.to_str()) {
+            Some(n) => n,
+            None => continue,
+        };
+        if dir_name.starts_with('.') {
+            continue;
+        }
+
+        let json_content = if let Ok(c) = fs::read_to_string(dir.join("driver.json")) {
+            c
+        } else if let Ok(c) = fs::read_to_string(dir.join("meta.json")) {
+            c
+        } else {
+            continue;
+        };
+
+        let lib_name = match parse_json_string_value(&json_content, "libraryName") {
+            Some(l) => l,
+            None => continue,
+        };
+
+        if !lib_name.ends_with(".so") || lib_name.contains('/') || lib_name.contains('\\') {
+            continue;
+        }
+
+        let name = parse_json_string_value(&json_content, "name").unwrap_or_else(|| dir_name.to_string());
+        let folder = parse_json_string_value(&json_content, "folder").unwrap_or_else(|| "payload".to_string());
+        let load_dir = dir.join(&folder);
+
+        let lib_file = load_dir.join(&lib_name);
+        let alt_lib = dir.join(&lib_name);
+
+        let valid_load_dir = if lib_file.is_file() {
+            load_dir
+        } else if alt_lib.is_file() {
+            dir
+        } else {
+            continue;
+        };
+
+        out.push_str(dir_name);
+        out.push('\t');
+        out.push_str(&name);
+        out.push('\t');
+        out.push_str(&valid_load_dir.to_string_lossy());
+        out.push('\t');
+        out.push_str(&lib_name);
+        out.push('\n');
+    }
+
+    out
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn Java_io_mininxd_nfsu2_GpuDrivers_nativeScanDrivers(
+    mut env: jni::JNIEnv,
+    _class: jni::objects::JClass,
+    j_root: jni::sys::jstring,
+) -> jni::sys::jstring {
+    if j_root.is_null() {
+        return std::ptr::null_mut();
+    }
+    let root_str: String = match env.get_string(&jni::objects::JString::from_raw(j_root)) {
+        Ok(s) => s.into(),
+        Err(_) => return std::ptr::null_mut(),
+    };
+
+    let result = scan_gpu_drivers(&root_str);
+    env.new_string(result).map(|s| s.into_raw()).unwrap_or(std::ptr::null_mut())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

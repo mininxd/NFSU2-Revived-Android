@@ -108,3 +108,22 @@
   - In-place ASCII IP rewriter (`rewrite_server_addresses` from `10.77.0.1` to `127.0.0.1`).
   - RFC/protocol constants: `TCP_OP_SYN`, `TCP_OP_SYNACK`, `TCP_OP_RST`, `TCP_OP_DATA`, `TCP_OP_FIN`, `VHOST_VIP`.
   - Safe JNI bindings (`nativeBuildTcpFrame`, `nativeRewriteServerAddresses`, `nativeParseTcpHeader`).
+
+### Wave 8: GPU Driver Discovery, Quick Chat Protocol, Server API & Pipeline Cache Management (Completed)
+- [x] **`GpuDrivers.java` -> `graphics_cache::driver_inspector`**:
+  - Pure Rust GPU driver package scanner and `driver.json` / `meta.json` metadata parser (`scan_gpu_drivers`).
+  - Strict path traversal validation, ELF ARM64 `.so` existence check.
+  - Safe JNI bindings (`nativeScanDrivers`).
+- [x] **`GraphicsCache.java` -> `graphics_cache::pipeline_cache`**:
+  - Pure Rust atomic pipeline cache backup and rotation engine (`rotate_and_reset_cache_dir`).
+  - Timestamped directory backup (`dxvk-v2-reset-<timestamp>`).
+  - Safe JNI bindings (`nativeResetCache`).
+- [x] **`QuickChatManager.java` -> `roam_rs::quick_chat`**:
+  - Pure Rust radial stick gesture classifier (`stick_to_radial_group`) with deadzone thresholding.
+  - User notification JSON formatter (`format_quick_chat_json`) replacing Java JSONObject parsing.
+  - Safe JNI bindings (`nativeFormatReceivedChat`, `nativeStickToGroup`).
+- [x] **`ServerApiClient.java` -> `roam_rs::server_api`**:
+  - FNV-1a room hash matching nfsu2-web and roam companion in pure Rust (`room_hash`).
+  - Server URL resolver and WebSocket host classifier (`resolve_http_base_url`, `is_ws_host`).
+  - Lightweight JSON player statistics parser for `/players` endpoint (`parse_player_stats`).
+  - Safe JNI bindings (`nativeRoomHash`, `nativeGetHttpBaseUrl`, `nativeIsWsHost`, `nativeParsePlayersJson`).

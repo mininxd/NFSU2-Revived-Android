@@ -20,6 +20,16 @@ import java.util.*;
 final class GpuDrivers {
     private static final String TAG = "NFSU2-GpuDrivers";
 
+    private static volatile boolean nativeLoaded = false;
+    static {
+        try {
+            System.loadLibrary("graphics_cache");
+            nativeLoaded = true;
+        } catch (Throwable ignored) {}
+    }
+
+    private static native String nativeScanDrivers(String rootPath);
+
     static final class Driver {
         final String id, name, library;
         final File directory;
@@ -36,7 +46,25 @@ final class GpuDrivers {
 
     static List<Driver> list(Context context) {
         List<Driver> result = new ArrayList<>();
-        File[] dirs = root(context).listFiles(File::isDirectory);
+        File rootDir = root(context);
+
+        if (nativeLoaded) {
+            try {
+                String scanned = nativeScanDrivers(rootDir.getAbsolutePath());
+                if (scanned != null && !scanned.isEmpty()) {
+                    for (String line : scanned.split("\n")) {
+                        String[] parts = line.split("\t");
+                        if (parts.length >= 4) {
+                            result.add(new Driver(parts[0], parts[1], new File(parts[2]), parts[3]));
+                        }
+                    }
+                    result.sort(Comparator.comparing(d -> d.name.toLowerCase(Locale.ROOT)));
+                    return result;
+                }
+            } catch (Throwable ignored) {}
+        }
+
+        File[] dirs = rootDir.listFiles(File::isDirectory);
         if (dirs != null) for (File dir : dirs) {
             try {
                 if (dir.getName().startsWith(".")) continue;
