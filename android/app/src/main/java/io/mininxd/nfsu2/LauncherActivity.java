@@ -63,7 +63,7 @@ public final class LauncherActivity extends Activity {
         {"Magyar", "Hungarian", "Hungarian"}
     };
 
-    private LinearLayout checksList, optionsList;
+    private LinearLayout optionsList;
     private TextView status;
     private Button play, access, downloadFiles, chooseLocation;
     private Button btnPresetPerformance, btnPresetBalanced, btnPresetOriginal;
@@ -226,9 +226,12 @@ public final class LauncherActivity extends Activity {
         status = label("", 13, 0xDDFFFFFF, false);
         status.setPadding(0, dp(4), 0, dp(6));
         card.addView(status);
-        checksList = new LinearLayout(this);
-        checksList.setOrientation(LinearLayout.VERTICAL);
-        card.addView(checksList);
+
+        chooseLocation = actionButton("Choose Game Folder", false);
+        chooseLocation.setOnClickListener(view -> showChooseLocationDialog());
+        LinearLayout.LayoutParams chooseParams = new LinearLayout.LayoutParams(-1, dp(42));
+        chooseParams.topMargin = dp(4);
+        card.addView(chooseLocation, chooseParams);
 
         play = actionButton("PLAY", true);
         play.setOnClickListener(view -> play());
@@ -273,12 +276,6 @@ public final class LauncherActivity extends Activity {
         accessParams.topMargin = dp(8);
         left.addView(access, accessParams);
 
-        chooseLocation = actionButton("Choose Game Folder", false);
-        chooseLocation.setOnClickListener(view -> showChooseLocationDialog());
-        LinearLayout.LayoutParams chooseParams = new LinearLayout.LayoutParams(-1, dp(46));
-        chooseParams.topMargin = dp(8);
-        left.addView(chooseLocation, chooseParams);
-
         downloadFiles = actionButton("Download Game Data", false);
         downloadFiles.setOnClickListener(view -> startDownloadOrExtractGameData());
         LinearLayout.LayoutParams dlParams = new LinearLayout.LayoutParams(-1, dp(46));
@@ -290,10 +287,7 @@ public final class LauncherActivity extends Activity {
         LinearLayout.LayoutParams rightParams = new LinearLayout.LayoutParams(0, -1, 1f);
         rightParams.leftMargin = dp(24);
         columns.addView(right, rightParams);
-        right.addView(label("SETTINGS & MULTIPLAYER", 12, ACCENT, true));
-        TextView note = label("Applied when pressing PLAY.", 12, TEXT_HINT, false);
-        note.setPadding(0, dp(2), 0, dp(4));
-        right.addView(note);
+        right.addView(label("SETTINGS", 12, ACCENT, true));
         ScrollView scroll = new ScrollView(this);
         optionsList = new LinearLayout(this);
         optionsList.setOrientation(LinearLayout.VERTICAL);
@@ -306,17 +300,11 @@ public final class LauncherActivity extends Activity {
         boolean allowed = allowed();
         File root = gameRoot();
         if (allowed) ensureScriptsInstalled(root);
-        checksList.removeAllViews();
         boolean exe = allowed && new File(root, "SPEED2.EXE").isFile();
         if (allowed && !exe) {
             ensureGamefilesInstalled(root);
             exe = new File(root, "SPEED2.EXE").isFile();
         }
-        addCheck("SPEED2.EXE", exe, true);
-        StringBuilder missing = new StringBuilder();
-        for (String folder : new String[] {"GLOBAL", "TRACKS", "CARS", "FRONTEND", "LANGUAGES"})
-            if (!(allowed && new File(root, folder).isDirectory())) missing.append(missing.length() == 0 ? "" : ", ").append(folder);
-        addCheck(missing.length() == 0 ? "Game folders" : "Missing folders: " + missing, missing.length() == 0, true);
         boolean ready = exe && !languages().isEmpty();
         String displayPath = root.getAbsolutePath();
         status.setText(!allowed ? "Allow file access to read internal storage/nfsu2."
@@ -324,7 +312,7 @@ public final class LauncherActivity extends Activity {
         play.setEnabled(ready);
         play.setAlpha(ready ? 1f : .45f);
         access.setVisibility(allowed ? View.GONE : View.VISIBLE);
-        chooseLocation.setVisibility(allowed && !ready ? View.VISIBLE : View.GONE);
+        chooseLocation.setVisibility(allowed ? View.VISIBLE : View.GONE);
 
         String dlUrl = getGamefilesUrl();
         File localCacheZip = new File(Environment.getExternalStorageDirectory(), "cache/NFSU2_GameFiles.zip");
@@ -1380,13 +1368,6 @@ public final class LauncherActivity extends Activity {
     }
 
     // ---- Widgets ---------------------------------------------------------------------------------------
-
-    private void addCheck(String name, boolean ok, boolean required) {
-        TextView row = label((ok ? "✓  " : required ? "✗  " : "!  ") + name + (ok || required ? "" : " · optional"), 13,
-                ok ? COLOR_OK : required ? COLOR_ERR : COLOR_WARN, false);
-        row.setPadding(0, dp(2), 0, dp(2));
-        checksList.addView(row);
-    }
 
     private View optionRow(String title, String value, Runnable onClick) {
         LinearLayout row = new LinearLayout(this);
