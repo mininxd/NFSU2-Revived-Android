@@ -684,11 +684,38 @@ pub unsafe extern "C" fn nfs_native_gles_set_window(window: *mut c_void) -> c_in
         }
     }
 
-    let context_attribs = [
+    // High priority GLES context attributes (EGL_IMG_context_priority: forces GPU governor into high frequency)
+    const EGL_CONTEXT_PRIORITY_LEVEL_IMG: i32 = 0x3100;
+    const EGL_CONTEXT_PRIORITY_HIGH_IMG: i32 = 0x3101;
+
+    // 1. Try GLES 3 with High Priority Context
+    let high_prio_attribs = [
         EGL_CONTEXT_CLIENT_VERSION, 3,
+        EGL_CONTEXT_PRIORITY_LEVEL_IMG, EGL_CONTEXT_PRIORITY_HIGH_IMG,
         EGL_NONE,
     ];
-    let mut context = (egl.egl_create_context)(display, config, EGL_NO_CONTEXT, context_attribs.as_ptr());
+    let mut context = (egl.egl_create_context)(display, config, EGL_NO_CONTEXT, high_prio_attribs.as_ptr());
+
+    // 2. Fallback to standard GLES 3
+    if context.is_null() {
+        let context_attribs = [
+            EGL_CONTEXT_CLIENT_VERSION, 3,
+            EGL_NONE,
+        ];
+        context = (egl.egl_create_context)(display, config, EGL_NO_CONTEXT, context_attribs.as_ptr());
+    }
+
+    // 3. Fallback to GLES 2 with High Priority Context
+    if context.is_null() {
+        let es2_high_attribs = [
+            EGL_CONTEXT_CLIENT_VERSION, 2,
+            EGL_CONTEXT_PRIORITY_LEVEL_IMG, EGL_CONTEXT_PRIORITY_HIGH_IMG,
+            EGL_NONE,
+        ];
+        context = (egl.egl_create_context)(display, config, EGL_NO_CONTEXT, es2_high_attribs.as_ptr());
+    }
+
+    // 4. Fallback to standard GLES 2
     if context.is_null() {
         let es2_attribs = [
             EGL_CONTEXT_CLIENT_VERSION, 2,
