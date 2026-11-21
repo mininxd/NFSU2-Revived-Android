@@ -208,23 +208,43 @@ pub fn load_extra_options_ini(game_root: Option<&str>) -> ExtraOptionsSettings {
     let mut parser = IniParser::new();
     let mut loaded = false;
 
-    // Check /sdcard/cache/scripts/NFSU2ExtraOptionsSettings.ini
-    let sdcard_path = "/sdcard/cache/scripts/NFSU2ExtraOptionsSettings.ini";
-    if Path::new(sdcard_path).exists() {
-        loaded = parser.load_file(sdcard_path);
+    let mut candidates = Vec::new();
+    if let Some(root) = game_root {
+        let r = root.trim_end_matches('/');
+        candidates.push(format!("{}/scripts/NFSU2ExtraOptionsSettings.ini", r));
+        candidates.push(format!("{}/scripts/nfsu2extraoptionssettings.ini", r));
+        candidates.push(format!("{}/Scripts/NFSU2ExtraOptionsSettings.ini", r));
+        candidates.push(format!("{}/NFSU2ExtraOptionsSettings.ini", r));
+        candidates.push(format!("{}/nfsu2extraoptionssettings.ini", r));
     }
+    candidates.push("/sdcard/nfsu2/scripts/NFSU2ExtraOptionsSettings.ini".to_string());
+    candidates.push("/sdcard/nfsu2/NFSU2ExtraOptionsSettings.ini".to_string());
+    candidates.push("/sdcard/cache/scripts/NFSU2ExtraOptionsSettings.ini".to_string());
+    candidates.push("/sdcard/cache/NFSU2ExtraOptionsSettings.ini".to_string());
 
-    // Fall back to <game_root>/scripts/NFSU2ExtraOptionsSettings.ini
-    if !loaded {
-        if let Some(root) = game_root {
-            let candidate = format!("{}/scripts/NFSU2ExtraOptionsSettings.ini", root.trim_end_matches('/'));
-            if Path::new(&candidate).exists() {
-                loaded = parser.load_file(&candidate);
+    for path in &candidates {
+        if Path::new(path).exists() {
+            if parser.load_file(path) {
+                loaded = true;
+                break;
             }
         }
     }
 
-    if !loaded {
+    // Detect dinput8.dll (ASI Loader proxy DLL) or NFSU2ExtraOptions.asi in the game directory
+    let mut dinput8_detected = false;
+    if let Some(root) = game_root {
+        let r = root.trim_end_matches('/');
+        if Path::new(&format!("{}/dinput8.dll", r)).exists()
+            || Path::new(&format!("{}/scripts/NFSU2ExtraOptions.asi", r)).exists()
+            || Path::new(&format!("{}/Scripts/NFSU2ExtraOptions.asi", r)).exists()
+            || Path::new(&format!("{}/NFSU2ExtraOptions.asi", r)).exists()
+        {
+            dinput8_detected = true;
+        }
+    }
+
+    if !loaded && !dinput8_detected {
         return ExtraOptionsSettings::default();
     }
 

@@ -453,6 +453,14 @@ public final class GameActivity extends NativeActivity {
             android.system.Os.setenv("NFSU2_DUMB_AI", dumbAI ? "1" : "0", true);
 
             boolean extraOptions = GameOptions.isExtraOptionsEnabled(this);
+            try {
+                File root = LauncherActivity.gameRoot();
+                if (new File(root, "dinput8.dll").exists() ||
+                    new File(root, "scripts/NFSU2ExtraOptions.asi").exists() ||
+                    new File(root, "NFSU2ExtraOptions.asi").exists()) {
+                    extraOptions = true;
+                }
+            } catch (Throwable ignored) {}
             android.system.Os.setenv("NFSU2_EXTRA_OPTIONS", extraOptions ? "1" : "0", true);
 
             android.system.Os.setenv("NFSU2_AUTOSAVE", "1", true);

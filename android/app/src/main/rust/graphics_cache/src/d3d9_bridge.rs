@@ -406,7 +406,6 @@ pub unsafe extern "C" fn nfs_d3d9_bridge_release_resource(handle: u32) -> u32 {
     let freed = with_d3d9(|d| d.release_resource(handle));
     if freed { 1 } else { 0 }
 }
-}
 
 #[no_mangle]
 pub unsafe extern "C" fn nfs_d3d9_bridge_begin_scene() -> u32 {

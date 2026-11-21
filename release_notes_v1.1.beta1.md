@@ -19,6 +19,13 @@
   - Updated `apply_affinity()` to bind process and rendering threads directly to `perf_cores_mask`.
   - Intelligently separates audio worker threads (which float across all cores with nice `-16` for zero starvation) from heavy emulation, DXVK, and render threads (bound strictly to performance clusters with nice `-20`).
 
-### 4. Version Bump
+### 4. dinput8.dll ASI Loader & NFSU2 Extra Options Mod Support
+- **Fixed `graphics_cache` Build**: Fixed compilation syntax error in `d3d9_bridge.rs`, restoring compilation and deployment of `libgraphics_cache.so`.
+- **Automatic ASI Mod Detection (`dinput8.dll` / `NFSU2ExtraOptions.asi`)**:
+  - Automatically detects `dinput8.dll` and `scripts/NFSU2ExtraOptions.asi` placed in the game root directory.
+  - Transparently activates native Extra Options patches and exposes the "Extra Options" setting card in the Launcher menu.
+  - Multi-path INI discovery: checks `<game_root>/scripts/NFSU2ExtraOptionsSettings.ini`, `<game_root>/NFSU2ExtraOptionsSettings.ini`, `/sdcard/nfsu2/`, and `/sdcard/cache/` with case-insensitive path fallbacks.
+
+### 5. Version Bump
 - Bumped app `versionCode` to **110** and `versionName` to **1.1.beta1**.
 
