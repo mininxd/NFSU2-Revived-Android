@@ -8,6 +8,14 @@ import java.util.zip.*;
 
 /** Bounded driver ZIP extraction. No Android dependencies so malformed packages can be tested on the host. */
 final class DriverArchive {
+    private static volatile boolean nativeLoaded = false;
+    static {
+        try {
+            System.loadLibrary("graphics_cache");
+            nativeLoaded = true;
+        } catch (Throwable ignored) {}
+    }
+
     private static final long LIMIT = 256L * 1024 * 1024;
     static void extract(InputStream input, File root) throws IOException {
         String prefix = root.getCanonicalPath() + File.separator;
@@ -45,6 +53,7 @@ final class DriverArchive {
     }
 
     static native boolean nativeValidateLibrary(String path);
+    static native boolean nativeDeleteRecursive(String path);
 
     static void validateLibrary(File library) throws IOException {
         try {
@@ -60,6 +69,14 @@ final class DriverArchive {
     }
 
     static void delete(File file) throws IOException {
+        if (file == null || !file.exists()) return;
+        if (nativeLoaded) {
+            try {
+                if (nativeDeleteRecursive(file.getAbsolutePath())) {
+                    return;
+                }
+            } catch (Throwable ignored) {}
+        }
         if (Files.isSymbolicLink(file.toPath())) throw new IOException("Unexpected symbolic link in package.");
         File[] children = file.listFiles();
         if (children != null) for (File child : children) delete(child);

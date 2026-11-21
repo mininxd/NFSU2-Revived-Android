@@ -502,30 +502,9 @@ public final class VirtualSwitchClient {
     public synchronized void sendTcpFrame(int dstVip, int sport, int dport, int op, int ttl, int cid, byte[] data) {
         if (!running.get() || wsOut == null || myVirtualIp == 0) return;
         try {
+            byte[] frame = LocalOnlineBridge.buildTcpFrame(myVirtualIp, dstVip, sport, dport, op, ttl, cid, data);
+            sendWsFrame(2, frame);
             int payloadLen = (data != null) ? data.length : 0;
-            ByteBuffer buf = ByteBuffer.allocate(24 + payloadLen).order(ByteOrder.BIG_ENDIAN);
-            buf.put((byte) KIND_TCP);
-            buf.put((byte) 0);
-            buf.put((byte) 0);
-            buf.put((byte) 0);
-            buf.putInt(myVirtualIp);
-            buf.putInt(dstVip);
-            buf.putShort((short) sport);
-            buf.putShort((short) dport);
-
-            // LAN header: [16] op, [17] ttl, [18..19] 0, [20..23] cid (little-endian)
-            buf.put((byte) op);
-            buf.put((byte) ttl);
-            buf.putShort((short) 0);
-            buf.order(ByteOrder.LITTLE_ENDIAN);
-            buf.putInt(cid);
-            buf.order(ByteOrder.BIG_ENDIAN);
-
-            if (payloadLen > 0) {
-                buf.put(data);
-            }
-
-            sendWsFrame(2, buf.array());
             NetLog.i(TAG, "Sent TCP frame: op=" + op + ", dst=" + NetLog.ipStr(dstVip) + ":" + dport
                     + ", cid=" + cid + ", len=" + payloadLen + (payloadLen > 0 ? ", hex=" + NetLog.hexPreview(data, 16) : ""));
         } catch (Exception e) {

@@ -14,6 +14,7 @@ pub mod switch;
 pub mod postoffice;
 pub mod peer;
 pub mod classic_online;
+pub mod local_bridge;
 
 pub use crc::*;
 pub use hash::*;
@@ -29,3 +30,4 @@ pub use switch::*;
 pub use postoffice::*;
 pub use peer::*;
 pub use classic_online::*;
+pub use local_bridge::*;

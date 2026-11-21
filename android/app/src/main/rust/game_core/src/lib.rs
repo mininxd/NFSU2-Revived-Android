@@ -11,6 +11,7 @@ pub mod nitro_manager;
 pub mod tilt_fusion;
 pub mod touch_hud;
 pub mod settings;
+pub mod version;
 
 pub use camera_stick::*;
 pub use contrast_regulator::*;
@@ -23,6 +24,7 @@ pub use nitro_manager::*;
 pub use tilt_fusion::*;
 pub use touch_hud::*;
 pub use settings::*;
+pub use version::*;
 
 use jni::objects::{JClass, JFloatArray};
 use jni::sys::{jboolean, jfloat, jfloatArray, jint, jlong};

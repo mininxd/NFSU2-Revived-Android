@@ -17,6 +17,16 @@ import javax.net.ssl.HttpsURLConnection;
 
 /** Optional official GitHub updates supporting Stable and Beta channels. */
 final class ReleaseUpdates {
+    private static volatile boolean nativeLoaded = false;
+    static {
+        try {
+            System.loadLibrary("game_core");
+            nativeLoaded = true;
+        } catch (Throwable ignored) {}
+    }
+
+    private static native String nativeStripMarkdown(String markdown);
+
     private static final String REPO = "https://github.com/mininxd/NFSU2-Revived-Android/";
     private static final String API_RELEASES = "https://api.github.com/repos/mininxd/NFSU2-Revived-Android/releases?per_page=15";
     private static final String API_LATEST = "https://api.github.com/repos/mininxd/NFSU2-Revived-Android/releases/latest";
@@ -112,6 +122,12 @@ final class ReleaseUpdates {
 
     static String plainText(String markdown) {
         if (markdown == null || markdown.trim().isEmpty()) return null;
+        if (nativeLoaded) {
+            try {
+                String res = nativeStripMarkdown(markdown);
+                if (res != null) return res;
+            } catch (Throwable ignored) {}
+        }
         return markdown.replace("\r", "")
                 .replaceAll("(?m)^#{1,6}\\s*", "")
                 .replaceAll("(?m)^>\\s?", "")

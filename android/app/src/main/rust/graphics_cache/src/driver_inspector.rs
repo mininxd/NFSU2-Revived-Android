@@ -194,6 +194,29 @@ pub unsafe extern "C" fn Java_io_mininxd_nfsu2_DriverArchive_nativeValidateLibra
     if validate_arm64_elf_file(Path::new(&path_str)) { 1 } else { 0 }
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn Java_io_mininxd_nfsu2_DriverArchive_nativeDeleteRecursive(
+    mut env: jni::JNIEnv,
+    _class: jni::objects::JClass,
+    j_path: jni::sys::jstring,
+) -> jni::sys::jboolean {
+    if j_path.is_null() {
+        return 0;
+    }
+    let path_str: String = match env.get_string(&jni::objects::JString::from_raw(j_path)) {
+        Ok(s) => s.into(),
+        Err(_) => return 0,
+    };
+    let path = Path::new(&path_str);
+    if !path.exists() {
+        return 1;
+    }
+    if path.is_file() || path.is_symlink() {
+        return if fs::remove_file(path).is_ok() { 1 } else { 0 };
+    }
+    if fs::remove_dir_all(path).is_ok() { 1 } else { 0 }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

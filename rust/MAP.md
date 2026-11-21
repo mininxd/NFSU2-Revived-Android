@@ -92,3 +92,19 @@
   - Microsecond-precision epoch timestamp generation and categorized entry tracking.
   - Eliminates JVM garbage collection pauses during high-frequency networking and racing inputs.
   - JNI bindings (`nativeRingLog`, `nativeRingGetBytes`).
+
+### Wave 7: Driver Archive Security, Semantic Version Engine & Pure Rust LAN TCP Bridge (Completed)
+- [x] **`ReleaseVersion.java` & `ReleaseUpdates.java` -> `game_core::version`**:
+  - Zero-allocation semantic version parser and comparator (`parse_version`, `same_version`, `newer_version`, `is_update_available`).
+  - Supports numeric dot-hierarchy and pre-release levels (alpha, beta, pre, rc).
+  - Single-pass Markdown release notes stripper to clean plain text (`strip_markdown`).
+  - Safe JNI bindings (`nativeSameVersion`, `nativeNewer`, `nativeIsUpdateAvailable`, `nativeStripMarkdown`).
+- [x] **`DriverArchive.java` -> `graphics_cache::driver_inspector`**:
+  - Pure Rust ARM64 ELF shared library header validator (`validate_arm64_elf_file`, `validate_arm64_elf_header`).
+  - Fast recursive directory deletion and unlinking (`nativeDeleteRecursive`).
+  - Safe JNI bindings (`nativeValidateLibrary`, `nativeDeleteRecursive`).
+- [x] **`LocalOnlineBridge.java` & `VirtualSwitchClient.java` -> `roam_rs::local_bridge`**:
+  - Zero-allocation 24-byte LAN TCP frame encoder and decoder (`encode_tcp_frame`, `parse_tcp_frame`).
+  - In-place ASCII IP rewriter (`rewrite_server_addresses` from `10.77.0.1` to `127.0.0.1`).
+  - RFC/protocol constants: `TCP_OP_SYN`, `TCP_OP_SYNACK`, `TCP_OP_RST`, `TCP_OP_DATA`, `TCP_OP_FIN`, `VHOST_VIP`.
+  - Safe JNI bindings (`nativeBuildTcpFrame`, `nativeRewriteServerAddresses`, `nativeParseTcpHeader`).

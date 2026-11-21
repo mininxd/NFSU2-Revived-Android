@@ -25,6 +25,47 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class LocalOnlineBridge {
     private static final String TAG = "LocalOnlineBridge";
 
+    private static volatile boolean nativeLoaded = false;
+    static {
+        try {
+            System.loadLibrary("roam_rs");
+            nativeLoaded = true;
+        } catch (Throwable ignored) {}
+    }
+
+    public static native byte[] nativeBuildTcpFrame(int srcVip, int dstVip, int sport, int dport, int op, int ttl, int cid, byte[] payload);
+    public static native int nativeRewriteServerAddresses(byte[] data);
+    public static native int nativeParseTcpHeader(byte[] data, int[] outInfo);
+
+    public static byte[] buildTcpFrame(int srcVip, int dstVip, int sport, int dport, int op, int ttl, int cid, byte[] payload) {
+        if (nativeLoaded) {
+            try {
+                byte[] frame = nativeBuildTcpFrame(srcVip, dstVip, sport, dport, op, ttl, cid, payload);
+                if (frame != null && frame.length >= 24) return frame;
+            } catch (Throwable ignored) {}
+        }
+        int payloadLen = (payload != null) ? payload.length : 0;
+        ByteBuffer buf = ByteBuffer.allocate(24 + payloadLen).order(ByteOrder.BIG_ENDIAN);
+        buf.put((byte) 4); // KIND_TCP
+        buf.put((byte) 0);
+        buf.put((byte) 0);
+        buf.put((byte) 0);
+        buf.putInt(srcVip);
+        buf.putInt(dstVip);
+        buf.putShort((short) sport);
+        buf.putShort((short) dport);
+        buf.put((byte) op);
+        buf.put((byte) ttl);
+        buf.putShort((short) 0);
+        buf.order(ByteOrder.LITTLE_ENDIAN);
+        buf.putInt(cid);
+        buf.order(ByteOrder.BIG_ENDIAN);
+        if (payloadLen > 0) {
+            buf.put(payload);
+        }
+        return buf.array();
+    }
+
     public static final int VHOST_VIP = 0x0A4D0001; // 10.77.0.1
     public static final int PORT_REDIRECTOR = 20920;
     public static final int PORT_REDIRECTOR_SSL = 20921; // in case guest connects to 20921
@@ -226,22 +267,27 @@ public final class LocalOnlineBridge {
      */
     public void handleServerTcpFrame(byte[] data) {
         if (data == null || data.length < 24) return;
-        // Frame layout:
-        // [0] kind (4)
-        // [4..7] srcVip (10.77.0.1)
-        // [8..11] dstVip (myVirtualIp)
-        // [12..13] sport (e.g. 20920)
-        // [14..15] dport (localEphemeralPort)
-        // [16] op (1=SYN, 2=SYNACK, 3=RST, 4=DATA, 5=FIN)
-        // [17] ttl
-        // [18..19] pad
-        // [20..23] cid (little endian)
-        // [24..] payload
 
-        int sport = ((data[12] & 0xFF) << 8) | (data[13] & 0xFF);
-        int dport = ((data[14] & 0xFF) << 8) | (data[15] & 0xFF);
-        int op = data[16] & 0xFF;
-        int cid = ByteBuffer.wrap(data, 20, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
+        int sport, dport, op, cid;
+        if (nativeLoaded) {
+            int[] info = new int[5];
+            if (nativeParseTcpHeader(data, info) != 0) {
+                sport = info[0];
+                dport = info[1];
+                op = info[2];
+                cid = info[3];
+            } else {
+                sport = ((data[12] & 0xFF) << 8) | (data[13] & 0xFF);
+                dport = ((data[14] & 0xFF) << 8) | (data[15] & 0xFF);
+                op = data[16] & 0xFF;
+                cid = ByteBuffer.wrap(data, 20, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
+            }
+        } else {
+            sport = ((data[12] & 0xFF) << 8) | (data[13] & 0xFF);
+            dport = ((data[14] & 0xFF) << 8) | (data[15] & 0xFF);
+            op = data[16] & 0xFF;
+            cid = ByteBuffer.wrap(data, 20, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
+        }
 
         VirtualConn conn = connections.get(cid);
         if (conn == null) return;
@@ -294,6 +340,12 @@ public final class LocalOnlineBridge {
      */
     private static void rewriteServerAddresses(byte[] bytes) {
         if (bytes == null || bytes.length < 9) return;
+        if (nativeLoaded) {
+            try {
+                nativeRewriteServerAddresses(bytes);
+                return;
+            } catch (Throwable ignored) {}
+        }
         int targetLen = TARGET_IP_BYTES.length;
         int limit = bytes.length - targetLen;
         for (int i = 0; i <= limit; i++) {
