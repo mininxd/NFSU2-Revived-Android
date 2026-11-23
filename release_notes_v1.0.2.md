@@ -23,5 +23,11 @@
 - **Cross-Process Path Synchronization**:
   - Custom game directory paths are now forwarded directly via Intent extras and synchronized into `NFSU2_DATA_DIR` so native engine shims, widescreen patches, and graphics tuners load game assets from the exact selected folder.
 
-### 3. Version Bump
+### 3. Custom Graphics Preset & Settings Persistence
+- **Saved Custom Preset Button**:
+  - Added a dedicated **Custom** preset button alongside Performance, Balanced, and Original.
+  - Automatically records and updates custom parameters whenever graphics settings (Internal Resolution, Draw Distance, Graphics API, FPS Limit) are adjusted manually in the options list.
+  - Tapping **Custom** instantly restores the user's saved personalized configuration, allowing effortless switching between default factory presets and custom tuned profiles.
+
+### 4. Version Bump
 - Bumped app `versionCode` to **102** and `versionName` to **1.0.2**.

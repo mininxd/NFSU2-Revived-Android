@@ -67,7 +67,7 @@ public final class LauncherActivity extends Activity {
     private LinearLayout optionsList;
     private TextView status;
     private Button play, access, downloadFiles, chooseLocation;
-    private Button btnPresetPerformance, btnPresetBalanced, btnPresetOriginal;
+    private Button btnPresetPerformance, btnPresetBalanced, btnPresetOriginal, btnPresetCustom;
     public static Context sAppContext = null;
     public static String sCustomGamePath = null;
     private boolean playAfterProbe, checkingUpdates, resumed;
@@ -259,6 +259,7 @@ public final class LauncherActivity extends Activity {
         btnPresetPerformance = presetButton("Performance", "performance");
         btnPresetBalanced = presetButton("Balanced", "balanced");
         btnPresetOriginal = presetButton("Original", "original");
+        btnPresetCustom = presetButton("Custom", "custom");
 
         LinearLayout.LayoutParams pBtnLp1 = new LinearLayout.LayoutParams(0, -1, 1f);
         pBtnLp1.rightMargin = dp(4);
@@ -269,7 +270,11 @@ public final class LauncherActivity extends Activity {
         presetRow.addView(btnPresetBalanced, pBtnLp2);
 
         LinearLayout.LayoutParams pBtnLp3 = new LinearLayout.LayoutParams(0, -1, 1f);
+        pBtnLp3.rightMargin = dp(4);
         presetRow.addView(btnPresetOriginal, pBtnLp3);
+
+        LinearLayout.LayoutParams pBtnLp4 = new LinearLayout.LayoutParams(0, -1, 1f);
+        presetRow.addView(btnPresetCustom, pBtnLp4);
 
         access = actionButton("Allow access to internal storage/nfsu2", false);
         access.setOnClickListener(view -> requestAccess());
@@ -624,8 +629,7 @@ public final class LauncherActivity extends Activity {
                     if (GameOptions.WIDESCREEN.equals(option.key) || GameOptions.MINIMAP.equals(option.key)) {
                         GameOptions.applyWidescreenPatchFile(this);
                     }
-                    GameOptions.prefs(this).edit().putString("active_preset", "custom").apply();
-                    updatePresetButtons("custom");
+                    saveCustomPreset();
                     dialog.dismiss(); refreshOptions();
                 }).setNegativeButton("Cancel", null).show();
     }
@@ -1172,7 +1176,8 @@ public final class LauncherActivity extends Activity {
         Button b = new Button(this);
         b.setText(title);
         b.setAllCaps(false);
-        b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        b.setPadding(dp(2), 0, dp(2), 0);
         b.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD_ITALIC));
         b.setOnClickListener(v -> applyPreset(presetId));
         b.setStateListAnimator(null);
@@ -1180,10 +1185,11 @@ public final class LauncherActivity extends Activity {
     }
 
     private void updatePresetButtons(String activePreset) {
-        if (btnPresetPerformance == null || btnPresetBalanced == null || btnPresetOriginal == null) return;
+        if (btnPresetPerformance == null || btnPresetBalanced == null || btnPresetOriginal == null || btnPresetCustom == null) return;
         setPresetButtonState(btnPresetPerformance, "performance".equalsIgnoreCase(activePreset));
         setPresetButtonState(btnPresetBalanced, "balanced".equalsIgnoreCase(activePreset));
         setPresetButtonState(btnPresetOriginal, "original".equalsIgnoreCase(activePreset));
+        setPresetButtonState(btnPresetCustom, "custom".equalsIgnoreCase(activePreset));
     }
 
     private void setPresetButtonState(Button b, boolean active) {
@@ -1199,8 +1205,22 @@ public final class LauncherActivity extends Activity {
         b.setBackground(bg);
     }
 
+    private void saveCustomPreset() {
+        android.content.SharedPreferences sp = GameOptions.prefs(this);
+        sp.edit()
+                .putString("custom_resolution", GameOptions.get(this, GameOptions.RESOLUTION))
+                .putString("custom_draw_distance", GameOptions.get(this, GameOptions.DRAW_DISTANCE))
+                .putString("custom_graphics_backend", GameOptions.get(this, GameOptions.GRAPHICS_BACKEND))
+                .putString("custom_fps", GameOptions.get(this, GameOptions.FPS))
+                .putBoolean("has_custom_preset", true)
+                .putString("active_preset", "custom")
+                .apply();
+        updatePresetButtons("custom");
+    }
+
     private void applyPreset(String preset) {
-        android.content.SharedPreferences.Editor ed = GameOptions.prefs(this).edit();
+        android.content.SharedPreferences sp = GameOptions.prefs(this);
+        android.content.SharedPreferences.Editor ed = sp.edit();
         ed.putString("active_preset", preset);
         if ("performance".equalsIgnoreCase(preset)) {
             ed.putString(GameOptions.DRAW_DISTANCE, "performance");
@@ -1211,6 +1231,23 @@ public final class LauncherActivity extends Activity {
         } else if ("original".equalsIgnoreCase(preset)) {
             ed.putString(GameOptions.DRAW_DISTANCE, "original");
             ed.putString(GameOptions.RESOLUTION, "100");
+        } else if ("custom".equalsIgnoreCase(preset)) {
+            if (sp.getBoolean("has_custom_preset", false)) {
+                String cRes = sp.getString("custom_resolution", null);
+                if (cRes != null) ed.putString(GameOptions.RESOLUTION, cRes);
+                String cDraw = sp.getString("custom_draw_distance", null);
+                if (cDraw != null) ed.putString(GameOptions.DRAW_DISTANCE, cDraw);
+                String cBackend = sp.getString("custom_graphics_backend", null);
+                if (cBackend != null) ed.putString(GameOptions.GRAPHICS_BACKEND, cBackend);
+                String cFps = sp.getString("custom_fps", null);
+                if (cFps != null) ed.putString(GameOptions.FPS, cFps);
+            } else {
+                ed.putString("custom_resolution", GameOptions.get(this, GameOptions.RESOLUTION));
+                ed.putString("custom_draw_distance", GameOptions.get(this, GameOptions.DRAW_DISTANCE));
+                ed.putString("custom_graphics_backend", GameOptions.get(this, GameOptions.GRAPHICS_BACKEND));
+                ed.putString("custom_fps", GameOptions.get(this, GameOptions.FPS));
+                ed.putBoolean("has_custom_preset", true);
+            }
         }
         ed.apply();
         updatePresetButtons(preset);
