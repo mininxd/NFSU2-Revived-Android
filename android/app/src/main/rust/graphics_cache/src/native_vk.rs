@@ -344,6 +344,12 @@ pub unsafe extern "C" fn nfs_native_vk_set_window(window: *mut c_void) -> c_int 
 
     let mut guard = VK_STATE.lock().unwrap();
 
+    if let Some(ref s) = *guard {
+        if s.window == window && s.swapchain != 0 && !s.device.is_null() {
+            return 0;
+        }
+    }
+
     // Clean up old swapchain / context if surface exists
     if let Some(ref mut old) = *guard {
         if !old.device.is_null() {

@@ -315,6 +315,10 @@ void shutdownD3D9Bridge(){
 #endif
 }
 void setD3D9HostWindow(ANativeWindow* window){
+    ANativeWindow* prev = hostWindow.load();
+    if(prev == window && window != nullptr){
+        return;
+    }
     hostWindow=window;
 #ifdef __ANDROID__
     if(window){
@@ -513,13 +517,22 @@ uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumen
 
         auto source=static_cast<const RECT*>(pointer(args[1])),destination=static_cast<const RECT*>(pointer(args[2]));
         auto dirty=static_cast<const RGNDATA*>(pointer(args[4]));
-        static auto s_native_vk_present = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_vk_present"));
-        if(s_native_vk_present && s_native_vk_present() == 0) {
-            return D3D_OK;
-        }
-        static auto s_native_present = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_gles_present"));
-        if(s_native_present && s_native_present() == 0) {
-            return D3D_OK;
+        const char* rend = std::getenv("NFSU2_RENDERER");
+        bool isGl = rend && (std::strcmp(rend, "opengl") == 0 || std::strcmp(rend, "opengl_es") == 0);
+        if(isGl) {
+            static auto s_native_present = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_gles_present"));
+            if(s_native_present && s_native_present() == 0) {
+                return D3D_OK;
+            }
+        } else {
+            static auto s_native_vk_present = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_vk_present"));
+            if(s_native_vk_present && s_native_vk_present() == 0) {
+                return D3D_OK;
+            }
+            static auto s_native_present = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_gles_present"));
+            if(s_native_present && s_native_present() == 0) {
+                return D3D_OK;
+            }
         }
         return kind==2?static_cast<IDirect3DDevice9*>(object)->Present(source,destination,window,dirty):
             static_cast<IDirect3DSwapChain9*>(object)->Present(source,destination,window,dirty,args[5]);
@@ -607,7 +620,10 @@ uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumen
             // here with the reason instead.
             static unsigned failures=0;failures=FAILED(status)?failures+1:0;
             if(FAILED(status)&&failures<2)return status;
-            if(FAILED(status))throw std::runtime_error("The GPU could not create the graphics device (Vulkan, CreateDevice "+
+            const char* rend = std::getenv("NFSU2_RENDERER");
+            bool isGl = rend && (std::strcmp(rend, "opengl") == 0 || std::strcmp(rend, "opengl_es") == 0);
+            if(FAILED(status))throw std::runtime_error("The GPU could not create the graphics device (" +
+                std::string(isGl ? "OpenGL ES" : "Vulkan") + ", CreateDevice "+
                 std::to_string(uint32_t(status))+"). Use \"Check driver\" in the launcher to see what is missing.");
             write(args[6],wrap(device,Kind::Device));return status;
         }

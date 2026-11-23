@@ -407,6 +407,17 @@ public final class GameActivity extends NativeActivity {
         s_instance = this;
         refreshNewsAsync();
         GameOptions.syncWidescreenIni(this);
+        Intent launch = getIntent();
+        try {
+            String gameRootPath = launch != null ? launch.getStringExtra("gameRoot") : null;
+            if (gameRootPath == null || gameRootPath.isEmpty()) {
+                gameRootPath = LauncherActivity.gameRoot(this).getAbsolutePath();
+            }
+            android.system.Os.setenv("NFSU2_DATA_DIR", gameRootPath, true);
+            String backend = launch != null ? launch.getStringExtra("graphicsBackend") : null;
+            if (backend == null || "auto".equalsIgnoreCase(backend)) backend = GameOptions.getEffectiveGraphicsBackend(this);
+            android.system.Os.setenv("NFSU2_RENDERER", backend, true);
+        } catch (Throwable ignored) {}
         GamePerformanceBooster.apply(this, getWindow());
         PerformanceCores.bindToPerformanceCores();
         GameLog.init(this);

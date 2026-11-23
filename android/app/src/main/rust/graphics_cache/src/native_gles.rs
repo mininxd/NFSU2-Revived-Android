@@ -630,6 +630,12 @@ pub unsafe extern "C" fn nfs_native_gles_set_window(window: *mut c_void) -> c_in
 
     let mut guard = EGL_STATE.lock().unwrap();
 
+    if let Some(ref s) = *guard {
+        if s.window == window && !s.surface.is_null() && !s.context.is_null() {
+            return 0;
+        }
+    }
+
     if let Some(old) = guard.take() {
         if !old.surface.is_null() {
             (egl.egl_destroy_surface)(old.display, old.surface);

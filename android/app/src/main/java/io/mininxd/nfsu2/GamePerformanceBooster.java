@@ -47,31 +47,35 @@ public final class GamePerformanceBooster {
      * Delegates performance core binding, OEM boost, and DXVK configuration to native Rust.
      */
     public static synchronized void apply(Activity activity, Window window) {
-        if (applied || activity == null) return;
+        if (activity == null) return;
+        boolean firstRun = !applied;
         applied = true;
 
         try {
             // 1. Native Rust affinity, process priority, and SoC/OEM governor boost
-            if (nativeBoosterLoaded) {
-                try {
-                    nativeApplyBooster(activity);
-                    Log.i(TAG, "Applied native Rust CPU and governor performance booster");
-                } catch (Throwable t) {
-                    Log.w(TAG, "nativeApplyBooster failed, using fallback: " + t.getMessage());
+            if (firstRun) {
+                if (nativeBoosterLoaded) {
+                    try {
+                        nativeApplyBooster(activity);
+                        Log.i(TAG, "Applied native Rust CPU and governor performance booster");
+                    } catch (Throwable t) {
+                        Log.w(TAG, "nativeApplyBooster failed, using fallback: " + t.getMessage());
+                        fallbackProcessPriority();
+                        PerformanceCores.bindToPerformanceCores();
+                    }
+                } else {
                     fallbackProcessPriority();
                     PerformanceCores.bindToPerformanceCores();
                 }
-            } else {
-                fallbackProcessPriority();
-                PerformanceCores.bindToPerformanceCores();
             }
 
             // 2. Native Rust driver environment setup
             File cacheDir = new File(activity.getCacheDir(), "graphics-cache");
             if (nativeDxvkLoaded) {
                 try {
-                    nativeConfigureDxvkAndDriver(cacheDir.getAbsolutePath(), "/sdcard/nfsu2");
-                    Log.i(TAG, "Configured native Rust graphics tuner and driver environment");
+                    String rootDir = LauncherActivity.gameRoot(activity).getAbsolutePath();
+                    nativeConfigureDxvkAndDriver(cacheDir.getAbsolutePath(), rootDir);
+                    Log.i(TAG, "Configured native Rust graphics tuner and driver environment for: " + rootDir);
                 } catch (Throwable t) {
                     Log.w(TAG, "nativeConfigureDxvkAndDriver failed: " + t.getMessage());
                 }

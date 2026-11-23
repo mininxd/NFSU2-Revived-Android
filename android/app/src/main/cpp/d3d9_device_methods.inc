@@ -69,13 +69,22 @@ case 17:{*argumentCount=5;
             }
         }
     }
-    static auto s_native_vk_present = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_vk_present"));
-    if(s_native_vk_present && s_native_vk_present() == 0) {
-        return D3D_OK;
-    }
-    static auto s_native_present = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_gles_present"));
-    if(s_native_present && s_native_present() == 0) {
-        return D3D_OK;
+    const char* rend = std::getenv("NFSU2_RENDERER");
+    bool isGl = rend && (std::strcmp(rend, "opengl") == 0 || std::strcmp(rend, "opengl_es") == 0);
+    if(isGl) {
+        static auto s_native_present = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_gles_present"));
+        if(s_native_present && s_native_present() == 0) {
+            return D3D_OK;
+        }
+    } else {
+        static auto s_native_vk_present = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_vk_present"));
+        if(s_native_vk_present && s_native_vk_present() == 0) {
+            return D3D_OK;
+        }
+        static auto s_native_present = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_gles_present"));
+        if(s_native_present && s_native_present() == 0) {
+            return D3D_OK;
+        }
     }
     return device->Present(static_cast<const RECT*>(pointer(args[1])),static_cast<const RECT*>(pointer(args[2])),args[3]?hostWindow.load():nullptr,static_cast<const RGNDATA*>(pointer(args[4])));}
 case 18:{*argumentCount=5;IDirect3DSurface9* object4=nullptr;HRESULT status=device->GetBackBuffer(static_cast<UINT>(args[1]),static_cast<UINT>(args[2]),static_cast<D3DBACKBUFFER_TYPE>(args[3]),args[4]?&object4:nullptr);if(args[4])write(args[4],SUCCEEDED(status)?wrap(object4,Kind::Surface):0);return status;}

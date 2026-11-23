@@ -11,6 +11,11 @@ ANativeWindow* s_current_native_window = nullptr;
 HWND s_current_window_handle = nullptr;
 uint32_t s_render_width = 1280;
 uint32_t s_render_height = 720;
+
+inline bool isOpenGLBackend() {
+    const char* rend = std::getenv("NFSU2_RENDERER");
+    return rend && (std::strcmp(rend, "opengl") == 0 || std::strcmp(rend, "opengl_es") == 0);
+}
 }
 
 void* resolveGraphicsCacheSymbol(const char* name);
@@ -772,10 +777,15 @@ public:
     }
 
     HRESULT STDMETHODCALLTYPE Present(const RECT*, const RECT*, HWND, const RGNDATA*) override {
-        static auto s_vk_present = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_vk_present"));
-        if (s_vk_present && s_vk_present() == 0) return D3D_OK;
-        static auto s_gles_present = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_gles_present"));
-        if (s_gles_present && s_gles_present() == 0) return D3D_OK;
+        if (isOpenGLBackend()) {
+            static auto s_gles_present = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_gles_present"));
+            if (s_gles_present && s_gles_present() == 0) return D3D_OK;
+        } else {
+            static auto s_vk_present = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_vk_present"));
+            if (s_vk_present && s_vk_present() == 0) return D3D_OK;
+            static auto s_gles_present = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_gles_present"));
+            if (s_gles_present && s_gles_present() == 0) return D3D_OK;
+        }
         return D3D_OK;
     }
 
@@ -875,24 +885,30 @@ public:
     }
 
     HRESULT STDMETHODCALLTYPE BeginScene() override {
-        static auto s_vk_begin = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_vk_begin_scene"));
-        if (s_vk_begin) s_vk_begin();
+        if (!isOpenGLBackend()) {
+            static auto s_vk_begin = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_vk_begin_scene"));
+            if (s_vk_begin) s_vk_begin();
+        }
         static auto s_gles_begin = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_gles_begin_scene"));
         if (s_gles_begin) s_gles_begin();
         return D3D_OK;
     }
 
     HRESULT STDMETHODCALLTYPE EndScene() override {
-        static auto s_vk_end = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_vk_end_scene"));
-        if (s_vk_end) s_vk_end();
+        if (!isOpenGLBackend()) {
+            static auto s_vk_end = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_vk_end_scene"));
+            if (s_vk_end) s_vk_end();
+        }
         static auto s_gles_end = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_gles_end_scene"));
         if (s_gles_end) s_gles_end();
         return D3D_OK;
     }
 
     HRESULT STDMETHODCALLTYPE Clear(DWORD count, const D3DRECT* rects, DWORD flags, D3DCOLOR color, float z, DWORD stencil) override {
-        static auto s_vk_clear = reinterpret_cast<int(*)(uint32_t,uint32_t,float,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_vk_clear"));
-        if (s_vk_clear) s_vk_clear(flags, color, z, stencil);
+        if (!isOpenGLBackend()) {
+            static auto s_vk_clear = reinterpret_cast<int(*)(uint32_t,uint32_t,float,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_vk_clear"));
+            if (s_vk_clear) s_vk_clear(flags, color, z, stencil);
+        }
         static auto s_gles_clear = reinterpret_cast<int(*)(uint32_t,uint32_t,float,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_gles_clear"));
         if (s_gles_clear) s_gles_clear(flags, color, z, stencil);
         return D3D_OK;
@@ -900,8 +916,10 @@ public:
 
     HRESULT STDMETHODCALLTYPE SetTransform(D3DTRANSFORMSTATETYPE state, const D3DMATRIX* matrix) override {
         if (matrix) {
-            static auto s_vk_tf = reinterpret_cast<int(*)(uint32_t,const float*)>(resolveGraphicsCacheSymbol("nfs_native_vk_set_transform"));
-            if (s_vk_tf) s_vk_tf(state, reinterpret_cast<const float*>(matrix));
+            if (!isOpenGLBackend()) {
+                static auto s_vk_tf = reinterpret_cast<int(*)(uint32_t,const float*)>(resolveGraphicsCacheSymbol("nfs_native_vk_set_transform"));
+                if (s_vk_tf) s_vk_tf(state, reinterpret_cast<const float*>(matrix));
+            }
             static auto s_gles_tf = reinterpret_cast<int(*)(uint32_t,const float*)>(resolveGraphicsCacheSymbol("nfs_native_gles_set_transform"));
             if (s_gles_tf) s_gles_tf(state, reinterpret_cast<const float*>(matrix));
             static auto s_b_tf = reinterpret_cast<void(*)(uint32_t,const float*)>(resolveGraphicsCacheSymbol("nfs_d3d9_bridge_set_transform"));
@@ -920,8 +938,10 @@ public:
 
     HRESULT STDMETHODCALLTYPE SetViewport(const D3DVIEWPORT9* vp) override {
         if (vp) {
-            static auto s_vk_vp = reinterpret_cast<int(*)(int,int,int,int)>(resolveGraphicsCacheSymbol("nfs_native_vk_set_viewport"));
-            if (s_vk_vp) s_vk_vp(vp->X, vp->Y, vp->Width, vp->Height);
+            if (!isOpenGLBackend()) {
+                static auto s_vk_vp = reinterpret_cast<int(*)(int,int,int,int)>(resolveGraphicsCacheSymbol("nfs_native_vk_set_viewport"));
+                if (s_vk_vp) s_vk_vp(vp->X, vp->Y, vp->Width, vp->Height);
+            }
             static auto s_gles_vp = reinterpret_cast<int(*)(int,int,int,int)>(resolveGraphicsCacheSymbol("nfs_native_gles_set_viewport"));
             if (s_gles_vp) s_gles_vp(vp->X, vp->Y, vp->Width, vp->Height);
             static auto s_b_vp = reinterpret_cast<void(*)(const void*)>(resolveGraphicsCacheSymbol("nfs_d3d9_bridge_set_viewport"));
@@ -948,8 +968,10 @@ public:
     HRESULT STDMETHODCALLTYPE GetClipPlane(DWORD, float*) override { return D3D_OK; }
 
     HRESULT STDMETHODCALLTYPE SetRenderState(D3DRENDERSTATETYPE state, DWORD val) override {
-        static auto s_vk_rs = reinterpret_cast<int(*)(uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_vk_set_render_state"));
-        if (s_vk_rs) s_vk_rs(state, val);
+        if (!isOpenGLBackend()) {
+            static auto s_vk_rs = reinterpret_cast<int(*)(uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_vk_set_render_state"));
+            if (s_vk_rs) s_vk_rs(state, val);
+        }
         static auto s_gles_rs = reinterpret_cast<int(*)(uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_gles_set_render_state"));
         if (s_gles_rs) s_gles_rs(state, val);
         static auto s_b_rs = reinterpret_cast<void(*)(uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_d3d9_bridge_set_render_state"));
@@ -981,8 +1003,10 @@ public:
         return D3D_OK;
     }
     HRESULT STDMETHODCALLTYPE SetTexture(DWORD stage, IDirect3DBaseTexture9* pTex) override {
-        static auto s_vk_tex = reinterpret_cast<int(*)(uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_vk_set_texture"));
-        if (s_vk_tex) s_vk_tex(stage, pTex ? 1 : 0);
+        if (!isOpenGLBackend()) {
+            static auto s_vk_tex = reinterpret_cast<int(*)(uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_vk_set_texture"));
+            if (s_vk_tex) s_vk_tex(stage, pTex ? 1 : 0);
+        }
         static auto s_gles_tex = reinterpret_cast<int(*)(uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_gles_set_texture"));
         if (s_gles_tex) s_gles_tex(stage, pTex ? 1 : 0);
         static auto s_b_tex = reinterpret_cast<void(*)(uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_d3d9_bridge_set_texture"));
@@ -1030,34 +1054,54 @@ public:
     float STDMETHODCALLTYPE GetNPatchMode() override { return 0.0f; }
 
     HRESULT STDMETHODCALLTYPE DrawPrimitive(D3DPRIMITIVETYPE primType, UINT startVertex, UINT primCount) override {
-        static auto s_vk_draw = reinterpret_cast<int(*)(uint32_t,uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_vk_draw_primitive"));
-        if (s_vk_draw && s_vk_draw(primType, startVertex, primCount) == 0) return D3D_OK;
-        static auto s_gles_draw = reinterpret_cast<int(*)(uint32_t,uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_gles_draw_primitive"));
-        if (s_gles_draw && s_gles_draw(primType, startVertex, primCount) == 0) return D3D_OK;
+        if (isOpenGLBackend()) {
+            static auto s_gles_draw = reinterpret_cast<int(*)(uint32_t,uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_gles_draw_primitive"));
+            if (s_gles_draw && s_gles_draw(primType, startVertex, primCount) == 0) return D3D_OK;
+        } else {
+            static auto s_vk_draw = reinterpret_cast<int(*)(uint32_t,uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_vk_draw_primitive"));
+            if (s_vk_draw && s_vk_draw(primType, startVertex, primCount) == 0) return D3D_OK;
+            static auto s_gles_draw = reinterpret_cast<int(*)(uint32_t,uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_gles_draw_primitive"));
+            if (s_gles_draw && s_gles_draw(primType, startVertex, primCount) == 0) return D3D_OK;
+        }
         return D3D_OK;
     }
 
     HRESULT STDMETHODCALLTYPE DrawIndexedPrimitive(D3DPRIMITIVETYPE primType, INT baseVertex, UINT minIdx, UINT numVtx, UINT startIdx, UINT primCount) override {
-        static auto s_vk_draw = reinterpret_cast<int(*)(uint32_t,int,uint32_t,uint32_t,uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_vk_draw_indexed"));
-        if (s_vk_draw && s_vk_draw(primType, baseVertex, minIdx, numVtx, startIdx, primCount) == 0) return D3D_OK;
-        static auto s_gles_draw = reinterpret_cast<int(*)(uint32_t,int,uint32_t,uint32_t,uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_gles_draw_indexed"));
-        if (s_gles_draw && s_gles_draw(primType, baseVertex, minIdx, numVtx, startIdx, primCount) == 0) return D3D_OK;
+        if (isOpenGLBackend()) {
+            static auto s_gles_draw = reinterpret_cast<int(*)(uint32_t,int,uint32_t,uint32_t,uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_gles_draw_indexed"));
+            if (s_gles_draw && s_gles_draw(primType, baseVertex, minIdx, numVtx, startIdx, primCount) == 0) return D3D_OK;
+        } else {
+            static auto s_vk_draw = reinterpret_cast<int(*)(uint32_t,int,uint32_t,uint32_t,uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_vk_draw_indexed"));
+            if (s_vk_draw && s_vk_draw(primType, baseVertex, minIdx, numVtx, startIdx, primCount) == 0) return D3D_OK;
+            static auto s_gles_draw = reinterpret_cast<int(*)(uint32_t,int,uint32_t,uint32_t,uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_gles_draw_indexed"));
+            if (s_gles_draw && s_gles_draw(primType, baseVertex, minIdx, numVtx, startIdx, primCount) == 0) return D3D_OK;
+        }
         return D3D_OK;
     }
 
     HRESULT STDMETHODCALLTYPE DrawPrimitiveUP(D3DPRIMITIVETYPE primType, UINT primCount, const void* pData, UINT stride) override {
-        static auto s_vk_draw = reinterpret_cast<int(*)(uint32_t,uint32_t,const void*,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_vk_draw_primitive_up"));
-        if (s_vk_draw && s_vk_draw(primType, primCount, pData, stride) == 0) return D3D_OK;
-        static auto s_gles_draw = reinterpret_cast<int(*)(uint32_t,uint32_t,const void*,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_gles_draw_primitive_up"));
-        if (s_gles_draw && s_gles_draw(primType, primCount, pData, stride) == 0) return D3D_OK;
+        if (isOpenGLBackend()) {
+            static auto s_gles_draw = reinterpret_cast<int(*)(uint32_t,uint32_t,const void*,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_gles_draw_primitive_up"));
+            if (s_gles_draw && s_gles_draw(primType, primCount, pData, stride) == 0) return D3D_OK;
+        } else {
+            static auto s_vk_draw = reinterpret_cast<int(*)(uint32_t,uint32_t,const void*,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_vk_draw_primitive_up"));
+            if (s_vk_draw && s_vk_draw(primType, primCount, pData, stride) == 0) return D3D_OK;
+            static auto s_gles_draw = reinterpret_cast<int(*)(uint32_t,uint32_t,const void*,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_gles_draw_primitive_up"));
+            if (s_gles_draw && s_gles_draw(primType, primCount, pData, stride) == 0) return D3D_OK;
+        }
         return D3D_OK;
     }
 
     HRESULT STDMETHODCALLTYPE DrawIndexedPrimitiveUP(D3DPRIMITIVETYPE primType, UINT minVtxIdx, UINT vtxCount, UINT primCount, const void* pIdxData, D3DFORMAT idxFmt, const void* pVtxData, UINT stride) override {
-        static auto s_vk_draw = reinterpret_cast<int(*)(uint32_t,uint32_t,uint32_t,uint32_t,const void*,uint32_t,const void*,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_vk_draw_indexed_primitive_up"));
-        if (s_vk_draw && s_vk_draw(primType, minVtxIdx, vtxCount, primCount, pIdxData, idxFmt, pVtxData, stride) == 0) return D3D_OK;
-        static auto s_gles_draw = reinterpret_cast<int(*)(uint32_t,uint32_t,uint32_t,uint32_t,const void*,uint32_t,const void*,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_gles_draw_indexed_primitive_up"));
-        if (s_gles_draw && s_gles_draw(primType, minVtxIdx, vtxCount, primCount, pIdxData, idxFmt, pVtxData, stride) == 0) return D3D_OK;
+        if (isOpenGLBackend()) {
+            static auto s_gles_draw = reinterpret_cast<int(*)(uint32_t,uint32_t,uint32_t,uint32_t,const void*,uint32_t,const void*,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_gles_draw_indexed_primitive_up"));
+            if (s_gles_draw && s_gles_draw(primType, minVtxIdx, vtxCount, primCount, pIdxData, idxFmt, pVtxData, stride) == 0) return D3D_OK;
+        } else {
+            static auto s_vk_draw = reinterpret_cast<int(*)(uint32_t,uint32_t,uint32_t,uint32_t,const void*,uint32_t,const void*,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_vk_draw_indexed_primitive_up"));
+            if (s_vk_draw && s_vk_draw(primType, minVtxIdx, vtxCount, primCount, pIdxData, idxFmt, pVtxData, stride) == 0) return D3D_OK;
+            static auto s_gles_draw = reinterpret_cast<int(*)(uint32_t,uint32_t,uint32_t,uint32_t,const void*,uint32_t,const void*,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_gles_draw_indexed_primitive_up"));
+            if (s_gles_draw && s_gles_draw(primType, minVtxIdx, vtxCount, primCount, pIdxData, idxFmt, pVtxData, stride) == 0) return D3D_OK;
+        }
         return D3D_OK;
     }
 

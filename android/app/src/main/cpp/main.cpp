@@ -530,9 +530,11 @@ void android_main(android_app* app) {
             if(d3d9RequestsSurface()){host.renderer.stop();acknowledgeD3D9Surface(true);}
             setGuestPaused(false);
             if(!customVulkanError.empty())throw std::runtime_error(customVulkanError);
-            if (!host.renderer.device&&!d3d9RequestsSurface()&&!(customVulkanDriver&&host.guestAttempted)) {
+            const char* rend = getenv("NFSU2_RENDERER");
+            bool isGl = rend && (strcmp(rend, "opengl") == 0 || strcmp(rend, "opengl_es") == 0);
+            if (!host.renderer.device&&!d3d9RequestsSurface()&&!((customVulkanDriver||isGl)&&host.guestAttempted)) {
                 checkGameData();
-                if(customVulkanDriver){
+                if(customVulkanDriver || isGl){
                     setGuestDisplaySize(unsigned(ANativeWindow_getWidth(app->window)),unsigned(ANativeWindow_getHeight(app->window)));
                 }else{
                     host.renderer.start(app->window);
