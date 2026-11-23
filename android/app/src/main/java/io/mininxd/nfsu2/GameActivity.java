@@ -440,7 +440,6 @@ public final class GameActivity extends NativeActivity {
             }
         } catch (Throwable ignored) {}
         applyDisplayRefreshRate();
-        Intent launch = getIntent();
         float distVal = 450.0f;
         try {
             String menuScale = GameOptions.get(this, GameOptions.MENU_BUTTON_SIZE);
