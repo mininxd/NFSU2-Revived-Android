@@ -9,6 +9,8 @@ import android.os.Environment;
 import android.provider.MediaStore;
 import android.util.Log;
 
+import io.mininxd.nfsu2.LauncherActivity;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
