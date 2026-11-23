@@ -175,20 +175,27 @@ public final class GameLog {
                 writer.flush();
             }
 
-            // Sync copy to /sdcard/NFSU2/game_log.txt and /sdcard/nfsu2/game_log.txt
-            for (String folder : new String[]{"NFSU2", "nfsu2"}) {
-                try {
-                    File sdcardDir = new File(Environment.getExternalStorageDirectory(), folder);
-                    if (sdcardDir.isDirectory() || sdcardDir.mkdirs()) {
-                        File sdcardFile = new File(sdcardDir, "game_log.txt");
-                        try (FileWriter writer = new FileWriter(sdcardFile, true)) {
-                            writer.write(entry);
-                            writer.write("\n");
-                            writer.flush();
-                        }
+            // Sync copy to active game root if it exists, or existing nfsu2 / NFSU2 (never create new folder)
+            try {
+                File root = LauncherActivity.gameRoot();
+                File targetDir = (root != null && root.isDirectory()) ? root : null;
+                if (targetDir == null) {
+                    File lower = new File(Environment.getExternalStorageDirectory(), "nfsu2");
+                    if (lower.isDirectory()) targetDir = lower;
+                    else {
+                        File upper = new File(Environment.getExternalStorageDirectory(), "NFSU2");
+                        if (upper.isDirectory()) targetDir = upper;
                     }
-                } catch (Throwable ignored) {}
-            }
+                }
+                if (targetDir != null && targetDir.isDirectory()) {
+                    File sdcardFile = new File(targetDir, "game_log.txt");
+                    try (FileWriter writer = new FileWriter(sdcardFile, true)) {
+                        writer.write(entry);
+                        writer.write("\n");
+                        writer.flush();
+                    }
+                }
+            } catch (Throwable ignored) {}
         } catch (Throwable t) {
             Log.d(TAG, "writeToFile failed: " + t.getMessage());
         }
@@ -214,18 +221,25 @@ public final class GameLog {
                 }
             } catch (Throwable ignored) {}
         }
-        for (String folder : new String[]{"NFSU2", "nfsu2"}) {
-            try {
-                File sdcardDir = new File(Environment.getExternalStorageDirectory(), folder);
-                if (sdcardDir.isDirectory() || sdcardDir.mkdirs()) {
-                    File haltFile = new File(sdcardDir, "halt_log.txt");
-                    try (FileWriter writer = new FileWriter(haltFile, true)) {
-                        writer.write(report);
-                        writer.flush();
-                    }
+        try {
+            File root = LauncherActivity.gameRoot(ctx);
+            File targetDir = (root != null && root.isDirectory()) ? root : null;
+            if (targetDir == null) {
+                File lower = new File(Environment.getExternalStorageDirectory(), "nfsu2");
+                if (lower.isDirectory()) targetDir = lower;
+                else {
+                    File upper = new File(Environment.getExternalStorageDirectory(), "NFSU2");
+                    if (upper.isDirectory()) targetDir = upper;
                 }
-            } catch (Throwable ignored) {}
-        }
+            }
+            if (targetDir != null && targetDir.isDirectory()) {
+                File haltFile = new File(targetDir, "halt_log.txt");
+                try (FileWriter writer = new FileWriter(haltFile, true)) {
+                    writer.write(report);
+                    writer.flush();
+                }
+            }
+        } catch (Throwable ignored) {}
     }
 
     public static File getPrimaryHaltFile(Context ctx) {
@@ -330,24 +344,31 @@ public final class GameLog {
             }
         } catch (Throwable ignored) {}
 
-        // 2. Try /sdcard/NFSU2/
-        for (String folder : new String[]{"NFSU2", "nfsu2"}) {
-            try {
-                File sdcardDir = new File(Environment.getExternalStorageDirectory(), folder);
-                if (sdcardDir.isDirectory() || sdcardDir.mkdirs()) {
-                    File dest = new File(sdcardDir, "NFSU2-game.log");
-                    try (InputStream in = new FileInputStream(source);
-                         FileOutputStream out = new FileOutputStream(dest)) {
-                        byte[] buf = new byte[8192];
-                        int n;
-                        while ((n = in.read(buf)) != -1) {
-                            out.write(buf, 0, n);
-                        }
-                    }
-                    if (exportedPath == null) exportedPath = dest.getAbsolutePath();
+        // 2. Try active game root or existing sdcard folder
+        try {
+            File root = LauncherActivity.gameRoot(ctx);
+            File targetDir = (root != null && root.isDirectory()) ? root : null;
+            if (targetDir == null) {
+                File lower = new File(Environment.getExternalStorageDirectory(), "nfsu2");
+                if (lower.isDirectory()) targetDir = lower;
+                else {
+                    File upper = new File(Environment.getExternalStorageDirectory(), "NFSU2");
+                    if (upper.isDirectory()) targetDir = upper;
                 }
-            } catch (Throwable ignored) {}
-        }
+            }
+            if (targetDir != null && targetDir.isDirectory()) {
+                File dest = new File(targetDir, "NFSU2-game.log");
+                try (InputStream in = new FileInputStream(source);
+                     FileOutputStream out = new FileOutputStream(dest)) {
+                    byte[] buf = new byte[8192];
+                    int n;
+                    while ((n = in.read(buf)) != -1) {
+                        out.write(buf, 0, n);
+                    }
+                }
+                if (exportedPath == null) exportedPath = dest.getAbsolutePath();
+            }
+        } catch (Throwable ignored) {}
 
         return exportedPath != null ? exportedPath : (source != null ? source.getAbsolutePath() : null);
     }

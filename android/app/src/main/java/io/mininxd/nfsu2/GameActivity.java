@@ -440,8 +440,12 @@ public final class GameActivity extends NativeActivity {
             else if ("200".equals(menuScale)) android.system.Os.setenv("NFSU2_MENU_SCALE", "2.0", true);
             else android.system.Os.setenv("NFSU2_MENU_SCALE", menuScale, true);
 
+            String gameRootPath = launch != null ? launch.getStringExtra("gameRoot") : null;
+            if (gameRootPath == null || gameRootPath.isEmpty()) {
+                gameRootPath = LauncherActivity.gameRoot(this).getAbsolutePath();
+            }
             try {
-                android.system.Os.setenv("NFSU2_DATA_DIR", LauncherActivity.gameRoot().getAbsolutePath(), true);
+                android.system.Os.setenv("NFSU2_DATA_DIR", gameRootPath, true);
             } catch (Throwable ignored) {}
 
             String horn = GameOptions.get(this, GameOptions.HORN);
@@ -455,7 +459,7 @@ public final class GameActivity extends NativeActivity {
 
             boolean extraOptions = GameOptions.isExtraOptionsEnabled(this);
             try {
-                File root = LauncherActivity.gameRoot();
+                File root = new File(gameRootPath);
                 if (new File(root, "dinput8.dll").exists() ||
                     new File(root, "scripts/NFSU2ExtraOptions.asi").exists() ||
                     new File(root, "NFSU2ExtraOptions.asi").exists()) {

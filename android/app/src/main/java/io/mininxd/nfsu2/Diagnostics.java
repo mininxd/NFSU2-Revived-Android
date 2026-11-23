@@ -227,11 +227,20 @@ final class Diagnostics {
         return report.getAbsolutePath();
     }
 
-    /** Copies the report directly to /sdcard/NFSU2/ */
+    /** Copies the report directly to active game root or existing sdcard folder */
     static String saveToSdcard(File report) {
         try {
-            File destDir = new File(android.os.Environment.getExternalStorageDirectory(), "NFSU2");
-            if (!destDir.isDirectory()) destDir.mkdirs();
+            File root = LauncherActivity.gameRoot();
+            File destDir = (root != null && root.isDirectory()) ? root : null;
+            if (destDir == null) {
+                File lower = new File(android.os.Environment.getExternalStorageDirectory(), "nfsu2");
+                if (lower.isDirectory()) destDir = lower;
+                else {
+                    File upper = new File(android.os.Environment.getExternalStorageDirectory(), "NFSU2");
+                    if (upper.isDirectory()) destDir = upper;
+                }
+            }
+            if (destDir == null || !destDir.isDirectory()) return null;
             File dest = new File(destDir, report.getName());
             try (InputStream input = new java.io.FileInputStream(report);
                  java.io.FileOutputStream output = new java.io.FileOutputStream(dest)) {

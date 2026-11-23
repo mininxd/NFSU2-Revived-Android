@@ -12,13 +12,32 @@
 inline std::string resolveGameRoot() {
     const char* env = std::getenv("NFSU2_DATA_DIR");
     if (env && *env && access(env, R_OK) == 0) {
+        std::string s1 = std::string(env) + "/SPEED2.EXE";
+        std::string s2 = std::string(env) + "/speed2.exe";
+        if (access(s1.c_str(), R_OK) == 0 || access(s2.c_str(), R_OK) == 0) {
+            return env;
+        }
+        std::string sub1 = std::string(env) + "/nfsu2";
+        std::string sub2 = std::string(env) + "/NFSU2";
+        if (access((sub1 + "/SPEED2.EXE").c_str(), R_OK) == 0 || access((sub1 + "/speed2.exe").c_str(), R_OK) == 0) {
+            return sub1;
+        }
+        if (access((sub2 + "/SPEED2.EXE").c_str(), R_OK) == 0 || access((sub2 + "/speed2.exe").c_str(), R_OK) == 0) {
+            return sub2;
+        }
         return env;
     }
     const char* candidates[] = {
+        "/sdcard/nfsu2",
+        "/storage/emulated/0/nfsu2",
         "/sdcard/NFSU2",
         "/storage/emulated/0/NFSU2",
-        "/sdcard/nfsu2",
-        "/storage/emulated/0/nfsu2"
+        "/sdcard/Download/nfsu2",
+        "/storage/emulated/0/Download/nfsu2",
+        "/sdcard/Download/NFSU2",
+        "/storage/emulated/0/Download/NFSU2",
+        "/sdcard/Downloads/nfsu2",
+        "/storage/emulated/0/Downloads/nfsu2"
     };
     for (const char* dir : candidates) {
         std::string s1 = std::string(dir) + "/SPEED2.EXE";
@@ -32,7 +51,7 @@ inline std::string resolveGameRoot() {
             return dir;
         }
     }
-    return "/sdcard/NFSU2";
+    return "/sdcard/nfsu2";
 }
 
 inline const std::string& getGameRoot() {

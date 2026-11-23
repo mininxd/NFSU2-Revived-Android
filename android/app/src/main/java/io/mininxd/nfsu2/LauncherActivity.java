@@ -15,6 +15,7 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.DocumentsContract;
 import android.provider.Settings;
 import android.util.DisplayMetrics;
 import android.util.TypedValue;
@@ -298,17 +299,17 @@ public final class LauncherActivity extends Activity {
 
     private void refresh() {
         boolean allowed = allowed();
-        File root = gameRoot();
+        File root = gameRoot(this);
         if (allowed) ensureScriptsInstalled(root);
-        boolean exe = allowed && new File(root, "SPEED2.EXE").isFile();
+        boolean exe = allowed && isGameExecutable(root);
         if (allowed && !exe) {
             ensureGamefilesInstalled(root);
-            exe = new File(root, "SPEED2.EXE").isFile();
+            exe = isGameExecutable(root);
         }
         boolean ready = exe && !languages().isEmpty();
-        String displayPath = root.getAbsolutePath();
-        status.setText(ready ? displayPath : "");
-        status.setVisibility(ready ? View.VISIBLE : View.GONE);
+        String displayPath = root != null ? root.getAbsolutePath() : "";
+        status.setText(ready ? displayPath : (!displayPath.isEmpty() ? (!exe ? "SPEED2.EXE not found in " + displayPath : displayPath) : ""));
+        status.setVisibility(ready || (!displayPath.isEmpty() && !exe) ? View.VISIBLE : View.GONE);
         play.setEnabled(ready);
         play.setAlpha(ready ? 1f : .45f);
         access.setVisibility(allowed ? View.GONE : View.VISIBLE);
@@ -337,7 +338,7 @@ public final class LauncherActivity extends Activity {
     }
 
     private void ensureGamefilesInstalled(File root) {
-        if (!allowed() || new File(root, "SPEED2.EXE").isFile()) return;
+        if (!allowed() || isGameExecutable(root)) return;
         try {
             String[] list = getAssets().list("gamefiles");
             if (list != null && list.length > 0) {
@@ -522,7 +523,7 @@ public final class LauncherActivity extends Activity {
         if (android.os.Process.is64Bit())
             optionsList.addView(optionRow("Vulkan Driver", driver == null ? "System default" : driver.name, this::chooseDriver));
         optionsList.addView(optionRow("Check driver", "GPU, graphics API & driver info", () -> probeDriver(false)));
-        optionsList.addView(optionRow("Game Location", gameRoot().getName(), this::showChooseLocationDialog));
+        optionsList.addView(optionRow("Game Location", locationLabel(), this::showChooseLocationDialog));
         optionsList.addView(optionRow("Language", languageLabel(), this::chooseLanguage));
         for (GameOptions.Option option : GameOptions.ALL)
             optionsList.addView(optionRow(option.title, option.label(GameOptions.get(this, option.key)), () -> chooseOption(option)));
@@ -556,21 +557,21 @@ public final class LauncherActivity extends Activity {
 
     private List<String[]> languages() {
         List<String[]> found = new ArrayList<>();
-        File root = gameRoot();
+        File root = gameRoot(this);
+        if (root == null || !root.isDirectory()) return found;
+        File langDir = findSubDir(root, "LANGUAGES");
+        File langPacks = findSubDir(root, "LANGPACKS");
         for (String[] language : LANGUAGES) {
             String code = language[2];
             String codeLower = code.toLowerCase(Locale.ROOT);
             String nameLower = language[1].toLowerCase(Locale.ROOT);
-            if (new File(root, "LANGUAGES/" + code + ".bin").isFile()
-                    || new File(root, "LANGUAGES/" + codeLower + ".bin").isFile()
-                    || new File(root, "LANGPACKS/" + codeLower).isDirectory()
-                    || new File(root, "LANGPACKS/" + nameLower).isDirectory()
-                    || new File(root, "LANGPACKS/" + code + ".bin").isFile()
-                    || ("Spanish".equalsIgnoreCase(language[1]) && (
-                        new File(root, "LANGUAGES/Spanish.bin").isFile()
-                        || new File(root, "LANGUAGES/spanish.bin").isFile()
-                        || new File(root, "LANGUAGES/Espanol.bin").isFile()
-                        || new File(root, "LANGUAGES/espanol.bin").isFile()
+            if ((langDir != null && (findSubFile(langDir, code + ".bin") != null || findSubFile(langDir, codeLower + ".bin") != null))
+                    || (langPacks != null && (findSubDir(langPacks, codeLower) != null || findSubDir(langPacks, nameLower) != null || findSubFile(langPacks, code + ".bin") != null))
+                    || ("Spanish".equalsIgnoreCase(language[1]) && langDir != null && (
+                        findSubFile(langDir, "Spanish.bin") != null
+                        || findSubFile(langDir, "spanish.bin") != null
+                        || findSubFile(langDir, "Espanol.bin") != null
+                        || findSubFile(langDir, "espanol.bin") != null
                     ))) {
                 found.add(language);
             }
@@ -943,7 +944,8 @@ public final class LauncherActivity extends Activity {
             } catch (Throwable ignored) {}
             String path = getPathFromTreeUri(treeUri);
             if (path != null) {
-                File dir = new File(path);
+                File dir = resolveCustomPath(path);
+                if (dir == null) dir = new File(path);
                 setCustomGameRoot(dir);
                 refresh();
             } else {
@@ -1138,6 +1140,7 @@ public final class LauncherActivity extends Activity {
         boolean logsEnabled = !"off".equals(GameOptions.get(this, GameOptions.DISPLAY_LOGS));
         if (GameOptions.usesWidescreenPatch(this)) GameOptions.syncWidescreenHudDat(this, logsEnabled);
         startActivity(new Intent(this, GameActivity.class)
+                .putExtra("gameRoot", gameRoot(this).getAbsolutePath())
                 .putExtra("language", GameOptions.language(this))
                 .putExtra("renderWidth", size[0]).putExtra("renderHeight", size[1])
                 .putExtra("resolutionPercent", GameOptions.get(this, GameOptions.RESOLUTION))
@@ -1214,8 +1217,20 @@ public final class LauncherActivity extends Activity {
         refreshOptions();
     }
 
+    private String locationLabel() {
+        File root = gameRoot(this);
+        if (root == null) return "Default";
+        String path = root.getAbsolutePath();
+        String ext = Environment.getExternalStorageDirectory().getAbsolutePath();
+        if (path.startsWith(ext)) {
+            String rel = path.substring(ext.length()).replaceAll("^/+", "");
+            return rel.isEmpty() ? "/sdcard" : rel;
+        }
+        return path;
+    }
+
     private void showChooseLocationDialog() {
-        File current = gameRoot();
+        File current = gameRoot(this);
         android.widget.EditText input = new android.widget.EditText(this);
         input.setSingleLine(true);
         input.setText(current.getAbsolutePath());
@@ -1242,7 +1257,8 @@ public final class LauncherActivity extends Activity {
                 .setPositiveButton("Save", (d, which) -> {
                     String p = input.getText().toString().trim();
                     if (!p.isEmpty()) {
-                        File f = new File(p);
+                        File f = resolveCustomPath(p);
+                        if (f == null) f = new File(p);
                         setCustomGameRoot(f);
                         refresh();
                     }
@@ -1273,14 +1289,170 @@ public final class LauncherActivity extends Activity {
         }
     }
 
+    public static boolean isGameExecutable(File root) {
+        if (root == null || !root.isDirectory()) return false;
+        return new File(root, "SPEED2.EXE").isFile()
+                || new File(root, "speed2.exe").isFile()
+                || new File(root, "Speed2.exe").isFile()
+                || findSubFile(root, "speed2.exe") != null;
+    }
+
+    public static File findGameRootInDir(File dir) {
+        if (dir == null) return null;
+        if (isGameExecutable(dir)) return dir;
+
+        for (String subName : new String[]{"nfsu2", "NFSU2", "NFS Underground 2", "Need for Speed Underground 2", "Need For Speed Underground 2"}) {
+            File sub = new File(dir, subName);
+            if (isGameExecutable(sub)) return sub;
+        }
+
+        if (dir.isDirectory()) {
+            File[] children = dir.listFiles();
+            if (children != null) {
+                for (File child : children) {
+                    if (child.isDirectory() && isGameExecutable(child)) {
+                        return child;
+                    }
+                }
+            }
+        }
+        return dir;
+    }
+
+    private static File findSubDir(File parent, String name) {
+        if (parent == null || !parent.isDirectory()) return null;
+        File direct = new File(parent, name);
+        if (direct.isDirectory()) return direct;
+        File[] files = parent.listFiles();
+        if (files != null) {
+            for (File f : files) {
+                if (f.isDirectory() && f.getName().equalsIgnoreCase(name)) return f;
+            }
+        }
+        return null;
+    }
+
+    private static File findSubFile(File parent, String name) {
+        if (parent == null || !parent.isDirectory()) return null;
+        File direct = new File(parent, name);
+        if (direct.isFile()) return direct;
+        File[] files = parent.listFiles();
+        if (files != null) {
+            for (File f : files) {
+                if (f.isFile() && f.getName().equalsIgnoreCase(name)) return f;
+            }
+        }
+        return null;
+    }
+
+    private static File resolveCaseInsensitive(File base, String relPath) {
+        if (base == null || !base.isDirectory() || relPath == null) return null;
+        String[] parts = relPath.split("/+");
+        File current = base;
+        for (String part : parts) {
+            if (part.isEmpty() || ".".equals(part)) continue;
+            if ("..".equals(part)) {
+                current = current.getParentFile();
+                if (current == null) return null;
+                continue;
+            }
+            File direct = new File(current, part);
+            if (direct.exists()) {
+                current = direct;
+                continue;
+            }
+            File[] files = current.listFiles();
+            if (files == null) return null;
+            File found = null;
+            for (File f : files) {
+                if (f.getName().equalsIgnoreCase(part)) {
+                    found = f;
+                    break;
+                }
+            }
+            if (found == null) {
+                if ("download".equalsIgnoreCase(part)) {
+                    for (File f : files) {
+                        if ("downloads".equalsIgnoreCase(f.getName())) { found = f; break; }
+                    }
+                } else if ("downloads".equalsIgnoreCase(part)) {
+                    for (File f : files) {
+                        if ("download".equalsIgnoreCase(f.getName())) { found = f; break; }
+                    }
+                }
+            }
+            if (found == null) return null;
+            current = found;
+        }
+        return current;
+    }
+
+    public static File resolveCustomPath(String rawPath) {
+        if (rawPath == null) return null;
+        String p = rawPath.trim();
+        if (p.isEmpty()) return null;
+
+        File direct = new File(p);
+        if (direct.exists() && direct.isDirectory()) {
+            return findGameRootInDir(direct);
+        }
+
+        File ext = Environment.getExternalStorageDirectory();
+
+        if (p.startsWith("/sdcard/") || p.equals("/sdcard")) {
+            String rel = p.length() > 7 ? p.substring(7).replaceAll("^/+", "") : "";
+            File sub = new File(ext, rel);
+            if (sub.exists() && sub.isDirectory()) return findGameRootInDir(sub);
+            File match = resolveCaseInsensitive(ext, rel);
+            if (match != null && match.isDirectory()) return findGameRootInDir(match);
+        }
+
+        String emulatedPrefix = "/storage/emulated/0";
+        if (p.startsWith(emulatedPrefix)) {
+            String rel = p.substring(emulatedPrefix.length()).replaceAll("^/+", "");
+            File sub = new File(ext, rel);
+            if (sub.exists() && sub.isDirectory()) return findGameRootInDir(sub);
+            File match = resolveCaseInsensitive(ext, rel);
+            if (match != null && match.isDirectory()) return findGameRootInDir(match);
+        }
+
+        String stripped = p.replaceAll("^/+", "");
+        File underExt = new File(ext, stripped);
+        if (underExt.exists() && underExt.isDirectory()) {
+            return findGameRootInDir(underExt);
+        }
+
+        File match = resolveCaseInsensitive(ext, stripped);
+        if (match != null && match.isDirectory()) {
+            return findGameRootInDir(match);
+        }
+
+        if (stripped.toLowerCase(Locale.ROOT).startsWith("download/") || stripped.toLowerCase(Locale.ROOT).startsWith("downloads/")) {
+            int slash = stripped.indexOf('/');
+            String subRel = slash >= 0 ? stripped.substring(slash + 1) : "";
+            for (String dlName : new String[]{"Download", "download", "Downloads", "downloads"}) {
+                File dlBase = new File(ext, dlName);
+                if (dlBase.isDirectory()) {
+                    File subFile = new File(dlBase, subRel);
+                    if (subFile.exists() && subFile.isDirectory()) return findGameRootInDir(subFile);
+                    File dlMatch = resolveCaseInsensitive(dlBase, subRel);
+                    if (dlMatch != null && dlMatch.isDirectory()) return findGameRootInDir(dlMatch);
+                }
+            }
+        }
+
+        if (!p.startsWith("/storage/")) {
+            return underExt;
+        }
+        return direct;
+    }
+
     private void setCustomGameRoot(File dir) {
         if (dir == null) return;
-        if (!dir.exists()) dir.mkdirs();
-        File actual = dir;
-        if (!new File(actual, "SPEED2.EXE").isFile() && new File(actual, "NFSU2/SPEED2.EXE").isFile()) {
-            actual = new File(actual, "NFSU2");
-        } else if (!new File(actual, "SPEED2.EXE").isFile() && new File(actual, "nfsu2/SPEED2.EXE").isFile()) {
-            actual = new File(actual, "nfsu2");
+        File actual = findGameRootInDir(dir);
+        if (actual == null) actual = dir;
+        if (!actual.exists()) {
+            try { actual.mkdirs(); } catch (Throwable ignored) {}
         }
         GameOptions.prefs(this).edit().putString(GameOptions.CUSTOM_GAME_DIR, actual.getAbsolutePath()).apply();
         sCustomGamePath = actual.getAbsolutePath();
@@ -1292,29 +1464,73 @@ public final class LauncherActivity extends Activity {
         try {
             String docId = null;
             if (Build.VERSION.SDK_INT >= 21) {
-                docId = android.provider.DocumentsContract.getTreeDocumentId(uri);
+                try {
+                    docId = DocumentsContract.getTreeDocumentId(uri);
+                } catch (Throwable ignored) {}
+            }
+            if (docId == null) {
+                try {
+                    docId = DocumentsContract.getDocumentId(uri);
+                } catch (Throwable ignored) {}
             }
             if (docId == null) docId = uri.getPath();
-            if (docId != null) {
-                int colon = docId.indexOf(':');
-                String type = colon >= 0 ? docId.substring(0, colon) : docId;
-                String rel = colon >= 0 ? docId.substring(colon + 1) : "";
-                if ("primary".equalsIgnoreCase(type) || type.endsWith("primary")) {
-                    File ext = Environment.getExternalStorageDirectory();
-                    return rel.isEmpty() ? ext.getAbsolutePath() : new File(ext, rel).getAbsolutePath();
-                } else if (type.startsWith("/tree/")) {
-                    String sub = type.substring("/tree/".length());
-                    int subColon = sub.indexOf(':');
-                    if (subColon >= 0 && "primary".equalsIgnoreCase(sub.substring(0, subColon))) {
-                        File ext = Environment.getExternalStorageDirectory();
-                        String r = sub.substring(subColon + 1);
-                        return r.isEmpty() ? ext.getAbsolutePath() : new File(ext, r).getAbsolutePath();
-                    }
+            if (docId == null) return null;
+
+            try {
+                docId = java.net.URLDecoder.decode(docId, "UTF-8");
+            } catch (Throwable ignored) {}
+
+            if (docId.startsWith("raw:")) {
+                String raw = docId.substring(4);
+                if (new File(raw).exists()) return raw;
+                File resolved = resolveCustomPath(raw);
+                if (resolved != null && resolved.exists()) return resolved.getAbsolutePath();
+            }
+
+            String cleanedDocId = docId;
+            if (cleanedDocId.startsWith("/tree/")) cleanedDocId = cleanedDocId.substring(6);
+            else if (cleanedDocId.startsWith("tree/")) cleanedDocId = cleanedDocId.substring(5);
+            if (cleanedDocId.startsWith("/document/")) cleanedDocId = cleanedDocId.substring(10);
+            else if (cleanedDocId.startsWith("document/")) cleanedDocId = cleanedDocId.substring(9);
+
+            int colon = cleanedDocId.indexOf(':');
+            String type = colon >= 0 ? cleanedDocId.substring(0, colon) : cleanedDocId;
+            String rel = colon >= 0 ? cleanedDocId.substring(colon + 1) : "";
+
+            File ext = Environment.getExternalStorageDirectory();
+
+            if ("primary".equalsIgnoreCase(type) || type.toLowerCase(Locale.ROOT).endsWith("primary")) {
+                File target = rel.isEmpty() ? ext : new File(ext, rel);
+                if (target.exists()) return target.getAbsolutePath();
+                File resolved = resolveCustomPath(rel);
+                if (resolved != null && resolved.exists()) return resolved.getAbsolutePath();
+                return target.getAbsolutePath();
+            }
+
+            if ("downloads".equalsIgnoreCase(type) || "download".equalsIgnoreCase(type) || "msf".equalsIgnoreCase(type)) {
+                File dlDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                if (rel.isEmpty() || "msf".equalsIgnoreCase(type)) {
+                    return dlDir.getAbsolutePath();
                 }
-                File extDir = new File("/storage/" + type + (rel.isEmpty() ? "" : "/" + rel));
-                if (extDir.exists() || extDir.isDirectory()) {
-                    return extDir.getAbsolutePath();
-                }
+                File target = new File(dlDir, rel);
+                if (target.exists()) return target.getAbsolutePath();
+                File resolved = resolveCaseInsensitive(dlDir, rel);
+                if (resolved != null && resolved.exists()) return resolved.getAbsolutePath();
+                return target.getAbsolutePath();
+            }
+
+            File extDir = new File("/storage/" + type + (rel.isEmpty() ? "" : "/" + rel));
+            if (extDir.exists() || extDir.isDirectory()) {
+                return extDir.getAbsolutePath();
+            }
+            File mntDir = new File("/mnt/media_rw/" + type + (rel.isEmpty() ? "" : "/" + rel));
+            if (mntDir.exists() || mntDir.isDirectory()) {
+                return mntDir.getAbsolutePath();
+            }
+
+            File fallback = resolveCustomPath(rel.isEmpty() ? cleanedDocId : rel);
+            if (fallback != null && fallback.exists()) {
+                return fallback.getAbsolutePath();
             }
         } catch (Throwable t) {
             android.util.Log.w("NFSU2", "Failed to resolve tree uri: " + uri, t);
@@ -1328,17 +1544,44 @@ public final class LauncherActivity extends Activity {
         if (context != null) {
             String custom = GameOptions.prefs(context).getString(GameOptions.CUSTOM_GAME_DIR, null);
             if (custom != null && !custom.trim().isEmpty()) {
+                File resolved = resolveCustomPath(custom.trim());
+                if (resolved != null && resolved.isDirectory()) return resolved;
                 File f = new File(custom.trim());
                 if (f.isDirectory()) return f;
             }
         }
         if (sCustomGamePath != null && !sCustomGamePath.trim().isEmpty()) {
+            File resolved = resolveCustomPath(sCustomGamePath.trim());
+            if (resolved != null && resolved.isDirectory()) return resolved;
             File f = new File(sCustomGamePath.trim());
             if (f.isDirectory()) return f;
         }
-        File f = new File(Environment.getExternalStorageDirectory(), "NFSU2");
-        if (f.isDirectory()) return f;
-        return new File(Environment.getExternalStorageDirectory(), "nfsu2");
+
+        File ext = Environment.getExternalStorageDirectory();
+        File[] candidates = new File[] {
+            new File(ext, "nfsu2"),
+            new File(ext, "NFSU2"),
+            new File(ext, "Download/nfsu2"),
+            new File(ext, "Download/NFSU2"),
+            new File(ext, "Downloads/nfsu2"),
+            new File(ext, "Downloads/NFSU2")
+        };
+
+        for (File candidate : candidates) {
+            if (isGameExecutable(candidate)) return candidate;
+        }
+
+        for (File candidate : candidates) {
+            if (candidate.isDirectory()) {
+                String[] list = candidate.list();
+                if (list != null && list.length > 0) return candidate;
+            }
+        }
+
+        if (new File(ext, "nfsu2").isDirectory()) return new File(ext, "nfsu2");
+        if (new File(ext, "NFSU2").isDirectory()) return new File(ext, "NFSU2");
+
+        return new File(ext, "nfsu2");
     }
 
     public static File gameRoot() {

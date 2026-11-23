@@ -114,41 +114,35 @@ public final class GameOptions {
      *                 (minimap top offset is applied directly in widescreen.c without horizontal shift).
      */
     static void applyWidescreenPatchFile(Context context) {
-        java.io.File[] roots = new java.io.File[] {
-                LauncherActivity.gameRoot(),
-                new java.io.File(android.os.Environment.getExternalStorageDirectory(), "nfsu2"),
-                new java.io.File(android.os.Environment.getExternalStorageDirectory(), "NFSU2")
-        };
+        java.io.File root = LauncherActivity.gameRoot(context);
+        if (root == null || !root.isDirectory()) return;
         boolean widescreen = usesWidescreenPatch(context);
-        for (java.io.File root : roots) {
-            if (root == null) continue;
-            java.io.File scripts = new java.io.File(root, "scripts");
-            if (!scripts.isDirectory() && !scripts.mkdirs()) continue;
-            java.io.File dat = new java.io.File(scripts, "NFSUnderground2.WidescreenFix.dat");
-            java.io.File held = new java.io.File(scripts, "NFSUnderground2.WidescreenFix.dat.hold");
-            try {
-                if (widescreen) {
-                    if (held.isFile() && held.length() > 1000) {
-                        if (dat.isFile()) dat.delete();
-                        held.renameTo(dat);
-                    }
-                    if (!dat.isFile() || dat.length() < 1000) {
-                        if (dat.isFile()) dat.delete();
-                        LauncherActivity.copyAssetFile(context, "scripts/NFSUnderground2.WidescreenFix.dat", dat);
-                    }
-                } else {
-                    if (dat.isFile()) {
-                        if (dat.length() > 1000) {
-                            if (held.isFile()) held.delete();
-                            dat.renameTo(held);
-                        } else {
-                            dat.delete();
-                        }
+        java.io.File scripts = new java.io.File(root, "scripts");
+        if (!scripts.isDirectory() && !scripts.mkdirs()) return;
+        java.io.File dat = new java.io.File(scripts, "NFSUnderground2.WidescreenFix.dat");
+        java.io.File held = new java.io.File(scripts, "NFSUnderground2.WidescreenFix.dat.hold");
+        try {
+            if (widescreen) {
+                if (held.isFile() && held.length() > 1000) {
+                    if (dat.isFile()) dat.delete();
+                    held.renameTo(dat);
+                }
+                if (!dat.isFile() || dat.length() < 1000) {
+                    if (dat.isFile()) dat.delete();
+                    LauncherActivity.copyAssetFile(context, "scripts/NFSUnderground2.WidescreenFix.dat", dat);
+                }
+            } else {
+                if (dat.isFile()) {
+                    if (dat.length() > 1000) {
+                        if (held.isFile()) held.delete();
+                        dat.renameTo(held);
+                    } else {
+                        dat.delete();
                     }
                 }
-            } catch (Throwable t) {
-                android.util.Log.w("NFSU2", "WidescreenFix.dat (" + root + "): " + t.getMessage());
             }
+        } catch (Throwable t) {
+            android.util.Log.w("NFSU2", "WidescreenFix.dat (" + root + "): " + t.getMessage());
         }
     }
 
@@ -170,7 +164,7 @@ public final class GameOptions {
     static int detectRegionFromFiles(Context context) {
         if (nativeLoaded) {
             try {
-                java.io.File gr = LauncherActivity.gameRoot();
+                java.io.File gr = LauncherActivity.gameRoot(context);
                 int detected = nativeDetectRegion(gr != null ? gr.getAbsolutePath() : "");
                 if (detected != -1) {
                     android.util.Log.i("NFSU2", "Region auto-detect via native game_core: found GLOBALTEXTURESROW.BIN → EU (1)");
@@ -179,13 +173,15 @@ public final class GameOptions {
             } catch (Throwable ignored) {}
         }
         try {
+            java.io.File gr = LauncherActivity.gameRoot(context);
             String[] candidates = {
-                LauncherActivity.gameRoot() + "/GLOBALTEXTURESROW.BIN",
+                gr != null ? gr.getAbsolutePath() + "/GLOBALTEXTURESROW.BIN" : null,
+                gr != null ? gr.getAbsolutePath() + "/globaltexturesrow.bin" : null,
                 android.os.Environment.getExternalStorageDirectory() + "/nfsu2/GLOBALTEXTURESROW.BIN",
                 android.os.Environment.getExternalStorageDirectory() + "/NFSU2/GLOBALTEXTURESROW.BIN",
             };
             for (String path : candidates) {
-                if (new java.io.File(path).isFile()) {
+                if (path != null && new java.io.File(path).isFile()) {
                     android.util.Log.i("NFSU2", "Region auto-detect: found GLOBALTEXTURESROW.BIN → EU (1)");
                     return 1;
                 }
@@ -495,7 +491,7 @@ public final class GameOptions {
     private static String loadGraphicsApiJson(Context context) {
         try {
             java.io.File[] candidates = {
-                new java.io.File(LauncherActivity.gameRoot(), "config/graphics_api.json"),
+                new java.io.File(LauncherActivity.gameRoot(context), "config/graphics_api.json"),
                 new java.io.File(android.os.Environment.getExternalStorageDirectory(), "NFSU2/config/graphics_api.json"),
                 new java.io.File(android.os.Environment.getExternalStorageDirectory(), "nfsu2/config/graphics_api.json")
             };
@@ -586,14 +582,14 @@ public final class GameOptions {
      */
     static void syncWidescreenIni(Context context) {
         try {
-            String root = LauncherActivity.gameRoot().getAbsolutePath();
+            String root = LauncherActivity.gameRoot(context).getAbsolutePath();
             String prefs = "/data/data/" + context.getPackageName() + "/shared_prefs/nfsu2_game.xml";
             if (nativeSyncSettings(root, prefs) == 0) {
                 return;
             }
         } catch (Throwable ignored) {}
         try {
-            java.io.File iniFile = new java.io.File(LauncherActivity.gameRoot(),
+            java.io.File iniFile = new java.io.File(LauncherActivity.gameRoot(context),
                     "scripts/NFSUnderground2.WidescreenFix.ini");
             if (!iniFile.isFile()) {
                 iniFile = new java.io.File(android.os.Environment.getExternalStorageDirectory(),
@@ -669,7 +665,7 @@ public final class GameOptions {
      */
     static void syncWidescreenHudDat(Context context, boolean logsEnabled) {
         try {
-            java.io.File scripts = new java.io.File(LauncherActivity.gameRoot(), "scripts");
+            java.io.File scripts = new java.io.File(LauncherActivity.gameRoot(context), "scripts");
             java.io.File datFile = new java.io.File(scripts, "NFSUnderground2.WidescreenFix.dat");
             if (!datFile.isFile()) {
                 datFile = new java.io.File(scripts, "NFSUnderground2.WidescreenFix.dat.hold");
@@ -772,7 +768,7 @@ public final class GameOptions {
 
     public static void syncExtraOptionsIni(Context context) {
         try {
-            java.io.File iniFile = new java.io.File(LauncherActivity.gameRoot(),
+            java.io.File iniFile = new java.io.File(LauncherActivity.gameRoot(context),
                     "scripts/NFSU2ExtraOptionsSettings.ini");
             if (!iniFile.isFile()) {
                 iniFile = new java.io.File(android.os.Environment.getExternalStorageDirectory(),
@@ -783,7 +779,7 @@ public final class GameOptions {
                 }
             }
             if (!iniFile.isFile()) {
-                java.io.File target = new java.io.File(LauncherActivity.gameRoot(), "scripts/NFSU2ExtraOptionsSettings.ini");
+                java.io.File target = new java.io.File(LauncherActivity.gameRoot(context), "scripts/NFSU2ExtraOptionsSettings.ini");
                 if (target.getParentFile() != null && !target.getParentFile().exists()) target.getParentFile().mkdirs();
                 LauncherActivity.copyAssetFile(context, "scripts/NFSU2ExtraOptionsSettings.ini", target);
                 iniFile = target;
