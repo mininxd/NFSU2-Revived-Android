@@ -87,7 +87,7 @@ endif()
 add_library(nfsu2_diagnostics SHARED gpu_probe.cpp vulkan_driver.cpp universal_gpu_loader.cpp)
 target_link_libraries(nfsu2_diagnostics PRIVATE android log dl)
 target_compile_options(nfsu2_diagnostics PRIVATE -O2 -Wall -Wextra -Werror -Wno-missing-field-initializers)
-add_library(nfsu2_android SHARED main.cpp guest_runtime.cpp d3d9_bridge.cpp native_d3d9.cpp vulkan_driver.cpp universal_gpu_loader.cpp adpf_manager.cpp audio_watchdog.cpp performance_tuner.cpp "${NFS_ROOT}/src/runtime/overrides.c" "${NFS_ROOT}/src/runtime/widescreen.c" $<TARGET_OBJECTS:nfs_guest>)
+add_library(nfsu2_android SHARED main.cpp guest_runtime.cpp d3d9_bridge.cpp native_d3d9.cpp vulkan_driver.cpp universal_gpu_loader.cpp adpf_manager.cpp audio_watchdog.cpp performance_tuner.cpp gpu_governor_engine.cpp "${NFS_ROOT}/src/runtime/overrides.c" "${NFS_ROOT}/src/runtime/widescreen.c" $<TARGET_OBJECTS:nfs_guest>)
 target_include_directories(nfsu2_android SYSTEM PRIVATE "${NFS_ROOT}/include/native"
   "${NFS_ROOT}/include/native/windows" "${NFS_ROOT}/include/native/directx")
 target_include_directories(nfsu2_android PRIVATE "${PCRECOMP}/runtime/recomp32" "${PCRECOMP}/runtime/win32hle" "${NFS_ROOT}/src/runtime")

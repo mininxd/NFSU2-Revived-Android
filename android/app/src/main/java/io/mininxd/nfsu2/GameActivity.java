@@ -806,11 +806,13 @@ public final class GameActivity extends NativeActivity {
         if (statusWindow != null) statusWindow.dismiss();
         if (touchControls != null) {touchControls.removeCallbacks(updateControlMode);touchControls.releaseAll();}
         if (controlsWindow != null) controlsWindow.dismiss();
+        GpuClockGovernor.pause();
         super.onPause();
     }
     @Override protected void onResume() {
         super.onResume();
         foreground=true;
+        GpuClockGovernor.resume();
         requestGameAudioFocus();
         startCompanionTicker();
         holdLanBroadcasts(true);
@@ -999,6 +1001,7 @@ public final class GameActivity extends NativeActivity {
         }
         super.onDestroy();
         stopCompanionTicker();
+        GpuClockGovernor.stop();
         if (diagnosticOverlay != null) diagnosticOverlay.stop();
         AdhocRoamClient.getInstance().stop();
         // Each launch uses a fresh guest machine in the dedicated :game process.

@@ -59,5 +59,15 @@
 - **Direct SurfaceFlinger Frame Rate Signaling**:
   - Integrated `View.setFrameRate` (API 30+) directly into `applyDisplayRefreshRate()` to prevent OEM display governors (HyperOS, ColorOS, One UI) from downclocking screen refresh rates to 30Hz or 45Hz.
 
-### 7. Version Bump
+### 7. GPU DVFS Clock Sustainer & Race/Explore Frequency Clamping
+- **Qualcomm Adreno kgsl-3d0 `idle_timer` Extension (1000ms)**:
+  - Resolved an issue where the GPU clock dropped to minimum idle frequencies (200–300 MHz) during races and open-world exploring while remaining locked at peak clocks in the garage.
+  - In races/roam, the x86 CPU emulation thread takes 20–30ms simulating physics, AI, and world streaming, while the modern mobile GPU finishes rendering that frame in only 3–5ms. Because the GPU sits idle during the remaining frame interval, kernel GPU governors (Adreno `kgsl-3d0` and Mali `ged`) mistakenly assumed light graphics load and dropped power levels.
+  - Implemented `GpuClockGovernor` across Rust (`perf_cores`), C++, and Java: extends `idle_timer` to 1000ms, clamps `min_pwrlevel` to 0, sets devfreq to `performance`, and activates `force_clk_on`, `force_bus_on`, and `force_rail_on`.
+- **ARM Mali & MediaTek Dimensity GED Boost**:
+  - Enforces `boost_gpu_enable`, `ged_boost_enable`, `gx_boost_on`, and `gpu_boost_level=100`, clamping Mali devfreq nodes to peak frequencies during active gameplay.
+- **Persistent GPU Governor Watchdog**:
+  - Runs a background watchdog keeper thread that re-asserts GPU frequency locks every 500–1000ms, preventing OEM background power daemons (Xiaomi Joyose, Qualcomm thermal-engine, Samsung GOS) from downclocking the GPU during races.
+
+### 8. Version Bump
 - Maintained app `versionCode` at **103** and `versionName` at **1.0.3**.

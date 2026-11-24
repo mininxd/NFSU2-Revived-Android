@@ -91,6 +91,9 @@ public final class GamePerformanceBooster {
             configureAndroidGameManager(activity);
             enableSustainedPerformance(activity, window);
 
+            // 4. Dedicated GPU Clock Sustainer & DVFS Governor
+            GpuClockGovernor.start(activity);
+
             Log.i(TAG, "GamePerformanceBooster optimizations successfully applied");
         } catch (Throwable t) {
             Log.w(TAG, "Error applying GamePerformanceBooster", t);

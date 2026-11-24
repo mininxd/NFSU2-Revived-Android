@@ -19,6 +19,7 @@ pub mod logger;
 pub mod soc_tuner;
 pub mod diagnostics;
 pub mod game_manager;
+pub mod gpu_governor;
 pub use adpf::*;
 pub use steering_pacer::*;
 pub use tuner::*;
@@ -26,6 +27,7 @@ pub use logger::*;
 pub use soc_tuner::*;
 pub use diagnostics::*;
 pub use game_manager::*;
+pub use gpu_governor::*;
 
 use std::fs;
 use std::os::raw::{c_int, c_long};
@@ -543,6 +545,9 @@ pub unsafe extern "C" fn Java_io_mininxd_nfsu2_GamePerformanceBooster_nativeAppl
     // 2. Bind process and all threads in /proc/self/task to performance CPU cluster
     let cluster = CpuCluster::detect();
     let _ = cluster.apply_affinity();
+
+    // 2b. Start GPU Governor Keeper to lock peak GPU clock and prevent race/explore downclocking
+    start_gpu_governor_keeper();
 
     // 3. Platform-specific OEM booster coordination (Xiaomi HyperOS / Joyose, MediaTek)
     if let Ok(perf_class) = env.find_class("android/os/PerfService") {
