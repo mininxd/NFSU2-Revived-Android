@@ -530,8 +530,10 @@ void android_main(android_app* app) {
             if(d3d9RequestsSurface()){host.renderer.stop();acknowledgeD3D9Surface(true);}
             setGuestPaused(false);
             if(!customVulkanError.empty())throw std::runtime_error(customVulkanError);
-            const char* rend = getenv("NFSU2_RENDERER");
-            bool isGl = rend && (strcmp(rend, "opengl") == 0 || strcmp(rend, "opengl_es") == 0);
+            static const bool isGl = [](){
+                const char* rend = getenv("NFSU2_RENDERER");
+                return rend && (strcmp(rend, "opengl") == 0 || strcmp(rend, "opengl_es") == 0);
+            }();
             if (!host.renderer.device&&!d3d9RequestsSurface()&&!((customVulkanDriver||isGl)&&host.guestAttempted)) {
                 checkGameData();
                 if(customVulkanDriver || isGl){
@@ -548,8 +550,6 @@ void android_main(android_app* app) {
             auto status=host.guestWorker.status();
             if(status!=host.guestStatus){
                 host.guestStatus=status;
-                const char* rend = getenv("NFSU2_RENDERER");
-                bool isGl = rend && (strcmp(rend, "opengl") == 0 || strcmp(rend, "opengl_es") == 0);
                 unsigned major = VK_API_VERSION_MAJOR(s_vulkanApiVersion);
                 unsigned minor = VK_API_VERSION_MINOR(s_vulkanApiVersion);
                 if (major < 1 || (major == 1 && minor < 3)) { major = 1; minor = 3; }

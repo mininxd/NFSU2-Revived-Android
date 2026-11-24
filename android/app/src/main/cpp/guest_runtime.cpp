@@ -366,10 +366,14 @@ void d3dDispatch(){
         nfs_adpf_end_frame();
         nfs_widescreen_apply_frame_rate();
         static void (*s_roam_tick)()=nullptr;
-        if(!s_roam_tick){
-            void* h=dlopen("libnfsu2_roam.so",RTLD_NOW|RTLD_GLOBAL);
-            if(h)s_roam_tick=reinterpret_cast<void(*)()>(dlsym(h,"nfs_roam_frame_tick"));
-            if(!s_roam_tick)s_roam_tick=reinterpret_cast<void(*)()>(dlsym(RTLD_DEFAULT,"nfs_roam_frame_tick"));
+        static bool s_roam_checked = false;
+        if(!s_roam_checked){
+            s_roam_checked = true;
+            s_roam_tick=reinterpret_cast<void(*)()>(dlsym(RTLD_DEFAULT,"nfs_roam_frame_tick"));
+            if(!s_roam_tick){
+                void* h=dlopen("libgame_core.so",RTLD_NOLOAD);
+                if(h) s_roam_tick=reinterpret_cast<void(*)()>(dlsym(h,"nfs_roam_frame_tick"));
+            }
         }
         if(s_roam_tick)s_roam_tick();
         static uint64_t s_last_token_ns = 0;

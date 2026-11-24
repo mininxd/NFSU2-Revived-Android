@@ -44,25 +44,40 @@ std::unordered_map<uint32_t,Object> objects;
 // device, active textures, vertex buffers, and index buffers (~40k calls/frame).
 struct FastObjCache { uint32_t addr; Object* obj; };
 static FastObjCache s_obj_cache[4]{};
-static uint32_t s_obj_cache_head = 0;
 
 static inline void clearObjectCache() {
     std::memset(s_obj_cache, 0, sizeof(s_obj_cache));
 }
 
 Object* findObject(uint32_t address){
-    for (int i = 0; i < 4; ++i) {
+    if (__builtin_expect(s_obj_cache[0].addr == address && s_obj_cache[0].obj != nullptr, 1)) {
+        return s_obj_cache[0].obj;
+    }
+    for (int i = 1; i < 4; ++i) {
         if (s_obj_cache[i].addr == address && s_obj_cache[i].obj) {
-            return s_obj_cache[i].obj;
+            auto hit = s_obj_cache[i];
+            s_obj_cache[i] = s_obj_cache[0];
+            s_obj_cache[0] = hit;
+            return hit.obj;
         }
     }
     auto found = objects.find(address);
     if (found == objects.end()) return nullptr;
-    s_obj_cache[s_obj_cache_head & 3] = {address, &found->second};
-    ++s_obj_cache_head;
+    s_obj_cache[3] = s_obj_cache[2];
+    s_obj_cache[2] = s_obj_cache[1];
+    s_obj_cache[1] = s_obj_cache[0];
+    s_obj_cache[0] = {address, &found->second};
     return &found->second;
 }
-std::map<IUnknown*,uint32_t> addresses;
+std::unordered_map<IUnknown*,uint32_t> addresses;
+const bool s_is_native_vk = [](){
+    const char* rend = std::getenv("NFSU2_RENDERER");
+    return rend && (std::strcmp(rend, "vulkan_native") == 0);
+}();
+const bool s_is_native_gles = [](){
+    const char* rend = std::getenv("NFSU2_RENDERER");
+    return rend && (std::strcmp(rend, "opengl") == 0 || std::strcmp(rend, "opengl_es") == 0);
+}();
 void* guestBase;
 uint32_t (*allocateGuest)(uint32_t);
 void (*freeGuest)(uint32_t);
@@ -94,9 +109,11 @@ template<class T>bool kindMatches(Kind kind){
     else return false;
 }
 template<class T>T* nativeObject(uint32_t address){
-    if(!address)return nullptr;auto found=objects.find(address);if(found==objects.end())return nullptr;
-    if(kindMatches<T>(found->second.kind))return static_cast<T*>(found->second.native);
-    auto native=dynamic_cast<T*>(found->second.native);return native;
+    if(!address)return nullptr;
+    Object* entry = findObject(address);
+    if(!entry) return nullptr;
+    if(kindMatches<T>(entry->kind))return static_cast<T*>(entry->native);
+    auto native=dynamic_cast<T*>(entry->native);return native;
 }
 uint32_t wrapTexture(IDirect3DBaseTexture9* texture){if(!texture)return 0;switch(texture->GetType()){case D3DRTYPE_TEXTURE:return wrap(texture,Kind::Texture);case D3DRTYPE_CUBETEXTURE:return wrap(texture,Kind::Cube);case D3DRTYPE_VOLUMETEXTURE:return wrap(texture,Kind::VolumeTexture);default:throw std::runtime_error("Unknown D3D9 base texture type");}}
 struct FastD3D9Filter {
@@ -130,6 +147,10 @@ struct FastD3D9Filter {
     uint32_t ib;
     uint64_t ib_epoch;
     uint8_t ib_valid;
+    uint32_t light_enabled[8];
+    uint8_t light_valid[8];
+    uint32_t sw_enabled;
+    uint8_t sw_valid;
     uint64_t epoch;
 
     void forget() {
@@ -139,7 +160,9 @@ struct FastD3D9Filter {
         std::memset(tex_valid, 0, sizeof(tex_valid));
         std::memset(stream_valid, 0, sizeof(stream_valid));
         std::memset(stream_freq_valid, 0, sizeof(stream_freq_valid));
+        std::memset(light_valid, 0, sizeof(light_valid));
         decl_valid = 0; fvf_valid = 0; vs_valid = 0; ps_valid = 0; ib_valid = 0;
+        sw_valid = 0;
     }
     void notifyRetire() { ++epoch; }
     void notifyRtChange() {
@@ -258,6 +281,25 @@ struct FastD3D9Filter {
             ps = sh; ps_epoch = epoch; ps_valid = 1;
             return false;
         }
+        case 53: { // LightEnable(Index, Enable)
+            *count = 3;
+            uint32_t idx = args[1];
+            if (idx < 8) {
+                uint32_t enable = args[2] ? 1 : 0;
+                if (light_valid[idx] && light_enabled[idx] == enable) return true;
+                light_enabled[idx] = enable;
+                light_valid[idx] = 1;
+            }
+            return false;
+        }
+        case 77: { // SetSoftwareVertexProcessing(bSoftware)
+            *count = 2;
+            uint32_t sw = args[1] ? 1 : 0;
+            if (sw_valid && sw_enabled == sw) return true;
+            sw_enabled = sw;
+            sw_valid = 1;
+            return false;
+        }
         default: return false;
         }
     }
@@ -335,17 +377,19 @@ void setD3D9Compatibility(bool cpuTextures,unsigned backBuffers){
 }
 void configureD3D9Bridge(void* base,uint32_t (*allocator)(uint32_t),void (*deallocator)(uint32_t)){
     guestBase=base;allocateGuest=allocator;freeGuest=deallocator;
+    getGraphicsCacheHandle();
+    auto reg_fn = reinterpret_cast<void(*)(void(*)(int))>(resolveGraphicsCacheSymbol("nfs_contrast_regulator_register_callback"));
+    if (!reg_fn) reg_fn = reinterpret_cast<void(*)(void(*)(int))>(resolveGraphicsCacheSymbol("nfs_contrast_register_ramp_callback"));
+    if (reg_fn) reg_fn(nfs_d3d9_set_enhanced_contrast_ramp);
     static auto s_tuner_env = reinterpret_cast<int(*)()>(dlsym(RTLD_DEFAULT,"nfs_dxvk_tuner_apply_environment"));
     if(s_tuner_env) s_tuner_env();
-    const char* rend = std::getenv("NFSU2_RENDERER");
-    bool isGl = rend && (std::strcmp(rend, "opengl") == 0 || std::strcmp(rend, "opengl_es") == 0);
-    if(isGl) {
+    if(s_is_native_gles) {
         static auto s_gles_init = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_gles_init"));
         if(s_gles_init) {
             int ret = s_gles_init();
             NFS_RUNTIME_LOG(ANDROID_LOG_INFO, "NFSU2-GLES", "Native Pure Rust GLES initialized (result=%d)", ret);
         }
-    } else {
+    } else if(s_is_native_vk) {
         static auto s_vk_init = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_vk_init"));
         if(s_vk_init) {
             int ret = s_vk_init();
@@ -398,14 +442,12 @@ void setD3D9HostWindow(ANativeWindow* window){
             pfnSetFrameRate(window, 60.0f, 0);
         }
     }
-    const char* rend = std::getenv("NFSU2_RENDERER");
-    bool isGl = rend && (std::strcmp(rend, "opengl") == 0 || std::strcmp(rend, "opengl_es") == 0);
-    if(isGl) {
+    if(s_is_native_gles) {
         static auto s_native_window = reinterpret_cast<int(*)(void*)>(resolveGraphicsCacheSymbol("nfs_native_gles_set_window"));
         if(s_native_window) {
             s_native_window(window);
         }
-    } else {
+    } else if(s_is_native_vk) {
         static auto s_native_vk_window = reinterpret_cast<int(*)(void*)>(resolveGraphicsCacheSymbol("nfs_native_vk_set_window"));
         if(s_native_vk_window) {
             s_native_vk_window(window);
@@ -526,14 +568,6 @@ extern "C" void nfs_d3d9_set_enhanced_contrast_ramp(int enable) {
 }
 
 uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumentCount){
-    getGraphicsCacheHandle();
-    static bool s_contrast_ramp_reg = false;
-    if (!s_contrast_ramp_reg) {
-        s_contrast_ramp_reg = true;
-        auto reg_fn = reinterpret_cast<void(*)(void(*)(int))>(resolveGraphicsCacheSymbol("nfs_contrast_regulator_register_callback"));
-        if (!reg_fn) reg_fn = reinterpret_cast<void(*)(void(*)(int))>(resolveGraphicsCacheSymbol("nfs_contrast_register_ramp_callback"));
-        if (reg_fn) reg_fn(nfs_d3d9_set_enhanced_contrast_ramp);
-    }
     uint32_t kind=(token-methodBase)/4096,method=((token-methodBase)%4096)/16;
     if(kind==2){
         if(s_fast_d3d9_filter.filter(method, args, argumentCount)){
@@ -686,28 +720,14 @@ uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumen
             // here with the reason instead.
             static unsigned failures=0;failures=FAILED(status)?failures+1:0;
             if(FAILED(status)&&failures<2)return status;
-            const char* rend = std::getenv("NFSU2_RENDERER");
-            bool isGl = rend && (std::strcmp(rend, "opengl") == 0 || std::strcmp(rend, "opengl_es") == 0);
             if(FAILED(status))throw std::runtime_error("The GPU could not create the graphics device (" +
-                std::string(isGl ? "OpenGL ES" : "Vulkan") + ", CreateDevice "+
+                std::string(s_is_native_gles ? "OpenGL ES" : "Vulkan") + ", CreateDevice "+
                 std::to_string(uint32_t(status))+"). Use \"Check driver\" in the launcher to see what is missing.");
             write(args[6],wrap(device,Kind::Device));return status;
         }
         }
     }
     if(kind==2){
-        if(s_fast_d3d9_filter.filter(method, args, argumentCount)){
-            return D3D_OK;
-        }
-        static auto s_filter_state = []() -> int(*)(uint32_t,const uint32_t*,uint32_t*) {
-            void* h = getGraphicsCacheHandle();
-            auto fn = h ? reinterpret_cast<int(*)(uint32_t,const uint32_t*,uint32_t*)>(dlsym(h,"nfs_d3d9_filter_state")) : nullptr;
-            if(!fn) fn = reinterpret_cast<int(*)(uint32_t,const uint32_t*,uint32_t*)>(dlsym(RTLD_DEFAULT,"nfs_d3d9_filter_state"));
-            return fn;
-        }();
-        if(s_filter_state && s_filter_state(method, args, argumentCount)){
-            return D3D_OK;
-        }
         auto device=static_cast<IDirect3DDevice9*>(object);
         s_active_d3d9_device = device;
         switch(method){

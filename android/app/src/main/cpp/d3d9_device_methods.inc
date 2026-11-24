@@ -69,20 +69,14 @@ case 17:{*argumentCount=5;
             }
         }
     }
-    const char* rend = std::getenv("NFSU2_RENDERER");
-    bool isGl = rend && (std::strcmp(rend, "opengl") == 0 || std::strcmp(rend, "opengl_es") == 0);
-    if(isGl) {
+    if (__builtin_expect(s_is_native_gles, 0)) {
         static auto s_native_present = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_gles_present"));
         if(s_native_present && s_native_present() == 0) {
             return D3D_OK;
         }
-    } else {
+    } else if (__builtin_expect(s_is_native_vk, 0)) {
         static auto s_native_vk_present = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_vk_present"));
         if(s_native_vk_present && s_native_vk_present() == 0) {
-            return D3D_OK;
-        }
-        static auto s_native_present = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_gles_present"));
-        if(s_native_present && s_native_present() == 0) {
             return D3D_OK;
         }
     }
@@ -125,22 +119,34 @@ case 41:{*argumentCount=1;
     static int(*s_contrast_pre)(void*) = nullptr;
     if(!s_contrast_pre) s_contrast_pre = reinterpret_cast<int(*)(void*)>(resolveGraphicsCacheSymbol("nfs_contrast_regulator_pre_frame"));
     if(s_contrast_pre) s_contrast_pre(guestBase);
-    static auto s_vk_begin = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_vk_begin_scene"));
-    if(s_vk_begin && s_vk_begin() == 0) return D3D_OK;
-    static auto s_gles_begin = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_gles_begin_scene"));
-    if(s_gles_begin && s_gles_begin() == 0) return D3D_OK;
+    if (__builtin_expect(s_is_native_vk, 0)) {
+        static auto s_vk_begin = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_vk_begin_scene"));
+        if(s_vk_begin && s_vk_begin() == 0) return D3D_OK;
+    }
+    if (__builtin_expect(s_is_native_gles, 0)) {
+        static auto s_gles_begin = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_gles_begin_scene"));
+        if(s_gles_begin && s_gles_begin() == 0) return D3D_OK;
+    }
     return device->BeginScene();}
 case 42:{*argumentCount=1;
-    static auto s_vk_end = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_vk_end_scene"));
-    if(s_vk_end && s_vk_end() == 0) return D3D_OK;
-    static auto s_gles_end = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_gles_end_scene"));
-    if(s_gles_end && s_gles_end() == 0) return D3D_OK;
+    if (__builtin_expect(s_is_native_vk, 0)) {
+        static auto s_vk_end = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_vk_end_scene"));
+        if(s_vk_end && s_vk_end() == 0) return D3D_OK;
+    }
+    if (__builtin_expect(s_is_native_gles, 0)) {
+        static auto s_gles_end = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_native_gles_end_scene"));
+        if(s_gles_end && s_gles_end() == 0) return D3D_OK;
+    }
     return device->EndScene();}
 case 43:{*argumentCount=7;
-    static auto s_vk_clear = reinterpret_cast<int(*)(uint32_t,uint32_t,float,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_vk_clear"));
-    if(s_vk_clear && s_vk_clear(static_cast<DWORD>(args[1]), static_cast<D3DCOLOR>(args[4]), floatValue(args[5]), static_cast<DWORD>(args[6])) == 0) return D3D_OK;
-    static auto s_gles_clear = reinterpret_cast<int(*)(uint32_t,uint32_t,float,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_gles_clear"));
-    if(s_gles_clear && s_gles_clear(static_cast<DWORD>(args[1]), static_cast<D3DCOLOR>(args[4]), floatValue(args[5]), static_cast<DWORD>(args[6])) == 0) return D3D_OK;
+    if (__builtin_expect(s_is_native_vk, 0)) {
+        static auto s_vk_clear = reinterpret_cast<int(*)(uint32_t,uint32_t,float,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_vk_clear"));
+        if(s_vk_clear && s_vk_clear(static_cast<DWORD>(args[1]), static_cast<D3DCOLOR>(args[4]), floatValue(args[5]), static_cast<DWORD>(args[6])) == 0) return D3D_OK;
+    }
+    if (__builtin_expect(s_is_native_gles, 0)) {
+        static auto s_gles_clear = reinterpret_cast<int(*)(uint32_t,uint32_t,float,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_gles_clear"));
+        if(s_gles_clear && s_gles_clear(static_cast<DWORD>(args[1]), static_cast<D3DCOLOR>(args[4]), floatValue(args[5]), static_cast<DWORD>(args[6])) == 0) return D3D_OK;
+    }
     return device->Clear(static_cast<DWORD>(args[1]),static_cast<const D3DRECT*>(pointer(args[2])),static_cast<DWORD>(args[3]),static_cast<D3DCOLOR>(args[4]),floatValue(args[5]),static_cast<DWORD>(args[6]));}
 case 44:{*argumentCount=3;
     static int(*s_filter_tf)(uint32_t,const float*) = nullptr;
@@ -193,13 +199,26 @@ case 44:{*argumentCount=3;
         if(!s_cull_world) s_cull_world = reinterpret_cast<void(*)(const float*)>(resolveGraphicsCacheSymbol("nfs_camera_cull_update_world"));
         if(s_cull_world) s_cull_world(reinterpret_cast<const float*>(matrix));
     }
+    static float s_fast_tf_cache[264][16];
+    static uint8_t s_fast_tf_valid[264] = {0};
+    if (args[1] < 264 && matrix) {
+        if (s_fast_tf_valid[args[1]] && std::memcmp(s_fast_tf_cache[args[1]], matrix, sizeof(float) * 16) == 0) {
+            return D3D_OK;
+        }
+        std::memcpy(s_fast_tf_cache[args[1]], matrix, sizeof(float) * 16);
+        s_fast_tf_valid[args[1]] = 1;
+    }
     if(s_filter_tf && matrix && s_filter_tf(args[1], reinterpret_cast<const float*>(matrix))){
         return D3D_OK;
     }
-    static auto s_vk_tf = reinterpret_cast<int(*)(uint32_t,const float*)>(resolveGraphicsCacheSymbol("nfs_native_vk_set_transform"));
-    if(s_vk_tf && matrix && s_vk_tf(args[1], reinterpret_cast<const float*>(matrix)) == 0) return D3D_OK;
-    static auto s_gles_tf = reinterpret_cast<int(*)(uint32_t,const float*)>(resolveGraphicsCacheSymbol("nfs_native_gles_set_transform"));
-    if(s_gles_tf && matrix && s_gles_tf(args[1], reinterpret_cast<const float*>(matrix)) == 0) return D3D_OK;
+    if (__builtin_expect(s_is_native_vk, 0)) {
+        static auto s_vk_tf = reinterpret_cast<int(*)(uint32_t,const float*)>(resolveGraphicsCacheSymbol("nfs_native_vk_set_transform"));
+        if(s_vk_tf && matrix && s_vk_tf(args[1], reinterpret_cast<const float*>(matrix)) == 0) return D3D_OK;
+    }
+    if (__builtin_expect(s_is_native_gles, 0)) {
+        static auto s_gles_tf = reinterpret_cast<int(*)(uint32_t,const float*)>(resolveGraphicsCacheSymbol("nfs_native_gles_set_transform"));
+        if(s_gles_tf && matrix && s_gles_tf(args[1], reinterpret_cast<const float*>(matrix)) == 0) return D3D_OK;
+    }
     return device->SetTransform(static_cast<D3DTRANSFORMSTATETYPE>(args[1]),matrix);}
 case 45:{*argumentCount=3;return device->GetTransform(static_cast<D3DTRANSFORMSTATETYPE>(args[1]),static_cast<D3DMATRIX*>(pointer(args[2])));}
 case 46:{*argumentCount=3;return device->MultiplyTransform(static_cast<D3DTRANSFORMSTATETYPE>(args[1]),static_cast<const D3DMATRIX*>(pointer(args[2])));}
@@ -222,8 +241,15 @@ case 47:{*argumentCount=2;
             s_cull_sub_vp(is_sub);
         }
     }
-    static auto s_vk_vp = reinterpret_cast<int(*)(int,int,int,int)>(resolveGraphicsCacheSymbol("nfs_native_vk_set_viewport"));
-    if(s_vk_vp && vp && s_vk_vp(vp->X, vp->Y, vp->Width, vp->Height) == 0) return D3D_OK;
+    if (__builtin_expect(s_is_native_vk, 0)) {
+        static auto s_vk_vp = reinterpret_cast<int(*)(int,int,int,int)>(resolveGraphicsCacheSymbol("nfs_native_vk_set_viewport"));
+        if(s_vk_vp && vp && s_vk_vp(vp->X, vp->Y, vp->Width, vp->Height) == 0) return D3D_OK;
+    }
+    if (__builtin_expect(s_is_native_gles, 0)) {
+        static auto s_gles_vp = reinterpret_cast<int(*)(int,int,int,int)>(resolveGraphicsCacheSymbol("nfs_native_gles_set_viewport"));
+        if(s_gles_vp && vp && s_gles_vp(vp->X, vp->Y, vp->Width, vp->Height) == 0) return D3D_OK;
+    }
+    return device->SetViewport(vp);}
     static auto s_gles_vp = reinterpret_cast<int(*)(int,int,int,int)>(resolveGraphicsCacheSymbol("nfs_native_gles_set_viewport"));
     if(s_gles_vp && vp && s_gles_vp(vp->X, vp->Y, vp->Width, vp->Height) == 0) return D3D_OK;
     return device->SetViewport(vp);}
@@ -237,10 +263,14 @@ case 54:{*argumentCount=3;return device->GetLightEnable(static_cast<DWORD>(args[
 case 55:{*argumentCount=3;return device->SetClipPlane(static_cast<DWORD>(args[1]),static_cast<const float*>(pointer(args[2])));}
 case 56:{*argumentCount=3;return device->GetClipPlane(static_cast<DWORD>(args[1]),static_cast<float*>(pointer(args[2])));}
 case 57:{*argumentCount=3;
-    static auto s_vk_rs = reinterpret_cast<int(*)(uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_vk_set_render_state"));
-    if(s_vk_rs && s_vk_rs(static_cast<D3DRENDERSTATETYPE>(args[1]), static_cast<DWORD>(args[2])) == 0) return D3D_OK;
-    static auto s_gles_rs = reinterpret_cast<int(*)(uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_gles_set_render_state"));
-    if(s_gles_rs && s_gles_rs(static_cast<D3DRENDERSTATETYPE>(args[1]), static_cast<DWORD>(args[2])) == 0) return D3D_OK;
+    if (__builtin_expect(s_is_native_vk, 0)) {
+        static auto s_vk_rs = reinterpret_cast<int(*)(uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_vk_set_render_state"));
+        if(s_vk_rs && s_vk_rs(static_cast<D3DRENDERSTATETYPE>(args[1]), static_cast<DWORD>(args[2])) == 0) return D3D_OK;
+    }
+    if (__builtin_expect(s_is_native_gles, 0)) {
+        static auto s_gles_rs = reinterpret_cast<int(*)(uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_gles_set_render_state"));
+        if(s_gles_rs && s_gles_rs(static_cast<D3DRENDERSTATETYPE>(args[1]), static_cast<DWORD>(args[2])) == 0) return D3D_OK;
+    }
     return device->SetRenderState(static_cast<D3DRENDERSTATETYPE>(args[1]),static_cast<DWORD>(args[2]));}
 case 58:{*argumentCount=3;return device->GetRenderState(static_cast<D3DRENDERSTATETYPE>(args[1]),static_cast<DWORD*>(pointer(args[2])));}
 case 59:{*argumentCount=3;IDirect3DStateBlock9* object2=nullptr;HRESULT status=device->CreateStateBlock(static_cast<D3DSTATEBLOCKTYPE>(args[1]),args[2]?&object2:nullptr);if(args[2])write(args[2],SUCCEEDED(status)?wrap(object2,Kind::StateBlock):0);return status;}
@@ -250,10 +280,14 @@ case 62:{*argumentCount=2;return device->SetClipStatus(static_cast<const D3DCLIP
 case 63:{*argumentCount=2;return device->GetClipStatus(static_cast<D3DCLIPSTATUS9*>(pointer(args[1])));}
 case 64:{*argumentCount=3;IDirect3DBaseTexture9* object2=nullptr;HRESULT status=device->GetTexture(static_cast<DWORD>(args[1]),args[2]?&object2:nullptr);if(args[2])write(args[2],SUCCEEDED(status)?wrapTexture(object2):0);return status;}
 case 65:{*argumentCount=3;
-    static auto s_vk_tex = reinterpret_cast<int(*)(uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_vk_set_texture"));
-    if(s_vk_tex && s_vk_tex(static_cast<DWORD>(args[1]), args[2]) == 0) return D3D_OK;
-    static auto s_gles_tex = reinterpret_cast<int(*)(uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_gles_set_texture"));
-    if(s_gles_tex && s_gles_tex(static_cast<DWORD>(args[1]), args[2]) == 0) return D3D_OK;
+    if (__builtin_expect(s_is_native_vk, 0)) {
+        static auto s_vk_tex = reinterpret_cast<int(*)(uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_vk_set_texture"));
+        if(s_vk_tex && s_vk_tex(static_cast<DWORD>(args[1]), args[2]) == 0) return D3D_OK;
+    }
+    if (__builtin_expect(s_is_native_gles, 0)) {
+        static auto s_gles_tex = reinterpret_cast<int(*)(uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_gles_set_texture"));
+        if(s_gles_tex && s_gles_tex(static_cast<DWORD>(args[1]), args[2]) == 0) return D3D_OK;
+    }
     return device->SetTexture(static_cast<DWORD>(args[1]),nativeObject<IDirect3DBaseTexture9>(args[2]));}
 case 66:{*argumentCount=4;return device->GetTextureStageState(static_cast<DWORD>(args[1]),static_cast<D3DTEXTURESTAGESTATETYPE>(args[2]),static_cast<DWORD*>(pointer(args[3])));}
 case 67:{*argumentCount=4;return device->SetTextureStageState(static_cast<DWORD>(args[1]),static_cast<D3DTEXTURESTAGESTATETYPE>(args[2]),static_cast<DWORD>(args[3]));}
@@ -281,37 +315,53 @@ case 81:{*argumentCount=4;
     static int(*s_cull_test)() = nullptr;
     if(!s_cull_test) s_cull_test = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_camera_cull_test_draw"));
     if (s_cull_test && s_cull_test()) return D3D_OK;
-    static auto s_vk_draw_prim = reinterpret_cast<int(*)(uint32_t,uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_vk_draw_primitive"));
-    if(s_vk_draw_prim && s_vk_draw_prim(static_cast<uint32_t>(args[1]), static_cast<uint32_t>(args[2]), static_cast<uint32_t>(args[3])) == 0) return D3D_OK;
-    static auto s_gles_draw_prim = reinterpret_cast<int(*)(uint32_t,uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_gles_draw_primitive"));
-    if(s_gles_draw_prim && s_gles_draw_prim(static_cast<uint32_t>(args[1]), static_cast<uint32_t>(args[2]), static_cast<uint32_t>(args[3])) == 0) return D3D_OK;
+    if (__builtin_expect(s_is_native_vk, 0)) {
+        static auto s_vk_draw_prim = reinterpret_cast<int(*)(uint32_t,uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_vk_draw_primitive"));
+        if(s_vk_draw_prim && s_vk_draw_prim(static_cast<uint32_t>(args[1]), static_cast<uint32_t>(args[2]), static_cast<uint32_t>(args[3])) == 0) return D3D_OK;
+    }
+    if (__builtin_expect(s_is_native_gles, 0)) {
+        static auto s_gles_draw_prim = reinterpret_cast<int(*)(uint32_t,uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_gles_draw_primitive"));
+        if(s_gles_draw_prim && s_gles_draw_prim(static_cast<uint32_t>(args[1]), static_cast<uint32_t>(args[2]), static_cast<uint32_t>(args[3])) == 0) return D3D_OK;
+    }
     return device->DrawPrimitive(static_cast<D3DPRIMITIVETYPE>(args[1]),static_cast<UINT>(args[2]),static_cast<UINT>(args[3]));}
 case 82:{*argumentCount=7;
     static int(*s_cull_test)() = nullptr;
     if(!s_cull_test) s_cull_test = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_camera_cull_test_draw"));
     if (s_cull_test && s_cull_test()) return D3D_OK;
-    static auto s_vk_draw = reinterpret_cast<int(*)(uint32_t,int,uint32_t,uint32_t,uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_vk_draw_indexed"));
-    if(s_vk_draw && s_vk_draw(static_cast<uint32_t>(args[1]), static_cast<int>(args[2]), static_cast<uint32_t>(args[3]), static_cast<uint32_t>(args[4]), static_cast<uint32_t>(args[5]), static_cast<uint32_t>(args[6])) == 0) return D3D_OK;
-    static auto s_gles_draw = reinterpret_cast<int(*)(uint32_t,int,uint32_t,uint32_t,uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_gles_draw_indexed"));
-    if(s_gles_draw && s_gles_draw(static_cast<uint32_t>(args[1]), static_cast<int>(args[2]), static_cast<uint32_t>(args[3]), static_cast<uint32_t>(args[4]), static_cast<uint32_t>(args[5]), static_cast<uint32_t>(args[6])) == 0) return D3D_OK;
+    if (__builtin_expect(s_is_native_vk, 0)) {
+        static auto s_vk_draw = reinterpret_cast<int(*)(uint32_t,int,uint32_t,uint32_t,uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_vk_draw_indexed"));
+        if(s_vk_draw && s_vk_draw(static_cast<uint32_t>(args[1]), static_cast<int>(args[2]), static_cast<uint32_t>(args[3]), static_cast<uint32_t>(args[4]), static_cast<uint32_t>(args[5]), static_cast<uint32_t>(args[6])) == 0) return D3D_OK;
+    }
+    if (__builtin_expect(s_is_native_gles, 0)) {
+        static auto s_gles_draw = reinterpret_cast<int(*)(uint32_t,int,uint32_t,uint32_t,uint32_t,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_gles_draw_indexed"));
+        if(s_gles_draw && s_gles_draw(static_cast<uint32_t>(args[1]), static_cast<int>(args[2]), static_cast<uint32_t>(args[3]), static_cast<uint32_t>(args[4]), static_cast<uint32_t>(args[5]), static_cast<uint32_t>(args[6])) == 0) return D3D_OK;
+    }
     return device->DrawIndexedPrimitive(static_cast<D3DPRIMITIVETYPE>(args[1]),static_cast<INT>(args[2]),static_cast<UINT>(args[3]),static_cast<UINT>(args[4]),static_cast<UINT>(args[5]),static_cast<UINT>(args[6]));}
 case 83:{*argumentCount=5;
     static int(*s_cull_test)() = nullptr;
     if(!s_cull_test) s_cull_test = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_camera_cull_test_draw"));
     if (s_cull_test && s_cull_test()) return D3D_OK;
-    static auto s_vk_draw_up = reinterpret_cast<int(*)(uint32_t,uint32_t,const void*,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_vk_draw_primitive_up"));
-    if(s_vk_draw_up && s_vk_draw_up(static_cast<uint32_t>(args[1]), static_cast<uint32_t>(args[2]), static_cast<const void*>(pointer(args[3])), static_cast<uint32_t>(args[4])) == 0) return D3D_OK;
-    static auto s_gles_draw_up = reinterpret_cast<int(*)(uint32_t,uint32_t,const void*,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_gles_draw_primitive_up"));
-    if(s_gles_draw_up && s_gles_draw_up(static_cast<uint32_t>(args[1]), static_cast<uint32_t>(args[2]), static_cast<const void*>(pointer(args[3])), static_cast<uint32_t>(args[4])) == 0) return D3D_OK;
+    if (__builtin_expect(s_is_native_vk, 0)) {
+        static auto s_vk_draw_up = reinterpret_cast<int(*)(uint32_t,uint32_t,const void*,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_vk_draw_primitive_up"));
+        if(s_vk_draw_up && s_vk_draw_up(static_cast<uint32_t>(args[1]), static_cast<uint32_t>(args[2]), static_cast<const void*>(pointer(args[3])), static_cast<uint32_t>(args[4])) == 0) return D3D_OK;
+    }
+    if (__builtin_expect(s_is_native_gles, 0)) {
+        static auto s_gles_draw_up = reinterpret_cast<int(*)(uint32_t,uint32_t,const void*,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_gles_draw_primitive_up"));
+        if(s_gles_draw_up && s_gles_draw_up(static_cast<uint32_t>(args[1]), static_cast<uint32_t>(args[2]), static_cast<const void*>(pointer(args[3])), static_cast<uint32_t>(args[4])) == 0) return D3D_OK;
+    }
     return device->DrawPrimitiveUP(static_cast<D3DPRIMITIVETYPE>(args[1]),static_cast<UINT>(args[2]),static_cast<const void*>(pointer(args[3])),static_cast<UINT>(args[4]));}
 case 84:{*argumentCount=9;
     static int(*s_cull_test)() = nullptr;
     if(!s_cull_test) s_cull_test = reinterpret_cast<int(*)()>(resolveGraphicsCacheSymbol("nfs_camera_cull_test_draw"));
     if (s_cull_test && s_cull_test()) return D3D_OK;
-    static auto s_vk_draw_idx_up = reinterpret_cast<int(*)(uint32_t,uint32_t,uint32_t,uint32_t,const void*,uint32_t,const void*,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_vk_draw_indexed_primitive_up"));
-    if(s_vk_draw_idx_up && s_vk_draw_idx_up(static_cast<uint32_t>(args[1]), static_cast<uint32_t>(args[2]), static_cast<uint32_t>(args[3]), static_cast<uint32_t>(args[4]), static_cast<const void*>(pointer(args[5])), static_cast<uint32_t>(args[6]), static_cast<const void*>(pointer(args[7])), static_cast<uint32_t>(args[8])) == 0) return D3D_OK;
-    static auto s_gles_draw_idx_up = reinterpret_cast<int(*)(uint32_t,uint32_t,uint32_t,uint32_t,const void*,uint32_t,const void*,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_gles_draw_indexed_primitive_up"));
-    if(s_gles_draw_idx_up && s_gles_draw_idx_up(static_cast<uint32_t>(args[1]), static_cast<uint32_t>(args[2]), static_cast<uint32_t>(args[3]), static_cast<uint32_t>(args[4]), static_cast<const void*>(pointer(args[5])), static_cast<uint32_t>(args[6]), static_cast<const void*>(pointer(args[7])), static_cast<uint32_t>(args[8])) == 0) return D3D_OK;
+    if (__builtin_expect(s_is_native_vk, 0)) {
+        static auto s_vk_draw_idx_up = reinterpret_cast<int(*)(uint32_t,uint32_t,uint32_t,uint32_t,const void*,uint32_t,const void*,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_vk_draw_indexed_primitive_up"));
+        if(s_vk_draw_idx_up && s_vk_draw_idx_up(static_cast<uint32_t>(args[1]), static_cast<uint32_t>(args[2]), static_cast<uint32_t>(args[3]), static_cast<uint32_t>(args[4]), static_cast<const void*>(pointer(args[5])), static_cast<uint32_t>(args[6]), static_cast<const void*>(pointer(args[7])), static_cast<uint32_t>(args[8])) == 0) return D3D_OK;
+    }
+    if (__builtin_expect(s_is_native_gles, 0)) {
+        static auto s_gles_draw_idx_up = reinterpret_cast<int(*)(uint32_t,uint32_t,uint32_t,uint32_t,const void*,uint32_t,const void*,uint32_t)>(resolveGraphicsCacheSymbol("nfs_native_gles_draw_indexed_primitive_up"));
+        if(s_gles_draw_idx_up && s_gles_draw_idx_up(static_cast<uint32_t>(args[1]), static_cast<uint32_t>(args[2]), static_cast<uint32_t>(args[3]), static_cast<uint32_t>(args[4]), static_cast<const void*>(pointer(args[5])), static_cast<uint32_t>(args[6]), static_cast<const void*>(pointer(args[7])), static_cast<uint32_t>(args[8])) == 0) return D3D_OK;
+    }
     return device->DrawIndexedPrimitiveUP(static_cast<D3DPRIMITIVETYPE>(args[1]),static_cast<UINT>(args[2]),static_cast<UINT>(args[3]),static_cast<UINT>(args[4]),static_cast<const void*>(pointer(args[5])),static_cast<D3DFORMAT>(args[6]),static_cast<const void*>(pointer(args[7])),static_cast<UINT>(args[8]));}
 case 85:{*argumentCount=7;return device->ProcessVertices(static_cast<UINT>(args[1]),static_cast<UINT>(args[2]),static_cast<UINT>(args[3]),nativeObject<IDirect3DVertexBuffer9>(args[4]),nativeObject<IDirect3DVertexDeclaration9>(args[5]),static_cast<DWORD>(args[6]));}
 case 86:{*argumentCount=3;IDirect3DVertexDeclaration9* object2=nullptr;noteVertexDeclaration(static_cast<const D3DVERTEXELEMENT9*>(pointer(args[1])));HRESULT status=device->CreateVertexDeclaration(static_cast<const D3DVERTEXELEMENT9*>(pointer(args[1])),args[2]?&object2:nullptr);if(args[2])write(args[2],SUCCEEDED(status)?wrap(object2,Kind::Declaration):0);return status;}
