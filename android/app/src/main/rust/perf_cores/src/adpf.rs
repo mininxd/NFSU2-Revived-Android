@@ -142,9 +142,21 @@ pub fn adpf_init(target_fps: i32) {
         return;
     }
 
-    let fps = if target_fps <= 0 { 60 } else { target_fps };
+    let fps = if target_fps <= 0 { 120 } else { target_fps };
     let target_ns = 1_000_000_000i64 / (fps as i64);
     TARGET_DURATION_NS.store(target_ns, Ordering::Relaxed);
+
+    // If an existing session exists, try updating target duration directly
+    let session = ADPF_SESSION.load(Ordering::Relaxed);
+    if !session.is_null() {
+        let guard = API.lock().unwrap();
+        if let Some(ref api) = *guard {
+            unsafe {
+                (api.update_target)(session, target_ns);
+                return;
+            }
+        }
+    }
 
     adpf_destroy();
 
@@ -190,6 +202,8 @@ pub fn adpf_end_frame() {
     } else {
         actual_duration_ns + (actual_duration_ns / 4)
     };
+    let report_cpu_ns = report_total_ns.max(actual_duration_ns);
+    let report_gpu_ns = (target_ns * 3 / 4).max(1);
 
     let guard = API.lock().unwrap();
     if let Some(ref api) = *guard {
@@ -206,11 +220,10 @@ pub fn adpf_end_frame() {
                         set_total(work, report_total_ns);
                     }
                     if let Some(set_cpu) = api.work_set_cpu {
-                        set_cpu(work, actual_duration_ns);
+                        set_cpu(work, report_cpu_ns);
                     }
                     if let Some(set_gpu) = api.work_set_gpu {
-                        let gpu_dur = (target_ns / 2).max(1);
-                        set_gpu(work, gpu_dur);
+                        set_gpu(work, report_gpu_ns);
                     }
                     let _ = report2(session, work);
                     work_release(work);

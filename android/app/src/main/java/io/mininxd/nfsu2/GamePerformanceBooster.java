@@ -82,7 +82,12 @@ public final class GamePerformanceBooster {
             }
 
             // 3. Android platform frame scheduler & sustained performance hooks
-            AndroidGameManagerBridge.setGameplayMode(activity, 60);
+            int targetFps = 60;
+            try {
+                targetFps = Integer.parseInt(GameOptions.get(activity, GameOptions.FPS));
+                if (targetFps <= 0) targetFps = 120; // Uncapped maps to 120Hz display target
+            } catch (Throwable ignored) {}
+            AndroidGameManagerBridge.setGameplayMode(activity, targetFps);
             configureAndroidGameManager(activity);
             enableSustainedPerformance(activity, window);
 

@@ -645,19 +645,20 @@ public final class DiagnosticOverlay {
             }
         } catch (Exception ignored) {}
 
-        // Fallback: process CPU accounting
+        // Fallback: process CPU accounting (matches standard Android game profilers & top)
+        // 100% represents one saturated core; multi-core workloads can scale over 100%
         long nowWall = SystemClock.elapsedRealtime();
         long nowCpu = Process.getElapsedCpuTime();
         if (lastWallTime > 0 && nowWall > lastWallTime) {
             long cpuDiff = nowCpu - lastProcessCpuTime;
             long wallDiff = nowWall - lastWallTime;
-            int cores = Math.max(1, Runtime.getRuntime().availableProcessors());
-            lastCpuPercent = (cpuDiff * 100.0f) / (wallDiff * cores);
+            lastCpuPercent = (cpuDiff * 100.0f) / Math.max(1L, wallDiff);
         }
         lastWallTime = nowWall;
         lastProcessCpuTime = nowCpu;
 
-        return Math.max(0.0f, Math.min(100.0f, lastCpuPercent));
+        int maxCores = Math.max(1, Runtime.getRuntime().availableProcessors());
+        return Math.max(0.0f, Math.min(maxCores * 100.0f, lastCpuPercent));
     }
 
     private float getTargetFps() {
@@ -703,11 +704,11 @@ public final class DiagnosticOverlay {
         float estimated;
         if (cpu > 70.0f && liveGameFps < (targetFps * 0.70f)) {
             // CPU Bound bottleneck: GPU is stalled waiting for guest x86 JIT/draw call emission
-            estimated = Math.min(48.0f, Math.max(12.0f, (liveGameFps / targetFps) * 45.0f));
+            estimated = Math.min(50.0f, Math.max(15.0f, (liveGameFps / targetFps) * 50.0f));
         } else {
-            // Normal / GPU active: scale proportionally without artificial 100% pegging
+            // Active GPU load: scale to real frame delivery vs budget
             float efficiency = Math.min(1.0f, targetMs / Math.max(1.0f, actualMs));
-            estimated = Math.min(85.0f, Math.max(18.0f, efficiency * 68.0f));
+            estimated = Math.min(98.0f, Math.max(25.0f, efficiency * 95.0f));
         }
 
         if (smoothedGpuPercent < 0.0f) {

@@ -114,6 +114,7 @@ impl DxvkProfileConfig {
         let mut s = String::with_capacity(2048);
         s.push_str("dxvk.enableStateCache = True\n");
         s.push_str("dxvk.enableAsync = True\n");
+        s.push_str("dxvk.async = True\n");
         if self.enable_gpl {
             s.push_str("dxvk.enableGraphicsPipelineLibrary = True\n");
             s.push_str("dxvk.gplAsyncCache = True\n");

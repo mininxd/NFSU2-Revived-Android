@@ -216,8 +216,8 @@ pub unsafe extern "C" fn nfs_rust_apply_engine_pacing(mem_base: *mut u8, real_el
     // while respecting the player's in-game Enhanced Contrast choice (G_BLEACH_BYPASS_ENABLE_ADDR)
     write_u32(mem_base, G_OVERBRIGHT_ENABLE_ADDR, 0);
 
-    // 9. Anti-slowmotion frame pacing
-    if real_elapsed > 0.010 && real_elapsed < 0.200 {
+    // 9. Anti-slowmotion frame pacing (supports 60Hz, 90Hz, 120Hz, 240Hz, and uncapped)
+    if real_elapsed > 0.004 && real_elapsed < 0.200 {
         let current_wdt = read_f32(mem_base, G_SIM_WDT_ADDR);
         let current_realdt = read_f32(mem_base, G_SIM_REALDT_ADDR);
         let effective_dt = if current_wdt > 0.0 { current_wdt } else { current_realdt };
@@ -226,8 +226,8 @@ pub unsafe extern "C" fn nfs_rust_apply_engine_pacing(mem_base: *mut u8, real_el
             let corrected = pacing_filter_dt(real_elapsed, effective_dt);
             write_f32(mem_base, G_SIM_WDT_ADDR, corrected);
             write_f32(mem_base, G_SIM_REALDT_ADDR, corrected);
-            // Cap simulation physics steps to 35 max to prevent CPU physics death spiral during hiccups
-            let steps = ((corrected * 1800.0) as u32).min(35);
+            // Scaled with 3600 Hz tick base (capped to 70 max to prevent physics death spiral during hiccups)
+            let steps = ((corrected * 3600.0) as u32).min(70);
             write_u32(mem_base, G_SIM_STEPS_ADDR, steps);
             PACED_FRAMES.fetch_add(1, Ordering::Relaxed);
         }

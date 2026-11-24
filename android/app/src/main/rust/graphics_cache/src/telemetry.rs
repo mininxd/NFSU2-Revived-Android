@@ -150,6 +150,31 @@ pub extern "C" fn nfs_telemetry_get_cpu_usage() -> f32 {
         }
     }
 
+    // Fallback: unprivileged /proc/self/stat (Process CPU usage across all active cores)
+    if let Ok(self_stat) = fs::read_to_string("/proc/self/stat") {
+        if let Some(rparen) = self_stat.rfind(')') {
+            let rest = &self_stat[rparen + 1..];
+            let fields: Vec<&str> = rest.split_whitespace().collect();
+            // fields[11] is utime (14th field in /proc/pid/stat), fields[12] is stime (15th field)
+            if fields.len() >= 13 {
+                if let (Ok(utime), Ok(stime)) = (fields[11].parse::<u64>(), fields[12].parse::<u64>()) {
+                    let work = utime + stime;
+                    let prev_work = PREV_WORK_JIFFIES.swap(work, Ordering::Relaxed);
+                    let prev_time = PREV_TOTAL_JIFFIES.swap(now_ms, Ordering::Relaxed);
+                    if prev_time > 0 && now_ms > prev_time {
+                        let time_diff_s = (now_ms - prev_time) as f32 / 1000.0;
+                        let work_diff = work.saturating_sub(prev_work);
+                        // sysconf(_SC_CLK_TCK) is standard 100 on Linux / Android
+                        let cpu_percent = (work_diff as f32 / 100.0) / time_diff_s * 100.0;
+                        let clamped = cpu_percent.clamp(0.0, 1600.0);
+                        LAST_CPU_PERCENT.store(clamped.to_bits(), Ordering::Relaxed);
+                        return clamped;
+                    }
+                }
+            }
+        }
+    }
+
     f32::from_bits(LAST_CPU_PERCENT.load(Ordering::Relaxed))
 }
 

@@ -291,6 +291,11 @@ public final class GameActivity extends NativeActivity {
                 io.mininxd.nfsu2.net.RoamNativeBridge.nativeSetFrameLimit(framesPerSecond);
             }
         } catch (Throwable ignored) {}
+        try {
+            if (s_instance != null) {
+                AndroidGameManagerBridge.setGameplayMode(s_instance, framesPerSecond > 0 ? framesPerSecond : 120);
+            }
+        } catch (Throwable ignored) {}
     }
     private static void nativeWidescreen(boolean enabled) { com.nfsu2.androidevolved.GameActivity.nativeWidescreen(enabled); }
     private static void nativeScreenMode(int mode) {
