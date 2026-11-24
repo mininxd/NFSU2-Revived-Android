@@ -535,6 +535,11 @@ uint32_t dispatchGuestD3D9(uint32_t token,const uint32_t* args,uint32_t* argumen
         if (reg_fn) reg_fn(nfs_d3d9_set_enhanced_contrast_ramp);
     }
     uint32_t kind=(token-methodBase)/4096,method=((token-methodBase)%4096)/16;
+    if(kind==2){
+        if(s_fast_d3d9_filter.filter(method, args, argumentCount)){
+            return D3D_OK;
+        }
+    }
     Object* entry=findObject(args[0]);
     if(!entry||static_cast<uint32_t>(entry->kind)!=kind){
         NFS_RUNTIME_LOG(ANDROID_LOG_ERROR,"NFSU2","Invalid D3D9 COM call object=%08x token=%08x kind=%u method=%u actualKind=%u",args[0],token,kind,method,
