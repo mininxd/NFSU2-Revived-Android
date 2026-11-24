@@ -440,7 +440,8 @@ public final class DiagnosticOverlay {
         }
         String fpsStr = (fps >= 100.0f) ? String.format(Locale.US, "%.0f", fps) : String.format(Locale.US, "%.1f", fps);
 
-        float cpu = (telemetryBuffer[2] > 0.0f) ? telemetryBuffer[2] : sampleCpuUsage();
+        float cpuRaw = (telemetryBuffer[2] > 0.0f) ? telemetryBuffer[2] : sampleCpuUsage();
+        float cpu = Math.max(0.0f, Math.min(100.0f, cpuRaw));
 
         // Memory
         ActivityManager am = (ActivityManager) activity.getSystemService(Context.ACTIVITY_SERVICE);
@@ -645,20 +646,19 @@ public final class DiagnosticOverlay {
             }
         } catch (Exception ignored) {}
 
-        // Fallback: process CPU accounting (matches standard Android game profilers & top)
-        // 100% represents one saturated core; multi-core workloads can scale over 100%
+        // Fallback: process CPU accounting normalized by total available cores (0.0% to 100.0%)
         long nowWall = SystemClock.elapsedRealtime();
         long nowCpu = Process.getElapsedCpuTime();
         if (lastWallTime > 0 && nowWall > lastWallTime) {
             long cpuDiff = nowCpu - lastProcessCpuTime;
             long wallDiff = nowWall - lastWallTime;
-            lastCpuPercent = (cpuDiff * 100.0f) / Math.max(1L, wallDiff);
+            int cores = Math.max(1, Runtime.getRuntime().availableProcessors());
+            lastCpuPercent = (cpuDiff * 100.0f) / (Math.max(1L, wallDiff) * cores);
         }
         lastWallTime = nowWall;
         lastProcessCpuTime = nowCpu;
 
-        int maxCores = Math.max(1, Runtime.getRuntime().availableProcessors());
-        return Math.max(0.0f, Math.min(maxCores * 100.0f, lastCpuPercent));
+        return Math.max(0.0f, Math.min(100.0f, lastCpuPercent));
     }
 
     private float getTargetFps() {

@@ -164,9 +164,13 @@ pub extern "C" fn nfs_telemetry_get_cpu_usage() -> f32 {
                     if prev_time > 0 && now_ms > prev_time {
                         let time_diff_s = (now_ms - prev_time) as f32 / 1000.0;
                         let work_diff = work.saturating_sub(prev_work);
+                        let total_cores = std::thread::available_parallelism()
+                            .map(|n| n.get())
+                            .unwrap_or(8) as f32;
                         // sysconf(_SC_CLK_TCK) is standard 100 on Linux / Android
-                        let cpu_percent = (work_diff as f32 / 100.0) / time_diff_s * 100.0;
-                        let clamped = cpu_percent.clamp(0.0, 1600.0);
+                        // Normalize by total available cores so CPU usage is strictly 0.0% to 100.0%
+                        let cpu_percent = ((work_diff as f32 / 100.0) / time_diff_s * 100.0) / total_cores.max(1.0);
+                        let clamped = cpu_percent.clamp(0.0, 100.0);
                         LAST_CPU_PERCENT.store(clamped.to_bits(), Ordering::Relaxed);
                         return clamped;
                     }
