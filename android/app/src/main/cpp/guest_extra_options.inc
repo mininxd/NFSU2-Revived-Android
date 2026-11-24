@@ -88,9 +88,12 @@ static inline void applyExtraOptions(const char* gameRoot) {
 
 static inline void updateDumbAIState() {
     if (!memory) return;
-    void* h = get_graphics_cache_handle();
-    auto fn_dumb = h ? (pfn_extra_dumb)dlsym(h, "nfs_extra_options_is_dumb_ai_enabled") : nullptr;
-    if (!fn_dumb) fn_dumb = (pfn_extra_dumb)dlsym(RTLD_DEFAULT, "nfs_extra_options_is_dumb_ai_enabled");
+    static auto fn_dumb = []() -> pfn_extra_dumb {
+        void* h = get_graphics_cache_handle();
+        auto fn = h ? (pfn_extra_dumb)dlsym(h, "nfs_extra_options_is_dumb_ai_enabled") : nullptr;
+        if (!fn) fn = (pfn_extra_dumb)dlsym(RTLD_DEFAULT, "nfs_extra_options_is_dumb_ai_enabled");
+        return fn;
+    }();
     int enabled = fn_dumb ? fn_dumb() : 0;
     // TheGameFlowManager at 0x008654A4 (6 = Gameplay)
     if (!memory->readable(0x008654A4u, 4) || !memory->readable(0x008900ACu, 4)) return;

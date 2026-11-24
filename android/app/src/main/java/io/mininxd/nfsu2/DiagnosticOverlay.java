@@ -702,13 +702,21 @@ public final class DiagnosticOverlay {
         float cpu = lastCpuPercent;
 
         float estimated;
-        if (cpu > 70.0f && liveGameFps < (targetFps * 0.70f)) {
-            // CPU Bound bottleneck: GPU is stalled waiting for guest x86 JIT/draw call emission
-            estimated = Math.min(50.0f, Math.max(15.0f, (liveGameFps / targetFps) * 50.0f));
+        if (liveGameFps >= (targetFps * 0.90f)) {
+            // Reaching full target frame rate (e.g. garage, showroom, menus, or light scenes):
+            // GPU is rendering lightweight geometry within ~2-3ms of a 16.6ms budget.
+            // Avoid misleadingly pegging GPU to 95-98% in menus/garage.
+            float loadPct = 25.0f + (cpu * 0.20f);
+            estimated = Math.min(45.0f, Math.max(20.0f, loadPct));
+        } else if (cpu > 70.0f) {
+            // CPU Bound bottleneck (races, traffic, physics, world streaming):
+            // GPU finishes rendering early and spends the remaining frame interval idle.
+            float ratio = Math.max(0.2f, liveGameFps / targetFps);
+            estimated = Math.min(50.0f, Math.max(18.0f, ratio * 45.0f));
         } else {
-            // Active GPU load: scale to real frame delivery vs budget
+            // Balanced gameplay load: scale to real frame delivery vs budget
             float efficiency = Math.min(1.0f, targetMs / Math.max(1.0f, actualMs));
-            estimated = Math.min(98.0f, Math.max(25.0f, efficiency * 95.0f));
+            estimated = Math.min(65.0f, Math.max(25.0f, efficiency * 60.0f));
         }
 
         if (smoothedGpuPercent < 0.0f) {
