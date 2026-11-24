@@ -50,7 +50,7 @@ pub fn record_reconnect_attempt() {
     LAST_RECONNECT_ATTEMPT_US.store(now, Ordering::Relaxed);
 }
 
-/// Calculates synthetic frame progression if real callback has stalled (> 20ms).
+/// Calculates synthetic frame progression if real callback has genuinely stalled (> 250ms).
 /// Returns the number of missed frames to advance.
 pub fn calculate_synthetic_advance(sample_rate: u32) -> u32 {
     let now = current_steady_us();
@@ -62,15 +62,17 @@ pub fn calculate_synthetic_advance(sample_rate: u32) -> u32 {
     }
 
     let since_callback = now - last_cb;
-    if since_callback > 20_000 {
-        // Callback hasn't fired in > 20ms
+    // Only advance synthetically if the callback has genuinely stalled (> 250ms),
+    // matching is_callback_stalled() (e.g. phone call, bluetooth disconnect, or app suspension).
+    // During normal playback, buffer intervals (10-40ms) must NEVER trigger synthetic advance!
+    if since_callback > 250_000 {
         let mut last_tick = LAST_SYNTHETIC_TICK_US.load(Ordering::Relaxed);
-        if last_tick == 0 {
-            last_tick = last_cb;
+        if last_tick < last_cb {
+            last_tick = last_cb + 250_000;
         }
         let delta_us = (now - last_tick).clamp(0, 100_000); // max 100ms clamp
 
-        if delta_us >= 5_000 { // at least 5ms step
+        if delta_us >= 10_000 { // 10ms steps during stall
             let rate = if sample_rate != 0 { sample_rate as u64 } else { 48_000 };
             let missed_frames = ((delta_us as u64 * rate) / 1_000_000) as u32;
             LAST_SYNTHETIC_TICK_US.store(now, Ordering::Relaxed);

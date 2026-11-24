@@ -298,7 +298,13 @@ impl CpuCluster {
         } else {
             all_cores_mask
         };
-        let render_mask = perf_mask;
+        let render_mask = if self.prime_cores_mask != 0 {
+            self.prime_cores_mask
+        } else if self.perf_cores_mask != 0 {
+            self.perf_cores_mask
+        } else {
+            all_cores_mask
+        };
 
         unsafe {
             // Process-level default affinity: performance cores (or all cores fallback)

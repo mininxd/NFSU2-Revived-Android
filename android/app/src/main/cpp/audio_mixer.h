@@ -23,8 +23,8 @@ struct PcmVoice {
     // the machine) and the ring would repeat its last half second until it
     // resumes, so it is muted instead. Loops written once (sound effects) never
     // become streaming and keep looping.
-    unsigned publishes=0;
-    double staleFrames=0;
+    std::atomic<uint32_t> publishes{0};
+    std::atomic<uint32_t> staleFrames{0};
 
     PcmVoice() = default;
     PcmVoice(const PcmVoice& o)
@@ -35,7 +35,8 @@ struct PcmVoice {
           right(o.right.load(std::memory_order_relaxed)),
           playing(o.playing.load(std::memory_order_relaxed)),
           loop(o.loop.load(std::memory_order_relaxed)),
-          publishes(o.publishes), staleFrames(o.staleFrames) {}
+          publishes(o.publishes.load(std::memory_order_relaxed)),
+          staleFrames(o.staleFrames.load(std::memory_order_relaxed)) {}
 
     PcmVoice& operator=(const PcmVoice& o) {
         if (this != &o) {
@@ -49,14 +50,14 @@ struct PcmVoice {
             right.store(o.right.load(std::memory_order_relaxed), std::memory_order_relaxed);
             playing.store(o.playing.load(std::memory_order_relaxed), std::memory_order_relaxed);
             loop.store(o.loop.load(std::memory_order_relaxed), std::memory_order_relaxed);
-            publishes = o.publishes;
-            staleFrames = o.staleFrames;
+            publishes.store(o.publishes.load(std::memory_order_relaxed), std::memory_order_relaxed);
+            staleFrames.store(o.staleFrames.load(std::memory_order_relaxed), std::memory_order_relaxed);
         }
         return *this;
     }
 
-    bool streaming()const{return loop.load(std::memory_order_relaxed)&&publishes>=4;}
-    void published(){staleFrames=0;if(playing.load(std::memory_order_relaxed))++publishes;}
+    bool streaming()const{return loop.load(std::memory_order_relaxed)&&publishes.load(std::memory_order_relaxed)>=4;}
+    void published(){staleFrames.store(0,std::memory_order_release);if(playing.load(std::memory_order_relaxed))publishes.fetch_add(1,std::memory_order_relaxed);}
     unsigned block()const{return channels*(bits/8);}
 };
 class PcmMixer {
@@ -85,26 +86,26 @@ public:
         // or block indefinitely on the guest emulation thread.
         std::unique_lock<std::mutex> lock(mutex, std::defer_lock);
         bool acquired = false;
-        for(int spin=0; spin<10; ++spin){
+        for(int spin=0; spin<100; ++spin){
             if(lock.try_lock()){ acquired = true; break; }
             #if defined(__aarch64__)
             asm volatile("yield");
             #endif
         }
         if(!acquired){
-            // Guest is actively uploading a buffer slice; avoid underrun stall.
-            return;
+            lock.lock();
         }
         for(auto& voice:voices){
             if(!voice||!voice->playing.load(std::memory_order_relaxed)||voice->samples.empty())continue;
             size_t count=voice->samples.size()/voice->block();if(!count)continue;
             double step=double(voice->frequency.load(std::memory_order_relaxed))/rate;
             double cur_pos=voice->position.load(std::memory_order_relaxed);
-            if(voice->streaming()&&voice->staleFrames>=double(count)){
+            uint32_t cur_stale=voice->staleFrames.load(std::memory_order_relaxed);
+            if(voice->streaming()&&cur_stale>=count){
                 voice->position.store(std::fmod(cur_pos+step*frames,double(count)), std::memory_order_relaxed);
                 continue;
             }
-            voice->staleFrames+=step*frames;
+            voice->staleFrames.fetch_add(unsigned(step*frames), std::memory_order_relaxed);
             static auto s_render_voice = reinterpret_cast<int(*)(
                 float*, uint32_t, const VoiceDesc*, const float*, uint32_t, uint32_t, double*
             )>(dlsym(RTLD_DEFAULT, "nfs_audio_mixer_render_voice"));
@@ -223,7 +224,7 @@ public:
                 size_t count=voice->samples.size()/voice->block();if(!count)continue;
                 auto& st = batch[batch_count];
                 st.position = voice->position.load(std::memory_order_relaxed);
-                st.stale_frames = voice->staleFrames;
+                st.stale_frames = double(voice->staleFrames.load(std::memory_order_relaxed));
                 st.step = double(voice->frequency.load(std::memory_order_relaxed))/rate;
                 st.count = count;
                 st.loop_mode = voice->loop.load(std::memory_order_relaxed) ? 1 : 0;
@@ -237,7 +238,7 @@ public:
                 for(size_t i=0; i<batch_count; ++i){
                     auto* v = active_ptrs[i];
                     v->position.store(batch[i].position, std::memory_order_relaxed);
-                    v->staleFrames = batch[i].stale_frames;
+                    v->staleFrames.store(uint32_t(batch[i].stale_frames), std::memory_order_relaxed);
                     if(!batch[i].is_playing){
                         v->playing.store(false, std::memory_order_relaxed);
                     }
@@ -250,11 +251,12 @@ public:
             size_t count=voice->samples.size()/voice->block();if(!count)continue;
             double step=double(voice->frequency.load(std::memory_order_relaxed))/rate;
             double cur_pos=voice->position.load(std::memory_order_relaxed);
-            if(voice->streaming()&&voice->staleFrames>=double(count)){
+            uint32_t cur_stale = voice->staleFrames.load(std::memory_order_relaxed);
+            if(voice->streaming()&&cur_stale>=count){
                 voice->position.store(std::fmod(cur_pos+step*frames,double(count)), std::memory_order_relaxed);
                 continue;
             }
-            voice->staleFrames+=step*frames;
+            voice->staleFrames.fetch_add(unsigned(step*frames), std::memory_order_relaxed);
             cur_pos+=step*frames;
             if(cur_pos>=count){
                 if(voice->loop.load(std::memory_order_relaxed)) voice->position.store(std::fmod(cur_pos,double(count)), std::memory_order_relaxed);

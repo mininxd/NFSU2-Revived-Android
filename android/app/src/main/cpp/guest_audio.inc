@@ -479,7 +479,6 @@ void soundDispatch(){
         uint32_t first=std::min(len1, maxFirst);
         uint32_t second=std::min(len2, maxSecond);
         if(object.guestSamples && bytes){
-            std::lock_guard<std::mutex> lock(soundMixer.mutex);
             if(first && object.lockOffset + first <= voice->samples.size()){
                 std::memcpy(voice->samples.data()+object.lockOffset,ptr(object.guestSamples+object.lockOffset,first),first);
             }

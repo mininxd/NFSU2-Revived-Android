@@ -15,8 +15,8 @@ pub fn calc_cursors(
         return (0, 0);
     }
     let pos_bytes = ((position_frames as u64 * block_align as u64) as u32) % total_bytes;
-    // Write cursor is positioned 10ms (sample_rate / 100) ahead of the play cursor
-    let write_margin = (sample_rate / 100) * block_align;
+    // Write cursor is positioned 30ms ahead of the play cursor to safely exceed hardware burst buffers
+    let write_margin = ((sample_rate as u64 * 30 / 1000) as u32) * block_align;
     let write_bytes = (pos_bytes + write_margin) % total_bytes;
     (pos_bytes, write_bytes)
 }
@@ -37,7 +37,7 @@ pub fn calc_lock_slices(
 
     // DSBLOCK_FROMWRITECURSOR = 1
     if (flags & 1) != 0 {
-        let write_margin = (sample_rate / 100) * block_align;
+        let write_margin = ((sample_rate as u64 * 30 / 1000) as u32) * block_align;
         offset = (current_play_bytes + write_margin) % total_bytes;
     }
 

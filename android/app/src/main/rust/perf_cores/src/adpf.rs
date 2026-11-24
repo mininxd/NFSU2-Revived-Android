@@ -188,7 +188,7 @@ pub fn adpf_end_frame() {
     let report_total_ns = if actual_duration_ns < target_ns {
         target_ns + 500_000
     } else {
-        actual_duration_ns
+        actual_duration_ns + (actual_duration_ns / 4)
     };
 
     let guard = API.lock().unwrap();

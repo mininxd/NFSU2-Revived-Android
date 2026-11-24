@@ -206,12 +206,12 @@ void yieldGuestMachine(unsigned milliseconds=0,std::chrono::steady_clock::time_p
         auto now = std::chrono::steady_clock::now();
         if (deadline > now) {
             auto remaining = deadline - now;
-            // Hybrid precision pacing: if remaining > 2.5ms, sleep for (remaining - 1.5ms)
-            // so background workers can run, then active-spin the final 1.5ms using ARM yield.
-            // This prevents kernel sleep overshoots and stops Linux schedutil/PowerHAL
-            // from downclocking CPU/GPU cores into 30% low-frequency idle states!
-            if (remaining > std::chrono::microseconds(2500)) {
-                std::this_thread::sleep_for(remaining - std::chrono::microseconds(1500));
+            // High-throughput gaming pacing: only sleep if remaining is substantial (> 6ms).
+            // For smaller remaining intervals (<= 6ms), active spin-yield with ARM yield.
+            // This prevents kernel sleep overshoots (which drop FPS from 60 down to 54)
+            // and forces the Linux kernel CPU frequency governor to maintain peak CPU clocks!
+            if (remaining > std::chrono::microseconds(6000)) {
+                std::this_thread::sleep_for(remaining - std::chrono::microseconds(4000));
             }
             while (std::chrono::steady_clock::now() < deadline) {
 #if defined(__aarch64__)

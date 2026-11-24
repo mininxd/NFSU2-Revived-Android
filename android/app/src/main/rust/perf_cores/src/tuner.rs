@@ -43,8 +43,11 @@ pub fn tune_current_thread(role: ThreadRole, name: Option<&str>) {
 
     let (mask, nice) = match role {
         ThreadRole::RenderMain => {
-            // Main rendering thread: pin to Big/Performance cores with maximum interactive priority
-            let m = if cluster.perf_cores_mask != 0 {
+            // Main rendering thread: prioritize Prime cores (4.32GHz Oryon on Snapdragon 8 Elite)
+            // with maximum interactive priority (-20)
+            let m = if cluster.prime_cores_mask != 0 {
+                cluster.prime_cores_mask
+            } else if cluster.perf_cores_mask != 0 {
                 cluster.perf_cores_mask
             } else {
                 all_cores_mask
