@@ -298,30 +298,28 @@ impl CpuCluster {
         } else {
             all_cores_mask
         };
-        let render_mask = if self.prime_cores_mask != 0 {
-            self.prime_cores_mask
-        } else if self.perf_cores_mask != 0 {
-            self.perf_cores_mask
-        } else {
-            all_cores_mask
-        };
+        // Span across all performance cores (Prime + Mid clusters) so the emulator,
+        // D3D9 bridge, and Vulkan command encoders can fully utilize multiple CPU cores
+        // instead of throttling on a single core.
+        let render_mask = perf_mask;
 
         unsafe {
-            // Process-level default affinity: performance cores (or all cores fallback)
-            let mask_val = render_mask as c_long;
+            // Process-level default affinity: allow all cores so OS/driver helper threads aren't restricted
+            let all_mask_val = all_cores_mask as c_long;
             let _ = libc::syscall(
                 libc::SYS_sched_setaffinity,
                 libc::getpid() as c_int,
                 std::mem::size_of::<c_long>(),
-                &mask_val as *const c_long,
+                &all_mask_val as *const c_long,
             );
 
-            // Calling thread affinity (RenderMain / UI thread): maximum priority nice -20
+            // Calling thread affinity (RenderMain / UI thread): all performance cores (nice -20)
+            let render_mask_val = render_mask as c_long;
             let ret = libc::syscall(
                 libc::SYS_sched_setaffinity,
                 0 as c_int,
                 std::mem::size_of::<c_long>(),
-                &mask_val as *const c_long,
+                &render_mask_val as *const c_long,
             );
             let _ = libc::setpriority(libc::PRIO_PROCESS, libc::getpid() as u32, -20);
             let _ = libc::setpriority(libc::PRIO_PROCESS, 0, -20);

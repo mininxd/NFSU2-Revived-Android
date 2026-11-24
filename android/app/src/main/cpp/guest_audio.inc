@@ -43,12 +43,10 @@ aaudio_data_callback_result_t soundCallback(AAudioStream*,void*,void* data,int32
     while(us>peak&&!soundCallbackPeakUs.compare_exchange_weak(peak,us,std::memory_order_relaxed)){}
     return AAUDIO_CALLBACK_RESULT_CONTINUE;
 }
-// Output buffer: 40 ms, grown to 100 ms after reported underruns. Two bursts
-// (4-10 ms on MediaTek, Exynos and Unisoc low-latency streams) were all a
-// render or guest-lock hiccup needed to break the sound on busy low-end
-// phones, and those drivers report no xruns, so the old grow-on-xrun rule
-// never fired. A racing game does not need lower latency than this.
-constexpr int32_t soundTargetMs=40,soundMaximumMs=100;
+// Output buffer: 50 ms target, grown up to 120 ms after reported underruns.
+// Two bursts (4-10 ms on MediaTek, Exynos and Unisoc low-latency streams) were all a
+// render or guest-lock hiccup needed to break the sound on busy phones.
+constexpr int32_t soundTargetMs=50,soundMaximumMs=120;
 AAudioStream* openSoundStream(aaudio_performance_mode_t mode){
     AAudioStreamBuilder* builder=nullptr;
     if(AAudio_createStreamBuilder(&builder)!=AAUDIO_OK)return nullptr;
@@ -401,13 +399,16 @@ void soundDispatch(){
         uint32_t bytes=uint32_t(voice->samples.size());
         uint32_t play=0,write=0;
         double cur_pos=voice->position.load(std::memory_order_relaxed);
+        uint32_t v_rate = voice->rate ? voice->rate : soundMixer.rate;
         static auto s_calc_cursors = reinterpret_cast<void(*)(double,uint32_t,uint32_t,uint32_t,uint32_t*,uint32_t*)>(
             dlsym(RTLD_DEFAULT,"nfs_dsound_calc_cursors"));
         if(s_calc_cursors){
-            s_calc_cursors(cur_pos,voice->block(),bytes,soundMixer.rate,&play,&write);
+            s_calc_cursors(cur_pos,voice->block(),bytes,v_rate,&play,&write);
         }else{
             play=uint32_t(cur_pos)*voice->block();
-            write=bytes?(play+soundMixer.rate/100*voice->block())%bytes:0;
+            uint32_t lead = (v_rate * 50u / 1000u) * voice->block();
+            if(lead >= bytes) lead = bytes / 4u;
+            write=bytes?(play+lead)%bytes:0;
         }
         if(arg(1))write32(arg(1),play);if(arg(2))write32(arg(2),write);ret(0,3);return;}
     case 5:{ // GetFormat(LPWAVEFORMATEX pwfxFormat, DWORD dwSizeAllocated, LPDWORD pdwSizeWritten)
@@ -437,14 +438,19 @@ void soundDispatch(){
         if(!bytes||(flags&~3u)||!arg(3)||!arg(4)){ret(0x80070057,8);return;}
         uint32_t cur_pos=uint32_t(voice->position.load(std::memory_order_relaxed))*voice->block();
         uint32_t resolved_off=offset,first=0,second=0;
+        uint32_t v_rate = voice->rate ? voice->rate : soundMixer.rate;
         static auto s_calc_lock = reinterpret_cast<int(*)(uint32_t,uint32_t,uint32_t,uint32_t,uint32_t,uint32_t,uint32_t,uint32_t*,uint32_t*,uint32_t*)>(
             dlsym(RTLD_DEFAULT,"nfs_dsound_calc_lock_slices"));
         if(s_calc_lock){
-            if(s_calc_lock(bytes,offset,length,flags,cur_pos,soundMixer.rate,voice->block(),&resolved_off,&first,&second)!=0){
+            if(s_calc_lock(bytes,offset,length,flags,cur_pos,v_rate,voice->block(),&resolved_off,&first,&second)!=0){
                 ret(0x80070057,8);return;
             }
         }else{
-            if(flags&1)resolved_off=(cur_pos+soundMixer.rate/100*voice->block())%bytes;
+            if(flags&1){
+                uint32_t lead = (v_rate * 50u / 1000u) * voice->block();
+                if(lead >= bytes) lead = bytes / 4u;
+                resolved_off=(cur_pos+lead)%bytes;
+            }
             if(flags&2){resolved_off=0;length=bytes;}
             if(resolved_off>=bytes||length>bytes){ret(0x80070057,8);return;}
             first=std::min(length,bytes-resolved_off);second=length-first;

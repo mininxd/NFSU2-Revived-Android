@@ -15,8 +15,12 @@ pub fn calc_cursors(
         return (0, 0);
     }
     let pos_bytes = ((position_frames as u64 * block_align as u64) as u32) % total_bytes;
-    // Write cursor is positioned 30ms ahead of the play cursor to safely exceed hardware burst buffers
-    let write_margin = ((sample_rate as u64 * 30 / 1000) as u32) * block_align;
+    // DirectSound write cursor is positioned 50ms ahead of play cursor (matching nfsu2-web audio.m WRITE_LEAD_MS)
+    // to safely prevent the game's audio writer from catching the playback head and stuttering.
+    let mut write_margin = ((sample_rate as u64 * 50 / 1000) as u32) * block_align;
+    if write_margin >= total_bytes {
+        write_margin = total_bytes / 4;
+    }
     let write_bytes = (pos_bytes + write_margin) % total_bytes;
     (pos_bytes, write_bytes)
 }
@@ -37,7 +41,10 @@ pub fn calc_lock_slices(
 
     // DSBLOCK_FROMWRITECURSOR = 1
     if (flags & 1) != 0 {
-        let write_margin = ((sample_rate as u64 * 30 / 1000) as u32) * block_align;
+        let mut write_margin = ((sample_rate as u64 * 50 / 1000) as u32) * block_align;
+        if write_margin >= total_bytes {
+            write_margin = total_bytes / 4;
+        }
         offset = (current_play_bytes + write_margin) % total_bytes;
     }
 

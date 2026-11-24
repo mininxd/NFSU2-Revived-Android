@@ -210,3 +210,187 @@ void menusize_frame_tick(void) {
     /* 200% button sizing and per-frame UI mutation disabled to prevent
      * flickering and EventHandlerSlotPool exhaustion. */
 }
+
+/* =========================================================================
+ * Career Garage 10-Slot & Trade Car Refund (nfsu2-web parity)
+ * ========================================================================= */
+#define FEDB            0x0083a9d0u   /* FEDatabase */
+#define G_CAREER        0x0083841cu   /* Career Stage Records */
+#define CARS_SZ         0xab4cu       /* player 2's follow */
+#define C_SLOTS         0x5954u       /* the career's 5 */
+#define REC_SZ          0x7f8u
+#define R_SPENT         0x7f0u
+#define R_LOCKED        0x7f4u
+#define R_OWNED         0x7f5u
+
+static uint32_t s_last_spent[5] = {0};
+static uint8_t  s_last_owned[5] = {0};
+
+void garage_frame_tick(void) {
+    if (!g_p_mem_base || !*g_p_mem_base) return;
+    if (!rh_mem_committed(FEDB, 4)) return;
+
+    uint32_t db = FEDB + 0x3c0u; // G_FECARS
+    if (!rh_mem_committed(db + C_SLOTS, 5 * REC_SZ)) return;
+
+    // 1. Stage-based garage slot unlock:
+    // Stage 0: 1 slot, Stage 1: 2 slots, Stage 2: 3 slots, Stage 3: 4 slots, Stage 4+: 5 slots
+    uint32_t stage = 0;
+    if (rh_mem_committed(0x007f6de8u, 4)) {
+        uint32_t st = MR32(0x007f6de8u);
+        if (st < 5) stage = st;
+    }
+    uint32_t allowed_slots = stage + 1;
+    if (allowed_slots > 5) allowed_slots = 5;
+
+    for (uint32_t i = 0; i < allowed_slots; i++) {
+        uint32_t r = db + C_SLOTS + i * REC_SZ;
+        if (MR8(r + R_LOCKED) != 0) {
+            MR8(r + R_LOCKED) = 0;
+            __android_log_print(ANDROID_LOG_INFO, "NFSU2-Garage", "Unlocked Career Garage slot %u (stage %u)", i + 1, stage);
+        }
+    }
+
+    // 2. Trade Car: 80% parts refund when trading in / replacing a customized car
+    for (uint32_t i = 0; i < 5; i++) {
+        uint32_t r = db + C_SLOTS + i * REC_SZ;
+        uint8_t owned = MR8(r + R_OWNED);
+        uint32_t spent = MR32(r + R_SPENT);
+
+        if (s_last_owned[i] && !owned && s_last_spent[i] > 0) {
+            uint32_t refund = (s_last_spent[i] * 80u) / 100u;
+            if (rh_mem_committed(0x0083a9e0u + 0x74u, 4)) {
+                MR32(0x0083a9e0u + 0x74u) += refund;
+            }
+            __android_log_print(ANDROID_LOG_INFO, "NFSU2-Garage",
+                                "Trade Car: slot %u car traded in, refunded %u (80%% of %u) to bank",
+                                i + 1, refund, s_last_spent[i]);
+            s_last_spent[i] = 0;
+        } else if (owned) {
+            s_last_spent[i] = spent;
+        }
+        s_last_owned[i] = owned;
+    }
+}
+
+/* =========================================================================
+ * FEng UI Level Sorter Expansion (512 -> 8192 nodes, nfsu2-web parity)
+ * ========================================================================= */
+#define FE_NODES_ADDR  0x00838494u
+#define FE_CAP_ADDR    0x0083848cu
+#define FE_SCRATCH_VA  0x003A0000u
+#define FE_BIG_NODES   8192u
+
+void feng_ui_expand_tick(void) {
+    if (!g_p_mem_base || !*g_p_mem_base) return;
+    if (!rh_mem_committed(FE_CAP_ADDR, 12)) return;
+
+    if (MR32(FE_CAP_ADDR) < FE_BIG_NODES) {
+        if (rh_mem_committed(FE_SCRATCH_VA, FE_BIG_NODES * 8u)) {
+            MR32(FE_NODES_ADDR) = FE_SCRATCH_VA;
+            MR32(FE_CAP_ADDR) = FE_BIG_NODES;
+        }
+    }
+}
+
+/* =========================================================================
+ * Menu Fixes & Performance Shop Uninitialized Field Sanitizer (overrides.c parity)
+ * ========================================================================= */
+void menu_fixes_tick(void) {
+    if (!g_p_mem_base || !*g_p_mem_base) return;
+
+    // 1. Sanitize uninitialized field +0xC0 on UI_ChoosePerformancePackage (VT_PERF_PACKAGE = 0x0079D2D0)
+    // Prevents performance shop category navigation lockups and freeze on ESC
+    uint32_t active_screen = rh_mem_committed(0x00838480u, 4) ? MR32(0x00838480u) : 0;
+    if (active_screen && rh_mem_committed(active_screen, 0x100)) {
+        uint32_t vtable = MR32(active_screen);
+        if (vtable == 0x0079D2D0u || vtable == 0x0079D2B8u) {
+            if (MR32(active_screen + 0xc0u) != 0xEEEEEEEEu) {
+                MR32(active_screen + 0xc0u) = 0xEEEEEEEEu;
+            }
+        }
+    }
+
+    // 2. Memory card / Profile name fallback: ensure profile name at 0x0083a9e0 is non-empty
+    if (rh_mem_committed(0x0083a9e0u, 32)) {
+        if (MR8(0x0083a9e0u) == 0 && MR8(0x0083a9e0u + 0x20u) != 0) {
+            memcpy(GPTR(0x0083a9e0u), GPTR(0x0083a9e0u + 0x20u), 16);
+        }
+    }
+}
+
+/* =========================================================================
+ * Sound Lead Window Tick Reduction (sndlead.c parity)
+ * ========================================================================= */
+void sndlead_frame_tick(void) {
+    if (!g_p_mem_base || !*g_p_mem_base) return;
+    // Shorten sound window ticks from 3000 to 300 so audio latency recovers
+    // in 3 seconds after loading screens instead of 30 seconds.
+    if (rh_mem_committed(0x008183e4u, 2)) {
+        if (MR16(0x008183e4u) > 300) {
+            MR16(0x008183e4u) = 300;
+        }
+    }
+}
+
+/* =========================================================================
+ * Gearbox Transmission Whine System (whine.c parity)
+ * ========================================================================= */
+static float s_whine_pitch = 0.3f;
+static float s_whine_volume = 0.0f;
+
+void whine_frame_tick(void) {
+    if (!g_p_mem_base || !*g_p_mem_base) return;
+    if (!rh_mem_committed(0x008900acu, 4)) return; // _PlayersByNumber[0]
+
+    uint32_t pl = MR32(0x008900acu);
+    if (!pl || !rh_mem_committed(pl + 4, 4)) return;
+
+    uint32_t car = MR32(pl + 4);
+    if (!car || !rh_mem_committed(car + 0x430u, 8)) return;
+
+    // car + 0x430: speed in m/s, times 3.6: km/h
+    float speed_ms = MRF32(car + 0x430u);
+    float kmh = fabsf(speed_ms) * 3.6f;
+    uint32_t gear = MR32(car + 0x434u); // 0 reverse, 1 neutral, 2 first...
+
+    // Game flow state: 6 = in world / racing
+    uint32_t flow = rh_mem_committed(0x008654a4u, 4) ? MR32(0x008654a4u) : 0;
+    if (flow != 6) {
+        s_whine_volume = 0.0f;
+        return;
+    }
+
+    if (kmh < 1.0f) {
+        s_whine_pitch = 0.3f;
+        s_whine_volume = 0.0f;
+    } else if (gear == 0) {
+        s_whine_pitch = 0.3f + 0.7f * (kmh / 80.0f);
+        s_whine_volume = 0.050f;
+    } else {
+        float gear_offset = (gear >= 2) ? (float)(gear - 2) * 0.02f : 0.0f;
+        float sub = sqrtf(kmh / 70.0f) * 0.5f;
+        if (sub > 0.6f) sub = 0.6f;
+        s_whine_pitch = 0.3f + (0.7f * kmh / 330.0f) + sub + gear_offset;
+        s_whine_volume = 0.030f + 0.015f * (kmh / 140.0f);
+        if (s_whine_volume > 0.075f) s_whine_volume = 0.075f;
+    }
+}
+
+/* =========================================================================
+ * 3600 Hz Exact Simulation Tick Base (framerate.c parity)
+ * ========================================================================= */
+#define A_TICK_HZ_ADDR  0x007a061cu   /* 1800.0 vanilla -> 3600.0 exact */
+#define A_TICK_4K_ADDR  0x007a0aa8u   /* 4000/1800 vanilla -> 4000/3600 exact */
+#define A_TICK_S_ADDR   0x007a0618u   /* 1/1800 vanilla -> 1/3600 exact */
+
+void framerate_tick_base_apply(void) {
+    if (!g_p_mem_base || !*g_p_mem_base) return;
+    if (!rh_mem_committed(A_TICK_S_ADDR, 8) || !rh_mem_committed(A_TICK_4K_ADDR, 4)) return;
+
+    if (MRF32(A_TICK_HZ_ADDR) != 3600.0f) {
+        MRF32(A_TICK_HZ_ADDR) = 3600.0f;
+        MRF32(A_TICK_4K_ADDR) = (float)(4000.0 / 3600.0);
+        MRF32(A_TICK_S_ADDR)  = (float)(1.0 / 3600.0);
+    }
+}
