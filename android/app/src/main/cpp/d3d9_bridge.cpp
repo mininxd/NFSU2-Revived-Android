@@ -40,14 +40,27 @@ enum class Kind:uint32_t {D3D9=1,Device=2,Texture=3,Cube=4,Surface=5,VertexBuffe
     VertexShader=8,PixelShader=9,Declaration=10,StateBlock=11,Query=12,SwapChain=13,VolumeTexture=14,Volume=15};
 struct Object {IUnknown* native;Kind kind;uint32_t references=1;CompressedView compressed;uint32_t parent=0;uint32_t children=0;};
 std::unordered_map<uint32_t,Object> objects;
-// Nearly every call of a frame targets the same object (the device). Element
-// pointers of an unordered_map survive rehashing; only erasing an object
-// invalidates them, so retireGuestObject/shutdown drop this one-entry cache.
-uint32_t cachedObjectAddress=0;Object* cachedObject=nullptr;
+// Multi-slot MRU cache to avoid hash table lookups when alternating between
+// device, active textures, vertex buffers, and index buffers (~40k calls/frame).
+struct FastObjCache { uint32_t addr; Object* obj; };
+static FastObjCache s_obj_cache[4]{};
+static uint32_t s_obj_cache_head = 0;
+
+static inline void clearObjectCache() {
+    std::memset(s_obj_cache, 0, sizeof(s_obj_cache));
+}
+
 Object* findObject(uint32_t address){
-    if(address==cachedObjectAddress&&cachedObject)return cachedObject;
-    auto found=objects.find(address);if(found==objects.end())return nullptr;
-    cachedObjectAddress=address;cachedObject=&found->second;return cachedObject;
+    for (int i = 0; i < 4; ++i) {
+        if (s_obj_cache[i].addr == address && s_obj_cache[i].obj) {
+            return s_obj_cache[i].obj;
+        }
+    }
+    auto found = objects.find(address);
+    if (found == objects.end()) return nullptr;
+    s_obj_cache[s_obj_cache_head & 3] = {address, &found->second};
+    ++s_obj_cache_head;
+    return &found->second;
 }
 std::map<IUnknown*,uint32_t> addresses;
 void* guestBase;
@@ -204,7 +217,7 @@ struct FastD3D9Filter {
 static FastD3D9Filter s_fast_d3d9_filter{};
 
 void retireGuestObject(uint32_t address){
-    cachedObjectAddress=0;cachedObject=nullptr;
+    clearObjectCache();
     auto found=objects.find(address);if(found==objects.end())return;
     s_fast_d3d9_filter.notifyRetire();
     static auto s_filter_retire = reinterpret_cast<void(*)()>(dlsym(RTLD_DEFAULT,"nfs_d3d9_filter_notify_retired"));
@@ -306,7 +319,7 @@ void shutdownD3D9Bridge(){
     for(uint32_t kind=15;kind;--kind)for(auto it=objects.begin();it!=objects.end();){
         if(static_cast<uint32_t>(it->second.kind)!=kind){++it;continue;}
         auto object=it->second;for(uint32_t n=0;n<object.references;++n)object.native->Release();
-        cachedObjectAddress=0;cachedObject=nullptr;
+        clearObjectCache();
         uint32_t table;std::memcpy(&table,pointer(it->first),4);freeGuest(table);freeGuest(it->first);addresses.erase(object.native);it=objects.erase(it);
     }
     surfaceRequested=false;surfaceAvailable=false;
