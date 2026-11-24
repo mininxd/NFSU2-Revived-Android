@@ -7,6 +7,7 @@
 #include <string.h>
 #include <strings.h>
 #include <stdint.h>
+#include <math.h>
 #include <android/log.h>
 
 /* Hidden Races Mod: unhides 33 career races & raises stage caps to 8 */
