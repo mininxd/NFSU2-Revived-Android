@@ -3,12 +3,25 @@
 #include "roam_affinity.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <ctype.h>
 #include <unistd.h>
 #include <dirent.h>
 #include <sched.h>
 #include <dlfcn.h>
 #include <sys/resource.h>
 #include <android/log.h>
+
+static int contains_case_insensitive(const char* haystack, const char* needle) {
+    if (!haystack || !needle) return 0;
+    size_t needle_len = strlen(needle);
+    if (needle_len == 0) return 1;
+    for (; *haystack; haystack++) {
+        if (strncasecmp(haystack, needle, needle_len) == 0) return 1;
+    }
+    return 0;
+}
 
 int nfs_bind_to_perf_cores(void) {
     typedef int (*FnBindPerf)(void);
@@ -76,9 +89,9 @@ int nfs_bind_to_perf_cores(void) {
     if (f_cpu) {
         char line[256];
         while (fgets(line, sizeof(line), f_cpu)) {
-            if (strcasestr(line, "sm8750") || strcasestr(line, "sun") || strcasestr(line, "oryon") ||
-                strcasestr(line, "mt6989") || strcasestr(line, "mt6991") ||
-                strcasestr(line, "dimensity 9300") || strcasestr(line, "dimensity 9400")) {
+            if (contains_case_insensitive(line, "sm8750") || contains_case_insensitive(line, "sun") || contains_case_insensitive(line, "oryon") ||
+                contains_case_insensitive(line, "mt6989") || contains_case_insensitive(line, "mt6991") ||
+                contains_case_insensitive(line, "dimensity 9300") || contains_case_insensitive(line, "dimensity 9400")) {
                 is_all_big_soc = 1;
                 break;
             }
