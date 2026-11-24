@@ -1,10 +1,20 @@
 ## What's New in v1.0.3
 
 ### 1. Direct3D 9 COM Bridge Acceleration & Redundant Call Bypass
-- **4-Slot MRU Cache for COM Object Lookups**:
-  - Replaced repetitive `std::unordered_map` bucket traversals in `d3d9_bridge.cpp` with a 4-slot MRU cache (`FastObjCache`), eliminating ~40,000 hash calculations per frame during texture and vertex/index buffer switching.
-- **Early Shadow Filter Bypass**:
-  - Moved `FastD3D9Filter` state evaluation ahead of object lookups: redundant calls return `D3D_OK` immediately in ~2 nanoseconds, bypassing COM dispatch and driver validation.
+- **True MRU Cache for COM Object Lookups & nativeObject Integration**:
+  - Upgraded `FastObjCache` in `d3d9_bridge.cpp` with true move-to-front MRU swapping, keeping the most active device, texture, vertex buffer, and index buffer handles in L1 cache slots.
+  - Routed `nativeObject<T>` lookups through the MRU cache and migrated `addresses` from `std::map` (O(log N) tree traversal) to `std::unordered_map` (O(1)).
+- **Hotpath Overhead Elimination in `dispatchGuestD3D9`**:
+  - Relocated `getGraphicsCacheHandle()` and contrast regulator registration out of `dispatchGuestD3D9` into bridge startup (`configureD3D9Bridge`), removing shared library symbol lookups and static branch overhead across all ~40,000 COM calls per frame.
+  - Eliminated redundant duplicate filter evaluations and removed non-state FFI calls into Rust on draw, clear, and lifecycle methods.
+- **Transform Matrix Bitwise Deduplication (SetTransform)**:
+  - Added fast 16-float (64-byte) bitwise matrix caching in `SetTransform` (method 44): identical World, View, Projection, and Texture transform calls return `D3D_OK` immediately in ~2 nanoseconds, bypassing DXVK matrix updates and uniform buffer rebinding.
+- **State Filtering Expansion (LightEnable & Software Vertex Processing)**:
+  - Added caching and deduplication for `LightEnable` (method 53) and `SetSoftwareVertexProcessing` (method 77) directly into `FastD3D9Filter`.
+- **Dormant Native Renderer FFI Call Bypassing**:
+  - Guarded all `s_vk_*` and `s_gles_*` native renderer hooks across draw calls (`DrawPrimitive`, `DrawIndexedPrimitive`, `Draw*UP`), states, and Present with `__builtin_expect(s_is_native_..., 0)`, preventing tens of thousands of unused cross-library FFI crossings per frame in DXVK mode.
+- **One-Time Roam Tick Resolution Guard**:
+  - Guarded `nfs_roam_frame_tick` resolution in `guest_runtime.cpp` with a one-time check, preventing repeated failed `dlopen` attempts on every Present frame.
 - **Stream Source & Index Buffer Deduplication**:
   - Added caching and deduplication for `SetStreamSource`, `SetStreamSourceFreq`, and `SetIndices`, filtering out thousands of repetitive buffer rebinding calls per frame before crossing into DXVK.
 
