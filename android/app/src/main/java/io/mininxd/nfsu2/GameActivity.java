@@ -735,6 +735,13 @@ public final class GameActivity extends NativeActivity {
                 maxField.setFloat(windowParams, Math.min(120.0f, refresh));
             } catch (Throwable ignored) {}
             getWindow().setAttributes(windowParams);
+            if (Build.VERSION.SDK_INT >= 30) {
+                try {
+                    android.view.View decor = getWindow().getDecorView();
+                    java.lang.reflect.Method sfr = decor.getClass().getMethod("setFrameRate", float.class, int.class);
+                    sfr.invoke(decor, Math.min(120f, refresh), 0);
+                } catch (Throwable ignored) {}
+            }
         } catch (Throwable ignored) {}
     }
 

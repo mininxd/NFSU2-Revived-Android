@@ -115,9 +115,11 @@ impl CpuCluster {
             lowest_freq = 0;
         }
 
-        // Secondary detection: Parse /proc/cpuinfo for known ARM Cortex part numbers
+        // Secondary detection: Parse /proc/cpuinfo for known ARM Cortex and Qualcomm Oryon part numbers
+        let mut is_all_big_soc = false;
         if let Ok(cpuinfo) = fs::read_to_string("/proc/cpuinfo") {
             let mut cur_cpu: i32 = -1;
+            let mut is_qualcomm = false;
             for line in cpuinfo.lines() {
                 let trimmed = line.trim();
                 if trimmed.starts_with("processor") {
@@ -126,10 +128,30 @@ impl CpuCluster {
                             cur_cpu = cpu_id;
                         }
                     }
+                } else if trimmed.starts_with("CPU implementer") {
+                    if let Some(colon) = trimmed.find(':') {
+                        let impl_str = trimmed[colon + 1..].trim();
+                        if let Ok(imp) = u32::from_str_radix(impl_str.trim_start_matches("0x"), 16) {
+                            if imp == 0x51 {
+                                is_qualcomm = true;
+                            }
+                        }
+                    }
+                } else if trimmed.starts_with("Hardware") || trimmed.starts_with("model name") {
+                    let lower = trimmed.to_lowercase();
+                    if lower.contains("sm8750") || lower.contains("sun") || lower.contains("oryon")
+                        || lower.contains("mt6989") || lower.contains("mt6991")
+                        || lower.contains("dimensity 9300") || lower.contains("dimensity 9400")
+                    {
+                        is_all_big_soc = true;
+                    }
                 } else if trimmed.starts_with("CPU part") && cur_cpu >= 0 && (cur_cpu as usize) < total_cores {
                     if let Some(colon) = trimmed.find(':') {
                         let part_str = trimmed[colon + 1..].trim();
                         let part = u32::from_str_radix(part_str.trim_start_matches("0x"), 16).unwrap_or(0);
+                        if is_qualcomm && (part == 0x001 || part == 0x002 || part == 0x005 || (part >= 0x800 && part <= 0x805)) {
+                            is_all_big_soc = true;
+                        }
                         let role = match part {
                             // Prime / Ultra-high performance cores (Cortex-X1/X2/X3/X4, Cortex-X925)
                             0xd44 | 0xd48 | 0xd4e | 0xd4f | 0xd82 => Some(CoreClusterRole::Prime),
@@ -158,7 +180,16 @@ impl CpuCluster {
         let mut little_cores_mask: u64 = 0;
 
         for (id, freq, cap, explicit_role) in raw_cores {
-            let role = if let Some(r) = explicit_role {
+            let role = if is_all_big_soc {
+                // All-big SoC (Snapdragon 8 Elite SM8750 Oryon, Dimensity 9300/9400):
+                // All cores are high-performance cores, zero Little efficiency cores!
+                // Top 2 cores are Prime (e.g. 4.32GHz), others are Mid/Performance (e.g. 3.53GHz).
+                if id >= total_cores.saturating_sub(2) {
+                    CoreClusterRole::Prime
+                } else {
+                    CoreClusterRole::Mid
+                }
+            } else if let Some(r) = explicit_role {
                 r
             } else if highest_freq > 0 && lowest_freq > 0 && highest_freq > lowest_freq {
                 let prime_thresh = (highest_freq as f64 * 0.92) as u64;
@@ -179,14 +210,14 @@ impl CpuCluster {
                     CoreClusterRole::Little
                 }
             } else {
-                // Topology fallback: top 25% prime, next 25% mid, bottom 50% little
+                // Architectural fallback when sysfs is restricted by SELinux:
+                // Treat all available cores as performance-capable (top 25% Prime, remainder Mid)
+                // to prevent starving the guest engine of CPU cores on unrecognized modern chips.
                 let ratio = (id as f64) / (total_cores as f64);
                 if ratio >= 0.75 {
                     CoreClusterRole::Prime
-                } else if ratio >= 0.50 {
-                    CoreClusterRole::Mid
                 } else {
-                    CoreClusterRole::Little
+                    CoreClusterRole::Mid
                 }
             };
 

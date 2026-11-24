@@ -71,22 +71,32 @@ impl SocInfo {
             }
         }
 
-        // 2. Identify Big vs Little cores from ARM Architecture Part IDs
-        // Little cores: Cortex-A53 (0xd03), A55 (0xd05), A510 (0xd46), A520 (0xd80)
-        // Big/Mid cores: Cortex-A73 (0xd08), A75 (0xd09), A76 (0xd0a - Helio G99/G100/Dimensity 700),
-        //                A77 (0xd0b), A78 (0xd0d - Dimensity 1080/7050), A710 (0xd41), A715 (0xd47),
-        //                A720 (0xd4e), A725 (0xd87), Cortex-X1 (0xd44), X2 (0xd42), X3 (0xd48),
-        //                X4 (0xd4f), X925 (0xd85)
-        for &(cpu_id, part) in &cpuinfo_parts {
-            if cpu_id < total_cores {
-                let is_little = part == 0xd03 || part == 0xd05 || part == 0xd46 || part == 0xd80;
-                let is_big = (part >= 0xd08 && !is_little) || part == 0xd44 || part == 0xd42
-                    || part == 0xd48 || part == 0xd4f || part == 0xd85;
+        // 2. Identify Big vs Little cores from ARM Architecture and Qualcomm Oryon Part IDs
+        let lower_hw = hardware_str.to_lowercase();
+        let is_all_big_soc = lower_hw.contains("sm8750")
+            || lower_hw.contains("sun")
+            || lower_hw.contains("oryon")
+            || lower_hw.contains("mt6989")
+            || lower_hw.contains("mt6991")
+            || lower_hw.contains("dimensity 9300")
+            || lower_hw.contains("dimensity 9400");
 
-                if is_big {
-                    big_cores_mask |= 1u64 << cpu_id;
-                } else if is_little {
-                    little_cores_mask |= 1u64 << cpu_id;
+        if is_all_big_soc {
+            big_cores_mask = if total_cores >= 64 { u64::MAX } else { (1u64 << total_cores) - 1 };
+            little_cores_mask = 0;
+        } else {
+            for &(cpu_id, part) in &cpuinfo_parts {
+                if cpu_id < total_cores {
+                    let is_little = part == 0xd03 || part == 0xd05 || part == 0xd46 || part == 0xd80;
+                    let is_big = (part >= 0xd08 && !is_little) || part == 0xd44 || part == 0xd42
+                        || part == 0xd48 || part == 0xd4f || part == 0xd85
+                        || part == 0x001 || part == 0x002 || part == 0x005;
+
+                    if is_big {
+                        big_cores_mask |= 1u64 << cpu_id;
+                    } else if is_little {
+                        little_cores_mask |= 1u64 << cpu_id;
+                    }
                 }
             }
         }
@@ -147,19 +157,10 @@ impl SocInfo {
             }
         }
 
-        // 5. Final architectural fallback: on standard 8-core SoCs, upper cores are Big
+        // 5. Final architectural fallback: on modern chips where sysfs is blocked, treat all cores as Big
         if big_cores_mask == 0 {
-            if total_cores >= 4 {
-                let start = total_cores / 2;
-                for i in start..total_cores {
-                    big_cores_mask |= 1u64 << i;
-                }
-                for i in 0..start {
-                    little_cores_mask |= 1u64 << i;
-                }
-            } else {
-                big_cores_mask = (1u64 << total_cores) - 1;
-            }
+            big_cores_mask = if total_cores >= 64 { u64::MAX } else { (1u64 << total_cores) - 1 };
+            little_cores_mask = 0;
         }
 
         // Determine SoC family
@@ -170,7 +171,7 @@ impl SocInfo {
             } else {
                 SocFamily::MediatekHelio
             }
-        } else if hw_lower.contains("qcom") || hw_lower.contains("sm") || hw_lower.contains("snapdragon") {
+        } else if hw_lower.contains("qcom") || hw_lower.contains("sm") || hw_lower.contains("snapdragon") || hw_lower.contains("sun") || hw_lower.contains("oryon") {
             SocFamily::QualcommSnapdragon
         } else if hw_lower.contains("gs") || hw_lower.contains("tensor") {
             SocFamily::GoogleTensor

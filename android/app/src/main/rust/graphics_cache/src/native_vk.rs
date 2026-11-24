@@ -18,6 +18,8 @@ pub type VkDeviceSize = u64;
 pub const VK_SUCCESS: VkResult = 0;
 pub const VK_NOT_READY: VkResult = 1;
 pub const VK_TIMEOUT: VkResult = 2;
+pub const VK_SUBOPTIMAL_KHR: VkResult = 1000001003;
+pub const VK_ERROR_OUT_OF_DATE_KHR: VkResult = -1000001004;
 pub const VK_NULL_HANDLE: usize = 0;
 
 pub const VK_STRUCTURE_TYPE_APPLICATION_INFO: u32 = 0;
@@ -568,7 +570,7 @@ pub unsafe extern "C" fn nfs_native_vk_present() -> c_int {
             &mut image_index,
         );
 
-        if res == VK_SUCCESS || res == VK_NOT_READY {
+        if res == VK_SUCCESS || res == VK_NOT_READY || res == VK_SUBOPTIMAL_KHR {
             let present_info = VkPresentInfoKHR {
                 s_type: VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
                 p_next: std::ptr::null(),
@@ -580,9 +582,12 @@ pub unsafe extern "C" fn nfs_native_vk_present() -> c_int {
                 p_results: std::ptr::null_mut(),
             };
 
-            (api.vk_queue_present_khr)(ctx.queue, &present_info);
+            let pres_res = (api.vk_queue_present_khr)(ctx.queue, &present_info);
             ctx.current_image = image_index;
             TOTAL_VK_PRESENTS.fetch_add(1, Ordering::Relaxed);
+            if pres_res == VK_SUCCESS || pres_res == VK_SUBOPTIMAL_KHR {
+                return 0;
+            }
             return 0;
         }
     }
