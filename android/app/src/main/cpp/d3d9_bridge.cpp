@@ -120,6 +120,16 @@ struct FastD3D9Filter {
     uint32_t ps;
     uint64_t ps_epoch;
     uint8_t ps_valid;
+    uint32_t stream_buf[4];
+    uint32_t stream_offset[4];
+    uint32_t stream_stride[4];
+    uint64_t stream_epoch[4];
+    uint8_t stream_valid[4];
+    uint32_t stream_freq[4];
+    uint8_t stream_freq_valid[4];
+    uint32_t ib;
+    uint64_t ib_epoch;
+    uint8_t ib_valid;
     uint64_t epoch;
 
     void forget() {
@@ -127,7 +137,9 @@ struct FastD3D9Filter {
         std::memset(ss_valid, 0, sizeof(ss_valid));
         std::memset(tss_valid, 0, sizeof(tss_valid));
         std::memset(tex_valid, 0, sizeof(tex_valid));
-        decl_valid = 0; fvf_valid = 0; vs_valid = 0; ps_valid = 0;
+        std::memset(stream_valid, 0, sizeof(stream_valid));
+        std::memset(stream_freq_valid, 0, sizeof(stream_freq_valid));
+        decl_valid = 0; fvf_valid = 0; vs_valid = 0; ps_valid = 0; ib_valid = 0;
     }
     void notifyRetire() { ++epoch; }
     void notifyRtChange() {
@@ -201,6 +213,42 @@ struct FastD3D9Filter {
             uint32_t sh = args[1];
             if (vs_valid && vs == sh && vs_epoch == epoch) return true;
             vs = sh; vs_epoch = epoch; vs_valid = 1;
+            return false;
+        }
+        case 100: { // SetStreamSource(Stream, pData, Offset, Stride)
+            *count = 5;
+            uint32_t stream = args[1];
+            if (stream < 4) {
+                uint32_t buf = args[2], offset = args[3], stride = args[4];
+                if (stream_valid[stream] && stream_buf[stream] == buf &&
+                    stream_offset[stream] == offset && stream_stride[stream] == stride &&
+                    stream_epoch[stream] == epoch) return true;
+                stream_buf[stream] = buf;
+                stream_offset[stream] = offset;
+                stream_stride[stream] = stride;
+                stream_epoch[stream] = epoch;
+                stream_valid[stream] = 1;
+            }
+            return false;
+        }
+        case 102: { // SetStreamSourceFreq(Stream, Setting)
+            *count = 3;
+            uint32_t stream = args[1];
+            if (stream < 4) {
+                uint32_t setting = args[2];
+                if (stream_freq_valid[stream] && stream_freq[stream] == setting) return true;
+                stream_freq[stream] = setting;
+                stream_freq_valid[stream] = 1;
+            }
+            return false;
+        }
+        case 104: { // SetIndices(pIndexData)
+            *count = 2;
+            uint32_t ib_h = args[1];
+            if (ib_valid && ib == ib_h && ib_epoch == epoch) return true;
+            ib = ib_h;
+            ib_epoch = epoch;
+            ib_valid = 1;
             return false;
         }
         case 107: { // SetPixelShader(pShader)

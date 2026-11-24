@@ -413,7 +413,7 @@ pub extern "system" fn Java_io_mininxd_nfsu2_AdhocRoamClient_nativeResolveSource
             buf[4] as u8,
             buf[5] as u8,
         ];
-        REGISTRY.resolve_source_ip(&ubuf) as jint
+        COORDINATOR.registry.resolve_source_ip(&ubuf) as jint
     } else {
         0
     }

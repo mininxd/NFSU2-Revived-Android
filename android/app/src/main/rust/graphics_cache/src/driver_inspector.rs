@@ -240,7 +240,7 @@ pub fn scan_gpu_drivers(root_dir: &str) -> String {
         }
 
         let dir_name = match dir.file_name().and_then(|n| n.to_str()) {
-            Some(n) => n,
+            Some(n) => n.to_string(),
             None => continue,
         };
         if dir_name.starts_with('.') {
@@ -279,7 +279,7 @@ pub fn scan_gpu_drivers(root_dir: &str) -> String {
             continue;
         };
 
-        out.push_str(dir_name);
+        out.push_str(&dir_name);
         out.push('\t');
         out.push_str(&name);
         out.push('\t');
