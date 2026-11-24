@@ -367,3 +367,122 @@ pub unsafe extern "C" fn nfs_widescreen_adjust_projection(
     let scale = base_aspect / aspect;
     *proj_matrix.offset(0) *= scale;
 }
+
+/// Decodes a DXT1/BC1 texture to RGBA8 directly into mapped staging memory with a custom row pitch.
+/// Eliminates intermediate buffer allocation and secondary row memcpy.
+#[no_mangle]
+pub unsafe extern "C" fn nfs_tex_dxt1_decode_strided(
+    width: u32,
+    height: u32,
+    src: *const u8,
+    src_len: usize,
+    dst_rgba: *mut u8,
+    dst_pitch: u32,
+) -> i32 {
+    if src.is_null() || dst_rgba.is_null() || width == 0 || height == 0 || dst_pitch < width * 4 {
+        return -1;
+    }
+
+    let bw = (width + 3) / 4;
+    let bh = (height + 3) / 4;
+    let required_src = (bw * bh * 8) as usize;
+    if src_len < required_src {
+        return -2;
+    }
+
+    let src_slice = std::slice::from_raw_parts(src, src_len);
+    let mut src_offset = 0;
+
+    for by in 0..bh {
+        for bx in 0..bw {
+            let c0 = (src_slice[src_offset] as u16) | ((src_slice[src_offset + 1] as u16) << 8);
+            let c1 = (src_slice[src_offset + 2] as u16) | ((src_slice[src_offset + 3] as u16) << 8);
+
+            let (r0, g0, b0) = rgb565_to_rgb888(c0);
+            let (r1, g1, b1) = rgb565_to_rgb888(c1);
+
+            let mut pal = [(0u8, 0u8, 0u8, 255u8); 4];
+            pal[0] = (r0, g0, b0, 255);
+            pal[1] = (r1, g1, b1, 255);
+
+            if c0 > c1 {
+                let r2 = (((2 * r0 as u32 + r1 as u32) * 85 + 128) >> 8) as u8;
+                let g2 = (((2 * g0 as u32 + g1 as u32) * 85 + 128) >> 8) as u8;
+                let b2 = (((2 * b0 as u32 + b1 as u32) * 85 + 128) >> 8) as u8;
+
+                let r3 = (((r0 as u32 + 2 * r1 as u32) * 85 + 128) >> 8) as u8;
+                let g3 = (((g0 as u32 + 2 * g1 as u32) * 85 + 128) >> 8) as u8;
+                let b3 = (((b0 as u32 + 2 * b1 as u32) * 85 + 128) >> 8) as u8;
+
+                pal[2] = (r2, g2, b2, 255);
+                pal[3] = (r3, g3, b3, 255);
+            } else {
+                let r2 = ((r0 as u16 + r1 as u16) >> 1) as u8;
+                let g2 = ((g0 as u16 + g1 as u16) >> 1) as u8;
+                let b2 = ((b0 as u16 + b1 as u16) >> 1) as u8;
+
+                pal[2] = (r2, g2, b2, 255);
+                pal[3] = (0, 0, 0, 0); // Transparent black
+            }
+
+            let bits = (src_slice[src_offset + 4] as u32)
+                | ((src_slice[src_offset + 5] as u32) << 8)
+                | ((src_slice[src_offset + 6] as u32) << 16)
+                | ((src_slice[src_offset + 7] as u32) << 24);
+
+            for py in 0..4 {
+                let y = by * 4 + py;
+                if y >= height { continue; }
+                for px in 0..4 {
+                    let x = bx * 4 + px;
+                    if x >= width { continue; }
+
+                    let shift = (py * 4 + px) * 2;
+                    let code = ((bits >> shift) & 0x03) as usize;
+                    let color = pal[code];
+
+                    let row_ptr = dst_rgba.offset((y * dst_pitch + x * 4) as isize);
+                    *row_ptr = color.0;
+                    *row_ptr.offset(1) = color.1;
+                    *row_ptr.offset(2) = color.2;
+                    *row_ptr.offset(3) = color.3;
+                }
+            }
+
+            src_offset += 8;
+        }
+    }
+
+    0
+}
+
+/// Decodes DXT1/3/5 textures with a custom destination row pitch.
+#[no_mangle]
+pub unsafe extern "C" fn nfs_tex_decode_strided(
+    mode: u32,
+    width: u32,
+    height: u32,
+    src: *const u8,
+    src_len: usize,
+    dst_rgba: *mut u8,
+    dst_pitch: u32,
+) -> i32 {
+    match mode {
+        1 => nfs_tex_dxt1_decode_strided(width, height, src, src_len, dst_rgba, dst_pitch),
+        _ => {
+            let mut flat = vec![0u8; (width * height * 4) as usize];
+            let res = match mode {
+                3 => nfs_tex_dxt3_decode_fast(width, height, src, src_len, flat.as_mut_ptr()),
+                5 => nfs_tex_dxt5_decode_fast(width, height, src, src_len, flat.as_mut_ptr()),
+                _ => -1,
+            };
+            if res != 0 { return res; }
+            for y in 0..height {
+                let src_row = &flat[(y * width * 4) as usize..((y + 1) * width * 4) as usize];
+                let dst_row = dst_rgba.offset((y * dst_pitch) as isize);
+                std::ptr::copy_nonoverlapping(src_row.as_ptr(), dst_row, (width * 4) as usize);
+            }
+            0
+        }
+    }
+}

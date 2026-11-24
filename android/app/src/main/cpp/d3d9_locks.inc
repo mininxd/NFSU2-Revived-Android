@@ -57,10 +57,19 @@ void copyLockBack(uint32_t address,uint32_t subresource){
         for(uint32_t row=0;row<data.rows;++row)std::memcpy(raw.data()+offset+row*data.pitch,static_cast<const uint8_t*>(pointer(data.guest))+row*data.pitch,data.rowBytes);
         uint32_t width=texture.mipWidth(data.compressed.level),height=texture.mipHeight(data.compressed.level);
         try {
-            auto pixels=decodeDXT(texture.mode(),width,height,raw.data(),raw.size());
-            if(data.native&&!pixels.empty()){
-                for(int32_t row=0;row<data.rectangle.bottom-data.rectangle.top;++row)
-                    std::memcpy(static_cast<uint8_t*>(data.native)+row*data.nativePitch,pixels.data()+((size_t(data.rectangle.top)+row)*width+data.rectangle.left)*4,(data.rectangle.right-data.rectangle.left)*4);
+            static auto s_decode_strided = reinterpret_cast<int(*)(unsigned, uint32_t, uint32_t, const uint8_t*, size_t, uint8_t*, uint32_t)>(
+                dlsym(RTLD_DEFAULT, "nfs_tex_decode_strided")
+            );
+            if(data.native && s_decode_strided && data.rectangle.left == 0 && data.rectangle.top == 0 &&
+               data.rectangle.right == (LONG)width && data.rectangle.bottom == (LONG)height) {
+                s_decode_strided(texture.mode(), width, height, raw.data(), raw.size(),
+                                 static_cast<uint8_t*>(data.native), data.nativePitch);
+            } else {
+                auto pixels=decodeDXT(texture.mode(),width,height,raw.data(),raw.size());
+                if(data.native&&!pixels.empty()){
+                    for(int32_t row=0;row<data.rectangle.bottom-data.rectangle.top;++row)
+                        std::memcpy(static_cast<uint8_t*>(data.native)+row*data.nativePitch,pixels.data()+((size_t(data.rectangle.top)+row)*width+data.rectangle.left)*4,(data.rectangle.right-data.rectangle.left)*4);
+                }
             }
         } catch(const std::exception& e) {
             NFS_RUNTIME_LOG(ANDROID_LOG_WARN,"NFSU2","DXT decode failed for %ux%u level %u: %s",width,height,data.compressed.level,e.what());

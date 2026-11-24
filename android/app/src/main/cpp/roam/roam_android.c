@@ -704,6 +704,7 @@ static recomp_void_func_t s_orig_5ff490 = NULL;
 static recomp_void_func_t s_orig_492e10 = NULL;
 static recomp_void_func_t s_orig_61ad80 = NULL;
 static recomp_void_func_t s_orig_483b40 = NULL;
+static recomp_void_func_t s_orig_664a1f = NULL;
 static recomp_hook_func_t s_orig_recomp_hook = NULL;
 
 static recomp_void_func_t arm64_inline_hook(void *target_func, void *hook_func) {
@@ -1398,6 +1399,185 @@ static void look_camera_frame_tick(void) {
     restore_turned_cameras();
 }
 
+/* =========================================================================
+ * D3DX9 Preshader & State Evaluation Memoization (HLE Parity with nfsu2-web)
+ * ========================================================================= */
+#define D3DX_MEMO_BUF 256u
+typedef struct {
+    uint32_t th;
+    uint32_t ab;
+    uint32_t eax;
+    uint32_t n;
+    uint32_t dst;
+    uint32_t dval;
+    uint32_t vval;
+    uint32_t len;
+    uint32_t valid;
+    uint8_t  buf[D3DX_MEMO_BUF];
+} D3dxMemoSlot;
+
+#define D3DX_MEMO_CAP 4096u
+static D3dxMemoSlot *g_d3dx_memo = NULL;
+static uint64_t g_memo_calls = 0;
+static uint64_t g_memo_hits = 0;
+static uint64_t g_memo_skips = 0;
+
+typedef struct { uint8_t *d; uint32_t len, cap; int eq; } D3dxSnapW;
+
+static inline int d3dx_sw_put(D3dxSnapW *w, const void *p, uint32_t n) {
+    if (w->len + n > w->cap) return 0;
+    uint8_t *q = w->d + w->len;
+    const uint8_t *s = (const uint8_t *)p;
+    if (w->eq) {
+        uint64_t x = 0;
+        uint32_t i = 0;
+        for (; i + 8u <= n; i += 8u) {
+            uint64_t a, b;
+            memcpy(&a, q + i, 8);
+            memcpy(&b, s + i, 8);
+            x |= a ^ b;
+        }
+        for (; i + 4u <= n; i += 4u) {
+            uint32_t a, b;
+            memcpy(&a, q + i, 4);
+            memcpy(&b, s + i, 4);
+            x |= a ^ b;
+        }
+        for (; i < n; i++) x |= (uint64_t)(q[i] ^ s[i]);
+        if (x) {
+            w->eq = 0;
+            memcpy(q, s, n);
+        }
+    } else {
+        memcpy(q, s, n);
+    }
+    w->len += n;
+    return 1;
+}
+
+static inline int d3dx_state_input_snap(D3dxSnapW *w, uint32_t th, uint32_t P, uint32_t R) {
+    if (!rh_mem_committed(R, 0x50u) || !rh_mem_committed(P, 0x10u)) return 0;
+    uint32_t fix[6] = { th, R, MR32(R + 0x38u), MR32(P), MR32(R + 0x48u), MR32(R + 8u) };
+    if (!d3dx_sw_put(w, fix, sizeof(fix))) return 0;
+    if (MR32(R + 0x3cu)) {
+        unsigned n = MR16(R + 0x4eu);
+        uint32_t base = MR32(R + 0x34u);
+        if (!base || !rh_mem_committed(base, n * 32u)) return 0;
+        for (unsigned i = 0; i < n; i++) {
+            uint32_t rec = base + i * 32u;
+            if (!MR32(rec)) continue;
+            uint32_t pp = MR32(rec + 0xcu);
+            if (!pp || !rh_mem_committed(pp, 8)) continue;
+            uint32_t dp = MR32(pp), ds = MR32(pp + 4u);
+            if (!ds || !rh_mem_committed(ds, 0x18u)) continue;
+            uint32_t el = MR32(ds + 0x10u); if (!el) el = 1;
+            uint32_t rows = MR32(ds + 0x14u); if (!rows) rows = 1;
+            uint32_t bytes = dp ? el * rows * 16u : 0u;
+            uint32_t hdr[2] = { MR32(rec), dp };
+            if (bytes > w->cap || !d3dx_sw_put(w, hdr, sizeof(hdr))) return 0;
+            if (bytes && (!rh_mem_committed(dp, bytes) || !d3dx_sw_put(w, GPTR(dp), bytes))) return 0;
+        }
+    }
+    return 1;
+}
+
+static inline uint32_t d3dx_rd32s(uint32_t a) {
+    return (a && rh_mem_committed(a, 4)) ? MR32(a) : 0u;
+}
+
+static void hook_sub_00664a1f(void) {
+    if (!g_p_esp || !*g_p_esp || !g_p_ecx || !g_p_mem_base || !*g_p_mem_base) {
+        if (s_orig_664a1f) s_orig_664a1f();
+        return;
+    }
+    uint32_t esp = *g_p_esp;
+    if (!rh_mem_committed(esp, 12)) {
+        if (s_orig_664a1f) s_orig_664a1f();
+        return;
+    }
+
+    if (!g_d3dx_memo) {
+        g_d3dx_memo = (D3dxMemoSlot *)calloc(D3DX_MEMO_CAP, sizeof(D3dxMemoSlot));
+        if (!g_d3dx_memo) {
+            if (s_orig_664a1f) s_orig_664a1f();
+            return;
+        }
+    }
+
+    uint32_t th = *g_p_ecx;
+    if (!th || !rh_mem_committed(th, 0x30u)) {
+        if (s_orig_664a1f) s_orig_664a1f();
+        return;
+    }
+
+    uint32_t a = MR32(esp + 4u);
+    uint32_t b = MR32(esp + 8u);
+
+    uint32_t p_table = MR32(th + 0x2cu);
+    if (!p_table || !rh_mem_committed(p_table + a * 0x64u, 8u)) {
+        if (s_orig_664a1f) s_orig_664a1f();
+        return;
+    }
+    uint32_t P = a * 0x64u + p_table;
+
+    uint32_t r_table = MR32(P + 4u);
+    if (!r_table || !rh_mem_committed(r_table + b * 0x64u, 0x50u)) {
+        if (s_orig_664a1f) s_orig_664a1f();
+        return;
+    }
+    uint32_t R = b * 0x64u + r_table;
+
+    g_memo_calls++;
+    if ((MR8(R + 0x30u) & 4) || !MR32(R + 0x38u)) {
+        if (s_orig_664a1f) s_orig_664a1f();
+        return;
+    }
+
+    uint32_t ab = (a << 16) | (b & 0xffffu);
+    uint32_t hk = (th * 0x9E3779B1u) ^ (ab * 0x85EBCA77u);
+    D3dxMemoSlot *s = NULL;
+    for (uint32_t j = 0; j < 64u; j++) {
+        D3dxMemoSlot *t = &g_d3dx_memo[(hk + j) & (D3DX_MEMO_CAP - 1)];
+        if (!t->n || (t->th == th && t->ab == ab)) { s = t; break; }
+    }
+    if (!s) {
+        if (s_orig_664a1f) s_orig_664a1f();
+        return;
+    }
+
+    int mine = s->n && s->th == th && s->ab == ab && s->valid;
+    D3dxSnapW w = { s->buf, 0, D3DX_MEMO_BUF, mine };
+    if (!d3dx_state_input_snap(&w, th, P, R)) {
+        s->valid = 0; s->th = th; s->ab = ab; s->n++;
+        if (s_orig_664a1f) s_orig_664a1f();
+        return;
+    }
+
+    uint32_t dst = MR32(P) + MR32(R + 0x48u);
+    uint32_t vb = MR32(R + 8u);
+    int same = mine && w.eq && w.len == s->len;
+    int hit = same && s->dst == dst && d3dx_rd32s(dst) == s->dval && d3dx_rd32s(vb) == s->vval;
+
+    if (hit) {
+        g_memo_hits++;
+        g_memo_skips++;
+        if (g_p_eax) *g_p_eax = s->eax;
+        *g_p_esp = esp + 12u; // ret 8: pop return address (4) + 2 parameters (8)
+        return;
+    }
+
+    s->th = th; s->ab = ab; s->valid = 0; s->n++;
+    if (s_orig_664a1f) {
+        s_orig_664a1f();
+    }
+    s->len = w.len;
+    s->eax = g_p_eax ? *g_p_eax : 0;
+    s->valid = 1;
+    s->dst = dst;
+    s->dval = d3dx_rd32s(dst);
+    s->vval = d3dx_rd32s(vb);
+}
+
 static void roam_android_install_hooks(void) {
     if (g_hooks_installed || !g_p_recomp_lookup) return;
 
@@ -1577,6 +1757,13 @@ static void roam_android_install_hooks(void) {
     if (mprotect((void *)got_page, page_sz * 2, PROT_READ | PROT_WRITE) == 0) {
         *(void **)got_recomp_hook = (void *)hook_recomp_hook;
         __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Patched GOT entry for recomp_hook");
+    }
+
+    // 6. sub_00664a1f (D3DX9 preshader state value memo: eliminates ~48% CPU thread overhead)
+    void *target_66 = g_p_recomp_lookup ? (void *)g_p_recomp_lookup(0x00664a1fu) : NULL;
+    if (target_66) {
+        s_orig_664a1f = (recomp_void_func_t)arm64_inline_hook(target_66, (void *)hook_sub_00664a1f);
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Hooked sub_00664a1f (D3DX9 state memo) at %p (orig: %p)", target_66, s_orig_664a1f);
     }
 
     g_hooks_installed = 1;
