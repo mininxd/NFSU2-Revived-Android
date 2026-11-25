@@ -66,6 +66,26 @@ public final class AdhocRoamClient {
         }
     }
 
+    public static void nativeLanUdpReceive(int srcVip, int dstVip, int sport, int dport, byte[] data) {
+        if (RoamNativeBridge.isLoaded()) {
+            try {
+                RoamNativeBridge.nativeLanUdpReceive(srcVip, dstVip, sport, dport, data);
+            } catch (Throwable t) {
+                Log.d(TAG, "nativeLanUdpReceive: " + t.getMessage());
+            }
+        }
+    }
+
+    public static void nativeSetSwitchStatus(boolean connected, int myVip) {
+        if (RoamNativeBridge.isLoaded()) {
+            try {
+                RoamNativeBridge.nativeSetSwitchStatus(connected, myVip);
+            } catch (Throwable t) {
+                Log.d(TAG, "nativeSetSwitchStatus: " + t.getMessage());
+            }
+        }
+    }
+
     public static void nativeRoamTick() {
         if (RoamNativeBridge.isLoaded()) {
             try {
@@ -123,6 +143,8 @@ public final class AdhocRoamClient {
             Log.d(TAG, "libnfsu2_roam not loaded directly: " + t.getMessage());
         }
         RoamNativeBridge.setSendListener((dstIp, dstPort, data) -> INSTANCE.handleNativeSend(dstIp, dstPort, data));
+        RoamNativeBridge.setLanUdpSendListener((dstVip, sport, dport, data) -> INSTANCE.handleLanUdpSend(dstVip, sport, dport, data));
+        RoamNativeBridge.setLanUdpBindListener((port) -> INSTANCE.switchClient.registerLanUdpPort(port));
     }
 
     public static void onNativeSend(int dstIp, int dstPort, byte[] data) {
@@ -169,6 +191,8 @@ public final class AdhocRoamClient {
     private final AdhocPostofficeClient postofficeClient = new AdhocPostofficeClient();
 
     private final Map<String, Peer> peers = new ConcurrentHashMap<>();
+    private final Map<Integer, byte[]> adhocVipToMac = new ConcurrentHashMap<>();
+    private final Map<String, Integer> adhocMacToVip = new ConcurrentHashMap<>();
 
     private volatile int activeMode = MODE_ADHOC;
     private Context appContext;
@@ -191,6 +215,7 @@ public final class AdhocRoamClient {
                 connectionStatus = "connected to " + serverHost;
                 Log.i(TAG, "connected to " + serverHost + " (VIP: " + virtualIp + ")");
                 NetLog.success(TAG, "Connected to switch: VIP=" + NetLog.ipStr(virtualIp));
+                nativeSetSwitchStatus(true, virtualIp);
                 configureNativeRoam(0x0A4D00FD); // Hub at 10.77.0.253
                 new Thread(() -> apiClient.pollServerPlayers(serverHost, roomName, null), "InitialPoller").start();
             }
@@ -199,6 +224,7 @@ public final class AdhocRoamClient {
             public void onDisconnected(String reason) {
                 adhocConnected.set(false);
                 connectionStatus = "error: " + reason;
+                nativeSetSwitchStatus(false, 0);
                 NetLog.fail(TAG, "Switch disconnected: " + reason);
             }
 
@@ -230,6 +256,17 @@ public final class AdhocRoamClient {
                     }
                 }
             }
+
+            @Override
+            public void onLanDatagramReceived(int srcVip, int dstVip, int sport, int dport, int op, byte[] payload) {
+                if (op == 1 || sport == 9999 || dport == 9999) return;
+                if (srcVip != 0x0A4D00FD) {
+                    trackWsPeer(srcVip);
+                }
+                NetLog.i(TAG, "LAN UDP RX " + NetLog.ipStr(srcVip) + ":" + sport + " -> :" + dport
+                        + " (len=" + (payload != null ? payload.length : 0) + ", hex=" + NetLog.hexPreview(payload, 12) + ")");
+                nativeLanUdpReceive(srcVip, dstVip, sport, dport, payload);
+            }
         });
 
         postofficeClient.setListener(new AdhocPostofficeClient.PostofficeListener() {
@@ -237,6 +274,7 @@ public final class AdhocRoamClient {
             public void onConnected(String bssid) {
                 adhocConnected.set(true);
                 connectionStatus = "connected to " + serverHost;
+                configureNativeRoam(0);
             }
 
             @Override
@@ -247,14 +285,18 @@ public final class AdhocRoamClient {
 
             @Override
             public void onPeerJoined(io.mininxd.nfsu2.net.Peer peer) {
-                peers.put(peer.getMacString(), new Peer(peer.name, peer.mac, peer.ip, peer.virtualPort));
+                int vIp = registerAdhocPeer(peer.mac);
+                peers.put(peer.getMacString(), new Peer(peer.name, peer.mac, vIp, peer.virtualPort));
             }
 
             @Override
             public void onPeerLeft(int peerIp) {
                 for (Map.Entry<String, Peer> entry : peers.entrySet()) {
-                    if (entry.getValue().ip == peerIp) {
+                    Peer p = entry.getValue();
+                    if (p.ip == peerIp || p.ip == virtualIpFromMac(p.mac)) {
                         peers.remove(entry.getKey());
+                        adhocVipToMac.remove(p.ip);
+                        adhocMacToVip.remove(entry.getKey());
                         break;
                     }
                 }
@@ -262,18 +304,7 @@ public final class AdhocRoamClient {
 
             @Override
             public void onDatagramReceived(byte[] srcMac, byte[] payload) {
-                String key = formatMac(srcMac);
-                Peer p = peers.get(key);
-                int srcIp = 0;
-                if (p != null && p.ip != 0) {
-                    srcIp = p.ip;
-                } else {
-                    try {
-                        srcIp = nativeResolveSourceIp(srcMac);
-                    } catch (Throwable ignored) {
-                        srcIp = (((srcMac[2] & 0xFF) << 24) | ((srcMac[3] & 0xFF) << 16) | ((srcMac[4] & 0xFF) << 8) | (srcMac[5] & 0xFF));
-                    }
-                }
+                int srcIp = registerAdhocPeer(srcMac);
                 if (RoamNativeBridge.isLoaded()) {
                     try {
                         nativeRoamReceive(srcIp, DEFAULT_GAME_PORT, payload);
@@ -318,7 +349,9 @@ public final class AdhocRoamClient {
         switchClient.setContext(this.appContext);
         this.ghostMode = ghostMode;
         if (running.get()) {
-            if (host.equals(serverHost) && room.equals(roomName) && name.equals(playerName)) {
+            if (java.util.Objects.equals(host, serverHost)
+                    && java.util.Objects.equals(room, roomName)
+                    && java.util.Objects.equals(name, playerName)) {
                 return;
             }
             stop();
@@ -386,6 +419,9 @@ public final class AdhocRoamClient {
             p.close();
         }
         peers.clear();
+        adhocVipToMac.clear();
+        adhocMacToVip.clear();
+        nativeSetSwitchStatus(false, 0);
         racingActive.set(false);
         adhocConnected.set(false);
     }
@@ -393,7 +429,7 @@ public final class AdhocRoamClient {
     private void configureNativeRoam(int hubIp) {
         if (RoamNativeBridge.isLoaded()) {
             try {
-                String peerList = (hubIp != 0) ? "" : ("127.0.0.1:" + LOCAL_RELAY_PORT);
+                String peerList = "";
                 NetLog.step(TAG, "nativeRoamConfigure: Room=" + roomName + ", Name=" + playerName
                         + ", Peers='" + peerList + "', Hub=" + (hubIp != 0 ? NetLog.ipStr(hubIp) : "none"));
                 nativeRoamConfigure(roomName, playerName, peerList, ghostMode, hubIp);
@@ -457,8 +493,46 @@ public final class AdhocRoamClient {
         if (activeMode == MODE_WSS) {
             sendWebSocketDgram(dstIp, dstPort, data);
         } else {
-            postofficeClient.broadcastToPeers(data);
+            byte[] targetMac = adhocVipToMac.get(dstIp);
+            if (targetMac != null) {
+                postofficeClient.sendPdpPacket(targetMac, data);
+            } else {
+                postofficeClient.broadcastToPeers(data);
+            }
         }
+    }
+
+    private void handleLanUdpSend(int dstVip, int sport, int dport, byte[] data) {
+        if (activeMode != MODE_WSS || data == null || data.length == 0) return;
+        NetLog.i(TAG, "LAN UDP TX " + sport + " -> " + NetLog.ipStr(dstVip) + ":" + dport
+                + " (len=" + data.length + ", hex=" + NetLog.hexPreview(data, 12) + ")");
+        switchClient.sendLanUdpFrame(dstVip, sport, dport, data);
+    }
+
+    private int registerAdhocPeer(byte[] mac) {
+        if (mac == null || mac.length < 6) return 0x0A4E0001;
+        String key = formatMac(mac);
+        Integer existing = adhocMacToVip.get(key);
+        if (existing != null && existing != 0) {
+            return existing;
+        }
+        int vip = virtualIpFromMac(mac);
+        adhocMacToVip.put(key, vip);
+        adhocVipToMac.put(vip, mac.clone());
+        return vip;
+    }
+
+    private static int virtualIpFromMac(byte[] mac) {
+        if (mac == null || mac.length < 6) return 0x0A4E0001;
+        int h = 0x811c9dc5;
+        for (int i = 0; i < 6; i++) {
+            h ^= (mac[i] & 0xFF);
+            h *= 0x01000193;
+        }
+        int host16 = (h ^ (h >>> 16)) & 0xFFFF;
+        if (host16 == 0) host16 = 1;
+        if (host16 >= 0xFFFF) host16 = 0xFFFE;
+        return 0x0A4E0000 | host16;
     }
 
     public synchronized void sendWebSocketDgram(int dstVip, int dport, byte[] payload) {

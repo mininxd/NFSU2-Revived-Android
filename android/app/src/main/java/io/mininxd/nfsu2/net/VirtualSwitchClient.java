@@ -64,9 +64,12 @@ public final class VirtualSwitchClient {
         void onDisconnected(String reason);
         void onPeersCountUpdated(int totalPeers);
         void onDatagramReceived(int srcVip, int sport, byte[] payload);
+        default void onLanDatagramReceived(int srcVip, int dstVip, int sport, int dport, int op, byte[] payload) {}
     }
 
-    private static final long UDP_ONLINE_PORT_MASK = 0x80000000L | (1L << (3658 % 31));
+    // NET_UDP_PORTS_SET (0x80000000) | bits for NFSU2 LAN/Online UDP ports (3658, 3659)
+    private static final long UDP_ONLINE_PORT_MASK = 0x80000000L | (1L << (3658 % 31)) | (1L << (3659 % 31));
+    private volatile long currentUdpPortMask = UDP_ONLINE_PORT_MASK;
 
     private static String sLastToken = "";
     private static String sLastVipStr = "";
@@ -419,7 +422,7 @@ public final class VirtualSwitchClient {
                     hello.put("compact", 0);
                     hello.put("deltas", 1);
                     hello.put("lan", 1);
-                    hello.put("udp", UDP_ONLINE_PORT_MASK);
+                    hello.put("udp", currentUdpPortMask);
                     if (sLastToken != null && !sLastToken.isEmpty() && sLastVipStr != null && !sLastVipStr.isEmpty()) {
                         hello.put("token", sLastToken);
                         hello.put("vip", sLastVipStr);
@@ -544,14 +547,68 @@ public final class VirtualSwitchClient {
     private void parseLanUdpFrame(byte[] frame) {
         if (frame.length < 24) return;
         int srcVip = ((frame[4] & 0xFF) << 24) | ((frame[5] & 0xFF) << 16) | ((frame[6] & 0xFF) << 8) | (frame[7] & 0xFF);
+        int dstVip = ((frame[8] & 0xFF) << 24) | ((frame[9] & 0xFF) << 16) | ((frame[10] & 0xFF) << 8) | (frame[11] & 0xFF);
         int sport = ((frame[12] & 0xFF) << 8) | (frame[13] & 0xFF);
-        if (sport == 0) sport = DEFAULT_GAME_PORT;
-        if (sport == 9999) return;
-        if (srcVip != myVirtualIp) {
-            byte[] payload = Arrays.copyOfRange(frame, 24, frame.length);
-            if (listener != null) {
-                listener.onDatagramReceived(srcVip, sport, payload);
+        int dport = ((frame[14] & 0xFF) << 8) | (frame[15] & 0xFF);
+        int op = frame[16] & 0xFF;
+        if (sport == 9999 || dport == 9999) return;
+        if (op == 1) return; // Ignore ICMP port unreachable notifications
+        if (srcVip == myVirtualIp) return;
+        if (dstVip != 0 && dstVip != myVirtualIp && dstVip != 0xFFFFFFFF && dstVip != 0x0A4DFFFF) return;
+
+        byte[] payload = Arrays.copyOfRange(frame, 24, frame.length);
+        if (listener == null || payload.length == 0) return;
+
+        if (dport == DEFAULT_GAME_PORT || (dport == 0 && sport == DEFAULT_GAME_PORT)) {
+            listener.onDatagramReceived(srcVip, sport != 0 ? sport : DEFAULT_GAME_PORT, payload);
+        } else {
+            listener.onLanDatagramReceived(srcVip, dstVip, sport, dport, op, payload);
+        }
+    }
+
+    public synchronized void registerLanUdpPort(int port) {
+        if (port <= 0 || port > 65535 || port == DEFAULT_GAME_PORT || port == 9999) return;
+        long nextMask = currentUdpPortMask | (1L << (port % 31));
+        if (nextMask == currentUdpPortMask) return;
+        currentUdpPortMask = nextMask;
+        if (running.get() && connected.get() && wsOut != null) {
+            try {
+                JSONObject lanMsg = new JSONObject();
+                lanMsg.put("t", "lan");
+                lanMsg.put("on", 1);
+                lanMsg.put("udp", nextMask);
+                sendWsFrame(1, lanMsg.toString().getBytes(StandardCharsets.UTF_8));
+                NetLog.i(TAG, "Updated LAN UDP port mask for port " + port + " -> 0x" + Long.toHexString(nextMask));
+            } catch (Exception e) {
+                Log.d(TAG, "registerLanUdpPort failed: " + e.getMessage());
             }
+        }
+    }
+
+    public synchronized void sendLanUdpFrame(int dstVip, int sport, int dport, byte[] payload) {
+        if (!running.get() || wsOut == null || payload == null || payload.length == 0 || myVirtualIp == 0) return;
+        try {
+            ByteBuffer buf = ByteBuffer.allocate(24 + payload.length).order(ByteOrder.BIG_ENDIAN);
+            buf.put((byte) KIND_LAN_UDP);
+            buf.put((byte) 0);
+            buf.put((byte) 0);
+            buf.put((byte) 0);
+            buf.putInt(myVirtualIp);
+            buf.putInt(dstVip);
+            buf.putShort((short) (sport & 0xFFFF));
+            buf.putShort((short) (dport & 0xFFFF));
+            buf.put((byte) 0);   // op = DATA
+            buf.put((byte) 64);  // ttl
+            buf.putShort((short) 0);
+            buf.putInt(0);       // cid
+            buf.put(payload);
+
+            sendWsFrame(2, buf.array());
+            NetLog.i(TAG, "Sent switch LAN UDP " + sport + " -> " + NetLog.ipStr(dstVip) + ":" + dport
+                    + " (len=" + payload.length + ")");
+        } catch (Exception e) {
+            Log.d(TAG, "sendLanUdpFrame failed: " + e.getMessage());
+            NetLog.fail(TAG, "sendLanUdpFrame to " + NetLog.ipStr(dstVip) + ":" + dport + " failed: " + e.getMessage(), e);
         }
     }
 

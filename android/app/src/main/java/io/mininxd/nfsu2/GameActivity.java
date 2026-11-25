@@ -509,8 +509,9 @@ public final class GameActivity extends NativeActivity {
             else if ("original".equals(drawDist)) distVal = 0.0f;
             android.system.Os.setenv("NFSU2_DRAW_DISTANCE", String.valueOf((int)distVal), true);
 
-            android.system.Os.setenv("NFSU2_CROWD", "0", true);
-            GraphicsCacheManager.setCrowdSuppression(true);
+            boolean allowCrowd = "on".equalsIgnoreCase(GameOptions.get(this, GameOptions.TRACKSIDE_CROWDS));
+            android.system.Os.setenv("NFSU2_CROWD", allowCrowd ? "1" : "0", true);
+            GraphicsCacheManager.setCrowdSuppression(!allowCrowd);
             android.system.Os.setenv("NFSU2_NEWS_URL", "https://api.mininxd.tech/nfsu2_news", true);
             refreshNewsAsync();
 

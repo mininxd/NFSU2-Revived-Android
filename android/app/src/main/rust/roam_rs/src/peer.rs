@@ -103,21 +103,15 @@ impl PeerRegistry {
         lock.as_ref()?.values().find(|p| p.ip == ip).cloned()
     }
 
-    /// Resolves source IPv4 address for an incoming MAC datagram.
-    /// If peer is registered and has non-zero IP, returns it;
-    /// otherwise synthesizes an IP from the lower 4 octets of the MAC address
-    /// (matching the Prometheus adhoc networking spec).
+    /// Resolves a deterministic RFC1918 private virtual IPv4 address in 10.78.x.y for a MAC address.
+    /// roam_core rejects public WAN IPs via rc_addr_private, so every Adhoc peer maps cleanly to 10.78/16.
     pub fn resolve_source_ip(&self, mac: &[u8; 6]) -> u32 {
         if let Some(peer) = self.find_by_mac(mac) {
-            if peer.ip != 0 {
+            if is_private_ipv4(peer.ip) {
                 return peer.ip;
             }
         }
-        // Fallback: ((mac[2] << 24) | (mac[3] << 16) | (mac[4] << 8) | mac[5])
-        ((mac[2] as u32) << 24)
-            | ((mac[3] as u32) << 16)
-            | ((mac[4] as u32) << 8)
-            | (mac[5] as u32)
+        virtual_ip_from_mac(mac)
     }
 
     /// Returns the number of currently tracked peers.
@@ -165,7 +159,23 @@ impl PeerRegistry {
 // ---------------------------------------------------------------------------
 
 /// Formats a 6-byte MAC into standard colon-separated uppercase string.
-pub fn format_mac(mac: &[u8; 6]) -> String {
+pub fn is_private_ipv4(ip: u32) -> bool {
+    let a = ip >> 24;
+    let b = (ip >> 16) & 0xff;
+    a == 10 || a == 127 || (a == 172 && (16..=31).contains(&b)) || (a == 192 && b == 168) || (a == 169 && b == 254)
+}
+
+fn virtual_ip_from_mac(mac: &[u8; 6]) -> u32 {
+    let mut h: u32 = 0x811c_9dc5;
+    for &b in mac {
+        h ^= b as u32;
+        h = h.wrapping_mul(0x0100_0193);
+    }
+    let host16 = ((h ^ (h >> 16)) & 0xffff).clamp(1, 0xfffe);
+    0x0a4e_0000 | host16 // 10.78.x.y
+}
+
+fn format_mac(mac: &[u8; 6]) -> String {
     format!(
         "{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
         mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]

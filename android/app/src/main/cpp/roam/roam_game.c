@@ -2291,7 +2291,7 @@ static int hud_on_top(uint32_t pkg){
  * anything.  Any number goes through: the page knows which it has (a newer page's it does not show).  The page
  * shows a line over the car of each player who said something lately, where the name over it is: tags_update tells
  * it where, with every frame (roam_plat_say_marks).  Not in the Windows plugin (no page). */
-#ifdef ROAM_HOST_WIN
+#if defined(ROAM_HOST_WIN) && !defined(ROAM_HOST_ANDROID)
 #define SAYS            0
 #else
 #define SAYS            1
@@ -6980,7 +6980,7 @@ static int g_parked;
  * each frame with the lock held; roam_web.c shows no notices then) */
 static int g_racing;
 int roam_game_racing(void){ return g_racing; }     /* with the lock held */
-#ifndef ROAM_HOST_WIN
+#if !defined(ROAM_HOST_WIN) || defined(ROAM_HOST_ANDROID)
 /* In a room (the Room setting) with nobody else in free roam there: the page says so once the player has been
  * ROOM_ALONE_US in free roam without a friend while the server's hub answers (it links the players of a room at any
  * distance, so no friend means nobody of the room is in free roam), and again only ROOM_AGAIN_US later.  A friend,
@@ -7463,7 +7463,7 @@ static void init_once(CPU *c){
     cf.platform = RC_PLAT_MAC;
 #endif
     cf.test_mode = O.test; cf.max_players = maxp; cf.rate_hz = O.rate; cf.duels = DUELS; cf.drifts = DRIFTS; cf.lobbies = MPRACES;
-#ifndef ROAM_HOST_WIN
+#if !defined(ROAM_HOST_WIN) || defined(ROAM_HOST_ANDROID)
     /* the hub links us with as many players as we show cars (a hub before version 10 gives 32; 0 shown: not said, 32
      * for quick chat and the lobbies); the Windows plugin's 5 cars say nothing */
     cf.links = O.max_cars;
@@ -7792,7 +7792,7 @@ static void world_changed(CPU *c, uint32_t w){
     g_world_seen = w;
 }
 
-#ifndef ROAM_HOST_WIN
+#if !defined(ROAM_HOST_WIN) || defined(ROAM_HOST_ANDROID)
 /* Solid cars switched while the game runs (the page's menu: roam_plat_solid).
  * Off: friends' cars lose their bodies at once, and the player's car is
  * passable on their screens (RC_BIT_PASS).  On: friends' cars are ghosts
@@ -7942,7 +7942,7 @@ static void car_rescue(int64_t host){
 void roam_game_frame(CPU *c){
     if (!g_inited) init_once(c);
     if (!O.on) return;
-#ifndef ROAM_HOST_WIN
+#if !defined(ROAM_HOST_WIN) || defined(ROAM_HOST_ANDROID)
     solid_follow();
     crews_follow();
     room_follow();
@@ -8049,7 +8049,7 @@ void roam_game_frame(CPU *c){
     uint8_t st = local_status(in_roam);
     rc_set_status(&g_s, st);
     g_racing = st == RC_ST_EVENT || (in_roam && (du_racing(rd32(G_RACE)) || em_racing(rd32(G_RACE))));
-#ifndef ROAM_HOST_WIN
+#if !defined(ROAM_HOST_WIN) || defined(ROAM_HOST_ANDROID)
     room_alone(host, st);
 #endif
     if (cfgn > 0){

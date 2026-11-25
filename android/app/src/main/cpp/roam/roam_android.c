@@ -12,12 +12,14 @@
 #include <strings.h>
 #include <math.h>
 #include <errno.h>
+#include <stdarg.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <poll.h>
 #include <pthread.h>
 #include <time.h>
 #include <stdatomic.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -302,10 +304,17 @@ static JavaVM         *g_jvm = NULL;
 static jclass          g_client_class = NULL;
 static jmethodID       g_mid_on_said = NULL;
 static jmethodID       g_mid_on_send = NULL;
+static jmethodID       g_mid_on_lan_udp_send = NULL;
+static jmethodID       g_mid_on_lan_udp_bind = NULL;
 static jclass          g_game_activity_class = NULL;
 static jmethodID       g_mid_fetch_news = NULL;
 static uint32_t        g_hub_ip = 0;
+static atomic_uint     g_room_gen = 0;
+static atomic_uint     g_name_gen = 0;
+static _Atomic int     g_switch_connected = 0;
+static _Atomic uint32_t g_switch_vip = 0;
 static void            lobby_frame_tick(void);
+__attribute__((visibility("default"))) void nfs_roam_frame_tick(void);
 
 void roam_plat_lock(void)   { pthread_mutex_lock(&g_mu); }
 void roam_plat_unlock(void) { pthread_mutex_unlock(&g_mu); }
@@ -402,8 +411,22 @@ int roam_plat_test_mode(void) { return 0; }
 int roam_plat_friend(const char *json) { (void)json; return 0; }
 int roam_plat_battle(const char *json) { (void)json; return 0; }
 int roam_plat_flying(const char *json) { (void)json; return 0; }
-uint32_t roam_plat_room(char name[64]) { (void)name; return 0; }
-uint32_t roam_plat_name(char out[33]) { (void)out; return 0; }
+uint32_t roam_plat_room(char name[64]) {
+    uint32_t gen = atomic_load(&g_room_gen);
+    if (!gen) return 0;
+    roam_plat_lock();
+    snprintf(name, 64, "%s", g_room_name);
+    roam_plat_unlock();
+    return gen;
+}
+uint32_t roam_plat_name(char out[33]) {
+    uint32_t gen = atomic_load(&g_name_gen);
+    if (!gen) return 0;
+    roam_plat_lock();
+    snprintf(out, 33, "%s", g_player_name);
+    roam_plat_unlock();
+    return gen;
+}
 
 void look_eye(float *e, float *f) {
     if (g_p_mem_base && *g_p_mem_base && g_p_esp && *g_p_esp) {
@@ -730,7 +753,16 @@ static recomp_void_func_t s_orig_49b930 = NULL;
 static recomp_void_func_t s_orig_4b6510 = NULL;
 static recomp_void_func_t s_orig_49b8a0 = NULL;
 static recomp_void_func_t s_orig_49b8e0 = NULL;
+static recomp_void_func_t s_orig_600590 = NULL;
 static recomp_hook_func_t s_orig_recomp_hook = NULL;
+
+extern void roam_game_hud(void *c);
+static void hook_sub_00600590(void) {
+    if (s_orig_600590) {
+        s_orig_600590();
+    }
+    roam_game_hud(NULL);
+}
 
 typedef uint32_t (*dispatch_d3d9_func_t)(uint32_t token, const uint32_t *args, uint32_t *argumentCount);
 static dispatch_d3d9_func_t s_orig_dispatch_d3d9 = NULL;
@@ -1954,6 +1986,91 @@ static inline void d3d9_cache_sync_device(uint32_t dev) {
     }
 }
 
+static void contrast_and_crowd_sync(uint32_t dev, int apply_gamma) {
+    if (!g_p_mem_base || !*g_p_mem_base) return;
+
+    // 1. Crowd setting enforcement (0x00870CD0 = g_CrowdEnable)
+    static int s_crowd_env_init = 0;
+    static int s_allow_crowd = 0;
+    if (!s_crowd_env_init) {
+        s_crowd_env_init = 1;
+        const char *env_crowd = getenv("NFSU2_CROWD");
+        s_allow_crowd = (env_crowd && (strcmp(env_crowd, "1") == 0 || strcasecmp(env_crowd, "on") == 0));
+        nfs_rust_set_crowd_suppression(!s_allow_crowd);
+    }
+    if (!s_allow_crowd && rh_mem_committed(0x00870cd0u, 4) && MR32(0x00870cd0u) != 0) {
+        MR32(0x00870cd0u) = 0;
+    }
+
+    // 2. Enhanced Contrast pre-scene clamp + hardware SetGammaRamp tone curve
+    uint32_t master_contrast = rh_mem_committed(0x00876518u, 4) ? MR32(0x00876518u) : 0u;
+    uint32_t bleach = rh_mem_committed(0x00870D00u, 4) ? MR32(0x00870D00u) : 0u;
+    uint32_t want_contrast = (master_contrast != 0u || bleach != 0u) ? 1u : 0u;
+
+    if (rh_mem_committed(0x00870D00u, 4)) MR32(0x00870D00u) = 0;
+    if (rh_mem_committed(0x00870CFCu, 4)) MR32(0x00870CFCu) = 0;
+    if (rh_mem_committed(0x00876514u, 4)) MR32(0x00876514u) = 0;
+
+    if (apply_gamma && dev != 0u && s_orig_dispatch_d3d9) {
+        static uint32_t s_last_gamma_contrast = 0xFFFFFFFFu;
+        static uint32_t s_gamma_ramp_va = 0u;
+        if (want_contrast != s_last_gamma_contrast) {
+            if (s_gamma_ramp_va == 0u && g_p_esp && *g_p_esp && g_p_recomp_lookup) {
+                recomp_void_func_t fn_malloc = (recomp_void_func_t)g_p_recomp_lookup(0x00575620u);
+                if (fn_malloc && g_p_eax) {
+                    uint32_t esp_save = *g_p_esp;
+                    uint32_t sz = 1536u;
+                    uint32_t sp = esp_save - 8u;
+                    if (rh_mem_committed(sp, 8)) {
+                        MR32(sp) = 0xDEAD0000u;
+                        MR32(sp + 4u) = sz;
+                        *g_p_esp = sp;
+                        fn_malloc();
+                        *g_p_esp = esp_save;
+                        if (*g_p_eax >= 0x10000u && rh_mem_committed(*g_p_eax, 1536)) {
+                            s_gamma_ramp_va = *g_p_eax;
+                        }
+                    }
+                }
+            }
+            if (s_gamma_ramp_va != 0u && rh_mem_committed(s_gamma_ramp_va, 1536)) {
+                uint16_t *r = (uint16_t *)GPTR(s_gamma_ramp_va);
+                uint16_t *g = r + 256;
+                uint16_t *b = r + 512;
+                for (int i = 0; i < 256; i++) {
+                    uint16_t w;
+                    if (want_contrast) {
+                        float c = (float)i / 255.0f;
+                        c = fminf(fmaxf(c * 1.00695555f, 0.0f), 1.0f);
+                        float s_curve = c * c * (3.0f - 2.0f * c);
+                        c = c * 0.85f + s_curve * 0.15f;
+                        float th = fminf(fmaxf((c - 0.5f) / 0.5f, 0.0f), 1.0f);
+                        c += -0.35f * 0.20f * (th * th * (3.0f - 2.0f * th)) * (c - 0.5f);
+                        float tw = fminf(fmaxf((c - 0.75f) / 0.25f, 0.0f), 1.0f);
+                        c += 0.16f * 0.15f * (tw * tw * (3.0f - 2.0f * tw)) * (1.0f - c);
+                        float ts = fminf(fmaxf((0.5f - c) / 0.5f, 0.0f), 1.0f);
+                        c += -0.12f * 0.18f * (ts * ts * (3.0f - 2.0f * ts)) * (0.5f - c);
+                        float tb = fminf(fmaxf((0.25f - c) / 0.25f, 0.0f), 1.0f);
+                        c += 0.22f * 0.10f * (tb * tb * (3.0f - 2.0f * tb)) * c;
+                        c -= 0.20f * 0.12f * (1.0f - c) * c;
+                        c = fminf(fmaxf(c, 0.0f), 1.0f);
+                        w = (uint16_t)(c * 65535.0f);
+                    } else {
+                        w = (uint16_t)(i * 257);
+                    }
+                    r[i] = w;
+                    g[i] = w;
+                    b[i] = w;
+                }
+                uint32_t ramp_args[4] = { dev, 0u, 0u, s_gamma_ramp_va };
+                uint32_t ramp_ac = 4u;
+                s_orig_dispatch_d3d9(0x7e000000u | (2u << 12) | (21u << 4), ramp_args, &ramp_ac);
+                s_last_gamma_contrast = want_contrast;
+            }
+        }
+    }
+}
+
 static uint32_t hook_dispatchGuestD3D9(uint32_t token, const uint32_t *args, uint32_t *argumentCount) {
     if (!s_orig_dispatch_d3d9) return 0;
     if (!args || !argumentCount || token < 0x7e000000u || token >= 0x7e010000u) {
@@ -1967,14 +2084,22 @@ static uint32_t hook_dispatchGuestD3D9(uint32_t token, const uint32_t *args, uin
 
     if (kind == 2u) {
         uint32_t dev = args[0];
+        if (method == 41u) {
+            contrast_and_crowd_sync(dev, 1);
+        }
         if (method == 17u) {
+            contrast_and_crowd_sync(dev, 0);
             d3d9_flush_pending_states();
             uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
             if (hr == 0u) {
-                g_frame_count++;
                 s_d3d9_cache.present_frames++;
-                fe_spinners_tick();
-                lobby_frame_tick();
+                if (roam_android_init_symbols() && g_p_esp && *g_p_esp) {
+                    nfs_roam_frame_tick();
+                } else {
+                    g_frame_count++;
+                    fe_spinners_tick();
+                    lobby_frame_tick();
+                }
                 static void (*s_telemetry_present)(uint64_t) = NULL;
                 static int s_telemetry_checked = 0;
                 if (!s_telemetry_checked) {
@@ -3126,18 +3251,33 @@ static void hook_nfs_widescreen_set_resolution(unsigned width, unsigned height) 
 }
 
 /* =========================================================================
- * Online News HTTP Interceptor (GOT hook on libnfsu2_android.so libc sockets)
- * Intercepts EA ProtoHTTP news/TOS requests on both classic and WebSocket
- * online servers and serves GameActivity.fetchNewsContent() via socketpair.
+ * Online News HTTP & Virtual Switch LAN UDP Interceptor (GOT hooks on
+ * libnfsu2_android.so libc sockets)
+ * - Intercepts EA ProtoHTTP news/TOS requests and serves GameActivity news.
+ * - Tunnels guest AF_INET/SOCK_DGRAM traffic to/from 10.77.x.y (and LAN
+ *   broadcasts when VirtualSwitch is connected) through VirtualSwitchClient.
  * ========================================================================= */
+typedef int (*lib_socket_fn)(int domain, int type, int protocol);
+typedef int (*lib_bind_fn)(int fd, const struct sockaddr *addr, socklen_t addrlen);
 typedef int (*lib_connect_fn)(int fd, const struct sockaddr *addr, socklen_t addrlen);
 typedef ssize_t (*lib_sendto_fn)(int fd, const void *buf, size_t len, int flags,
                                  const struct sockaddr *dest_addr, socklen_t addrlen);
+typedef ssize_t (*lib_recvfrom_fn)(int fd, void *buf, size_t len, int flags,
+                                   struct sockaddr *src_addr, socklen_t *addrlen);
+typedef int (*lib_poll_fn)(struct pollfd *fds, nfds_t nfds, int timeout);
+typedef int (*lib_ioctl_fn)(int fd, int request, void *argp);
+typedef int (*lib_getsockname_fn)(int fd, struct sockaddr *addr, socklen_t *addrlen);
 typedef int (*lib_close_fn)(int fd);
 
-static lib_connect_fn s_orig_lib_connect = NULL;
-static lib_sendto_fn  s_orig_lib_sendto  = NULL;
-static lib_close_fn   s_orig_lib_close   = NULL;
+static lib_socket_fn      s_orig_lib_socket      = NULL;
+static lib_bind_fn        s_orig_lib_bind        = NULL;
+static lib_connect_fn     s_orig_lib_connect     = NULL;
+static lib_sendto_fn      s_orig_lib_sendto      = NULL;
+static lib_recvfrom_fn    s_orig_lib_recvfrom    = NULL;
+static lib_poll_fn        s_orig_lib_poll        = NULL;
+static lib_ioctl_fn       s_orig_lib_ioctl       = NULL;
+static lib_getsockname_fn s_orig_lib_getsockname = NULL;
+static lib_close_fn       s_orig_lib_close       = NULL;
 
 #define HTTP_NEWS_MAX_SLOTS 32
 typedef struct {
@@ -3151,6 +3291,215 @@ typedef struct {
 static HttpNewsSlot    s_http_news_slots[HTTP_NEWS_MAX_SLOTS];
 static pthread_mutex_t s_http_news_mu = PTHREAD_MUTEX_INITIALIZER;
 static _Atomic int     s_http_news_active = 0;
+
+#define LAN_UDP_MAX_SOCKS 64
+#define LAN_UDP_RX_CAP    128
+#define LAN_UDP_PKT_MAX   1600
+
+typedef struct {
+    uint32_t src_vip;
+    uint16_t src_port;
+    uint16_t len;
+    uint8_t  data[LAN_UDP_PKT_MAX];
+} LanUdpPkt;
+
+typedef struct {
+    int       used;
+    int       fd;
+    uint16_t  local_port;
+    uint32_t  bound_vip;
+    uint32_t  peer_vip;
+    uint16_t  peer_port;
+    int       q_head;
+    int       q_tail;
+    int       q_count;
+    LanUdpPkt q[LAN_UDP_RX_CAP];
+} LanUdpSock;
+
+static LanUdpSock      s_lan_socks[LAN_UDP_MAX_SOCKS];
+static pthread_mutex_t s_lan_mu = PTHREAD_MUTEX_INITIALIZER;
+static int             s_lan_wake_fd = -1;
+static uint16_t        s_lan_wake_port = 0;
+
+static inline int lan_is_virtual_dst(uint32_t ip_h, uint16_t dport) {
+    if (dport == 47210u || dport == 47211u || dport == 9999u) return 0;
+    if ((ip_h & 0xFFFF0000u) == 0x0A4D0000u) return 1;
+    if (ip_h == 0xFFFFFFFFu && atomic_load_explicit(&g_switch_connected, memory_order_acquire)) return 1;
+    return 0;
+}
+
+static void lan_ensure_wake_fd_locked(void) {
+    if (s_lan_wake_fd >= 0) return;
+    int wfd = s_orig_lib_socket
+        ? s_orig_lib_socket(AF_INET, SOCK_DGRAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0)
+        : socket(AF_INET, SOCK_DGRAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
+    if (wfd < 0) return;
+
+    struct sockaddr_in sa;
+    memset(&sa, 0, sizeof sa);
+    sa.sin_family = AF_INET;
+    sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    sa.sin_port = 0;
+    int rc = s_orig_lib_bind
+        ? s_orig_lib_bind(wfd, (struct sockaddr *)&sa, sizeof sa)
+        : bind(wfd, (struct sockaddr *)&sa, sizeof sa);
+    if (rc == 0) {
+        socklen_t al = sizeof sa;
+        int g = s_orig_lib_getsockname
+            ? s_orig_lib_getsockname(wfd, (struct sockaddr *)&sa, &al)
+            : getsockname(wfd, (struct sockaddr *)&sa, &al);
+        if (g == 0) {
+            s_lan_wake_port = ntohs(sa.sin_port);
+        }
+        s_lan_wake_fd = wfd;
+    } else {
+        if (s_orig_lib_close) s_orig_lib_close(wfd);
+        else close(wfd);
+    }
+}
+
+static LanUdpSock *lan_find_by_fd_locked(int fd) {
+    if (fd < 0) return NULL;
+    for (int i = 0; i < LAN_UDP_MAX_SOCKS; i++) {
+        if (s_lan_socks[i].used && s_lan_socks[i].fd == fd) {
+            return &s_lan_socks[i];
+        }
+    }
+    return NULL;
+}
+
+static LanUdpSock *lan_find_by_port_locked(uint16_t dport) {
+    if (dport == 0) return NULL;
+    for (int i = 0; i < LAN_UDP_MAX_SOCKS; i++) {
+        if (s_lan_socks[i].used && s_lan_socks[i].local_port == dport) {
+            return &s_lan_socks[i];
+        }
+    }
+    return NULL;
+}
+
+static void lan_send_wake_locked(uint16_t dport) {
+    if (dport == 0) return;
+    lan_ensure_wake_fd_locked();
+    if (s_lan_wake_fd < 0) return;
+    struct sockaddr_in dst;
+    memset(&dst, 0, sizeof dst);
+    dst.sin_family = AF_INET;
+    dst.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    dst.sin_port = htons(dport);
+    uint8_t wake = 'W';
+    if (s_orig_lib_sendto) {
+        s_orig_lib_sendto(s_lan_wake_fd, &wake, 1, MSG_DONTWAIT, (struct sockaddr *)&dst, sizeof dst);
+    } else {
+        sendto(s_lan_wake_fd, &wake, 1, MSG_DONTWAIT, (struct sockaddr *)&dst, sizeof dst);
+    }
+}
+
+static void lan_drain_wake_locked(int fd) {
+    char tmp[16];
+    if (s_orig_lib_recvfrom) {
+        s_orig_lib_recvfrom(fd, tmp, sizeof tmp, MSG_DONTWAIT, NULL, NULL);
+    } else {
+        recvfrom(fd, tmp, sizeof tmp, MSG_DONTWAIT, NULL, NULL);
+    }
+}
+
+static uint16_t lan_query_local_port(int fd) {
+    struct sockaddr_in sa;
+    memset(&sa, 0, sizeof sa);
+    socklen_t sl = sizeof sa;
+    int rc = s_orig_lib_getsockname
+        ? s_orig_lib_getsockname(fd, (struct sockaddr *)&sa, &sl)
+        : getsockname(fd, (struct sockaddr *)&sa, &sl);
+    if (rc == 0 && sa.sin_family == AF_INET) {
+        return ntohs(sa.sin_port);
+    }
+    return 0;
+}
+
+static void lan_notify_java_bind(uint16_t port) {
+    if (port == 0 || port == 47210u || port == 47211u || port == 9999u) return;
+    if (!g_jvm || !g_client_class) return;
+    JNIEnv *env = NULL;
+    int attached = 0;
+    jint res = (*g_jvm)->GetEnv(g_jvm, (void **)&env, JNI_VERSION_1_6);
+    if (res == JNI_EDETACHED) {
+        if ((*g_jvm)->AttachCurrentThread(g_jvm, &env, NULL) == 0) attached = 1;
+        else env = NULL;
+    } else if (res != JNI_OK) {
+        env = NULL;
+    }
+    if (!env) return;
+    if (!g_mid_on_lan_udp_bind) {
+        g_mid_on_lan_udp_bind = (*env)->GetStaticMethodID(env, g_client_class, "onNativeLanUdpBind", "(I)V");
+        if ((*env)->ExceptionCheck(env)) {
+            (*env)->ExceptionClear(env);
+            g_mid_on_lan_udp_bind = NULL;
+        }
+    }
+    if (g_mid_on_lan_udp_bind) {
+        (*env)->CallStaticVoidMethod(env, g_client_class, g_mid_on_lan_udp_bind, (jint)port);
+        if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    }
+    if (attached) (*g_jvm)->DetachCurrentThread(g_jvm);
+}
+
+static void lan_udp_send_to_java(uint32_t dst_vip, uint16_t sport, uint16_t dport,
+                                 const void *buf, size_t len) {
+    if (!g_jvm || !g_client_class || !buf || len == 0) return;
+    JNIEnv *env = NULL;
+    int attached = 0;
+    jint res = (*g_jvm)->GetEnv(g_jvm, (void **)&env, JNI_VERSION_1_6);
+    if (res == JNI_EDETACHED) {
+        if ((*g_jvm)->AttachCurrentThread(g_jvm, &env, NULL) == 0) attached = 1;
+        else env = NULL;
+    } else if (res != JNI_OK) {
+        env = NULL;
+    }
+    if (!env) return;
+    if (!g_mid_on_lan_udp_send) {
+        g_mid_on_lan_udp_send = (*env)->GetStaticMethodID(env, g_client_class, "onNativeLanUdpSend", "(III[B)V");
+        if ((*env)->ExceptionCheck(env)) {
+            (*env)->ExceptionClear(env);
+            g_mid_on_lan_udp_send = NULL;
+        }
+    }
+    if (g_mid_on_lan_udp_send) {
+        jsize jlen = (jsize)(len > 65535u ? 65535u : len);
+        jbyteArray jData = (*env)->NewByteArray(env, jlen);
+        if (jData) {
+            (*env)->SetByteArrayRegion(env, jData, 0, jlen, (const jbyte *)buf);
+            (*env)->CallStaticVoidMethod(env, g_client_class, g_mid_on_lan_udp_send,
+                                         (jint)dst_vip, (jint)sport, (jint)dport, jData);
+            if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+            (*env)->DeleteLocalRef(env, jData);
+        }
+    }
+    if (attached) (*g_jvm)->DetachCurrentThread(g_jvm);
+}
+
+static void lan_enqueue_rx(uint32_t src_vip, uint16_t sport, uint16_t dport,
+                           const uint8_t *data, size_t len) {
+    if (!data || len == 0 || len > LAN_UDP_PKT_MAX || dport == 0) return;
+    pthread_mutex_lock(&s_lan_mu);
+    LanUdpSock *s = lan_find_by_port_locked(dport);
+    if (s) {
+        if (s->q_count >= LAN_UDP_RX_CAP) {
+            s->q_head = (s->q_head + 1) % LAN_UDP_RX_CAP;
+            s->q_count--;
+            lan_drain_wake_locked(s->fd);
+        }
+        LanUdpPkt *pkt = &s->q[s->q_tail];
+        pkt->src_vip = src_vip;
+        pkt->src_port = sport;
+        pkt->len = (uint16_t)len;
+        memcpy(pkt->data, data, len);
+        s->q_tail = (s->q_tail + 1) % LAN_UDP_RX_CAP;
+        s->q_count++;
+        lan_send_wake_locked(s->local_port);
+    }
+    pthread_mutex_unlock(&s_lan_mu);
+}
 
 static char *news_fetch_from_java(void) {
     static const char kFallbackNews[] =
@@ -3201,11 +3550,134 @@ static char *news_fetch_from_java(void) {
     return fb;
 }
 
+static int hook_lib_socket(int domain, int type, int protocol) {
+    int fd = s_orig_lib_socket
+        ? s_orig_lib_socket(domain, type, protocol)
+        : socket(domain, type, protocol);
+    if (fd >= 0 && domain == AF_INET && (type & 0x0f) == SOCK_DGRAM) {
+        pthread_mutex_lock(&s_lan_mu);
+        LanUdpSock *slot = lan_find_by_fd_locked(fd);
+        if (!slot) {
+            for (int i = 0; i < LAN_UDP_MAX_SOCKS; i++) {
+                if (!s_lan_socks[i].used) {
+                    slot = &s_lan_socks[i];
+                    break;
+                }
+            }
+        }
+        if (slot) {
+            memset(slot, 0, sizeof *slot);
+            slot->used = 1;
+            slot->fd = fd;
+        }
+        pthread_mutex_unlock(&s_lan_mu);
+    }
+    return fd;
+}
+
+static int hook_lib_bind(int fd, const struct sockaddr *addr, socklen_t addrlen) {
+    struct sockaddr_in rewritten;
+    const struct sockaddr *use_addr = addr;
+    socklen_t use_len = addrlen;
+    uint32_t req_ip = 0;
+    uint16_t req_port = 0;
+    int is_udp_inet = 0;
+
+    if (fd >= 0 && addr && addrlen >= (socklen_t)sizeof(struct sockaddr_in) &&
+        addr->sa_family == AF_INET) {
+        pthread_mutex_lock(&s_lan_mu);
+        LanUdpSock *slot = lan_find_by_fd_locked(fd);
+        is_udp_inet = (slot != NULL);
+        pthread_mutex_unlock(&s_lan_mu);
+
+        if (is_udp_inet) {
+            const struct sockaddr_in *in = (const struct sockaddr_in *)addr;
+            req_ip = ntohl(in->sin_addr.s_addr);
+            req_port = ntohs(in->sin_port);
+            int sw = atomic_load_explicit(&g_switch_connected, memory_order_acquire);
+            if ((req_ip & 0xFFFF0000u) == 0x0A4D0000u ||
+                (sw && req_port != 47210u && req_port != 47211u)) {
+                memset(&rewritten, 0, sizeof rewritten);
+                rewritten.sin_family = AF_INET;
+                rewritten.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+                rewritten.sin_port = in->sin_port;
+                int reuse = 1;
+                setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof reuse);
+                use_addr = (const struct sockaddr *)&rewritten;
+                use_len = (socklen_t)sizeof rewritten;
+            }
+        }
+    }
+
+    int rc = s_orig_lib_bind
+        ? s_orig_lib_bind(fd, use_addr, use_len)
+        : bind(fd, use_addr, use_len);
+
+    if (rc == 0 && is_udp_inet) {
+        uint16_t actual_port = lan_query_local_port(fd);
+        if (actual_port == 0) actual_port = req_port;
+        pthread_mutex_lock(&s_lan_mu);
+        LanUdpSock *slot = lan_find_by_fd_locked(fd);
+        if (slot) {
+            slot->local_port = actual_port;
+            if ((req_ip & 0xFFFF0000u) == 0x0A4D0000u) {
+                slot->bound_vip = req_ip;
+            }
+        }
+        pthread_mutex_unlock(&s_lan_mu);
+        lan_notify_java_bind(actual_port);
+    }
+    return rc;
+}
+
 static int hook_lib_connect(int fd, const struct sockaddr *addr, socklen_t addrlen) {
+    if (fd >= 0 && addr && addr->sa_family == AF_UNSPEC) {
+        pthread_mutex_lock(&s_lan_mu);
+        LanUdpSock *slot = lan_find_by_fd_locked(fd);
+        if (slot) {
+            slot->peer_vip = 0;
+            slot->peer_port = 0;
+        }
+        pthread_mutex_unlock(&s_lan_mu);
+    }
     if (fd > 0 && addr && addrlen >= (socklen_t)sizeof(struct sockaddr_in) &&
         addr->sa_family == AF_INET) {
         const struct sockaddr_in *in = (const struct sockaddr_in *)addr;
+        uint32_t ip_h = ntohl(in->sin_addr.s_addr);
         uint16_t port = ntohs(in->sin_port);
+
+        if (lan_is_virtual_dst(ip_h, port)) {
+            int handled_udp = 0;
+            uint16_t need_notify = 0;
+            pthread_mutex_lock(&s_lan_mu);
+            LanUdpSock *slot = lan_find_by_fd_locked(fd);
+            if (slot) {
+                if (slot->local_port == 0) {
+                    struct sockaddr_in lo;
+                    memset(&lo, 0, sizeof lo);
+                    lo.sin_family = AF_INET;
+                    lo.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+                    lo.sin_port = 0;
+                    int brc = s_orig_lib_bind
+                        ? s_orig_lib_bind(fd, (struct sockaddr *)&lo, sizeof lo)
+                        : bind(fd, (struct sockaddr *)&lo, sizeof lo);
+                    if (brc == 0) {
+                        slot->local_port = lan_query_local_port(fd);
+                        need_notify = slot->local_port;
+                    }
+                }
+                slot->peer_vip = ip_h;
+                slot->peer_port = port;
+                handled_udp = 1;
+            }
+            pthread_mutex_unlock(&s_lan_mu);
+            if (need_notify) lan_notify_java_bind(need_notify);
+            if (handled_udp) {
+                errno = 0;
+                return 0;
+            }
+        }
+
         if (port == 80u || port == 8080u || port == 3000u || port == 9900u) {
             int stype = 0;
             socklen_t sl = (socklen_t)sizeof(stype);
@@ -3384,12 +3856,214 @@ static ssize_t hook_lib_sendto(int fd, const void *buf, size_t len, int flags,
             return (ssize_t)len;
         }
     }
+    if (fd >= 0 && buf && len > 0) {
+        uint32_t dst_vip = 0;
+        uint16_t dport = 0;
+        if (dest_addr && addrlen >= (socklen_t)sizeof(struct sockaddr_in) &&
+            dest_addr->sa_family == AF_INET) {
+            const struct sockaddr_in *in = (const struct sockaddr_in *)dest_addr;
+            dst_vip = ntohl(in->sin_addr.s_addr);
+            dport = ntohs(in->sin_port);
+        }
+
+        int is_lan_udp = 0;
+        uint16_t sport = 0;
+        uint16_t bound_new = 0;
+
+        pthread_mutex_lock(&s_lan_mu);
+        LanUdpSock *slot = lan_find_by_fd_locked(fd);
+        if (slot) {
+            if (dst_vip == 0) {
+                dst_vip = slot->peer_vip;
+                dport = slot->peer_port;
+            }
+            if (dport != 0 && lan_is_virtual_dst(dst_vip, dport)) {
+                is_lan_udp = 1;
+                if (slot->local_port == 0) {
+                    struct sockaddr_in lo;
+                    memset(&lo, 0, sizeof lo);
+                    lo.sin_family = AF_INET;
+                    lo.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+                    lo.sin_port = 0;
+                    int brc = s_orig_lib_bind
+                        ? s_orig_lib_bind(fd, (struct sockaddr *)&lo, sizeof lo)
+                        : bind(fd, (struct sockaddr *)&lo, sizeof lo);
+                    if (brc == 0) {
+                        slot->local_port = lan_query_local_port(fd);
+                        bound_new = slot->local_port;
+                    }
+                }
+                sport = slot->local_port;
+            }
+        }
+        pthread_mutex_unlock(&s_lan_mu);
+
+        if (bound_new) lan_notify_java_bind(bound_new);
+
+        if (is_lan_udp) {
+            if (!sport) sport = dport;
+            uint32_t my_vip = atomic_load_explicit(&g_switch_vip, memory_order_acquire);
+            if (my_vip != 0 && dst_vip == my_vip) {
+                lan_enqueue_rx(my_vip, sport, dport, (const uint8_t *)buf, len);
+            } else {
+                lan_udp_send_to_java(dst_vip, sport, dport, buf, len);
+            }
+            errno = 0;
+            return (ssize_t)len;
+        }
+    }
     return s_orig_lib_sendto
         ? s_orig_lib_sendto(fd, buf, len, flags, dest_addr, addrlen)
         : sendto(fd, buf, len, flags, dest_addr, addrlen);
 }
 
+static ssize_t hook_lib_recvfrom(int fd, void *buf, size_t len, int flags,
+                                 struct sockaddr *src_addr, socklen_t *addrlen) {
+    if (fd >= 0) {
+        pthread_mutex_lock(&s_lan_mu);
+        LanUdpSock *slot = lan_find_by_fd_locked(fd);
+        if (slot && slot->q_count > 0) {
+            LanUdpPkt *pkt = &slot->q[slot->q_head];
+            size_t full_len = pkt->len;
+            size_t copy_n = (len < full_len) ? len : full_len;
+            if (buf && copy_n > 0) {
+                memcpy(buf, pkt->data, copy_n);
+            }
+            if (src_addr && addrlen && *addrlen >= (socklen_t)sizeof(struct sockaddr_in)) {
+                struct sockaddr_in *out_in = (struct sockaddr_in *)src_addr;
+                memset(out_in, 0, sizeof *out_in);
+                out_in->sin_family = AF_INET;
+                out_in->sin_port = htons(pkt->src_port);
+                out_in->sin_addr.s_addr = htonl(pkt->src_vip);
+                *addrlen = (socklen_t)sizeof(struct sockaddr_in);
+            }
+            if (!(flags & MSG_PEEK)) {
+                slot->q_head = (slot->q_head + 1) % LAN_UDP_RX_CAP;
+                slot->q_count--;
+                lan_drain_wake_locked(fd);
+            }
+            pthread_mutex_unlock(&s_lan_mu);
+            errno = 0;
+            return (ssize_t)((flags & MSG_TRUNC) ? full_len : copy_n);
+        }
+        pthread_mutex_unlock(&s_lan_mu);
+    }
+
+    for (;;) {
+        struct sockaddr_in peek_from;
+        socklen_t peek_fl = (socklen_t)sizeof peek_from;
+        struct sockaddr *use_sa = src_addr ? src_addr : (struct sockaddr *)&peek_from;
+        socklen_t *use_sl = addrlen ? addrlen : &peek_fl;
+        socklen_t saved_sl = *use_sl;
+        ssize_t n = s_orig_lib_recvfrom
+            ? s_orig_lib_recvfrom(fd, buf, len, flags, use_sa, use_sl)
+            : recvfrom(fd, buf, len, flags, use_sa, use_sl);
+        if (n == 1 && use_sa->sa_family == AF_INET && s_lan_wake_port != 0) {
+            const struct sockaddr_in *in = (const struct sockaddr_in *)use_sa;
+            if (in->sin_addr.s_addr == htonl(INADDR_LOOPBACK) &&
+                in->sin_port == htons(s_lan_wake_port)) {
+                *use_sl = saved_sl;
+                continue;
+            }
+        }
+        return n;
+    }
+}
+
+static int hook_lib_poll(struct pollfd *fds, nfds_t nfds, int timeout) {
+    if (fds && nfds > 0) {
+        int ready = 0;
+        pthread_mutex_lock(&s_lan_mu);
+        for (nfds_t i = 0; i < nfds; i++) {
+            fds[i].revents = 0;
+            if (fds[i].fd >= 0 && (fds[i].events & POLLIN)) {
+                LanUdpSock *s = lan_find_by_fd_locked(fds[i].fd);
+                if (s && s->q_count > 0) {
+                    fds[i].revents |= POLLIN;
+                    ready++;
+                }
+            }
+        }
+        pthread_mutex_unlock(&s_lan_mu);
+        if (ready > 0) return ready;
+    }
+
+    int rc = s_orig_lib_poll ? s_orig_lib_poll(fds, nfds, timeout) : poll(fds, nfds, timeout);
+    if (rc >= 0 && fds && nfds > 0) {
+        pthread_mutex_lock(&s_lan_mu);
+        for (nfds_t i = 0; i < nfds; i++) {
+            if (fds[i].fd >= 0 && (fds[i].events & POLLIN)) {
+                LanUdpSock *s = lan_find_by_fd_locked(fds[i].fd);
+                if (s && s->q_count > 0 && !(fds[i].revents & POLLIN)) {
+                    fds[i].revents |= POLLIN;
+                    rc++;
+                }
+            }
+        }
+        pthread_mutex_unlock(&s_lan_mu);
+    }
+    return rc;
+}
+
+static int hook_lib_ioctl(int fd, int request, ...) {
+    va_list ap;
+    va_start(ap, request);
+    void *argp = va_arg(ap, void *);
+    va_end(ap);
+
+    if (fd >= 0 && ((unsigned int)request == (unsigned int)FIONREAD) && argp) {
+        pthread_mutex_lock(&s_lan_mu);
+        LanUdpSock *slot = lan_find_by_fd_locked(fd);
+        if (slot && slot->q_count > 0) {
+            *(int *)argp = (int)slot->q[slot->q_head].len;
+            pthread_mutex_unlock(&s_lan_mu);
+            errno = 0;
+            return 0;
+        }
+        pthread_mutex_unlock(&s_lan_mu);
+    }
+    return s_orig_lib_ioctl
+        ? s_orig_lib_ioctl(fd, request, argp)
+        : ioctl(fd, request, argp);
+}
+
+static int hook_lib_getsockname(int fd, struct sockaddr *addr, socklen_t *addrlen) {
+    int rc = s_orig_lib_getsockname
+        ? s_orig_lib_getsockname(fd, addr, addrlen)
+        : getsockname(fd, addr, addrlen);
+    if (rc == 0 && fd >= 0 && addr && addrlen &&
+        *addrlen >= (socklen_t)sizeof(struct sockaddr_in) &&
+        addr->sa_family == AF_INET) {
+        uint32_t my_vip = atomic_load_explicit(&g_switch_vip, memory_order_acquire);
+        int sw = atomic_load_explicit(&g_switch_connected, memory_order_acquire);
+        pthread_mutex_lock(&s_lan_mu);
+        LanUdpSock *slot = lan_find_by_fd_locked(fd);
+        if (slot) {
+            struct sockaddr_in *in = (struct sockaddr_in *)addr;
+            if (slot->bound_vip != 0) {
+                in->sin_addr.s_addr = htonl(slot->bound_vip);
+            } else if (sw && my_vip != 0 &&
+                       (in->sin_addr.s_addr == 0 || in->sin_addr.s_addr == htonl(INADDR_LOOPBACK))) {
+                in->sin_addr.s_addr = htonl(my_vip);
+            }
+            if (slot->local_port != 0) {
+                in->sin_port = htons(slot->local_port);
+            }
+        }
+        pthread_mutex_unlock(&s_lan_mu);
+    }
+    return rc;
+}
+
 static int hook_lib_close(int fd) {
+    if (fd >= 0) {
+        pthread_mutex_lock(&s_lan_mu);
+        LanUdpSock *slot = lan_find_by_fd_locked(fd);
+        if (slot) {
+            memset(slot, 0, sizeof *slot);
+        }
+        pthread_mutex_unlock(&s_lan_mu);
+    }
     if (atomic_load_explicit(&s_http_news_active, memory_order_relaxed) > 0 && fd >= 0) {
         int peer_fd = -1;
         pthread_mutex_lock(&s_http_news_mu);
@@ -3879,6 +4553,20 @@ static void roam_android_install_hooks(void) {
         __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Updated k_functions[0x00483b40]");
     }
 
+    // 6. sub_00600590 (Player::Update HUD step -> roam_game_hud player tags)
+    void *target_60 = g_p_recomp_lookup ? (void *)g_p_recomp_lookup(0x00600590u) : NULL;
+    if (target_60 && !s_orig_600590) {
+        s_orig_600590 = (recomp_void_func_t)arm64_inline_hook(target_60, (void *)hook_sub_00600590);
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Hooked sub_00600590 (Player HUD -> roam_game_hud) at %p (orig: %p)", target_60, s_orig_600590);
+    }
+    uintptr_t k_60 = lib_base + 0x979da90;
+    if (*(uint32_t *)k_60 == 0x00600590u) {
+        uintptr_t page = k_60 & ~((uintptr_t)page_sz - 1);
+        mprotect((void *)page, page_sz * 2, PROT_READ | PROT_WRITE);
+        *(void **)(k_60 + 8) = (void *)hook_sub_00600590;
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Updated k_functions[0x00600590]");
+    }
+
     // Patch GOT slot for recomp_hook so PLT jumps directly to our hook
     uintptr_t got_recomp_hook = lib_base + 0x97dd4a8;
     uintptr_t got_page = got_recomp_hook & ~((uintptr_t)page_sz - 1);
@@ -3972,7 +4660,7 @@ static void roam_android_install_hooks(void) {
     }
 #endif
 
-    // Hook libnfsu2_android.so libc socket GOT slots (connect/sendto/close) for Online News HTTP responder
+    // Hook libnfsu2_android.so libc socket GOT slots (HTTP News + Virtual Switch LAN UDP)
     {
         struct {
             const char *name;
@@ -3980,9 +4668,15 @@ static void roam_android_install_hooks(void) {
             void *hook;
             void **orig_out;
         } net_got_hooks[] = {
-            { "connect", 0x97ddba8u, (void *)hook_lib_connect, (void **)&s_orig_lib_connect },
-            { "sendto",  0x97ddbe8u, (void *)hook_lib_sendto,  (void **)&s_orig_lib_sendto },
-            { "close",   0x97ddb50u, (void *)hook_lib_close,   (void **)&s_orig_lib_close },
+            { "socket",      0x97ddc00u, (void *)hook_lib_socket,      (void **)&s_orig_lib_socket },
+            { "bind",        0x97ddb90u, (void *)hook_lib_bind,        (void **)&s_orig_lib_bind },
+            { "connect",     0x97ddba8u, (void *)hook_lib_connect,     (void **)&s_orig_lib_connect },
+            { "sendto",      0x97ddbe8u, (void *)hook_lib_sendto,      (void **)&s_orig_lib_sendto },
+            { "recvfrom",    0x97ddbc8u, (void *)hook_lib_recvfrom,    (void **)&s_orig_lib_recvfrom },
+            { "poll",        0x97ddbd8u, (void *)hook_lib_poll,        (void **)&s_orig_lib_poll },
+            { "ioctl",       0x97ddbb8u, (void *)hook_lib_ioctl,       (void **)&s_orig_lib_ioctl },
+            { "getsockname", 0x97ddbd0u, (void *)hook_lib_getsockname, (void **)&s_orig_lib_getsockname },
+            { "close",       0x97ddb50u, (void *)hook_lib_close,       (void **)&s_orig_lib_close },
         };
         for (size_t i = 0; i < sizeof(net_got_hooks) / sizeof(net_got_hooks[0]); i++) {
             if (*net_got_hooks[i].orig_out) continue;
@@ -4265,7 +4959,13 @@ jint JNI_OnLoad(JavaVM *vm, void *reserved) {
         if (clz) {
             g_client_class = (jclass)(*env)->NewGlobalRef(env, clz);
             g_mid_on_said = (*env)->GetStaticMethodID(env, g_client_class, "onQuickChatReceived", "(Ljava/lang/String;)V");
+            if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionClear(env); g_mid_on_said = NULL; }
             g_mid_on_send = (*env)->GetStaticMethodID(env, g_client_class, "onNativeSend", "(II[B)V");
+            if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionClear(env); g_mid_on_send = NULL; }
+            g_mid_on_lan_udp_send = (*env)->GetStaticMethodID(env, g_client_class, "onNativeLanUdpSend", "(III[B)V");
+            if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionClear(env); g_mid_on_lan_udp_send = NULL; }
+            g_mid_on_lan_udp_bind = (*env)->GetStaticMethodID(env, g_client_class, "onNativeLanUdpBind", "(I)V");
+            if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionClear(env); g_mid_on_lan_udp_bind = NULL; }
             (*env)->DeleteLocalRef(env, clz);
         }
         jclass ga_clz = (*env)->FindClass(env, "io/mininxd/nfsu2/GameActivity");
@@ -4288,29 +4988,52 @@ jint JNI_OnLoad(JavaVM *vm, void *reserved) {
 }
 
 static void roam_do_configure(JNIEnv *env, jstring jRoom, jstring jName, jstring jPeers, jboolean jGhostMode, jint jHubIp) {
+    roam_plat_lock();
     g_ghost_mode = (jGhostMode == JNI_TRUE) ? 1 : 0;
     g_hub_ip = (uint32_t)jHubIp;
-    if (g_s && g_hub_ip) {
-        roam_plat_lock();
+    if (env) {
+        if (jRoom) {
+            const char *r = (*(JNIEnv **)env != NULL) ? (*env)->GetStringUTFChars(env, jRoom, NULL) : NULL;
+            if (r) {
+                snprintf(g_room_name, sizeof g_room_name, "%s", r);
+                (*env)->ReleaseStringUTFChars(env, jRoom, r);
+            }
+        }
+        if (jName) {
+            const char *n = (*(JNIEnv **)env != NULL) ? (*env)->GetStringUTFChars(env, jName, NULL) : NULL;
+            if (n) {
+                snprintf(g_player_name, sizeof g_player_name, "%s", n);
+                (*env)->ReleaseStringUTFChars(env, jName, n);
+            }
+        }
+        if (jPeers) {
+            const char *p = (*(JNIEnv **)env != NULL) ? (*env)->GetStringUTFChars(env, jPeers, NULL) : NULL;
+            if (p) {
+                snprintf(g_peers_str, sizeof g_peers_str, "%s", p);
+                (*env)->ReleaseStringUTFChars(env, jPeers, p);
+            }
+        }
+    }
+    atomic_fetch_add(&g_room_gen, 1u);
+    atomic_fetch_add(&g_name_gen, 1u);
+    if (g_s) {
         g_s->conf.hub_ip = g_hub_ip;
-        g_s->conf.hub_port = 47210;
+        g_s->conf.hub_port = g_hub_ip ? 47210 : 0;
         g_s->conf.snap_states = 1;
+        rc_name_clean(g_s->conf.name, g_player_name, RC_NAME_MAX + 1);
+        rc_set_room(g_s, rc_room_hash(g_room_name));
         g_s->hub_hello_tx = INT64_MIN / 4;
-        roam_plat_unlock();
+        if (!g_hub_ip && g_peers_str[0]) {
+            uint32_t pips[16];
+            uint16_t ppts[16];
+            int np = roam_plat_parse_peers(g_peers_str, 0, g_s->conf.port ? g_s->conf.port : 47210, pips, ppts, 16);
+            int64_t now = roam_plat_now_us();
+            for (int i = 0; i < np; i++) {
+                rc_add_peer(g_s, pips[i], ppts[i], 1, now);
+            }
+        }
     }
-    if (!env) return;
-    if (jRoom) {
-        const char *r = (*(JNIEnv **)env != NULL) ? (*env)->GetStringUTFChars(env, jRoom, NULL) : NULL;
-        if (r) { strncpy(g_room_name, r, sizeof g_room_name - 1); (*env)->ReleaseStringUTFChars(env, jRoom, r); }
-    }
-    if (jName) {
-        const char *n = (*(JNIEnv **)env != NULL) ? (*env)->GetStringUTFChars(env, jName, NULL) : NULL;
-        if (n) { strncpy(g_player_name, n, sizeof g_player_name - 1); (*env)->ReleaseStringUTFChars(env, jName, n); }
-    }
-    if (jPeers) {
-        const char *p = (*(JNIEnv **)env != NULL) ? (*env)->GetStringUTFChars(env, jPeers, NULL) : NULL;
-        if (p) { strncpy(g_peers_str, p, sizeof g_peers_str - 1); (*env)->ReleaseStringUTFChars(env, jPeers, p); }
-    }
+    roam_plat_unlock();
     __android_log_print(ANDROID_LOG_INFO, "NFSU2-Roam", "Configured Native Roam: Room=%s, Name=%s, Peers=%s, GhostMode=%d, Hub=%08x",
                         g_room_name, g_player_name, g_peers_str, g_ghost_mode, g_hub_ip);
 }
@@ -4403,6 +5126,26 @@ JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_net_RoamNativeBridge_nativeRoamRece
         JNIEnv *env, jclass clazz, jint srcIp, jint srcPort, jbyteArray jData) {
     (void)clazz;
     roam_do_receive(env, srcIp, srcPort, jData);
+}
+
+JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_net_RoamNativeBridge_nativeLanUdpReceive(
+        JNIEnv *env, jclass clazz, jint srcVip, jint dstVip, jint sport, jint dport, jbyteArray jData) {
+    (void)clazz;
+    (void)dstVip;
+    if (!env || !jData) return;
+    jsize len = (*env)->GetArrayLength(env, jData);
+    if (len <= 0 || len > LAN_UDP_PKT_MAX) return;
+    uint8_t buf[LAN_UDP_PKT_MAX];
+    (*env)->GetByteArrayRegion(env, jData, 0, len, (jbyte *)buf);
+    lan_enqueue_rx((uint32_t)srcVip, (uint16_t)sport, (uint16_t)dport, buf, (size_t)len);
+}
+
+JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_net_RoamNativeBridge_nativeSetSwitchStatus(
+        JNIEnv *env, jclass clazz, jboolean connected, jint myVip) {
+    (void)env;
+    (void)clazz;
+    atomic_store_explicit(&g_switch_connected, (connected == JNI_TRUE) ? 1 : 0, memory_order_release);
+    atomic_store_explicit(&g_switch_vip, (uint32_t)myVip, memory_order_release);
 }
 
 JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_net_RoamNativeBridge_nativeRoamTick(

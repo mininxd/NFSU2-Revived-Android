@@ -142,7 +142,7 @@ public final class AdhocPostofficeClient {
                     NetLog.step(TAG, "Connecting to adhocctl " + serverHost + ":" + GameOptions.ADHOCCTL_PORT);
                     adhocctlSocket = new Socket();
                     adhocctlSocket.connect(new InetSocketAddress(serverHost, GameOptions.ADHOCCTL_PORT), 6000);
-                    adhocctlSocket.setSoTimeout(5000);
+                    adhocctlSocket.setSoTimeout(2000);
                     adhocctlSocket.setTcpNoDelay(true);
 
                     OutputStream out = new BufferedOutputStream(adhocctlSocket.getOutputStream());
@@ -179,10 +179,11 @@ public final class AdhocPostofficeClient {
                     long lastPing = System.currentTimeMillis();
 
                     while (running.get()) {
-                        if (System.currentTimeMillis() - lastPing >= 15000) {
+                        long now = System.currentTimeMillis();
+                        if (now - lastPing >= 5000) {
                             out.write(OPCODE_PING);
                             out.flush();
-                            lastPing = System.currentTimeMillis();
+                            lastPing = now;
                         }
 
                         int opcode;
@@ -353,9 +354,10 @@ public final class AdhocPostofficeClient {
                         if (Arrays.equals(srcMac, localMac)) continue;
 
                         getOrCreatePeer("Player", srcMac, 0);
-                        forwardToLocalGame(payload);
                         if (listener != null) {
                             listener.onDatagramReceived(srcMac, payload);
+                        } else {
+                            forwardToLocalGame(payload);
                         }
                     }
                 } catch (Exception e) {
