@@ -2018,15 +2018,6 @@ static uint32_t hook_dispatchGuestD3D9(uint32_t token, const uint32_t *args, uin
             return hr;
         }
 
-        /* Clamp offscreen CreateRenderTarget (28) & CreateDepthStencilSurface (29) MSAA to NONE */
-        if ((method == 28u || method == 29u) && (args[4] != 0u || args[5] != 0u)) {
-            uint32_t args_copy[9];
-            memcpy(args_copy, args, sizeof(args_copy));
-            args_copy[4] = 0u;
-            args_copy[5] = 0u;
-            return s_orig_dispatch_d3d9(token, args_copy, argumentCount);
-        }
-
         if (method == 60u) {
             uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
             if (hr == 0u) s_d3d9_cache.in_state_block = 1;
@@ -2594,6 +2585,12 @@ static void hook_nfs_widescreen_apply_frame_rate(void) {
         else if (rdt > 0.25f) rdt = 0.25f;
         MRF32(0x007fc858u) = rdt;
     }
+    if (s_lib_base && *(uint8_t *)(s_lib_base + 0x97f7300)) {
+        float *p_hud_offset = (float *)(s_lib_base + 0x97f7304);
+        if (*p_hud_offset > 106.666667f) {
+            *p_hud_offset = 106.666667f;
+        }
+    }
 }
 
 /* =========================================================================
@@ -3075,22 +3072,29 @@ static void hook_nfs_widescreen_set_resolution(unsigned width, unsigned height) 
         s_orig_widescreen_set_res(width, height);
     }
     if (!s_lib_base || !g_p_mem_base || !*g_p_mem_base || !width || !height) return;
-    if (s_display_w < 320u || s_display_h < 240u) return;
 
     uint8_t ws_enabled = *(uint8_t *)(s_lib_base + 0x97f7300);
     if (!ws_enabled) return;
 
-    float disp_aspect = (float)s_display_w / (float)s_display_h;
     float cur_aspect = (float)width / (float)height;
-    if (fabsf(cur_aspect - disp_aspect) > 0.03f) {
-        float hud_scale_x = 2.0f / (disp_aspect * 480.0f);
-        float hud_pos_x = disp_aspect * 240.0f;
-        float hud_offset = 240.0f * disp_aspect - 320.0f;
-        float dyno_x = 79.0f + ((480.0f * disp_aspect) - 640.0f) * 0.5f;
+    float target_aspect = (s_display_w >= 320u && s_display_h >= 240u)
+        ? ((float)s_display_w / (float)s_display_h)
+        : cur_aspect;
 
-        *(float *)(s_lib_base + 0x97e64bc) = disp_aspect;
+    /* Clamp .dat edge-anchor shift (s_hud_offset) to the 16:9 safe area (max 106.67)
+     * so ultrawide 20:9/21:9/22:9 screens do not push Drag HUD, tachometer, N2O,
+     * minimap, or leaderboard panels past FEng's 640-unit culling bounds. */
+    float safe_aspect = target_aspect > (16.0f / 9.0f) ? (16.0f / 9.0f) : target_aspect;
+    float safe_hud_offset = 240.0f * safe_aspect - 320.0f;
+    if (safe_hud_offset < 0.0f) safe_hud_offset = 0.0f;
+
+    if (fabsf(cur_aspect - target_aspect) > 0.03f) {
+        float hud_scale_x = 2.0f / (target_aspect * 480.0f);
+        float hud_pos_x = target_aspect * 240.0f;
+        float dyno_x = 79.0f + ((480.0f * target_aspect) - 640.0f) * 0.5f;
+
+        *(float *)(s_lib_base + 0x97e64bc) = target_aspect;
         *(float *)(s_lib_base + 0x97e64c0) = hud_pos_x;
-        *(float *)(s_lib_base + 0x97f7304) = hud_offset;
 
         MRF32(0x0079ac10u) = hud_scale_x;
         MRF32(0x00797d50u) = hud_pos_x;
@@ -3098,6 +3102,8 @@ static void hook_nfs_widescreen_set_resolution(unsigned width, unsigned height) 
         MRF32(0x007fa3c0u) = dyno_x;
         MRF32(0x007fa3c4u) = 60.0f;
     }
+
+    *(float *)(s_lib_base + 0x97f7304) = safe_hud_offset;
 }
 
 /* =========================================================================
