@@ -85,23 +85,7 @@ pub fn resolve_http_base_url(host_input: &str, default_host: &str) -> String {
 
 /// Classifies whether a host targets the modern WebSocket bridge vs legacy EA Nation / adhoc.
 pub fn is_ws_host(host: &str) -> bool {
-    let h = host.trim().to_ascii_lowercase();
-    if h.is_empty() {
-        return false;
-    }
-    if h.starts_with("ws://") || h.starts_with("wss://") || h.starts_with("http://") || h.starts_with("https://") {
-        return true;
-    }
-    if h.ends_with(":27312") || h.ends_with(":27313") || h.contains("postoffice") {
-        return false;
-    }
-    if h.ends_with(":80") || h.ends_with(":443") || h.ends_with(":8080") || h.ends_with(":3000") || h.ends_with(":8000") {
-        return true;
-    }
-    if h.starts_with("adhoc.") && !h.contains("nfsu2") {
-        return false;
-    }
-    true
+    crate::classic_online::should_use_local_bridge(host)
 }
 
 /// Parses JSON response from `/players` endpoint into `[players, roam, online, room]`.

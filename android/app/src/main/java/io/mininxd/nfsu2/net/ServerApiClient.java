@@ -62,6 +62,14 @@ public final class ServerApiClient {
     public int getRoomRoamPlayers() { return roomRoamPlayers; }
     public void setRoomRoamPlayers(int count) { if (count >= 0) this.roomRoamPlayers = count; }
 
+    public void resetStats() {
+        totalServerPlayers = 0;
+        totalRoamPlayers = 0;
+        totalOnlinePlayers = 0;
+        roomRoamPlayers = 0;
+        lastPollTime.set(0);
+    }
+
     public static String getHttpBaseUrl(String hostInput) {
         if (nativeLoaded) {
             try {
@@ -133,13 +141,13 @@ public final class ServerApiClient {
                 return nativeIsWsHost(host);
             } catch (Throwable ignored) {}
         }
-        if (host == null) return false;
+        if (host == null || host.trim().isEmpty()) return false;
+        if (GameOptions.isEahubClassic(host)) {
+            return false;
+        }
         String h = host.toLowerCase().trim();
         if (h.startsWith("ws://") || h.startsWith("wss://") || h.startsWith("http://") || h.startsWith("https://")) {
             return true;
-        }
-        if (GameOptions.isEahubClassic(host)) {
-            return false;
         }
         if (h.endsWith(":27312") || h.endsWith(":27313") || h.contains("postoffice")) {
             return false;
@@ -282,10 +290,6 @@ public final class ServerApiClient {
     }
 
     public void queryServerPlayers(Context context, Runnable onDone) {
-        if (!GameOptions.isDisplayLogsEnabled(context)) {
-            if (onDone != null) onDone.run();
-            return;
-        }
         String server = GameOptions.onlineServer(context);
         if (!isWsHost(server)) {
             if (onDone != null) onDone.run();

@@ -192,9 +192,7 @@ public final class AdhocRoamClient {
                 Log.i(TAG, "connected to " + serverHost + " (VIP: " + virtualIp + ")");
                 NetLog.success(TAG, "Connected to switch: VIP=" + NetLog.ipStr(virtualIp));
                 configureNativeRoam(0x0A4D00FD); // Hub at 10.77.0.253
-                if (isDisplayLogsEnabled()) {
-                    new Thread(() -> apiClient.pollServerPlayers(serverHost, roomName, null), "InitialPoller").start();
-                }
+                new Thread(() -> apiClient.pollServerPlayers(serverHost, roomName, null), "InitialPoller").start();
             }
 
             @Override
@@ -431,9 +429,7 @@ public final class AdhocRoamClient {
     private void startPlayersPollerThread() {
         playersPollerThread = new Thread(() -> {
             while (running.get()) {
-                if (isDisplayLogsEnabled()) {
-                    pollServerPlayers();
-                }
+                pollServerPlayers();
                 for (int i = 0; i < 50 && running.get(); i++) {
                     try { Thread.sleep(100); } catch (InterruptedException ignored) {}
                 }
@@ -444,15 +440,14 @@ public final class AdhocRoamClient {
     }
 
     public void pollServerPlayers() {
-        if (!isDisplayLogsEnabled()) return;
         apiClient.pollServerPlayers(serverHost, roomName, null);
     }
 
+    public void resetServerStats() {
+        apiClient.resetStats();
+    }
+
     public void queryServerPlayers(Context context, Runnable onDone) {
-        if (!GameOptions.isDisplayLogsEnabled(context)) {
-            if (onDone != null) onDone.run();
-            return;
-        }
         apiClient.queryServerPlayers(context, onDone);
     }
 

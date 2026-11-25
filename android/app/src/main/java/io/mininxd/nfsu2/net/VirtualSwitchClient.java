@@ -14,12 +14,17 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -61,11 +66,16 @@ public final class VirtualSwitchClient {
         void onDatagramReceived(int srcVip, int sport, byte[] payload);
     }
 
+    private static final long UDP_ONLINE_PORT_MASK = 0x80000000L | (1L << (3658 % 31));
+
     private static String sLastToken = "";
     private static String sLastVipStr = "";
+    private static String sLastHost = "";
+    private static long sLastDisconnectedMs = 0L;
 
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicBoolean connected = new AtomicBoolean(false);
+    private final Set<Integer> livePeerVips = Collections.synchronizedSet(new HashSet<>());
     private volatile boolean wasResumed = false;
     private Thread wsThread;
     private Socket wsSocket;
@@ -86,6 +96,7 @@ public final class VirtualSwitchClient {
             SharedPreferences prefs = this.context.getSharedPreferences("nfsu2_switch", Context.MODE_PRIVATE);
             if (sLastToken.isEmpty()) sLastToken = prefs.getString("switch_token", "");
             if (sLastVipStr.isEmpty()) sLastVipStr = prefs.getString("switch_vip_str", "");
+            if (sLastHost.isEmpty()) sLastHost = prefs.getString("switch_host", "");
         }
     }
 
@@ -186,7 +197,7 @@ public final class VirtualSwitchClient {
                             wsSocket.connect(new java.net.InetSocketAddress(host, curPort), 6000);
                         }
                         wsSocket.setTcpNoDelay(true);
-                        wsSocket.setSoTimeout(35000);
+                        wsSocket.setSoTimeout(5000);
 
                         OutputStream rawOut = new BufferedOutputStream(wsSocket.getOutputStream());
                         InputStream rawIn = new BufferedInputStream(wsSocket.getInputStream());
@@ -195,13 +206,17 @@ public final class VirtualSwitchClient {
                             wsOut = rawOut;
                         }
 
-                        // RFC 6455 Handshake
-                        boolean isResume = (sLastToken != null && !sLastToken.isEmpty());
+                        // RFC 6455 Handshake: resume only if same host disconnected recently; otherwise /lan?queue
+                        long nowMs = System.currentTimeMillis();
+                        boolean isResume = (sLastToken != null && !sLastToken.isEmpty()
+                                && host.equalsIgnoreCase(sLastHost)
+                                && sLastDisconnectedMs > 0L
+                                && (nowMs - sLastDisconnectedMs) < 55000L);
                         wasResumed = isResume;
                         String secKey = Base64.encodeToString(UUID.randomUUID().toString().substring(0, 16).getBytes(StandardCharsets.US_ASCII), Base64.NO_WRAP);
                         String origin = (curSsl ? "https://" : "http://") + host + (curPort == 80 || curPort == 443 ? "" : (":" + curPort));
                         String hostHeader = host + (curPort == 80 || curPort == 443 ? "" : (":" + curPort));
-                        String path = isResume ? "/lan?resume" : "/lan";
+                        String path = isResume ? "/lan?resume" : "/lan?queue";
                         String handshake = "GET " + path + " HTTP/1.1\r\n" +
                                 "Host: " + hostHeader + "\r\n" +
                                 "Upgrade: websocket\r\n" +
@@ -251,8 +266,10 @@ public final class VirtualSwitchClient {
                             hello.put("t", "hello");
                             hello.put("name", playerName != null ? playerName : "Racer");
                             hello.put("bundle", 0);
+                            hello.put("compact", 0);
                             hello.put("deltas", 1);
-                            hello.put("lan", 0);
+                            hello.put("lan", 1);
+                            hello.put("udp", UDP_ONLINE_PORT_MASK);
                             if (sLastVipStr != null && !sLastVipStr.isEmpty()) {
                                 hello.put("vip", sLastVipStr);
                             }
@@ -263,7 +280,16 @@ public final class VirtualSwitchClient {
 
                         // Receive loop
                         while (running.get()) {
-                            int b0 = rawIn.read();
+                            int b0;
+                            try {
+                                b0 = rawIn.read();
+                            } catch (SocketTimeoutException timeout) {
+                                if (System.currentTimeMillis() - lastPingTime > 2500) {
+                                    sendPing();
+                                    lastPingTime = System.currentTimeMillis();
+                                }
+                                continue;
+                            }
                             if (b0 == -1) break;
                             int b1 = rawIn.read();
                             if (b1 == -1) break;
@@ -332,7 +358,9 @@ public final class VirtualSwitchClient {
                             }
                         }
                     } finally {
-                        connected.set(false);
+                        if (connected.getAndSet(false)) {
+                            sLastDisconnectedMs = System.currentTimeMillis();
+                        }
                         synchronized (this) {
                             wsOut = null;
                         }
@@ -367,11 +395,15 @@ public final class VirtualSwitchClient {
                 String token = obj.optString("token", "");
                 if (token != null && !token.isEmpty()) sLastToken = token;
                 if (vipStr != null && !vipStr.isEmpty()) sLastVipStr = vipStr;
+                sLastHost = io.mininxd.nfsu2.GameOptions.extractHost(serverHost);
+                sLastDisconnectedMs = 0L;
+                livePeerVips.clear();
                 if (context != null) {
                     try {
                         context.getSharedPreferences("nfsu2_switch", Context.MODE_PRIVATE).edit()
                                 .putString("switch_token", sLastToken)
                                 .putString("switch_vip_str", sLastVipStr)
+                                .putString("switch_host", sLastHost)
                                 .apply();
                     } catch (Exception ignored) {}
                 }
@@ -380,24 +412,26 @@ public final class VirtualSwitchClient {
                 connected.set(true);
 
                 if (!wasResumed) {
-                    // Send hello packet with lan=0, bundle=0 for immediate Free Roam datagrams
                     JSONObject hello = new JSONObject();
                     hello.put("t", "hello");
                     hello.put("name", playerName != null ? playerName : "Racer");
                     hello.put("bundle", 0);
+                    hello.put("compact", 0);
                     hello.put("deltas", 1);
-                    hello.put("lan", 0);
-                    if (sLastToken != null && !sLastToken.isEmpty()) {
+                    hello.put("lan", 1);
+                    hello.put("udp", UDP_ONLINE_PORT_MASK);
+                    if (sLastToken != null && !sLastToken.isEmpty() && sLastVipStr != null && !sLastVipStr.isEmpty()) {
                         hello.put("token", sLastToken);
-                    }
-                    if (sLastVipStr != null && !sLastVipStr.isEmpty()) {
                         hello.put("vip", sLastVipStr);
                     }
-                    NetLog.step(TAG, "Sending hello to switch: bundle=0, lan=0, name=" + playerName);
+                    NetLog.step(TAG, "Sending hello to switch: bundle=0, compact=0, lan=1, name=" + playerName);
                     sendWsFrame(1, hello.toString().getBytes(StandardCharsets.UTF_8));
                 }
 
                 if (listener != null) listener.onConnected(myVirtualIp);
+            } else if ("queue".equals(type)) {
+                int pos = obj.optInt("pos", obj.optInt("place", 0));
+                NetLog.step(TAG, "Waiting in /lan switch queue" + (pos > 0 ? (" (position " + pos + ")") : ""));
             } else if ("ping".equals(type)) {
                 int id = obj.optInt("id", 0);
                 JSONObject pong = new JSONObject();
@@ -406,16 +440,49 @@ public final class VirtualSwitchClient {
                 sendWsFrame(1, pong.toString().getBytes(StandardCharsets.UTF_8));
             } else if ("peers".equals(type)) {
                 JSONArray arr = obj.optJSONArray("peers");
-                if (arr != null && listener != null) {
-                    listener.onPeersCountUpdated(arr.length());
+                if (arr != null) {
+                    synchronized (livePeerVips) {
+                        livePeerVips.clear();
+                        for (int i = 0; i < arr.length(); i++) {
+                            JSONObject p = arr.optJSONObject(i);
+                            if (p != null && !p.optBoolean("server", false)) {
+                                int vip = p.optInt("vip", 0);
+                                if (vip != 0 && vip != myVirtualIp) {
+                                    livePeerVips.add(vip);
+                                }
+                            }
+                        }
+                    }
+                    if (listener != null) {
+                        listener.onPeersCountUpdated(livePeerVips.size());
+                    }
                 }
             } else if ("delta".equals(type)) {
                 JSONArray added = obj.optJSONArray("peers");
                 JSONArray gone = obj.optJSONArray("gone");
-                int addedCount = added != null ? added.length() : 0;
-                int goneCount = gone != null ? gone.length() : 0;
+                synchronized (livePeerVips) {
+                    if (added != null) {
+                        for (int i = 0; i < added.length(); i++) {
+                            JSONObject p = added.optJSONObject(i);
+                            if (p != null && !p.optBoolean("server", false)) {
+                                int vip = p.optInt("vip", 0);
+                                if (vip != 0 && vip != myVirtualIp) {
+                                    livePeerVips.add(vip);
+                                }
+                            }
+                        }
+                    }
+                    if (gone != null) {
+                        for (int i = 0; i < gone.length(); i++) {
+                            int vip = gone.optInt(i, 0);
+                            if (vip != 0) {
+                                livePeerVips.remove(vip);
+                            }
+                        }
+                    }
+                }
                 if (listener != null) {
-                    listener.onPeersCountUpdated(addedCount - goneCount);
+                    listener.onPeersCountUpdated(livePeerVips.size());
                 }
             }
         } catch (Exception e) {

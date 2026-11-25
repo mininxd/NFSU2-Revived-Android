@@ -3921,8 +3921,10 @@ static void roam_android_install_hooks(void) {
         }
     }
 
-    // Widen checkGuestProgress render-thread slice (3 ms -> 33 ms) and tighten worker slice (500 us -> 200 us)
-    // to eliminate mid-frame guest thread handover stalls on 30-60 FPS mobile frames while keeping workers responsive.
+    // Tune checkGuestProgress scheduler slices for smooth city-area streaming without handover thrashing:
+    // render slice: 3 ms -> 8 ms (0x007a1200 ns); worker slice: 500 us -> 1.5 ms (0x0016e360 ns).
+    // checkGuestProgress only yields when a worker (e.g. L5RA.BUN area streamer) is runnable;
+    // giving workers 1.5 ms slices avoids zone-boundary stalls while keeping steady driving handover-free.
     uint32_t *slice_insns = (uint32_t *)(lib_base + 0x477ae0);
     if (slice_insns[0] == 0x5294240au &&
         slice_insns[2] == 0x72a000eau &&
@@ -3933,14 +3935,14 @@ static void roam_android_install_hooks(void) {
         uintptr_t sp_start = (uintptr_t)&slice_insns[0] & ~((uintptr_t)page_sz - 1);
         uintptr_t sp_end = ((uintptr_t)&slice_insns[6] + (uintptr_t)page_sz - 1) & ~((uintptr_t)page_sz - 1);
         if (mprotect((void *)sp_start, sp_end - sp_start, PROT_READ | PROT_WRITE | PROT_EXEC) == 0) {
-            slice_insns[0] = 0x5281a80au; /* mov  w10, #0x0d40 */
-            slice_insns[2] = 0x72a0006au; /* movk w10, #0x3, lsl #16   -> 200,000 ns (200 us) worker slice */
-            slice_insns[4] = 0x52914809u; /* mov  w9,  #0x8a40 */
-            slice_insns[5] = 0x72a03ee9u; /* movk w9,  #0x1f7, lsl #16 -> 33,000,000 ns (33 ms) render slice */
+            slice_insns[0] = 0x529c6c0au; /* mov  w10, #0xe360 */
+            slice_insns[2] = 0x72a002cau; /* movk w10, #0x16, lsl #16 -> 1,500,000 ns (1.5 ms) worker slice */
+            slice_insns[4] = 0x52824009u; /* mov  w9,  #0x1200 */
+            slice_insns[5] = 0x72a00f49u; /* movk w9,  #0x7a, lsl #16 -> 8,000,000 ns (8 ms) render slice */
             __builtin___clear_cache((char *)&slice_insns[0], (char *)&slice_insns[6]);
             mprotect((void *)sp_start, sp_end - sp_start, PROT_READ | PROT_EXEC);
             __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook",
-                "Patched checkGuestProgress slices: render 3ms->33ms, worker 500us->200us at %p",
+                "Patched checkGuestProgress slices: render 3ms->8ms, worker 500us->1.5ms at %p",
                 (void *)&slice_insns[0]);
         }
     }
@@ -3999,7 +4001,7 @@ static void roam_android_install_hooks(void) {
         }
     }
 
-    // Reduce checkGuestProgress clock/TLS polling frequency by 16x (64 -> 1024 yields per check)
+    // Reduce checkGuestProgress clock/TLS polling frequency by 4x (64 -> 256 yields per check)
     uint32_t *yield_insns = (uint32_t *)(lib_base + 0x477a98);
     if (yield_insns[0] == 0xb9418d09u &&
         yield_insns[1] == 0x11000529u &&
@@ -4008,11 +4010,11 @@ static void roam_android_install_hooks(void) {
         uintptr_t yp_start = (uintptr_t)&yield_insns[2] & ~((uintptr_t)page_sz - 1);
         uintptr_t yp_end = ((uintptr_t)&yield_insns[3] + (uintptr_t)page_sz - 1) & ~((uintptr_t)page_sz - 1);
         if (mprotect((void *)yp_start, yp_end - yp_start, PROT_READ | PROT_WRITE | PROT_EXEC) == 0) {
-            yield_insns[2] = 0x7200253fu; /* tst w9, #0x3ff (1024 yields) */
+            yield_insns[2] = 0x72001d3fu; /* tst w9, #0xff (256 yields) */
             __builtin___clear_cache((char *)&yield_insns[2], (char *)&yield_insns[3]);
             mprotect((void *)yp_start, yp_end - yp_start, PROT_READ | PROT_EXEC);
             __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook",
-                "Patched checkGuestProgress yield mask: 64 -> 1024 at %p",
+                "Patched checkGuestProgress yield mask: 64 -> 256 at %p",
                 (void *)&yield_insns[2]);
         }
     }
@@ -4118,15 +4120,31 @@ static void resolution_frame_tick(void) {
 }
 
 static void lobby_frame_tick(void) {
+    static int s_lobby_checked = 0;
+    static int s_strip_ssl = 0;
     static int s_lobby_patched = 0;
     if (s_lobby_patched || !g_p_mem_base || !*g_p_mem_base) return;
+    if (!s_lobby_checked) {
+        s_lobby_checked = 1;
+        /* Only strip '*' (DirtySock SSL prefix) when using nfsu2-web WSS bridge (LocalOnlineBridge).
+         * Classic eahub.eu requires DirtySock SSL and explicitly rejects plain TCP with an SSL bypass error. */
+        const char *mode = getenv("NFSU2_ONLINE_MODE");
+        s_strip_ssl = (mode && strcmp(mode, "wss") == 0);
+        if (!s_strip_ssl) {
+            s_lobby_patched = 1;
+            __android_log_print(ANDROID_LOG_INFO, "NFSU2",
+                "roam: classic online mode active; keeping '*' SSL prefix at 0x007fbdbc for eahub.eu");
+            return;
+        }
+    }
     if (rh_mem_committed(0x007fbdbcu, 16)) {
         uint8_t *p = (uint8_t *)GPTR(0x007fbdbcu);
         if (p && p[0] == '*') {
             memmove(p, p + 1, 15);
             p[15] = '\0';
             s_lobby_patched = 1;
-            __android_log_print(ANDROID_LOG_INFO, "NFSU2", "roam: patched 0x007fbdbc: removed '*' from lobby host for plain TCP");
+            __android_log_print(ANDROID_LOG_INFO, "NFSU2",
+                "roam: patched 0x007fbdbc: removed '*' from lobby host for nfsu2-web WSS plain TCP bridge");
         }
     }
 }

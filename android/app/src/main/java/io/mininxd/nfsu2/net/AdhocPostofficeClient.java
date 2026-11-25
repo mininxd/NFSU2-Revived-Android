@@ -10,7 +10,9 @@ import java.io.OutputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
@@ -137,8 +139,10 @@ public final class AdhocPostofficeClient {
             while (running.get()) {
                 try {
                     Log.i(TAG, "Connecting to adhocctl " + serverHost + ":" + GameOptions.ADHOCCTL_PORT);
-                    adhocctlSocket = new Socket(serverHost, GameOptions.ADHOCCTL_PORT);
-                    adhocctlSocket.setSoTimeout(45000);
+                    NetLog.step(TAG, "Connecting to adhocctl " + serverHost + ":" + GameOptions.ADHOCCTL_PORT);
+                    adhocctlSocket = new Socket();
+                    adhocctlSocket.connect(new InetSocketAddress(serverHost, GameOptions.ADHOCCTL_PORT), 6000);
+                    adhocctlSocket.setSoTimeout(5000);
                     adhocctlSocket.setTcpNoDelay(true);
 
                     OutputStream out = new BufferedOutputStream(adhocctlSocket.getOutputStream());
@@ -171,6 +175,7 @@ public final class AdhocPostofficeClient {
                     out.flush();
 
                     Log.i(TAG, "Adhocctl login and join room '" + adhocGroup + "' sent successfully");
+                    NetLog.step(TAG, "Adhocctl login and join room '" + adhocGroup + "' sent");
                     long lastPing = System.currentTimeMillis();
 
                     while (running.get()) {
@@ -180,7 +185,12 @@ public final class AdhocPostofficeClient {
                             lastPing = System.currentTimeMillis();
                         }
 
-                        int opcode = in.read();
+                        int opcode;
+                        try {
+                            opcode = in.read();
+                        } catch (SocketTimeoutException timeout) {
+                            continue;
+                        }
                         if (opcode == -1) break;
 
                         handleAdhocctlPacket((byte) opcode, in);
@@ -189,6 +199,7 @@ public final class AdhocPostofficeClient {
                     if (running.get()) {
                         String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
                         Log.w(TAG, "Adhocctl connection error to " + serverHost + ": " + errMsg + ", retrying in 5s...");
+                        NetLog.fail(TAG, "Adhocctl connection error to " + serverHost + ": " + errMsg, e);
                         if (listener != null) listener.onDisconnected(errMsg);
                         sleepQuietly(5000);
                     }
@@ -204,13 +215,16 @@ public final class AdhocPostofficeClient {
 
     private void handleAdhocctlPacket(byte opcode, InputStream in) throws Exception {
         switch (opcode) {
+            case OPCODE_PING:
+                break;
             case OPCODE_CONNECT_BSSID: {
                 byte[] bssid = readFully(in, 6);
                 boolean wasConnected = connected.getAndSet(true);
                 String bssidStr = formatMac(bssid);
                 Log.i(TAG, "Joined room group BSSID: " + bssidStr);
-                if (!wasConnected && listener != null) {
-                    listener.onConnected(bssidStr);
+                if (!wasConnected) {
+                    NetLog.success(TAG, "Adhocctl joined room BSSID: " + bssidStr);
+                    if (listener != null) listener.onConnected(bssidStr);
                 }
                 break;
             }
@@ -227,6 +241,7 @@ public final class AdhocPostofficeClient {
                 if (!connected.getAndSet(true)) {
                     String adhocGroup = (roomName != null && !roomName.isEmpty()) ? roomName : "FREEROAM";
                     Log.i(TAG, "Connected to room group: " + adhocGroup);
+                    NetLog.success(TAG, "Adhocctl connected to room group: " + adhocGroup);
                     if (listener != null) listener.onConnected(adhocGroup);
                 }
 
@@ -274,7 +289,8 @@ public final class AdhocPostofficeClient {
             while (running.get()) {
                 try {
                     Log.i(TAG, "Connecting to postoffice " + serverHost + ":" + GameOptions.POSTOFFICE_PORT);
-                    postofficeSocket = new Socket(serverHost, GameOptions.POSTOFFICE_PORT);
+                    postofficeSocket = new Socket();
+                    postofficeSocket.connect(new InetSocketAddress(serverHost, GameOptions.POSTOFFICE_PORT), 6000);
                     postofficeSocket.setTcpNoDelay(true);
 
                     synchronized (this) {
@@ -305,6 +321,7 @@ public final class AdhocPostofficeClient {
                     }
 
                     Log.i(TAG, "Postoffice PDP registered on port " + DEFAULT_GAME_PORT);
+                    NetLog.success(TAG, "Postoffice PDP registered on " + serverHost + ":" + GameOptions.POSTOFFICE_PORT);
 
                     byte[] header = new byte[14];
                     byte[] parsedMac = new byte[6];
@@ -344,6 +361,7 @@ public final class AdhocPostofficeClient {
                 } catch (Exception e) {
                     if (running.get()) {
                         Log.w(TAG, "Postoffice connection error: " + e.getMessage() + ", reconnecting in 5s...");
+                        NetLog.fail(TAG, "Postoffice error: " + e.getMessage(), e);
                         sleepQuietly(5000);
                     }
                 } finally {

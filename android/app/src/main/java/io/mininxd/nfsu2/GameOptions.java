@@ -233,9 +233,23 @@ public final class GameOptions {
      * the classic EA Nation / Adhoc Hub running original DirtySock TCP protocol.
      * Classic servers must NOT go through LocalOnlineBridge (WebSocket path).
      */
-    public static boolean isEahubClassic(String server) {
-        if (server == null) return false;
+    public static String extractHost(String server) {
+        if (server == null) return "";
         String s = server.trim().toLowerCase(java.util.Locale.US);
+        if (s.startsWith("http://")) s = s.substring(7);
+        else if (s.startsWith("https://")) s = s.substring(8);
+        else if (s.startsWith("ws://")) s = s.substring(5);
+        else if (s.startsWith("wss://")) s = s.substring(6);
+        int slash = s.indexOf('/');
+        if (slash >= 0) s = s.substring(0, slash);
+        int colon = s.indexOf(':');
+        if (colon >= 0) s = s.substring(0, colon);
+        while (s.endsWith(".")) s = s.substring(0, s.length() - 1);
+        return s;
+    }
+
+    public static boolean isEahubClassic(String server) {
+        String s = extractHost(server);
         return s.equals("eahub.eu") || s.equals("adhoc.eahub.eu")
                 || s.endsWith(".eahub.eu");
     }

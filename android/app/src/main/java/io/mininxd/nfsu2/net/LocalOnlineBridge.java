@@ -208,6 +208,12 @@ public final class LocalOnlineBridge {
                 conn.localOut = localSocket.getOutputStream();
                 InputStream localIn = localSocket.getInputStream();
 
+                // Wait briefly if the /lan WebSocket switch is still finishing its TLS/101 handshake
+                long waitStart = System.currentTimeMillis();
+                while (running.get() && !wsClient.isConnected() && (System.currentTimeMillis() - waitStart) < 4000L) {
+                    try { Thread.sleep(50); } catch (InterruptedException ie) { break; }
+                }
+
                 // Send TCP SYN (op 1) to 10.77.0.1:targetPort
                 Log.i(TAG, "Connecting TCP stream from local :" + listenPort + " to 10.77.0.1:" + targetPort + " (cid=" + cid + ", clientPort=" + localPort + ")");
                 NetLog.step(TAG, "DirtySock connected to 127.0.0.1:" + listenPort + ", sending TCP SYN to 10.77.0.1:" + targetPort + " (cid=" + cid + ")");

@@ -17,18 +17,38 @@ pub const PORT_BUDDY: u16 = 13505;
 /// Default socket probe timeout in milliseconds
 pub const DEFAULT_PROBE_TIMEOUT_MS: u64 = 4000;
 
-/// Checks if the configured online server is classic EA Nation / eahub.eu.
-/// Classic servers use direct TCP sockets and must NOT be routed through WebSocket LocalOnlineBridge.
-pub fn is_eahub_classic(server: &str) -> bool {
-    let s = server.trim().to_ascii_lowercase();
-    if s.is_empty() {
-        return false;
+/// Extracts a normalized lowercase hostname (without scheme, path, or port).
+fn extract_host_lower(server: &str) -> String {
+    let mut s = server.trim().to_ascii_lowercase();
+    for prefix in ["https://", "http://", "wss://", "ws://"] {
+        if let Some(rest) = s.strip_prefix(prefix) {
+            s = rest.to_string();
+            break;
+        }
     }
-    s == "eahub.eu" || s == "adhoc.eahub.eu" || s.ends_with(".eahub.eu")
+    if let Some(idx) = s.find('/') {
+        s.truncate(idx);
+    }
+    if let Some(idx) = s.find(':') {
+        s.truncate(idx);
+    }
+    s
 }
 
-/// Determines whether a given server should be routed through LocalOnlineBridge (WebSocket path).
-/// Returns true only if non-empty, not classic eahub, and contains ws/web markers.
+/// Checks if the configured online server is classic EA Nation / eahub.eu.
+/// Classic servers use direct TCP+SSL sockets and Prometheus Adhoc (adhoc.eahub.eu)
+/// and must NOT be routed through the WebSocket LocalOnlineBridge.
+pub fn is_eahub_classic(server: &str) -> bool {
+    let host = extract_host_lower(server);
+    if host.is_empty() {
+        return false;
+    }
+    host == "eahub.eu" || host == "adhoc.eahub.eu" || host.ends_with(".eahub.eu")
+}
+
+/// Determines whether a given server should be routed through LocalOnlineBridge (HTTPS + WSS nfsu2-web path).
+/// Default eahub.eu / *.eahub.eu (and explicit Prometheus Adhoc hosts) use classic logic (false).
+/// Any custom server (such as nfsu2.xyz) uses the modern nfsu2-web HTTPS + WSS bridge (true).
 pub fn should_use_local_bridge(server: &str) -> bool {
     let s = server.trim();
     if s.is_empty() {
@@ -37,14 +57,22 @@ pub fn should_use_local_bridge(server: &str) -> bool {
     if is_eahub_classic(s) {
         return false;
     }
-    // Check if it's explicitly a WebSocket host or custom server
     let lower = s.to_ascii_lowercase();
-    lower.starts_with("ws://")
+    if lower.starts_with("ws://")
         || lower.starts_with("wss://")
-        || lower.contains("nfsu2-web")
-        || lower.contains(":8080")
-        || lower.contains(":8000")
-        || lower.contains(":3000")
+        || lower.starts_with("http://")
+        || lower.starts_with("https://")
+    {
+        return true;
+    }
+    if lower.ends_with(":27312") || lower.ends_with(":27313") || lower.contains("postoffice") {
+        return false;
+    }
+    let host = extract_host_lower(&lower);
+    if host.starts_with("adhoc.") && !host.contains("nfsu2") {
+        return false;
+    }
+    true
 }
 
 /// Synchronous TCP reachability probe with timeout.
@@ -168,6 +196,9 @@ mod tests {
     fn test_should_use_bridge() {
         assert!(!should_use_local_bridge("eahub.eu"));
         assert!(!should_use_local_bridge("adhoc.eahub.eu"));
+        assert!(!should_use_local_bridge("adhoc.example.com:27312"));
+        assert!(should_use_local_bridge("nfsu2.xyz"));
+        assert!(should_use_local_bridge("https://nfsu2.xyz"));
         assert!(should_use_local_bridge("ws://192.168.1.100:8080"));
         assert!(should_use_local_bridge("nfsu2-web.online"));
     }

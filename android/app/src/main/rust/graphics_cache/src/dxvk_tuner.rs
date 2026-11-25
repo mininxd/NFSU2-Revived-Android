@@ -72,7 +72,7 @@ impl Default for DxvkProfileConfig {
             no_explicit_front_buffer: true,
             tear_free: false,
             max_frame_latency: 2,
-            num_compiler_threads: 4,
+            num_compiler_threads: 2,
         }
     }
 }
@@ -189,7 +189,11 @@ impl DxvkProfileConfig {
         s.push_str("dxvk.enableUnifiedImageLayouts = True\n");
         s.push_str("dxvk.enableImplicitResolves = False\n");
         s.push_str("dxvk.enableMemoryDefrag = False\n");
-        s.push_str("dxvk.trackPipelineLifetime = True\n");
+        s.push_str(if self.track_pipeline_lifetime {
+            "dxvk.trackPipelineLifetime = True\n"
+        } else {
+            "dxvk.trackPipelineLifetime = False\n"
+        });
 
         s.push_str("d3d9.deferSurfaceCreation = True\n");
         s.push_str("d3d9.tearFree = False\n");
@@ -383,6 +387,8 @@ mod tests {
         assert!(formatted.contains("d3d9.useFP16 = Auto"));
         assert!(formatted.contains("d3d9.deviceLocalConstantBuffers = Auto"));
         assert!(formatted.contains("d3d9.cachedWriteOnlyBuffers = True"));
+        assert!(formatted.contains("dxvk.trackPipelineLifetime = False"));
+        assert!(formatted.contains("dxvk.numCompilerThreads = 2"));
     }
 
     #[test]

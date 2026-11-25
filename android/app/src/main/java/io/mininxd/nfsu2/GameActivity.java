@@ -562,12 +562,17 @@ public final class GameActivity extends NativeActivity {
         String server = launch.getStringExtra("onlineServer");
         String configuredServer = GameOptions.validServer(server) ? server : GameOptions.onlineServer(this);
         boolean useLocalBridge = io.mininxd.nfsu2.net.EahubClassicOnline.shouldUseLocalBridge(configuredServer);
+        try {
+            // Default eahub.eu uses classic SSL prefix (*pcnfs05.ea.com) and Prometheus Adhoc;
+            // custom servers (e.g. nfsu2.xyz) strip '*' and tunnel via HTTPS/WSS LocalOnlineBridge.
+            android.system.Os.setenv("NFSU2_ONLINE_MODE", useLocalBridge ? "wss" : "classic", true);
+        } catch (Throwable ignored) {}
         if (useLocalBridge) {
             // Modern nfsu2-web server: tunnel DirtySock through LocalOnlineBridge WebSocket
             nativeOnlineServer("127.0.0.1");
         } else {
             // Classic server (eahub.eu or custom): gethostbyname in guest_network.inc
-            // redirects all *.ea.com DNS lookups to this host directly over plain TCP.
+            // redirects all *.ea.com DNS lookups to this host directly over plain/SSL DirtySock.
             String eaNationServer = GameOptions.isEahubClassic(configuredServer) ? "eahub.eu" : configuredServer;
             nativeOnlineServer(eaNationServer);
         }
@@ -618,9 +623,24 @@ public final class GameActivity extends NativeActivity {
         boolean isWs = useLocalBridge;  // only WS-based servers need Adhoc via LocalOnlineBridge
         boolean roamEnabled = launch.getBooleanExtra("roamEnabled", GameOptions.isRoamEnabled(this));
         if (roamEnabled || isWs) {
-            String roamServer = launch.getStringExtra("roamServer");
-            if (roamServer == null || roamServer.isEmpty()) roamServer = GameOptions.roamServer(this);
-            else if (GameOptions.isEahubClassic(roamServer)) roamServer = GameOptions.DEFAULT_ROAM_SERVER;
+            String roamServer;
+            if (isWs) {
+                // Custom nfsu2-web server hosts both /players over HTTPS and /lan over WSS on configuredServer
+                String rawRoam = launch.getStringExtra("roamServer");
+                if (rawRoam != null && !rawRoam.trim().isEmpty()
+                        && io.mininxd.nfsu2.net.EahubClassicOnline.shouldUseLocalBridge(rawRoam)) {
+                    roamServer = rawRoam.trim();
+                } else {
+                    roamServer = configuredServer;
+                }
+            } else {
+                String rawRoam = launch.getStringExtra("roamServer");
+                if (rawRoam == null || rawRoam.trim().isEmpty() || GameOptions.isEahubClassic(rawRoam)) {
+                    roamServer = GameOptions.DEFAULT_ROAM_SERVER;
+                } else {
+                    roamServer = rawRoam.trim();
+                }
+            }
             String roamRoom = launch.hasExtra("roamRoom") ? launch.getStringExtra("roamRoom") : GameOptions.roamRoom(this);
             if (roamRoom == null) roamRoom = "";
             String roamName = launch.getStringExtra("roamName");
