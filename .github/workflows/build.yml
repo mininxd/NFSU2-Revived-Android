@@ -128,6 +128,56 @@ jobs:
           CLANG_BIN="$CLANG_BIN" ./scripts/build_adrenotools_hooks.sh
           ls -lh android/app/src/main/jniLibs/arm64-v8a/lib*.so
 
+      - name: Cache Unicorn Engine x86-32 ARM64 Static Library
+        id: cache-unicorn
+        uses: actions/cache@v4
+        with:
+          path: /tmp/unicorn-arm64-cache
+          key: unicorn-2.1.1-x86-arm64-android26-v1
+
+      - name: Build Unicorn Engine (x86-32 JIT) & Native ASI Modloader (libnfsu2_asi.so)
+        run: |
+          NDK_DIR=$(find "$ANDROID_HOME/ndk" "$ANDROID_NDK_ROOT" /usr/local/lib/android/sdk/ndk -maxdepth 2 -name "build" 2>/dev/null | head -n 1 | xargs -r dirname)
+          CLANG_BIN=$(find "$ANDROID_HOME/ndk" "$ANDROID_NDK_ROOT" /usr/local/lib/android/sdk/ndk -name "aarch64-linux-android26-clang" 2>/dev/null | head -n 1)
+          if [ -z "$CLANG_BIN" ]; then
+            CLANG_BIN=$(find "$ANDROID_HOME/ndk" "$ANDROID_NDK_ROOT" /usr/local/lib/android/sdk/ndk -name "aarch64-linux-android28-clang" 2>/dev/null | head -n 1)
+          fi
+          if [ -z "$CLANG_BIN" ]; then
+            CLANG_BIN=$(find "$ANDROID_HOME/ndk" "$ANDROID_NDK_ROOT" /usr/local/lib/android/sdk/ndk -name "aarch64-linux-android*-clang" 2>/dev/null | grep -E "android(26|27|28|29|30|31|32|33|34|35)-clang" | sort -V | head -n 1)
+          fi
+          echo "NDK_DIR=$NDK_DIR CLANG_BIN=$CLANG_BIN"
+
+          if [ ! -f /tmp/unicorn-arm64-cache/libunicorn.a ]; then
+            echo "Cross-compiling Unicorn Engine 2.1.1 (x86 target only) for arm64-v8a..."
+            git clone --depth 1 --branch 2.1.1 https://github.com/unicorn-engine/unicorn.git /tmp/unicorn-src
+            cmake -S /tmp/unicorn-src -B /tmp/unicorn-build \
+              -DCMAKE_TOOLCHAIN_FILE="$NDK_DIR/build/cmake/android.toolchain.cmake" \
+              -DANDROID_ABI=arm64-v8a \
+              -DANDROID_PLATFORM=android-26 \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DUNICORN_ARCH=x86 \
+              -DBUILD_SHARED_LIBS=OFF \
+              -DUNICORN_BUILD_TESTS=OFF \
+              -DUNICORN_INSTALL=OFF
+            cmake --build /tmp/unicorn-build --target unicorn -j$(nproc)
+            mkdir -p /tmp/unicorn-arm64-cache/include
+            cp /tmp/unicorn-build/libunicorn.a /tmp/unicorn-arm64-cache/libunicorn.a
+            cp -r /tmp/unicorn-src/include/unicorn /tmp/unicorn-arm64-cache/include/
+            rm -rf /tmp/unicorn-src /tmp/unicorn-build
+          fi
+
+          echo "Building libnfsu2_asi.so..."
+          $CLANG_BIN -std=c11 -O3 -fomit-frame-pointer -funwind-tables -shared -fPIC -fno-strict-aliasing \
+            -I/tmp/unicorn-arm64-cache/include \
+            -Iandroid/app/src/main/cpp/asi \
+            android/app/src/main/cpp/asi/asi_log.c \
+            android/app/src/main/cpp/asi/asi_win32.c \
+            android/app/src/main/cpp/asi/asi_loader.c \
+            /tmp/unicorn-arm64-cache/libunicorn.a \
+            -lm -llog -ldl \
+            -o android/app/src/main/jniLibs/arm64-v8a/libnfsu2_asi.so
+          ls -lh android/app/src/main/jniLibs/arm64-v8a/libnfsu2_asi.so
+
       - name: Configure Gamefiles Direct Link from Secret (if set)
         env:
           GAMEFILES_URL: ${{ secrets.GAMEFILES_URL || secrets.GAMEFILES_ZIP_URL }}

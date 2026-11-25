@@ -402,9 +402,13 @@ public final class DiagnosticOverlay {
         float frameTimeMs = (lastFrameDurationMs > 0.0f) ? lastFrameDurationMs : ((fps > 0.0f) ? (1000.0f / fps) : 0.0f);
         float p1Low = 0.0f;
         if (fps > 0.5f) {
-            safeRecordFrameDuration((long)(frameTimeMs * 1_000_000.0f));
             if (safeGetFrameMetrics(frameMetricsBuffer) && frameMetricsBuffer[2] > 0.5f) {
                 p1Low = frameMetricsBuffer[2];
+            } else {
+                safeRecordFrameDuration((long)(frameTimeMs * 1_000_000.0f));
+                if (safeGetFrameMetrics(frameMetricsBuffer) && frameMetricsBuffer[2] > 0.5f) {
+                    p1Low = frameMetricsBuffer[2];
+                }
             }
         }
         if (fps <= 0.0f) {

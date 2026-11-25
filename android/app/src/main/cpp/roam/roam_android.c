@@ -6,6 +6,7 @@
 #include "roam_plat.h"
 #include "roam_affinity.h"
 #include "roam_powervr.h"
+#include "../asi/asi_loader.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -776,6 +777,7 @@ typedef struct {
 typedef void (*configure_res_modes_fn)(void);
 typedef int (*nfs_android_res_fn)(void);
 typedef uint8_t (*wsi_get_display_mode_fn)(void *monitor, uint32_t mode_num, DxvkWsiMode *mode);
+typedef void (*widescreen_init_fn)(const char *game_root);
 typedef void (*widescreen_set_res_fn)(unsigned width, unsigned height);
 typedef void (*widescreen_apply_fps_fn)(void);
 typedef void (*set_guest_frame_limit_fn)(uint32_t fps);
@@ -783,6 +785,7 @@ typedef void (*set_guest_frame_limit_fn)(uint32_t fps);
 static configure_res_modes_fn s_orig_configure_res_modes = NULL;
 static nfs_android_res_fn s_orig_nfs_android_res = NULL;
 static wsi_get_display_mode_fn s_orig_wsi_get_display_mode = NULL;
+static widescreen_init_fn s_orig_widescreen_init = NULL;
 static widescreen_set_res_fn s_orig_widescreen_set_res = NULL;
 static widescreen_apply_fps_fn s_orig_widescreen_apply_fps = NULL;
 static set_guest_frame_limit_fn s_fn_set_guest_frame_limit = NULL;
@@ -814,7 +817,7 @@ static recomp_void_func_t arm64_inline_hook(void *target_func, void *hook_func) 
     static uint8_t *s_tramp_page = NULL;
     static size_t s_tramp_offset = 0;
     if (!s_tramp_page) {
-        s_tramp_page = (uint8_t *)mmap(NULL, 8192, PROT_READ | PROT_WRITE | PROT_EXEC,
+        s_tramp_page = (uint8_t *)mmap(NULL, 65536, PROT_READ | PROT_WRITE | PROT_EXEC,
                                        MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
         if (s_tramp_page == MAP_FAILED) {
             s_tramp_page = NULL;
@@ -822,7 +825,7 @@ static recomp_void_func_t arm64_inline_hook(void *target_func, void *hook_func) 
             return NULL;
         }
     }
-    if (s_tramp_offset + 64 > 8192) {
+    if (s_tramp_offset + 64 > 65536) {
         __android_log_print(ANDROID_LOG_ERROR, "NFSU2-Hook", "trampoline page exhausted");
         return NULL;
     }
@@ -2594,21 +2597,201 @@ static void hook_nfs_widescreen_apply_frame_rate(void) {
 }
 
 /* =========================================================================
- * Native In-Game "Advanced Options" Menu (Bottom of Display Options)
+ * Native In-Game "Advanced Options" & "Modloader" Menus (Display Options)
  * ========================================================================= */
-#define ADV_OPT_COUNT 2
+#define ADV_OPT_COUNT     2
+#define ADV_MAX_WIDGETS   24
+#define MOD_WIDGET_BASE   100
+#define MOD_MAX_UI_ITEMS  14
 
 typedef struct {
     uint32_t ptr;
     int      id;
 } AdvWidgetSlot;
 
-static uint32_t s_adv_btn_ptr = 0u;
-static int      s_adv_screen_active = 0;
-static uint32_t s_adv_screen_ptr = 0u;
-static AdvWidgetSlot s_adv_widgets[ADV_OPT_COUNT];
-static int      s_adv_widget_count = 0;
-static uint32_t s_adv_str_buf = 0u;
+typedef struct {
+    char name[128];
+    int  builtin;
+    int  enabled_cfg;
+    int  boot_enabled;
+} ModUiEntry;
+
+static uint32_t      s_adv_btn_ptr = 0u;
+static uint32_t      s_mod_btn_ptr = 0u;
+static int           s_adv_screen_active = 0; /* 0 = stock, 1 = Advanced Options, 2 = Modloader */
+static uint32_t      s_adv_screen_ptr = 0u;
+static AdvWidgetSlot s_adv_widgets[ADV_MAX_WIDGETS];
+static int           s_adv_widget_count = 0;
+static uint32_t      s_adv_str_buf = 0u;
+
+static int           s_modloader_boot_enabled = 0;
+static int           s_modloader_cfg_enabled = 0;
+static int           s_modloader_cfg_explicit = 0;
+static int           s_modloader_loaded_count = 0;
+static ModUiEntry    s_mod_ui_entries[MOD_MAX_UI_ITEMS];
+static int           s_mod_ui_count = 0;
+
+static const char *modloader_game_dir(void) {
+    const char *d = getenv("NFSU2_DATA_DIR");
+    return (d && d[0]) ? d : "/storage/emulated/0/nfsu2";
+}
+
+static int modloader_is_builtin_asi(const char *name) {
+    if (!name) return 0;
+    return (strcasecmp(name, "NFSUnderground2.WidescreenFix.asi") == 0 ||
+            strcasecmp(name, "NFSU2FreeRoam.asi") == 0);
+}
+
+static void modloader_load_state(int is_boot) {
+    const char *gdir = modloader_game_dir();
+    const char *env = getenv("NFSU2_ASI_LOADER");
+    int env_on = (env && (strcmp(env, "1") == 0 || strcasecmp(env, "on") == 0 || strcasecmp(env, "true") == 0));
+
+    s_modloader_cfg_explicit = 0;
+    s_modloader_cfg_enabled = env_on;
+    s_mod_ui_count = 0;
+
+    char scripts_dir[1024];
+    snprintf(scripts_dir, sizeof(scripts_dir), "%s/scripts", gdir);
+    DIR *dp = opendir(scripts_dir);
+    if (dp) {
+        struct dirent *de;
+        while ((de = readdir(dp)) != NULL && s_mod_ui_count < MOD_MAX_UI_ITEMS) {
+            size_t nl = strlen(de->d_name);
+            if (nl <= 4 || strcasecmp(de->d_name + nl - 4, ".asi") != 0) continue;
+            ModUiEntry *e = &s_mod_ui_entries[s_mod_ui_count++];
+            memset(e, 0, sizeof(*e));
+            snprintf(e->name, sizeof(e->name), "%s", de->d_name);
+            e->builtin = modloader_is_builtin_asi(e->name);
+            e->enabled_cfg = e->builtin ? 0 : 1;
+            e->boot_enabled = e->enabled_cfg;
+        }
+        closedir(dp);
+    }
+
+    char cfg_path[1024];
+    snprintf(cfg_path, sizeof(cfg_path), "%s/scripts/modloader.cfg", gdir);
+    FILE *fp = fopen(cfg_path, "r");
+    if (fp) {
+        char line[512];
+        while (fgets(line, sizeof(line), fp)) {
+            char *p = line;
+            while (*p == ' ' || *p == '\t') p++;
+            if (strncasecmp(p, "enabled=", 8) == 0) {
+                s_modloader_cfg_enabled = (atoi(p + 8) != 0) ? 1 : 0;
+                s_modloader_cfg_explicit = 1;
+            } else if (strncasecmp(p, "mod.", 4) == 0) {
+                char *eq = strchr(p + 4, '=');
+                if (eq) {
+                    *eq = '\0';
+                    int val = (atoi(eq + 1) != 0) ? 1 : 0;
+                    for (int i = 0; i < s_mod_ui_count; i++) {
+                        if (strcasecmp(s_mod_ui_entries[i].name, p + 4) == 0) {
+                            s_mod_ui_entries[i].enabled_cfg = val;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        fclose(fp);
+    }
+
+    if (is_boot) {
+        s_modloader_boot_enabled = s_modloader_cfg_enabled;
+        for (int i = 0; i < s_mod_ui_count; i++) {
+            s_mod_ui_entries[i].boot_enabled = s_mod_ui_entries[i].enabled_cfg;
+        }
+    }
+}
+
+static void modloader_save_state(void) {
+    const char *gdir = modloader_game_dir();
+    char scripts_dir[1024], cfg_path[1024];
+    snprintf(scripts_dir, sizeof(scripts_dir), "%s/scripts", gdir);
+    mkdir(scripts_dir, 0775);
+    snprintf(cfg_path, sizeof(cfg_path), "%s/scripts/modloader.cfg", gdir);
+    FILE *fp = fopen(cfg_path, "w");
+    if (!fp) return;
+    fprintf(fp, "# NFSU2 Revived Android Modloader Config\n");
+    fprintf(fp, "enabled=%d\n", s_modloader_cfg_enabled ? 1 : 0);
+    for (int i = 0; i < s_mod_ui_count; i++) {
+        fprintf(fp, "mod.%s=%d\n", s_mod_ui_entries[i].name, s_mod_ui_entries[i].enabled_cfg ? 1 : 0);
+    }
+    fclose(fp);
+}
+
+static int asi_mem_committed_cb(uint32_t va, uint32_t len) {
+    return rh_mem_committed(va, len);
+}
+
+static void hook_nfs_widescreen_init(const char *game_root) {
+    if (s_orig_widescreen_init) {
+        s_orig_widescreen_init(game_root);
+    }
+    static int s_asi_booted = 0;
+    if (s_asi_booted) return;
+    s_asi_booted = 1;
+
+    roam_android_init_symbols();
+    modloader_load_state(1);
+    if (!s_modloader_boot_enabled) {
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-ASI",
+            "ASI Modloader OFF (0%% emulation overhead, libnfsu2_asi.so not loaded)");
+        return;
+    }
+
+    int any_enabled = 0;
+    for (int i = 0; i < s_mod_ui_count; i++) {
+        if (s_mod_ui_entries[i].enabled_cfg) any_enabled++;
+    }
+    if (any_enabled == 0) {
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-ASI",
+            "ASI Modloader ON but 0 enabled .asi files in scripts/ (staying pure native ARM64)");
+        return;
+    }
+
+    void *h_asi = dlopen("libnfsu2_asi.so", RTLD_NOW | RTLD_GLOBAL);
+    if (!h_asi) {
+        __android_log_print(ANDROID_LOG_ERROR, "NFSU2-ASI",
+            "Failed to dlopen libnfsu2_asi.so: %s", dlerror());
+        return;
+    }
+    typedef int (*asi_boot_fn)(const AsiHostBridge *);
+    asi_boot_fn fn_boot = (asi_boot_fn)dlsym(h_asi, "asi_loader_boot");
+    if (!fn_boot || !s_lib_base || !g_p_mem_base || !*g_p_mem_base) {
+        __android_log_print(ANDROID_LOG_ERROR, "NFSU2-ASI",
+            "asi_loader_boot symbol or guest base unavailable");
+        return;
+    }
+
+    AsiHostBridge br;
+    memset(&br, 0, sizeof(br));
+    br.game_dir           = modloader_game_dir();
+    br.lib_base           = s_lib_base;
+    br.p_mem_base         = (uint8_t **)g_p_mem_base;
+    br.p_eax              = g_p_eax;
+    br.p_ecx              = g_p_ecx;
+    br.p_edx              = g_p_edx;
+    br.p_ebx              = g_p_ebx;
+    br.p_esp              = g_p_esp;
+    br.p_ebp              = g_p_ebp;
+    br.p_esi              = g_p_esi;
+    br.p_edi              = g_p_edi;
+    br.p_fp_top           = (int32_t *)(s_lib_base + 0x97e781cu);
+    br.p_st               = (double *)(s_lib_base + 0x98004b8u);
+    br.p_fs_base          = (uint32_t *)(s_lib_base + 0x97e78f0u);
+    br.recomp_lookup      = (asi_recomp_lookup_fn_t)g_p_recomp_lookup;
+    br.arm64_inline_hook  = (asi_inline_hook_fn_t)arm64_inline_hook;
+    br.mem_committed      = asi_mem_committed_cb;
+    br.recomp_table       = (const void *)(s_lib_base + 0x976a050u);
+    br.recomp_table_count = *(const uint32_t *)(s_lib_base + 0x1e50b8u);
+
+    s_modloader_loaded_count = fn_boot(&br);
+    __android_log_print(ANDROID_LOG_INFO, "NFSU2-ASI",
+        "asi_loader_boot finished: %d .asi mod(s) active (see %s/dinput8_log.txt)",
+        s_modloader_loaded_count, br.game_dir);
+}
 
 static uint32_t adv_guest_call_direct(recomp_void_func_t target, uint32_t ecx, uint32_t edx, int n, const uint32_t *args) {
     if (!target || !g_p_mem_base || !*g_p_mem_base || !g_p_esp || *g_p_esp == 0u) return 0u;
@@ -2681,27 +2864,58 @@ static void adv_refresh_widget(uint32_t self, int id) {
     uint32_t lbl_obj = MR32(self + 0x2cu);
     uint32_t val_obj = MR32(self + 0x30u);
 
+    char label_buf[64];
     const char *label = "";
     const char *value = "";
-    switch (id) {
-        case 0:
-            label = "FPS Limit";
-            if (s_adv_cfg.fps_limit == 30) value = "30 FPS";
-            else if (s_adv_cfg.fps_limit == 60) value = "60 FPS";
-            else if (s_adv_cfg.fps_limit == 90) value = "90 FPS";
-            else if (s_adv_cfg.fps_limit == 120) value = "120 FPS";
-            else value = "Uncapped";
-            break;
-        case 1:
-            label = "Invariant Position";
-            if (s_adv_cfg.dxvk_invariant_pos == s_adv_cfg.boot_invariant_pos) {
-                value = s_adv_cfg.dxvk_invariant_pos ? "Safe (On)" : "Fast (Unsafe)";
+    if (id == MOD_WIDGET_BASE) {
+        label = "ASI Loader";
+        if (s_modloader_cfg_enabled == s_modloader_boot_enabled) {
+            value = s_modloader_cfg_enabled ? "On (Beta)" : "Off";
+        } else {
+            value = s_modloader_cfg_enabled ? "On (Restart)" : "Off (Restart)";
+        }
+    } else if (id > MOD_WIDGET_BASE) {
+        int midx = id - (MOD_WIDGET_BASE + 1);
+        if (s_mod_ui_count == 0) {
+            label = "scripts/*.asi";
+            value = "None found";
+        } else if (midx >= 0 && midx < s_mod_ui_count) {
+            ModUiEntry *e = &s_mod_ui_entries[midx];
+            snprintf(label_buf, sizeof(label_buf), "%.26s", e->name);
+            label = label_buf;
+            if (!s_modloader_boot_enabled && !e->enabled_cfg && e->builtin) {
+                value = "Built-in (Off)";
+            } else if (e->enabled_cfg == e->boot_enabled && s_modloader_boot_enabled) {
+                value = e->enabled_cfg ? "Active" : "Off";
+            } else if (e->enabled_cfg != e->boot_enabled) {
+                value = e->enabled_cfg ? "On (Restart)" : "Off (Restart)";
             } else {
-                value = s_adv_cfg.dxvk_invariant_pos ? "Safe (Restart)" : "Fast (Restart)";
+                value = e->enabled_cfg ? "On" : "Off";
             }
-            break;
-        default:
+        } else {
             return;
+        }
+    } else {
+        switch (id) {
+            case 0:
+                label = "FPS Limit";
+                if (s_adv_cfg.fps_limit == 30) value = "30 FPS";
+                else if (s_adv_cfg.fps_limit == 60) value = "60 FPS";
+                else if (s_adv_cfg.fps_limit == 90) value = "90 FPS";
+                else if (s_adv_cfg.fps_limit == 120) value = "120 FPS";
+                else value = "Uncapped";
+                break;
+            case 1:
+                label = "Invariant Position";
+                if (s_adv_cfg.dxvk_invariant_pos == s_adv_cfg.boot_invariant_pos) {
+                    value = s_adv_cfg.dxvk_invariant_pos ? "Safe (On)" : "Fast (Unsafe)";
+                } else {
+                    value = s_adv_cfg.dxvk_invariant_pos ? "Safe (Restart)" : "Fast (Restart)";
+                }
+                break;
+            default:
+                return;
+        }
     }
 
     if (lbl_obj) adv_set_fe_str(lbl_obj, label);
@@ -2713,7 +2927,7 @@ static void hook_sub_0054ee40(void) {
     uint32_t esp = g_p_esp ? *g_p_esp : 0u;
     uint32_t widget = (esp >= 0x10000u && rh_mem_committed(esp + 4u, 4)) ? MR32(esp + 4u) : 0u;
 
-    /* Insert "Advanced Options" right before "Default Settings" (vtable 0x007920a0) in Display Options */
+    /* Insert "Advanced Options" and "Modloader" right before "Default Settings" (vtable 0x007920a0) */
     if (this_screen && widget && rh_mem_committed(widget, 4) && MR32(widget) == 0x007920a0u) {
         s_adv_screen_active = 0;
         s_adv_widget_count = 0;
@@ -2726,6 +2940,14 @@ static void hook_sub_0054ee40(void) {
             s_adv_btn_ptr = btn;
             adv_guest_call_direct(s_orig_54ee40, this_screen, 0u, 1, &btn);
         }
+        uint32_t mbtn = adv_guest_call(0x00575620u, 0u, 0u, 1, &sz);
+        if (mbtn && rh_mem_committed(mbtn, 0x38)) {
+            uint32_t ctor_args[3] = { this_screen + 0xfcu, this_screen + 0x10cu, 1u };
+            adv_guest_call(0x0051dfc0u, mbtn, 0u, 3, ctor_args);
+            MR32(mbtn) = 0x00792060u; /* PCOCustomizeSettings vtable */
+            s_mod_btn_ptr = mbtn;
+            adv_guest_call_direct(s_orig_54ee40, this_screen, 0u, 1, &mbtn);
+        }
     }
 
     if (s_orig_54ee40) s_orig_54ee40();
@@ -2733,10 +2955,10 @@ static void hook_sub_0054ee40(void) {
 
 static void hook_sub_0049b960(void) {
     uint32_t self = g_p_ecx ? *g_p_ecx : 0u;
-    if (self != 0u && self == s_adv_btn_ptr) {
+    if (self != 0u && (self == s_adv_btn_ptr || self == s_mod_btn_ptr)) {
         if (rh_mem_committed(self + 0x2cu, 4)) {
             uint32_t lbl = MR32(self + 0x2cu);
-            if (lbl) adv_set_fe_str(lbl, "Advanced Options");
+            if (lbl) adv_set_fe_str(lbl, (self == s_mod_btn_ptr) ? "Modloader" : "Advanced Options");
         }
         if (g_p_esp) *g_p_esp += 4u;
         return;
@@ -2749,7 +2971,9 @@ static void hook_sub_0049b930(void) {
     uint32_t esp = g_p_esp ? *g_p_esp : 0u;
     uint32_t msg = (esp >= 0x10000u && rh_mem_committed(esp + 8u, 4)) ? MR32(esp + 8u) : 0u;
     if (msg == 0x0c407210u) {
-        s_adv_screen_active = (self != 0u && self == s_adv_btn_ptr) ? 1 : 0;
+        if (self != 0u && self == s_adv_btn_ptr) s_adv_screen_active = 1;
+        else if (self != 0u && self == s_mod_btn_ptr) s_adv_screen_active = 2;
+        else s_adv_screen_active = 0;
     }
     if (s_orig_49b930) s_orig_49b930();
 }
@@ -2765,8 +2989,11 @@ static void hook_sub_004b6510(void) {
     uint32_t this_screen = g_p_ecx ? *g_p_ecx : 0u;
     s_adv_screen_ptr = this_screen;
     s_adv_widget_count = 0;
-    adv_options_load();
-    {
+
+    int ids[ADV_MAX_WIDGETS];
+    int n_ids = 0;
+    if (s_adv_screen_active == 1) {
+        adv_options_load();
         const char *env_fps = getenv("NFSU2_FPS");
         if (env_fps && *env_fps) {
             int f = atoi(env_fps);
@@ -2774,10 +3001,23 @@ static void hook_sub_004b6510(void) {
                 s_adv_cfg.fps_limit = f;
             }
         }
+        for (int id = 0; id < ADV_OPT_COUNT && n_ids < ADV_MAX_WIDGETS; id++) {
+            ids[n_ids++] = id;
+        }
+    } else if (s_adv_screen_active == 2) {
+        modloader_load_state(0);
+        ids[n_ids++] = MOD_WIDGET_BASE;
+        if (s_mod_ui_count == 0) {
+            ids[n_ids++] = MOD_WIDGET_BASE + 1;
+        } else {
+            for (int i = 0; i < s_mod_ui_count && n_ids < ADV_MAX_WIDGETS; i++) {
+                ids[n_ids++] = MOD_WIDGET_BASE + 1 + i;
+            }
+        }
     }
 
     if (this_screen) {
-        for (int id = 0; id < ADV_OPT_COUNT; id++) {
+        for (int k = 0; k < n_ids; k++) {
             uint32_t sz = 0x54u;
             uint32_t w = adv_guest_call(0x00575620u, 0u, 0u, 1, &sz);
             if (!w || !rh_mem_committed(w, 0x54)) break;
@@ -2791,7 +3031,7 @@ static void hook_sub_004b6510(void) {
             adv_guest_call(0x0051e230u, w, 0u, 5, ctor_args);
             MR32(w) = 0x00792018u; /* PCOVSync vtable */
             s_adv_widgets[s_adv_widget_count].ptr = w;
-            s_adv_widgets[s_adv_widget_count].id = id;
+            s_adv_widgets[s_adv_widget_count].id = ids[k];
             s_adv_widget_count++;
 
             uint32_t add_args[2] = { w, 1u };
@@ -2819,10 +3059,10 @@ static void hook_sub_0049b8e0(void) {
         return;
     }
 
-    if (id == 0) {
+    if (id == 0 || id == MOD_WIDGET_BASE) {
         uint32_t hdr_args[2] = { 0x0078fa8cu, 0x42adb44cu };
         uint32_t hdr_obj = adv_guest_call(0x00537a10u, 0u, 0u, 2, hdr_args);
-        if (hdr_obj) adv_set_fe_str(hdr_obj, "Advanced Options");
+        if (hdr_obj) adv_set_fe_str(hdr_obj, (id == MOD_WIDGET_BASE) ? "Modloader" : "Advanced Options");
 
         if (s_adv_screen_ptr) {
             uint32_t sb_args[3] = { 8u, (uint32_t)s_adv_widget_count, 1u };
@@ -2849,25 +3089,38 @@ static void hook_sub_0049b8a0(void) {
     else if (msg == 0x9120409eu) dir = -1;                        /* Left */
 
     if (dir != 0) {
-        switch (id) {
-            case 0: {
-                static const int kFpsOpts[5] = { 30, 60, 90, 120, 0 };
-                int idx = 1;
-                for (int i = 0; i < 5; i++) {
-                    if (kFpsOpts[i] == s_adv_cfg.fps_limit) { idx = i; break; }
-                }
-                idx = (idx + dir + 5) % 5;
-                adv_apply_fps_limit(kFpsOpts[idx]);
-                break;
+        if (id == MOD_WIDGET_BASE) {
+            s_modloader_cfg_enabled = s_modloader_cfg_enabled ? 0 : 1;
+            modloader_save_state();
+            adv_refresh_widget(self, id);
+        } else if (id > MOD_WIDGET_BASE) {
+            int midx = id - (MOD_WIDGET_BASE + 1);
+            if (midx >= 0 && midx < s_mod_ui_count) {
+                s_mod_ui_entries[midx].enabled_cfg = s_mod_ui_entries[midx].enabled_cfg ? 0 : 1;
+                modloader_save_state();
+                adv_refresh_widget(self, id);
             }
-            case 1:
-                s_adv_cfg.dxvk_invariant_pos = s_adv_cfg.dxvk_invariant_pos ? 0 : 1;
-                break;
-            default:
-                break;
+        } else {
+            switch (id) {
+                case 0: {
+                    static const int kFpsOpts[5] = { 30, 60, 90, 120, 0 };
+                    int idx = 1;
+                    for (int i = 0; i < 5; i++) {
+                        if (kFpsOpts[i] == s_adv_cfg.fps_limit) { idx = i; break; }
+                    }
+                    idx = (idx + dir + 5) % 5;
+                    adv_apply_fps_limit(kFpsOpts[idx]);
+                    break;
+                }
+                case 1:
+                    s_adv_cfg.dxvk_invariant_pos = s_adv_cfg.dxvk_invariant_pos ? 0 : 1;
+                    break;
+                default:
+                    break;
+            }
+            adv_options_save();
+            adv_refresh_widget(self, id);
         }
-        adv_options_save();
-        adv_refresh_widget(self, id);
     }
 
     if (g_p_esp) *g_p_esp += 12u; /* ret 8 */
@@ -4596,6 +4849,8 @@ static void roam_android_install_hooks(void) {
           (void *)hook_nfs_android_resolution, (void **)&s_orig_nfs_android_res },
         { "_ZN4dxvk3wsi14getDisplayModeEPvjPNS0_7WsiModeE", 0x97df030u,
           (void *)hook_wsi_getDisplayMode, (void **)&s_orig_wsi_get_display_mode },
+        { "nfs_widescreen_init", 0x97ddd28u,
+          (void *)hook_nfs_widescreen_init, (void **)&s_orig_widescreen_init },
         { "nfs_widescreen_set_resolution", 0x97ddd08u,
           (void *)hook_nfs_widescreen_set_resolution, (void **)&s_orig_widescreen_set_res },
         { "nfs_widescreen_apply_frame_rate", 0x97ddc90u,
@@ -4711,17 +4966,6 @@ __attribute__((visibility("default"))) void nfs_roam_frame_tick(void) {
         nfs_bind_to_perf_cores();
     }
     g_frame_count++;
-    static uint64_t s_last_tick_ns = 0;
-    struct timespec ts_tick;
-    clock_gettime(CLOCK_MONOTONIC, &ts_tick);
-    uint64_t now_tick_ns = (uint64_t)ts_tick.tv_sec * 1000000000ULL + (uint64_t)ts_tick.tv_nsec;
-    if (s_last_tick_ns > 0 && now_tick_ns > s_last_tick_ns) {
-        uint64_t tick_dur_ns = now_tick_ns - s_last_tick_ns;
-        static void(*s_metrics_record_roam)(uint64_t) = NULL;
-        if (!s_metrics_record_roam) s_metrics_record_roam = (void(*)(uint64_t))dlsym(RTLD_DEFAULT, "nfs_metrics_record_frame");
-        if (s_metrics_record_roam) s_metrics_record_roam(tick_dur_ns);
-    }
-    s_last_tick_ns = now_tick_ns;
     hiddenraces_frame_tick();
     extraoptions_frame_tick();
     garage_frame_tick();

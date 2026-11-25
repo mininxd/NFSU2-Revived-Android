@@ -76,7 +76,17 @@ pub extern "C" fn nfs_telemetry_record_present(timestamp_ns: u64) {
             static mut RECORD_FN: Option<extern "C" fn(u64)> = None;
             static INIT: std::sync::Once = std::sync::Once::new();
             INIT.call_once(|| unsafe {
-                let sym = libc::dlsym(libc::RTLD_DEFAULT, b"nfs_metrics_record_frame\0".as_ptr() as *const _);
+                let mut sym = std::ptr::null_mut();
+                let h = libc::dlopen(
+                    b"libgame_core.so\0".as_ptr() as *const _,
+                    libc::RTLD_NOLOAD | libc::RTLD_LAZY,
+                );
+                if !h.is_null() {
+                    sym = libc::dlsym(h, b"nfs_metrics_record_frame\0".as_ptr() as *const _);
+                }
+                if sym.is_null() {
+                    sym = libc::dlsym(libc::RTLD_DEFAULT, b"nfs_metrics_record_frame\0".as_ptr() as *const _);
+                }
                 if !sym.is_null() {
                     RECORD_FN = Some(std::mem::transmute(sym));
                 }

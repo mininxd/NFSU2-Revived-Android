@@ -5,7 +5,7 @@
 
 use std::sync::Mutex;
 
-const RING_CAPACITY: usize = 512;
+const RING_CAPACITY: usize = 180;
 
 pub struct FrameMetricsEngine {
     durations_ns: Mutex<RingBuffer>,

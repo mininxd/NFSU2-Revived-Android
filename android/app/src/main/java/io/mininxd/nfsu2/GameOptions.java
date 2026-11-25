@@ -46,7 +46,7 @@ public final class GameOptions {
             ROAM_CARS_LIMIT = "roam_max_cars", ROAM_CREW = "roam_crew",
             GRAPHICS_BACKEND = "graphics_backend", DRAW_DISTANCE = "draw_distance",
             REGION = "region", SPEEDOMETER = "speedometer", PAD_LAYOUT = "pad_layout",
-            CUSTOM_GAME_DIR = "custom_game_dir";
+            CUSTOM_GAME_DIR = "custom_game_dir", ASI_LOADER = "asi_loader";
 
     static final Option[] ALL = {
             new Option(GRAPHICS_BACKEND, "Graphics API", "auto",
@@ -73,6 +73,9 @@ public final class GameOptions {
             new Option(PAD_LAYOUT, "Gamepad Layout", "port",
                     new String[] {"port", "console"},
                     new String[] {"Default Xbox", "PS2 style"}),
+            new Option(ASI_LOADER, "ASI Modloader", "off",
+                    new String[] {"off", "on"},
+                    new String[] {"Off", "On (Beta)"}),
     };
 
     private static final String PREFS = "nfsu2_game";
