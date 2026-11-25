@@ -463,14 +463,7 @@ public final class LauncherActivity extends Activity {
     private void ensureScriptsInstalled(File root) {
         if (!root.isDirectory()) return;
 
-        // Clean up legacy DLL or ASI files if previously extracted
-        try {
-            File oldDinput = new File(root, "dinput8.dll");
-            if (oldDinput.exists()) oldDinput.delete();
-            File oldAsi = new File(root, "scripts/NFSUnderground2.WidescreenFix.asi");
-            if (oldAsi.exists()) oldAsi.delete();
-        } catch (Exception ignored) {
-        }
+        // Preserve user-provided dinput8.dll and scripts/*.asi files for the ASI Modloader.
 
         // Install widescreen data file only
         File scriptsDir = new File(root, "scripts");

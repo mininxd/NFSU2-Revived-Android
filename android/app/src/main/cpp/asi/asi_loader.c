@@ -542,6 +542,47 @@ static uint32_t rd32_le(const uint8_t *p) {
     return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
 }
 
+static void setup_x86_gdt_and_segments(uc_engine *uc, uint8_t *mem) {
+    /* Place a 4-entry 32-bit GDT at ASI_TEB_BASE + 0x2000:
+     *   0x00: null
+     *   0x08: flat 32-bit code (base=0, limit=4GB, RX)
+     *   0x10: flat 32-bit data (base=0, limit=4GB, RW)
+     *   0x18: 32-bit FS/TEB data (base=ASI_TEB_BASE, limit=64KB, RW) */
+    uint32_t gdt_va = ASI_TEB_BASE + 0x2000u;
+    uint64_t gdt[4];
+    gdt[0] = 0ULL;
+    gdt[1] = 0x00CF9A000000FFFFULL;
+    gdt[2] = 0x00CF92000000FFFFULL;
+
+    uint32_t teb_base = ASI_TEB_BASE;
+    uint32_t teb_lim  = 0xFFFFu;
+    uint8_t fs_desc[8];
+    fs_desc[0] = (uint8_t)(teb_lim & 0xFFu);
+    fs_desc[1] = (uint8_t)((teb_lim >> 8) & 0xFFu);
+    fs_desc[2] = (uint8_t)(teb_base & 0xFFu);
+    fs_desc[3] = (uint8_t)((teb_base >> 8) & 0xFFu);
+    fs_desc[4] = (uint8_t)((teb_base >> 16) & 0xFFu);
+    fs_desc[5] = 0x92u; /* Present, DPL=0, S=1, RW data */
+    fs_desc[6] = 0x40u | (uint8_t)((teb_lim >> 16) & 0x0Fu); /* 32-bit, byte gran */
+    fs_desc[7] = (uint8_t)((teb_base >> 24) & 0xFFu);
+    memcpy(&gdt[3], fs_desc, 8);
+    memcpy(mem + gdt_va, gdt, sizeof(gdt));
+
+    uc_x86_mmr gdtr;
+    memset(&gdtr, 0, sizeof(gdtr));
+    gdtr.base  = gdt_va;
+    gdtr.limit = sizeof(gdt) - 1;
+    uc_reg_write(uc, UC_X86_REG_GDTR, &gdtr);
+
+    uint32_t cs = 0x08u, ds = 0x10u, fs = 0x18u;
+    uc_reg_write(uc, UC_X86_REG_CS, &cs);
+    uc_reg_write(uc, UC_X86_REG_DS, &ds);
+    uc_reg_write(uc, UC_X86_REG_ES, &ds);
+    uc_reg_write(uc, UC_X86_REG_SS, &ds);
+    uc_reg_write(uc, UC_X86_REG_GS, &ds);
+    uc_reg_write(uc, UC_X86_REG_FS, &fs);
+}
+
 static int call_asi_func_stdcall(uint32_t fn_va, const uint32_t *args, int nargs,
                                  const char *label, uint32_t *out_eax) {
     if (!s_uc || !s_bridge.p_mem_base || !*s_bridge.p_mem_base) return 0;
@@ -559,7 +600,7 @@ static int call_asi_func_stdcall(uint32_t fn_va, const uint32_t *args, int nargs
     memcpy(mem + esp, &sent, 4);
 
     uint32_t zero = 0, eflags = 0x202u;
-    uint32_t fs_base = ASI_TEB_BASE;
+    uint32_t fs_sel = 0x18u;
     uc_reg_write(s_uc, UC_X86_REG_ESP, &esp);
     uc_reg_write(s_uc, UC_X86_REG_EBP, &esp);
     uc_reg_write(s_uc, UC_X86_REG_EAX, &zero);
@@ -569,7 +610,7 @@ static int call_asi_func_stdcall(uint32_t fn_va, const uint32_t *args, int nargs
     uc_reg_write(s_uc, UC_X86_REG_ESI, &zero);
     uc_reg_write(s_uc, UC_X86_REG_EDI, &zero);
     uc_reg_write(s_uc, UC_X86_REG_EFLAGS, &eflags);
-    uc_reg_write(s_uc, UC_X86_REG_FS_BASE, &fs_base);
+    uc_reg_write(s_uc, UC_X86_REG_FS, &fs_sel);
 
     /* Cap init calls at 50M instructions to avoid infinite loops freezing boot */
     int ok = asi_exec_x86(fn_va, label, 50000000u);
@@ -947,6 +988,8 @@ int asi_loader_boot(const AsiHostBridge *bridge) {
     uc_mem_map_ptr(s_uc, ASI_HEAP_ARENA,  ASI_HEAP_ARENA_SZ,  UC_PROT_ALL, mem + ASI_HEAP_ARENA);
     uc_mem_map_ptr(s_uc, ASI_STACK_BASE,  ASI_STACK_SIZE,     UC_PROT_READ | UC_PROT_WRITE, mem + ASI_STACK_BASE);
     uc_mem_map_ptr(s_uc, ASI_TEB_BASE,    ASI_TEB_SIZE,       UC_PROT_READ | UC_PROT_WRITE, mem + ASI_TEB_BASE);
+
+    setup_x86_gdt_and_segments(s_uc, mem);
 
     uc_hook hh_unmapped = 0, hh_prot = 0;
     uc_hook_add(s_uc, &hh_unmapped, UC_HOOK_MEM_UNMAPPED, (void *)hook_mem_unmapped, NULL, 1, 0);

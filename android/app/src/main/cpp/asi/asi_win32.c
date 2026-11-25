@@ -475,22 +475,29 @@ static int api_is_known(const char *dll, const char *name) {
         "GetFileSize", "GetFileSizeEx", "GetFileAttributesA", "GetFileAttributesW", "SetEndOfFile",
         "CreateDirectoryA", "CreateDirectoryW", "DeleteFileA", "DeleteFileW",
         "FindFirstFileA", "FindNextFileA", "FindClose", "CloseHandle", "DuplicateHandle",
-        "GetCurrentDirectoryA", "GetFullPathNameA", "GetTempPathA",
+        "GetCurrentDirectoryA", "GetCurrentDirectoryW", "GetFullPathNameA", "GetFullPathNameW", "GetTempPathA",
+        "GetDriveTypeW", "GetFileInformationByHandle", "PeekNamedPipe", "FlushFileBuffers",
+        "FindFirstFileExW", "FindNextFileW",
         "GetProcessHeap", "HeapAlloc", "HeapReAlloc", "HeapFree", "HeapSize", "LocalAlloc", "LocalFree",
         "InitializeCriticalSection", "InitializeCriticalSectionEx", "InitializeCriticalSectionAndSpinCount",
         "EnterCriticalSection", "LeaveCriticalSection", "DeleteCriticalSection",
+        "InitializeSListHead", "InterlockedFlushSList",
         "TlsAlloc", "TlsGetValue", "TlsSetValue", "TlsFree",
         "FlsAlloc", "FlsGetValue", "FlsSetValue", "FlsFree",
         "GetTickCount", "GetTickCount64", "QueryPerformanceCounter", "QueryPerformanceFrequency",
-        "GetSystemTimeAsFileTime", "GetLocalTime", "Sleep",
+        "GetSystemTimeAsFileTime", "GetLocalTime", "SystemTimeToTzSpecificLocalTime",
+        "FileTimeToSystemTime", "GetTimeZoneInformation", "Sleep",
         "GetCurrentProcess", "GetCurrentProcessId", "GetCurrentThread", "GetCurrentThreadId",
         "GetLastError", "SetLastError", "GetCommandLineA", "GetCommandLineW",
         "GetEnvironmentVariableA", "GetEnvironmentVariableW", "SetEnvironmentVariableA", "SetEnvironmentVariableW",
-        "GetEnvironmentStringsW", "FreeEnvironmentStringsW", "GetOEMCP", "GetACP", "GetCPInfo",
-        "MultiByteToWideChar", "WideCharToMultiByte", "LCMapStringW", "GetStringTypeW",
-        "GetStdHandle", "GetFileType", "WriteConsoleA", "WriteConsoleW", "OutputDebugStringA",
-        "CreateEventA", "CreateMutexA", "CreateSemaphoreA", "WaitForSingleObject", "ReleaseMutex",
-        "ReleaseSemaphore", "SetEvent", "ResetEvent", "CreateThread", "ExitThread", "TerminateProcess",
+        "GetEnvironmentStringsW", "FreeEnvironmentStringsW", "GetOEMCP", "GetACP", "GetCPInfo", "IsValidCodePage",
+        "MultiByteToWideChar", "WideCharToMultiByte", "LCMapStringW", "LCMapStringEx", "GetStringTypeW",
+        "CompareStringW", "GetLocaleInfoW", "IsValidLocale", "GetUserDefaultLCID", "EnumSystemLocalesW",
+        "GetStdHandle", "SetStdHandle", "GetFileType", "GetConsoleOutputCP", "GetConsoleMode",
+        "WriteConsoleA", "WriteConsoleW", "ReadConsoleW", "OutputDebugStringA",
+        "CreateEventA", "CreateEventW", "CreateMutexA", "CreateSemaphoreA",
+        "WaitForSingleObject", "WaitForSingleObjectEx", "ReleaseMutex",
+        "ReleaseSemaphore", "SetEvent", "ResetEvent", "CreateThread", "ExitThread", "ExitProcess", "TerminateProcess",
         "IsDebuggerPresent", "IsProcessorFeaturePresent", "SetUnhandledExceptionFilter",
         "UnhandledExceptionFilter", "AddVectoredExceptionHandler", "RtlUnwind", "RaiseException",
         "EncodePointer", "DecodePointer", "FormatMessageA", "GetStartupInfoW", "GetVersionExA",
@@ -1040,6 +1047,61 @@ uint32_t asi_win32_dispatch(uint32_t thunk_va, AsiCallRegs *r) {
         uint32_t n = (buf && sz) ? (uint32_t)snprintf((char *)g_ptr(buf), sz, "C:\\nfsu2") : 8u;
         RET_STD(2, n);
     }
+    if (strcmp(fn, "GetCurrentDirectoryW") == 0) {
+        uint32_t sz = g_arg(r, 0), buf = g_arg(r, 1);
+        uint32_t n = (buf && sz) ? ascii_to_utf16("C:\\nfsu2", buf, sz) : 8u;
+        RET_STD(2, n);
+    }
+    if (strcmp(fn, "GetFullPathNameA") == 0) {
+        const char *in = g_cstr(g_arg(r, 0));
+        uint32_t sz = g_arg(r, 1), buf = g_arg(r, 2), part = g_arg(r, 3);
+        char full[512];
+        if (in && in[0] && in[1] == ':') snprintf(full, sizeof(full), "%s", in);
+        else snprintf(full, sizeof(full), "C:\\nfsu2\\%s", in ? in : "");
+        uint32_t n = (buf && sz) ? (uint32_t)snprintf((char *)g_ptr(buf), sz, "%s", full) : (uint32_t)strlen(full) + 1u;
+        if (part && buf) {
+            const char *sl = strrchr((const char *)g_ptr(buf), '\\');
+            g_wr32(part, sl ? (buf + (uint32_t)(sl + 1 - (const char *)g_ptr(buf))) : buf);
+        }
+        RET_STD(4, n);
+    }
+    if (strcmp(fn, "GetFullPathNameW") == 0) {
+        char in[512], full[512];
+        utf16_to_ascii(g_arg(r, 0), in, sizeof(in));
+        uint32_t sz = g_arg(r, 1), buf = g_arg(r, 2), part = g_arg(r, 3);
+        if (in[0] && in[1] == ':') snprintf(full, sizeof(full), "%s", in);
+        else snprintf(full, sizeof(full), "C:\\nfsu2\\%s", in);
+        uint32_t n = (buf && sz) ? ascii_to_utf16(full, buf, sz) : (uint32_t)strlen(full) + 1u;
+        if (part) g_wr32(part, 0);
+        RET_STD(4, n);
+    }
+    if (strcmp(fn, "GetDriveTypeW") == 0) { RET_STD(1, 3u); /* DRIVE_FIXED */ }
+    if (strcmp(fn, "GetFileInformationByHandle") == 0) {
+        uint32_t h = g_arg(r, 0), info = g_arg(r, 1);
+        if (info) {
+            memset(g_ptr(info), 0, 52);
+            g_wr32(info + 0, 0x80u); /* FILE_ATTRIBUTE_NORMAL */
+            if (h >= 0x1000u && h < 0x1000u + MAX_WIN_FILES && s_win_files[h - 0x1000u].in_use) {
+                FILE *fp = s_win_files[h - 0x1000u].fp;
+                long cur = ftell(fp);
+                fseek(fp, 0, SEEK_END);
+                long sz = ftell(fp);
+                fseek(fp, cur, SEEK_SET);
+                g_wr32(info + 36, (uint32_t)sz);
+            }
+        }
+        RET_STD(2, 1);
+    }
+    if (strcmp(fn, "FlushFileBuffers") == 0) {
+        uint32_t h = g_arg(r, 0);
+        if (h >= 0x1000u && h < 0x1000u + MAX_WIN_FILES && s_win_files[h - 0x1000u].in_use) {
+            fflush(s_win_files[h - 0x1000u].fp);
+        }
+        RET_STD(1, 1);
+    }
+    if (strcmp(fn, "PeekNamedPipe") == 0) { RET_STD(6, 0); }
+    if (strcmp(fn, "FindFirstFileExW") == 0) { RET_STD(6, 0xFFFFFFFFu); }
+    if (strcmp(fn, "FindNextFileW") == 0)    { s_last_error = 18u; RET_STD(2, 0); }
     if (strcmp(fn, "SHGetFolderPathA") == 0) {
         uint32_t out_va = g_arg(r, 4);
         if (out_va) snprintf((char *)g_ptr(out_va), 260, "C:\\nfsu2\\AppData");
@@ -1047,6 +1109,17 @@ uint32_t asi_win32_dispatch(uint32_t thunk_va, AsiCallRegs *r) {
     }
 
     /* --- Sync / TLS / Process / Time --- */
+    if (strcmp(fn, "InitializeSListHead") == 0) {
+        uint32_t p = g_arg(r, 0);
+        if (p) { g_wr32(p, 0); g_wr32(p + 4, 0); }
+        RET_STD(1, 0);
+    }
+    if (strcmp(fn, "InterlockedFlushSList") == 0) {
+        uint32_t p = g_arg(r, 0);
+        uint32_t head = p ? g_rd32(p) : 0u;
+        if (p) { g_wr32(p, 0); g_wr32(p + 4, 0); }
+        RET_STD(1, head);
+    }
     if (strcmp(fn, "InitializeCriticalSection") == 0) { RET_STD(1, 0); }
     if (strcmp(fn, "InitializeCriticalSectionAndSpinCount") == 0) { RET_STD(2, 1); }
     if (strcmp(fn, "InitializeCriticalSectionEx") == 0) { RET_STD(3, 1); }
@@ -1106,8 +1179,11 @@ uint32_t asi_win32_dispatch(uint32_t thunk_va, AsiCallRegs *r) {
         if (out_va) { g_wr32(out_va, (uint32_t)ft); g_wr32(out_va + 4, (uint32_t)(ft >> 32)); }
         RET_STD(1, 0);
     }
-    if (strcmp(fn, "GetLocalTime") == 0) {
-        uint32_t out_va = g_arg(r, 0);
+    if (strcmp(fn, "GetLocalTime") == 0 || strcmp(fn, "FileTimeToSystemTime") == 0 ||
+        strcmp(fn, "SystemTimeToTzSpecificLocalTime") == 0) {
+        int out_idx = (strcmp(fn, "GetLocalTime") == 0) ? 0 : (strcmp(fn, "FileTimeToSystemTime") == 0 ? 1 : 2);
+        int nargs   = (strcmp(fn, "GetLocalTime") == 0) ? 1 : (strcmp(fn, "FileTimeToSystemTime") == 0 ? 2 : 3);
+        uint32_t out_va = g_arg(r, out_idx);
         time_t now = time(NULL);
         struct tm t;
         localtime_r(&now, &t);
@@ -1121,6 +1197,11 @@ uint32_t asi_win32_dispatch(uint32_t thunk_va, AsiCallRegs *r) {
             g_wr16(out_va + 12, (uint16_t)t.tm_sec);
             g_wr16(out_va + 14, 0);
         }
+        RET_STD(nargs, nargs == 1 ? 0u : 1u);
+    }
+    if (strcmp(fn, "GetTimeZoneInformation") == 0) {
+        uint32_t p = g_arg(r, 0);
+        if (p) memset(g_ptr(p), 0, 172);
         RET_STD(1, 0);
     }
     if (strcmp(fn, "Sleep") == 0) {
@@ -1157,7 +1238,22 @@ uint32_t asi_win32_dispatch(uint32_t thunk_va, AsiCallRegs *r) {
         RET_STD(0, va);
     }
     if (strcmp(fn, "FreeEnvironmentStringsW") == 0) { asi_heap_free(g_arg(r, 0)); RET_STD(1, 1); }
-    if (strcmp(fn, "GetOEMCP") == 0 || strcmp(fn, "GetACP") == 0) { RET_STD(0, 1252u); }
+    if (strcmp(fn, "GetOEMCP") == 0 || strcmp(fn, "GetACP") == 0 || strcmp(fn, "GetConsoleOutputCP") == 0) { RET_STD(0, 1252u); }
+    if (strcmp(fn, "IsValidCodePage") == 0) { RET_STD(1, 1); }
+    if (strcmp(fn, "IsValidLocale") == 0)   { RET_STD(2, 1); }
+    if (strcmp(fn, "GetUserDefaultLCID") == 0) { RET_STD(0, 0x0409u); }
+    if (strcmp(fn, "GetLocaleInfoW") == 0)  { RET_STD(4, 0); }
+    if (strcmp(fn, "EnumSystemLocalesW") == 0) { RET_STD(2, 1); }
+    if (strcmp(fn, "CompareStringW") == 0) {
+        char a[256], b[256];
+        utf16_to_ascii(g_arg(r, 2), a, sizeof(a));
+        utf16_to_ascii(g_arg(r, 4), b, sizeof(b));
+        int cmp = strcasecmp(a, b);
+        RET_STD(6, cmp < 0 ? 1u : (cmp > 0 ? 3u : 2u)); /* CSTR_LESS_THAN=1, EQUAL=2, GREATER=3 */
+    }
+    if (strcmp(fn, "LCMapStringW") == 0)  { RET_STD(6, 0); }
+    if (strcmp(fn, "LCMapStringEx") == 0) { RET_STD(9, 0); }
+    if (strcmp(fn, "GetStringTypeW") == 0){ RET_STD(4, 1); }
     if (strcmp(fn, "GetCPInfo") == 0) {
         uint32_t out = g_arg(r, 1);
         if (out) { memset(g_ptr(out), 0, 20); g_wr32(out, 1); }
@@ -1192,7 +1288,14 @@ uint32_t asi_win32_dispatch(uint32_t thunk_va, AsiCallRegs *r) {
         RET_STD(8, copy);
     }
     if (strcmp(fn, "GetStdHandle") == 0) { RET_STD(1, g_arg(r, 0)); }
+    if (strcmp(fn, "SetStdHandle") == 0) { RET_STD(2, 1); }
     if (strcmp(fn, "GetFileType") == 0)  { RET_STD(1, 2u); /* FILE_TYPE_CHAR */ }
+    if (strcmp(fn, "GetConsoleMode") == 0) {
+        uint32_t out = g_arg(r, 1);
+        if (out) g_wr32(out, 0);
+        RET_STD(2, 0);
+    }
+    if (strcmp(fn, "ReadConsoleW") == 0) { RET_STD(5, 0); }
     if (strcmp(fn, "WriteConsoleA") == 0 || strcmp(fn, "WriteConsoleW") == 0) {
         uint32_t n = g_arg(r, 2), out = g_arg(r, 3);
         if (out) g_wr32(out, n);
@@ -1203,12 +1306,18 @@ uint32_t asi_win32_dispatch(uint32_t thunk_va, AsiCallRegs *r) {
         if (s) asi_log_info("[OutputDebugString] %s", s);
         RET_STD(1, 0);
     }
-    if (strcmp(fn, "CreateEventA") == 0 || strcmp(fn, "CreateMutexA") == 0 ||
-        strcmp(fn, "CreateSemaphoreA") == 0) {
+    if (strcmp(fn, "CreateEventA") == 0 || strcmp(fn, "CreateEventW") == 0 ||
+        strcmp(fn, "CreateMutexA") == 0 || strcmp(fn, "CreateSemaphoreA") == 0) {
         int nargs = (strcmp(fn, "CreateMutexA") == 0) ? 3 : 4;
         RET_STD(nargs, 0x3001u);
     }
-    if (strcmp(fn, "WaitForSingleObject") == 0) { RET_STD(2, 0); }
+    if (strcmp(fn, "WaitForSingleObject") == 0)   { RET_STD(2, 0); }
+    if (strcmp(fn, "WaitForSingleObjectEx") == 0) { RET_STD(3, 0); }
+    if (strcmp(fn, "ExitProcess") == 0 || strcmp(fn, "TerminateProcess") == 0) {
+        asi_log_warn("[ASI] Mod called %s() from 0x%08X - returning to host", fn, ret_va);
+        r->eax = 0;
+        return ASI_RET_SENTINEL;
+    }
     if (strcmp(fn, "ReleaseMutex") == 0 || strcmp(fn, "SetEvent") == 0 || strcmp(fn, "ResetEvent") == 0) { RET_STD(1, 1); }
     if (strcmp(fn, "ReleaseSemaphore") == 0) { RET_STD(3, 1); }
     if (strcmp(fn, "CreateThread") == 0) {
