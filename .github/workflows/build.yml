@@ -133,7 +133,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /tmp/unicorn-arm64-cache
-          key: unicorn-2.1.1-x86-arm64-android26-v1
+          key: unicorn-2.1.1-x86-arm64-android26-v2
 
       - name: Build Unicorn Engine (x86-32 JIT) & Native ASI Modloader (libnfsu2_asi.so)
         run: |
@@ -147,7 +147,7 @@ jobs:
           fi
           echo "NDK_DIR=$NDK_DIR CLANG_BIN=$CLANG_BIN"
 
-          if [ ! -f /tmp/unicorn-arm64-cache/libunicorn.a ]; then
+          if [ ! -d /tmp/unicorn-arm64-cache/lib ] || [ -z "$(ls -A /tmp/unicorn-arm64-cache/lib/*.a 2>/dev/null)" ]; then
             echo "Cross-compiling Unicorn Engine 2.1.1 (x86 target only) for arm64-v8a..."
             git clone --depth 1 --branch 2.1.1 https://github.com/unicorn-engine/unicorn.git /tmp/unicorn-src
             cmake -S /tmp/unicorn-src -B /tmp/unicorn-build \
@@ -160,9 +160,10 @@ jobs:
               -DUNICORN_BUILD_TESTS=OFF \
               -DUNICORN_INSTALL=OFF
             cmake --build /tmp/unicorn-build --target unicorn -j$(nproc)
-            mkdir -p /tmp/unicorn-arm64-cache/include
-            cp /tmp/unicorn-build/libunicorn.a /tmp/unicorn-arm64-cache/libunicorn.a
+            mkdir -p /tmp/unicorn-arm64-cache/lib /tmp/unicorn-arm64-cache/include
+            find /tmp/unicorn-build -name "*.a" -exec cp {} /tmp/unicorn-arm64-cache/lib/ \;
             cp -r /tmp/unicorn-src/include/unicorn /tmp/unicorn-arm64-cache/include/
+            ls -lh /tmp/unicorn-arm64-cache/lib/
             rm -rf /tmp/unicorn-src /tmp/unicorn-build
           fi
 
@@ -173,7 +174,7 @@ jobs:
             android/app/src/main/cpp/asi/asi_log.c \
             android/app/src/main/cpp/asi/asi_win32.c \
             android/app/src/main/cpp/asi/asi_loader.c \
-            /tmp/unicorn-arm64-cache/libunicorn.a \
+            -Wl,--start-group /tmp/unicorn-arm64-cache/lib/*.a -Wl,--end-group \
             -lm -llog -ldl \
             -o android/app/src/main/jniLibs/arm64-v8a/libnfsu2_asi.so
           ls -lh android/app/src/main/jniLibs/arm64-v8a/libnfsu2_asi.so
