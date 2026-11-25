@@ -28,6 +28,9 @@
 #include <setjmp.h>
 #include <sys/mman.h>
 #include <jni.h>
+#if defined(__aarch64__)
+#include <arm_neon.h>
+#endif
 
 ptrdiff_t *g_p_mem_base = NULL;
 uint32_t  *g_p_esp = NULL;
@@ -299,7 +302,10 @@ static JavaVM         *g_jvm = NULL;
 static jclass          g_client_class = NULL;
 static jmethodID       g_mid_on_said = NULL;
 static jmethodID       g_mid_on_send = NULL;
+static jclass          g_game_activity_class = NULL;
+static jmethodID       g_mid_fetch_news = NULL;
 static uint32_t        g_hub_ip = 0;
+static void            lobby_frame_tick(void);
 
 void roam_plat_lock(void)   { pthread_mutex_lock(&g_mu); }
 void roam_plat_unlock(void) { pthread_mutex_unlock(&g_mu); }
@@ -1517,6 +1523,21 @@ static void hook_recomp_hook(uint32_t va) {
         return;
     }
 
+    if (va == 0x005D2C12u) { /* FRAME_TIME (eDisplayFrame particle step) */
+        if (s_orig_recomp_hook) {
+            s_orig_recomp_hook(va);
+        }
+        if (g_p_mem_base && *g_p_mem_base && g_p_esp && *g_p_esp >= 0x10000u &&
+            rh_mem_committed(A_REALDT, 4) && rh_mem_committed(*g_p_esp, 4)) {
+            float rdt = MRF32(A_REALDT);
+            if (rdt > 0.0f && rdt <= 0.25f) {
+                if (rdt < (1.0f / 240.0f)) rdt = 1.0f / 240.0f;
+                MRF32(*g_p_esp) = rdt;
+            }
+        }
+        return;
+    }
+
     if (s_orig_recomp_hook) {
         s_orig_recomp_hook(va);
     }
@@ -1527,21 +1548,13 @@ static void look_camera_frame_tick(void) {
 }
 
 typedef struct {
-    int d3d9_state_filter;
-    int d3d9_ref_folding;
-    int car_envmap_throttle; /* 0=Original, 1=Half, 2=Quarter, 3=Off */
     int fps_limit;           /* 30, 60, 90, 120, 0(Uncapped) */
     int dxvk_invariant_pos;  /* 1=Safe(True), 0=Fast(False) */
     int boot_invariant_pos;
-    int d3d9_filter_log;
     int loaded;
 } AdvOptionsState;
 
-static AdvOptionsState s_adv_cfg = { 1, 1, 0, 60, 1, 1, 1, 0 };
-static _Atomic int s_d3d9_ref_flush_requested = 0;
-static _Atomic int s_d3d9_state_forget_requested = 0;
-static uint32_t s_saved_car_refl_rate = 0;
-static int s_car_envmap_applied = 0;
+static AdvOptionsState s_adv_cfg = { 60, 1, 1, 0 };
 
 static void adv_options_cfg_path(char *out, size_t out_sz) {
     const char *dir = getenv("NFSU2_DATA_DIR");
@@ -1581,16 +1594,8 @@ static void adv_options_load(void) {
         const char *v = eq + 1;
         while (*v == ' ' || *v == '\t') v++;
         int iv = atoi(v);
-        if (strncmp(k, "d3d9_state_filter", 17) == 0) {
-            s_adv_cfg.d3d9_state_filter = iv ? 1 : 0;
-        } else if (strncmp(k, "d3d9_ref_folding", 16) == 0) {
-            s_adv_cfg.d3d9_ref_folding = iv ? 1 : 0;
-        } else if (strncmp(k, "car_envmap_throttle", 19) == 0) {
-            if (iv >= 0 && iv <= 3) s_adv_cfg.car_envmap_throttle = iv;
-        } else if (strncmp(k, "invariant_position", 18) == 0) {
+        if (strncmp(k, "invariant_position", 18) == 0) {
             s_adv_cfg.dxvk_invariant_pos = iv ? 1 : 0;
-        } else if (strncmp(k, "d3d9_filter_log", 15) == 0) {
-            s_adv_cfg.d3d9_filter_log = iv ? 1 : 0;
         }
     }
     fclose(fp);
@@ -1638,17 +1643,7 @@ static void adv_options_save(void) {
     adv_options_cfg_path(path, sizeof(path));
     FILE *fp = fopen(path, "w");
     if (fp) {
-        fprintf(fp,
-            "d3d9_state_filter=%d\n"
-            "d3d9_ref_folding=%d\n"
-            "car_envmap_throttle=%d\n"
-            "invariant_position=%d\n"
-            "d3d9_filter_log=%d\n",
-            s_adv_cfg.d3d9_state_filter,
-            s_adv_cfg.d3d9_ref_folding,
-            s_adv_cfg.car_envmap_throttle,
-            s_adv_cfg.dxvk_invariant_pos,
-            s_adv_cfg.d3d9_filter_log);
+        fprintf(fp, "invariant_position=%d\n", s_adv_cfg.dxvk_invariant_pos);
         fclose(fp);
     }
 
@@ -1661,27 +1656,6 @@ static void adv_options_save(void) {
     char dxvk_game[512];
     snprintf(dxvk_game, sizeof(dxvk_game), "%s/dxvk.conf", dir);
     adv_update_dxvk_conf_file(dxvk_game, s_adv_cfg.dxvk_invariant_pos);
-}
-
-static void adv_apply_car_envmap(void) {
-    if (!g_p_mem_base || !*g_p_mem_base) return;
-    if (!rh_mem_committed(0x007fee90u, 16) || !rh_mem_committed(0x00870cb8u, 4)) return;
-
-    int mode = s_adv_cfg.car_envmap_throttle;
-    if (mode == 3) {
-        uint32_t cur = MR32(0x00870cb8u);
-        if (cur != 0u) s_saved_car_refl_rate = cur;
-        MR32(0x00870cb8u) = 0u;
-    } else {
-        if (MR32(0x00870cb8u) == 0u && s_saved_car_refl_rate != 0u) {
-            MR32(0x00870cb8u) = s_saved_car_refl_rate;
-        }
-        uint32_t mult = (mode == 1) ? 2u : ((mode == 2) ? 4u : 1u);
-        MR32(0x007fee94u) = 6u * mult;
-        MR32(0x007fee98u) = 4u * mult;
-        MR32(0x007fee9cu) = 1u * mult;
-    }
-    s_car_envmap_applied = 1;
 }
 
 static void adv_apply_fps_limit(int fps) {
@@ -1715,13 +1689,25 @@ typedef struct {
 typedef struct {
     uint32_t device_handle;
     uint8_t  in_state_block;
+    uint8_t  any_dirty;
     uint64_t epoch;
     uint32_t rs[256];
     uint8_t  rs_valid[256];
+    uint32_t rs_pend[256];
+    uint64_t rs_dirty[4];
+    uint32_t token_rs;
     uint32_t ss[16][16];
     uint8_t  ss_valid[16][16];
+    uint32_t ss_pend[16][16];
+    uint16_t ss_dirty[16];
+    uint32_t ss_dirty_mask;
+    uint32_t token_ss;
     uint32_t tss[8][33];
     uint8_t  tss_valid[8][33];
+    uint32_t tss_pend[8][33];
+    uint64_t tss_dirty[8];
+    uint32_t tss_dirty_mask;
+    uint32_t token_tss;
     uint32_t tex[16];
     uint64_t tex_epoch[16];
     uint8_t  tex_valid[16];
@@ -1754,6 +1740,8 @@ typedef struct {
     uint8_t  tf_valid[264];
     uint32_t vp[6];
     uint8_t  vp_valid;
+    uint32_t scissor[4];
+    uint8_t  scissor_valid;
     uint32_t vs_c[256 * 4];
     uint8_t  vs_c_valid[256];
     uint32_t ps_c[224 * 4];
@@ -1761,13 +1749,99 @@ typedef struct {
     D3D9RefEntry refs[D3D9_REF_SLOTS];
     uint64_t total_calls;
     uint64_t filtered_calls;
+    uint64_t coalesced_calls;
     uint64_t ref_folded_calls;
     uint64_t present_frames;
 } D3D9ShadowCache;
 
 static D3D9ShadowCache s_d3d9_cache;
 
+static inline void d3d9_clear_dirty_states(void) {
+    s_d3d9_cache.any_dirty = 0;
+    memset(s_d3d9_cache.rs_dirty, 0, sizeof(s_d3d9_cache.rs_dirty));
+    memset(s_d3d9_cache.ss_dirty, 0, sizeof(s_d3d9_cache.ss_dirty));
+    s_d3d9_cache.ss_dirty_mask = 0;
+    memset(s_d3d9_cache.tss_dirty, 0, sizeof(s_d3d9_cache.tss_dirty));
+    s_d3d9_cache.tss_dirty_mask = 0;
+}
+
+static void d3d9_flush_pending_states(void) {
+    if (!s_d3d9_cache.any_dirty || !s_orig_dispatch_d3d9 || s_d3d9_cache.device_handle == 0u) {
+        return;
+    }
+    uint32_t dev = s_d3d9_cache.device_handle;
+    s_d3d9_cache.any_dirty = 0;
+
+    for (uint32_t w = 0; w < 4u; w++) {
+        uint64_t mask = s_d3d9_cache.rs_dirty[w];
+        if (!mask) continue;
+        s_d3d9_cache.rs_dirty[w] = 0;
+        while (mask) {
+            uint32_t bit = (uint32_t)__builtin_ctzll(mask);
+            mask &= mask - 1ULL;
+            uint32_t st = (w << 6) | bit;
+            uint32_t val = s_d3d9_cache.rs_pend[st];
+            if (s_d3d9_cache.rs_valid[st] && s_d3d9_cache.rs[st] == val) continue;
+            uint32_t call_args[3] = { dev, st, val };
+            uint32_t ac = 0u;
+            uint32_t tok = s_d3d9_cache.token_rs ? s_d3d9_cache.token_rs : (0x7e000000u | (2u << 12) | (57u << 4));
+            uint32_t hr = s_orig_dispatch_d3d9(tok, call_args, &ac);
+            if (hr == 0u) {
+                s_d3d9_cache.rs[st] = val;
+                s_d3d9_cache.rs_valid[st] = 1;
+            }
+        }
+    }
+
+    uint32_t sm_mask = s_d3d9_cache.ss_dirty_mask;
+    s_d3d9_cache.ss_dirty_mask = 0;
+    while (sm_mask) {
+        uint32_t smp = (uint32_t)__builtin_ctz(sm_mask);
+        sm_mask &= sm_mask - 1u;
+        uint16_t tmask = s_d3d9_cache.ss_dirty[smp];
+        s_d3d9_cache.ss_dirty[smp] = 0;
+        while (tmask) {
+            uint32_t type = (uint32_t)__builtin_ctz((uint32_t)tmask);
+            tmask &= (uint16_t)(tmask - 1u);
+            uint32_t val = s_d3d9_cache.ss_pend[smp][type];
+            if (s_d3d9_cache.ss_valid[smp][type] && s_d3d9_cache.ss[smp][type] == val) continue;
+            uint32_t call_args[4] = { dev, smp, type, val };
+            uint32_t ac = 0u;
+            uint32_t tok = s_d3d9_cache.token_ss ? s_d3d9_cache.token_ss : (0x7e000000u | (2u << 12) | (69u << 4));
+            uint32_t hr = s_orig_dispatch_d3d9(tok, call_args, &ac);
+            if (hr == 0u) {
+                s_d3d9_cache.ss[smp][type] = val;
+                s_d3d9_cache.ss_valid[smp][type] = 1;
+            }
+        }
+    }
+
+    uint32_t ts_mask = s_d3d9_cache.tss_dirty_mask;
+    s_d3d9_cache.tss_dirty_mask = 0;
+    while (ts_mask) {
+        uint32_t stage = (uint32_t)__builtin_ctz(ts_mask);
+        ts_mask &= ts_mask - 1u;
+        uint64_t tmask = s_d3d9_cache.tss_dirty[stage];
+        s_d3d9_cache.tss_dirty[stage] = 0;
+        while (tmask) {
+            uint32_t type = (uint32_t)__builtin_ctzll(tmask);
+            tmask &= tmask - 1ULL;
+            uint32_t val = s_d3d9_cache.tss_pend[stage][type];
+            if (s_d3d9_cache.tss_valid[stage][type] && s_d3d9_cache.tss[stage][type] == val) continue;
+            uint32_t call_args[4] = { dev, stage, type, val };
+            uint32_t ac = 0u;
+            uint32_t tok = s_d3d9_cache.token_tss ? s_d3d9_cache.token_tss : (0x7e000000u | (2u << 12) | (67u << 4));
+            uint32_t hr = s_orig_dispatch_d3d9(tok, call_args, &ac);
+            if (hr == 0u) {
+                s_d3d9_cache.tss[stage][type] = val;
+                s_d3d9_cache.tss_valid[stage][type] = 1;
+            }
+        }
+    }
+}
+
 static void d3d9_cache_forget(void) {
+    d3d9_clear_dirty_states();
     memset(s_d3d9_cache.rs_valid, 0, sizeof(s_d3d9_cache.rs_valid));
     memset(s_d3d9_cache.ss_valid, 0, sizeof(s_d3d9_cache.ss_valid));
     memset(s_d3d9_cache.tss_valid, 0, sizeof(s_d3d9_cache.tss_valid));
@@ -1785,6 +1859,7 @@ static void d3d9_cache_forget(void) {
     s_d3d9_cache.ib_valid = 0;
     s_d3d9_cache.sw_vp_valid = 0;
     s_d3d9_cache.vp_valid = 0;
+    s_d3d9_cache.scissor_valid = 0;
 }
 
 static inline int d3d9_is_foldable_kind(uint32_t kind) {
@@ -1873,6 +1948,7 @@ static inline const void *d3d9_guest_ptr(uint32_t va, uint32_t len) {
 
 static inline void d3d9_cache_sync_device(uint32_t dev) {
     if (s_d3d9_cache.device_handle != dev) {
+        d3d9_flush_pending_states();
         d3d9_cache_forget();
         s_d3d9_cache.device_handle = dev;
     }
@@ -1884,13 +1960,6 @@ static uint32_t hook_dispatchGuestD3D9(uint32_t token, const uint32_t *args, uin
         return s_orig_dispatch_d3d9(token, args, argumentCount);
     }
 
-    if (atomic_exchange(&s_d3d9_ref_flush_requested, 0) != 0) {
-        d3d9_ref_flush_all();
-    }
-    if (atomic_exchange(&s_d3d9_state_forget_requested, 0) != 0) {
-        d3d9_cache_forget();
-    }
-
     uint32_t off = token - 0x7e000000u;
     uint32_t kind = off >> 12;
     uint32_t method = (off >> 4) & 0xFFu;
@@ -1899,10 +1968,13 @@ static uint32_t hook_dispatchGuestD3D9(uint32_t token, const uint32_t *args, uin
     if (kind == 2u) {
         uint32_t dev = args[0];
         if (method == 17u) {
+            d3d9_flush_pending_states();
             uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
             if (hr == 0u) {
                 g_frame_count++;
                 s_d3d9_cache.present_frames++;
+                fe_spinners_tick();
+                lobby_frame_tick();
                 static void (*s_telemetry_present)(uint64_t) = NULL;
                 static int s_telemetry_checked = 0;
                 if (!s_telemetry_checked) {
@@ -1922,14 +1994,14 @@ static uint32_t hook_dispatchGuestD3D9(uint32_t token, const uint32_t *args, uin
                     uint64_t now_ns = (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
                     s_telemetry_present(now_ns);
                 }
-                if (s_adv_cfg.d3d9_filter_log &&
-                    (s_d3d9_cache.present_frames == 60u || (s_d3d9_cache.present_frames % 300u) == 0u) &&
+                if ((s_d3d9_cache.present_frames == 60u || (s_d3d9_cache.present_frames % 300u) == 0u) &&
                     s_d3d9_cache.total_calls > 0u) {
-                    uint64_t saved = s_d3d9_cache.filtered_calls + s_d3d9_cache.ref_folded_calls;
+                    uint64_t saved = s_d3d9_cache.filtered_calls + s_d3d9_cache.coalesced_calls + s_d3d9_cache.ref_folded_calls;
                     double pct = (double)saved * 100.0 / (double)s_d3d9_cache.total_calls;
                     __android_log_print(ANDROID_LOG_INFO, "NFSU2-D3D9Filter",
-                        "Filtered %llu state + %llu ref = %llu / %llu D3D9 calls (%.1f%%) over %llu frames",
+                        "Filtered %llu state + %llu coalesced + %llu ref = %llu / %llu D3D9 calls (%.1f%%) over %llu frames",
                         (unsigned long long)s_d3d9_cache.filtered_calls,
+                        (unsigned long long)s_d3d9_cache.coalesced_calls,
                         (unsigned long long)s_d3d9_cache.ref_folded_calls,
                         (unsigned long long)saved,
                         (unsigned long long)s_d3d9_cache.total_calls,
@@ -1938,6 +2010,16 @@ static uint32_t hook_dispatchGuestD3D9(uint32_t token, const uint32_t *args, uin
                 }
             }
             return hr;
+        }
+
+        /* Flush any deferred RS/SS/TSS writes before any draw, clear, query, scene boundary, or state block */
+        if (s_d3d9_cache.any_dirty &&
+            (method == 81u || method == 82u || method == 83u || method == 84u ||
+             method == 115u || method == 116u || method == 43u || method == 41u ||
+             method == 42u || method == 34u || method == 35u || method == 37u ||
+             method == 39u || method == 58u || method == 66u || method == 68u ||
+             method == 85u || method == 59u || method == 60u || method == 61u)) {
+            d3d9_flush_pending_states();
         }
 
         /* Clear any stale ref-cache slot if D3D9 Create* reuses a previously freed guest handle */
@@ -1982,6 +2064,7 @@ static uint32_t hook_dispatchGuestD3D9(uint32_t token, const uint32_t *args, uin
             return hr;
         }
         if (method == 16u) {
+            d3d9_clear_dirty_states();
             d3d9_ref_flush_all();
             uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
             s_d3d9_cache.in_state_block = 0;
@@ -1990,6 +2073,7 @@ static uint32_t hook_dispatchGuestD3D9(uint32_t token, const uint32_t *args, uin
             return hr;
         }
         if (method == 2u) {
+            d3d9_flush_pending_states();
             d3d9_ref_flush_all();
             uint32_t refs = s_orig_dispatch_d3d9(token, args, argumentCount);
             if (refs == 0u) {
@@ -2004,6 +2088,7 @@ static uint32_t hook_dispatchGuestD3D9(uint32_t token, const uint32_t *args, uin
             uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
             memset(s_d3d9_cache.tex_valid, 0, sizeof(s_d3d9_cache.tex_valid));
             s_d3d9_cache.vp_valid = 0;
+            s_d3d9_cache.scissor_valid = 0;
             s_d3d9_cache.epoch++;
             return hr;
         }
@@ -2018,16 +2103,36 @@ static uint32_t hook_dispatchGuestD3D9(uint32_t token, const uint32_t *args, uin
             return hr;
         }
 
-        if (s_adv_cfg.d3d9_state_filter && !s_d3d9_cache.in_state_block && dev != 0u) {
+        if (!s_d3d9_cache.in_state_block && dev != 0u) {
             int same_dev = (s_d3d9_cache.device_handle == dev);
             switch (method) {
             case 57u: {
                 uint32_t st = args[1], val = args[2];
-                if (same_dev && st < 256u && s_d3d9_cache.rs_valid[st] && s_d3d9_cache.rs[st] == val) {
+                if (st <= 209u) {
+                    if (!same_dev) d3d9_cache_sync_device(dev);
+                    uint32_t w = st >> 6;
+                    uint64_t bit = 1ULL << (st & 63u);
+                    if (s_d3d9_cache.rs_valid[st] && s_d3d9_cache.rs[st] == val) {
+                        if (s_d3d9_cache.rs_dirty[w] & bit) {
+                            s_d3d9_cache.rs_dirty[w] &= ~bit;
+                            s_d3d9_cache.coalesced_calls++;
+                        } else {
+                            s_d3d9_cache.filtered_calls++;
+                        }
+                        *argumentCount = 3u;
+                        return 0u;
+                    }
+                    if (s_d3d9_cache.rs_dirty[w] & bit) {
+                        s_d3d9_cache.coalesced_calls++;
+                    }
+                    s_d3d9_cache.token_rs = token;
+                    s_d3d9_cache.rs_pend[st] = val;
+                    s_d3d9_cache.rs_dirty[w] |= bit;
+                    s_d3d9_cache.any_dirty = 1;
                     *argumentCount = 3u;
-                    s_d3d9_cache.filtered_calls++;
                     return 0u;
                 }
+                d3d9_flush_pending_states();
                 uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
                 if (hr == 0u && st < 256u) {
                     d3d9_cache_sync_device(dev);
@@ -2038,11 +2143,32 @@ static uint32_t hook_dispatchGuestD3D9(uint32_t token, const uint32_t *args, uin
             }
             case 69u: {
                 uint32_t smp = args[1], type = args[2], val = args[3];
-                if (same_dev && smp < 16u && type < 16u && s_d3d9_cache.ss_valid[smp][type] && s_d3d9_cache.ss[smp][type] == val) {
+                if (smp < 16u && type >= 1u && type <= 13u) {
+                    if (!same_dev) d3d9_cache_sync_device(dev);
+                    uint16_t bit = (uint16_t)(1u << type);
+                    if (s_d3d9_cache.ss_valid[smp][type] && s_d3d9_cache.ss[smp][type] == val) {
+                        if (s_d3d9_cache.ss_dirty[smp] & bit) {
+                            s_d3d9_cache.ss_dirty[smp] &= (uint16_t)~bit;
+                            if (s_d3d9_cache.ss_dirty[smp] == 0u) s_d3d9_cache.ss_dirty_mask &= ~(1u << smp);
+                            s_d3d9_cache.coalesced_calls++;
+                        } else {
+                            s_d3d9_cache.filtered_calls++;
+                        }
+                        *argumentCount = 4u;
+                        return 0u;
+                    }
+                    if (s_d3d9_cache.ss_dirty[smp] & bit) {
+                        s_d3d9_cache.coalesced_calls++;
+                    }
+                    s_d3d9_cache.token_ss = token;
+                    s_d3d9_cache.ss_pend[smp][type] = val;
+                    s_d3d9_cache.ss_dirty[smp] |= bit;
+                    s_d3d9_cache.ss_dirty_mask |= (1u << smp);
+                    s_d3d9_cache.any_dirty = 1;
                     *argumentCount = 4u;
-                    s_d3d9_cache.filtered_calls++;
                     return 0u;
                 }
+                d3d9_flush_pending_states();
                 uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
                 if (hr == 0u && smp < 16u && type < 16u) {
                     d3d9_cache_sync_device(dev);
@@ -2053,16 +2179,53 @@ static uint32_t hook_dispatchGuestD3D9(uint32_t token, const uint32_t *args, uin
             }
             case 67u: {
                 uint32_t stage = args[1], type = args[2], val = args[3];
-                if (same_dev && stage < 8u && type < 33u && s_d3d9_cache.tss_valid[stage][type] && s_d3d9_cache.tss[stage][type] == val) {
+                if (stage < 8u && type >= 1u && type <= 32u) {
+                    if (!same_dev) d3d9_cache_sync_device(dev);
+                    uint64_t bit = 1ULL << type;
+                    if (s_d3d9_cache.tss_valid[stage][type] && s_d3d9_cache.tss[stage][type] == val) {
+                        if (s_d3d9_cache.tss_dirty[stage] & bit) {
+                            s_d3d9_cache.tss_dirty[stage] &= ~bit;
+                            if (s_d3d9_cache.tss_dirty[stage] == 0ULL) s_d3d9_cache.tss_dirty_mask &= ~(1u << stage);
+                            s_d3d9_cache.coalesced_calls++;
+                        } else {
+                            s_d3d9_cache.filtered_calls++;
+                        }
+                        *argumentCount = 4u;
+                        return 0u;
+                    }
+                    if (s_d3d9_cache.tss_dirty[stage] & bit) {
+                        s_d3d9_cache.coalesced_calls++;
+                    }
+                    s_d3d9_cache.token_tss = token;
+                    s_d3d9_cache.tss_pend[stage][type] = val;
+                    s_d3d9_cache.tss_dirty[stage] |= bit;
+                    s_d3d9_cache.tss_dirty_mask |= (1u << stage);
+                    s_d3d9_cache.any_dirty = 1;
                     *argumentCount = 4u;
-                    s_d3d9_cache.filtered_calls++;
                     return 0u;
                 }
+                d3d9_flush_pending_states();
                 uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
                 if (hr == 0u && stage < 8u && type < 33u) {
                     d3d9_cache_sync_device(dev);
                     s_d3d9_cache.tss[stage][type] = val;
                     s_d3d9_cache.tss_valid[stage][type] = 1;
+                }
+                return hr;
+            }
+            case 75u: {
+                const void *src = d3d9_guest_ptr(args[1], 16u);
+                if (same_dev && src && s_d3d9_cache.scissor_valid &&
+                    memcmp(s_d3d9_cache.scissor, src, 16u) == 0) {
+                    *argumentCount = 2u;
+                    s_d3d9_cache.filtered_calls++;
+                    return 0u;
+                }
+                uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
+                if (hr == 0u && src) {
+                    d3d9_cache_sync_device(dev);
+                    memcpy(s_d3d9_cache.scissor, src, 16u);
+                    s_d3d9_cache.scissor_valid = 1;
                 }
                 return hr;
             }
@@ -2323,21 +2486,26 @@ static uint32_t hook_dispatchGuestD3D9(uint32_t token, const uint32_t *args, uin
     }
 
     if (kind == 13u && method == 3u) {
+        d3d9_flush_pending_states();
         uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
         if (hr == 0u) {
             g_frame_count++;
             s_d3d9_cache.present_frames++;
+            fe_spinners_tick();
+            lobby_frame_tick();
         }
         return hr;
     }
 
-    if (kind == 11u && method == 5u) {
+    if (kind == 11u && (method == 4u || method == 5u)) {
+        d3d9_flush_pending_states();
         uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
-        d3d9_cache_forget();
+        if (method == 5u) d3d9_cache_forget();
         return hr;
     }
 
     if (kind == 1u && method == 16u) {
+        d3d9_clear_dirty_states();
         d3d9_ref_flush_all();
         uint32_t args_copy[7];
         const uint32_t *call_args = args;
@@ -2376,7 +2544,7 @@ static uint32_t hook_dispatchGuestD3D9(uint32_t token, const uint32_t *args, uin
     /* Paired transient AddRef (method 1) / Release (method 2) folding for non-subresource D3D9 objects */
     if (d3d9_is_foldable_kind(kind)) {
         uint32_t handle = args[0];
-        if (method == 1u && handle != 0u && s_adv_cfg.d3d9_ref_folding) {
+        if (method == 1u && handle != 0u) {
             D3D9RefEntry *e = d3d9_ref_lookup(handle, (uint8_t)kind);
             if (e) {
                 if (e->base_refs == 0u) {
@@ -2405,16 +2573,11 @@ static uint32_t hook_dispatchGuestD3D9(uint32_t token, const uint32_t *args, uin
         }
         if (method == 2u && handle != 0u) {
             D3D9RefEntry *e = d3d9_ref_lookup(handle, (uint8_t)kind);
-            if (e) {
-                if (s_adv_cfg.d3d9_ref_folding && e->base_refs >= 1u && e->extra_refs > 0u) {
-                    e->extra_refs--;
-                    *argumentCount = 1u;
-                    s_d3d9_cache.ref_folded_calls++;
-                    return e->base_refs + e->extra_refs;
-                }
-                if (e->extra_refs > 0u) {
-                    d3d9_ref_flush_entry(e);
-                }
+            if (e && e->base_refs >= 1u && e->extra_refs > 0u) {
+                e->extra_refs--;
+                *argumentCount = 1u;
+                s_d3d9_cache.ref_folded_calls++;
+                return e->base_refs + e->extra_refs;
             }
             uint32_t refs = s_orig_dispatch_d3d9(token, args, argumentCount);
             if (refs == 0u) {
@@ -2452,7 +2615,7 @@ static void hook_nfs_widescreen_apply_frame_rate(void) {
     if (rh_mem_committed(0x007875bcu, 4)) MRF32(0x007875bcu) = 1.0f / 60.0f;
     if (rh_mem_committed(0x00865198u, 4) && rh_mem_committed(0x007fc858u, 4)) {
         float rdt = MRF32(0x00865198u);
-        if (rdt < 1.0f / 60.0f) rdt = 1.0f / 60.0f;
+        if (rdt < 1.0f / 240.0f) rdt = 1.0f / 240.0f;
         else if (rdt > 0.25f) rdt = 0.25f;
         MRF32(0x007fc858u) = rdt;
     }
@@ -2461,7 +2624,7 @@ static void hook_nfs_widescreen_apply_frame_rate(void) {
 /* =========================================================================
  * Native In-Game "Advanced Options" Menu (Bottom of Display Options)
  * ========================================================================= */
-#define ADV_OPT_COUNT 6
+#define ADV_OPT_COUNT 2
 
 typedef struct {
     uint32_t ptr;
@@ -2550,21 +2713,6 @@ static void adv_refresh_widget(uint32_t self, int id) {
     const char *value = "";
     switch (id) {
         case 0:
-            label = "D3D9 State Filter";
-            value = s_adv_cfg.d3d9_state_filter ? "On" : "Off";
-            break;
-        case 1:
-            label = "D3D9 Ref Folding";
-            value = s_adv_cfg.d3d9_ref_folding ? "On" : "Off";
-            break;
-        case 2:
-            label = "Car Reflection Rate";
-            if (s_adv_cfg.car_envmap_throttle == 0) value = "Original";
-            else if (s_adv_cfg.car_envmap_throttle == 1) value = "Half";
-            else if (s_adv_cfg.car_envmap_throttle == 2) value = "Quarter";
-            else value = "Off";
-            break;
-        case 3:
             label = "FPS Limit";
             if (s_adv_cfg.fps_limit == 30) value = "30 FPS";
             else if (s_adv_cfg.fps_limit == 60) value = "60 FPS";
@@ -2572,17 +2720,13 @@ static void adv_refresh_widget(uint32_t self, int id) {
             else if (s_adv_cfg.fps_limit == 120) value = "120 FPS";
             else value = "Uncapped";
             break;
-        case 4:
+        case 1:
             label = "Invariant Position";
             if (s_adv_cfg.dxvk_invariant_pos == s_adv_cfg.boot_invariant_pos) {
-                value = s_adv_cfg.dxvk_invariant_pos ? "Safe (On)" : "Fast (Off)";
+                value = s_adv_cfg.dxvk_invariant_pos ? "Safe (On)" : "Fast (Unsafe)";
             } else {
                 value = s_adv_cfg.dxvk_invariant_pos ? "Safe (Restart)" : "Fast (Restart)";
             }
-            break;
-        case 5:
-            label = "D3D9 Filter Log";
-            value = s_adv_cfg.d3d9_filter_log ? "On" : "Off";
             break;
         default:
             return;
@@ -2734,21 +2878,7 @@ static void hook_sub_0049b8a0(void) {
 
     if (dir != 0) {
         switch (id) {
-            case 0:
-                s_adv_cfg.d3d9_state_filter = s_adv_cfg.d3d9_state_filter ? 0 : 1;
-                atomic_store(&s_d3d9_state_forget_requested, 1);
-                break;
-            case 1:
-                s_adv_cfg.d3d9_ref_folding = s_adv_cfg.d3d9_ref_folding ? 0 : 1;
-                if (!s_adv_cfg.d3d9_ref_folding) {
-                    atomic_store(&s_d3d9_ref_flush_requested, 1);
-                }
-                break;
-            case 2:
-                s_adv_cfg.car_envmap_throttle = (s_adv_cfg.car_envmap_throttle + dir + 4) % 4;
-                adv_apply_car_envmap();
-                break;
-            case 3: {
+            case 0: {
                 static const int kFpsOpts[5] = { 30, 60, 90, 120, 0 };
                 int idx = 1;
                 for (int i = 0; i < 5; i++) {
@@ -2758,11 +2888,8 @@ static void hook_sub_0049b8a0(void) {
                 adv_apply_fps_limit(kFpsOpts[idx]);
                 break;
             }
-            case 4:
+            case 1:
                 s_adv_cfg.dxvk_invariant_pos = s_adv_cfg.dxvk_invariant_pos ? 0 : 1;
-                break;
-            case 5:
-                s_adv_cfg.d3d9_filter_log = s_adv_cfg.d3d9_filter_log ? 0 : 1;
                 break;
             default:
                 break;
@@ -2998,6 +3125,581 @@ static void hook_nfs_widescreen_set_resolution(unsigned width, unsigned height) 
     }
 }
 
+/* =========================================================================
+ * Online News HTTP Interceptor (GOT hook on libnfsu2_android.so libc sockets)
+ * Intercepts EA ProtoHTTP news/TOS requests on both classic and WebSocket
+ * online servers and serves GameActivity.fetchNewsContent() via socketpair.
+ * ========================================================================= */
+typedef int (*lib_connect_fn)(int fd, const struct sockaddr *addr, socklen_t addrlen);
+typedef ssize_t (*lib_sendto_fn)(int fd, const void *buf, size_t len, int flags,
+                                 const struct sockaddr *dest_addr, socklen_t addrlen);
+typedef int (*lib_close_fn)(int fd);
+
+static lib_connect_fn s_orig_lib_connect = NULL;
+static lib_sendto_fn  s_orig_lib_sendto  = NULL;
+static lib_close_fn   s_orig_lib_close   = NULL;
+
+#define HTTP_NEWS_MAX_SLOTS 32
+typedef struct {
+    int    fd;
+    int    peer_fd;
+    int    responded;
+    size_t req_len;
+    char   req_buf[1024];
+} HttpNewsSlot;
+
+static HttpNewsSlot    s_http_news_slots[HTTP_NEWS_MAX_SLOTS];
+static pthread_mutex_t s_http_news_mu = PTHREAD_MUTEX_INITIALIZER;
+static _Atomic int     s_http_news_active = 0;
+
+static char *news_fetch_from_java(void) {
+    static const char kFallbackNews[] =
+        " %{START CMD=news TITLE=\"NFSU2 Revived Core\" BTN1=\"OK\" BTN1-GOTO=\"$exit=0\" %}\r\n"
+        "Welcome to Need for Speed Underground 2 Revived.\r\n\r\n"
+        "See you on the streets of Bayview.\r\n"
+        "%{%}\r\n";
+
+    if (g_jvm && g_game_activity_class && g_mid_fetch_news) {
+        JNIEnv *env = NULL;
+        int attached = 0;
+        jint env_res = (*g_jvm)->GetEnv(g_jvm, (void **)&env, JNI_VERSION_1_6);
+        if (env_res == JNI_EDETACHED) {
+            if ((*g_jvm)->AttachCurrentThread(g_jvm, &env, NULL) == 0) {
+                attached = 1;
+            } else {
+                env = NULL;
+            }
+        } else if (env_res != JNI_OK) {
+            env = NULL;
+        }
+        if (env) {
+            jstring jstr = (jstring)(*env)->CallStaticObjectMethod(env, g_game_activity_class, g_mid_fetch_news);
+            if ((*env)->ExceptionCheck(env)) {
+                (*env)->ExceptionClear(env);
+                jstr = NULL;
+            }
+            if (jstr) {
+                const char *utf = (*env)->GetStringUTFChars(env, jstr, NULL);
+                char *copy = NULL;
+                if (utf && utf[0] != '\0') {
+                    size_t slen = strlen(utf);
+                    copy = (char *)malloc(slen + 1u);
+                    if (copy) memcpy(copy, utf, slen + 1u);
+                }
+                if (utf) (*env)->ReleaseStringUTFChars(env, jstr, utf);
+                (*env)->DeleteLocalRef(env, jstr);
+                if (attached) (*g_jvm)->DetachCurrentThread(g_jvm);
+                if (copy) return copy;
+            } else if (attached) {
+                (*g_jvm)->DetachCurrentThread(g_jvm);
+            }
+        }
+    }
+
+    char *fb = (char *)malloc(sizeof(kFallbackNews));
+    if (fb) memcpy(fb, kFallbackNews, sizeof(kFallbackNews));
+    return fb;
+}
+
+static int hook_lib_connect(int fd, const struct sockaddr *addr, socklen_t addrlen) {
+    if (fd > 0 && addr && addrlen >= (socklen_t)sizeof(struct sockaddr_in) &&
+        addr->sa_family == AF_INET) {
+        const struct sockaddr_in *in = (const struct sockaddr_in *)addr;
+        uint16_t port = ntohs(in->sin_port);
+        if (port == 80u || port == 8080u || port == 3000u || port == 9900u) {
+            int stype = 0;
+            socklen_t sl = (socklen_t)sizeof(stype);
+            if (getsockopt(fd, SOL_SOCKET, SO_TYPE, &stype, &sl) == 0 && stype == SOCK_STREAM) {
+                int pair[2] = { -1, -1 };
+                if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0, pair) == 0) {
+                    int buf_sz = 262144;
+                    setsockopt(pair[0], SOL_SOCKET, SO_RCVBUF, &buf_sz, sizeof(buf_sz));
+                    setsockopt(pair[0], SOL_SOCKET, SO_SNDBUF, &buf_sz, sizeof(buf_sz));
+                    setsockopt(pair[1], SOL_SOCKET, SO_RCVBUF, &buf_sz, sizeof(buf_sz));
+                    setsockopt(pair[1], SOL_SOCKET, SO_SNDBUF, &buf_sz, sizeof(buf_sz));
+
+                    if (dup2(pair[0], fd) == fd) {
+                        fcntl(fd, F_SETFD, FD_CLOEXEC);
+                        if (s_orig_lib_close) s_orig_lib_close(pair[0]);
+                        else close(pair[0]);
+
+                        int old_peer = -1;
+                        pthread_mutex_lock(&s_http_news_mu);
+                        int free_idx = -1;
+                        for (int i = 0; i < HTTP_NEWS_MAX_SLOTS; i++) {
+                            if (s_http_news_slots[i].fd == fd) {
+                                old_peer = s_http_news_slots[i].peer_fd;
+                                free_idx = i;
+                                break;
+                            }
+                            if (s_http_news_slots[i].fd <= 0 && free_idx < 0) {
+                                free_idx = i;
+                            }
+                        }
+                        if (free_idx >= 0) {
+                            int was_empty = (s_http_news_slots[free_idx].fd <= 0);
+                            s_http_news_slots[free_idx].fd = fd;
+                            s_http_news_slots[free_idx].peer_fd = pair[1];
+                            s_http_news_slots[free_idx].responded = 0;
+                            s_http_news_slots[free_idx].req_len = 0;
+                            s_http_news_slots[free_idx].req_buf[0] = '\0';
+                            if (was_empty) atomic_fetch_add(&s_http_news_active, 1);
+                            pthread_mutex_unlock(&s_http_news_mu);
+
+                            if (old_peer >= 0) {
+                                if (s_orig_lib_close) s_orig_lib_close(old_peer);
+                                else close(old_peer);
+                            }
+
+                            char ip_txt[INET_ADDRSTRLEN] = {0};
+                            inet_ntop(AF_INET, &in->sin_addr, ip_txt, sizeof(ip_txt));
+                            __android_log_print(ANDROID_LOG_INFO, "NFSU2-News",
+                                "Intercepted HTTP connect on fd=%d (%s:%u) -> local news socketpair",
+                                fd, ip_txt, (unsigned)port);
+                            errno = 0;
+                            return 0;
+                        }
+                        pthread_mutex_unlock(&s_http_news_mu);
+                        if (s_orig_lib_close) s_orig_lib_close(pair[1]);
+                        else close(pair[1]);
+                    } else {
+                        if (s_orig_lib_close) {
+                            s_orig_lib_close(pair[0]);
+                            s_orig_lib_close(pair[1]);
+                        } else {
+                            close(pair[0]);
+                            close(pair[1]);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return s_orig_lib_connect ? s_orig_lib_connect(fd, addr, addrlen) : connect(fd, addr, addrlen);
+}
+
+static ssize_t hook_lib_sendto(int fd, const void *buf, size_t len, int flags,
+                               const struct sockaddr *dest_addr, socklen_t addrlen) {
+    if (atomic_load_explicit(&s_http_news_active, memory_order_relaxed) > 0 && fd >= 0) {
+        int is_http = 0;
+        int do_respond = 0;
+        int peer_fd = -1;
+        char req_copy[1024];
+        req_copy[0] = '\0';
+
+        pthread_mutex_lock(&s_http_news_mu);
+        for (int i = 0; i < HTTP_NEWS_MAX_SLOTS; i++) {
+            if (s_http_news_slots[i].fd == fd) {
+                is_http = 1;
+                if (!s_http_news_slots[i].responded) {
+                    if (buf && len > 0) {
+                        size_t avail = sizeof(s_http_news_slots[i].req_buf) - 1u - s_http_news_slots[i].req_len;
+                        size_t copy_n = (len < avail) ? len : avail;
+                        if (copy_n > 0) {
+                            memcpy(s_http_news_slots[i].req_buf + s_http_news_slots[i].req_len, buf, copy_n);
+                            s_http_news_slots[i].req_len += copy_n;
+                            s_http_news_slots[i].req_buf[s_http_news_slots[i].req_len] = '\0';
+                        }
+                    }
+                    if (strstr(s_http_news_slots[i].req_buf, "\r\n\r\n") != NULL ||
+                        strstr(s_http_news_slots[i].req_buf, "\n\n") != NULL ||
+                        s_http_news_slots[i].req_len >= sizeof(s_http_news_slots[i].req_buf) - 1u) {
+                        s_http_news_slots[i].responded = 1;
+                        peer_fd = s_http_news_slots[i].peer_fd;
+                        memcpy(req_copy, s_http_news_slots[i].req_buf, s_http_news_slots[i].req_len + 1u);
+                        do_respond = 1;
+                    }
+                }
+                break;
+            }
+        }
+        pthread_mutex_unlock(&s_http_news_mu);
+
+        if (is_http) {
+            if (do_respond && peer_fd >= 0) {
+                int is_head = (strncmp(req_copy, "HEAD ", 5) == 0);
+                char first_line[256];
+                size_t fl = 0;
+                while (fl + 1u < sizeof(first_line) && req_copy[fl] != '\0' &&
+                       req_copy[fl] != '\r' && req_copy[fl] != '\n') {
+                    first_line[fl] = req_copy[fl];
+                    fl++;
+                }
+                first_line[fl] = '\0';
+
+                int is_tos = (strcasestr(first_line, "/tos") != NULL);
+                char *payload = NULL;
+                if (is_tos) {
+                    static const char kTosPage[] =
+                        " %{START CMD=news TITLE=\"Terms of Service\" BTN1=\"OK\" BTN1-GOTO=\"$exit=0\" %}\r\n"
+                        "Play fair and respect other racers in the lobby and free roam.\r\n"
+                        "%{%}\r\n";
+                    payload = (char *)malloc(sizeof(kTosPage));
+                    if (payload) memcpy(payload, kTosPage, sizeof(kTosPage));
+                } else {
+                    payload = news_fetch_from_java();
+                }
+
+                if (payload) {
+                    size_t body_len = strlen(payload);
+                    char header[384];
+                    int hlen = snprintf(header, sizeof(header),
+                        "HTTP/1.0 200 OK\r\n"
+                        "Server: Apache\r\n"
+                        "Content-Type: text/plain; charset=utf-8\r\n"
+                        "Content-Length: %zu\r\n"
+                        "Connection: close\r\n\r\n",
+                        body_len);
+                    if (hlen > 0) {
+                        size_t total_len = (size_t)hlen + (is_head ? 0u : body_len);
+                        char *resp = (char *)malloc(total_len);
+                        if (resp) {
+                            memcpy(resp, header, (size_t)hlen);
+                            if (!is_head && body_len > 0) {
+                                memcpy(resp + hlen, payload, body_len);
+                            }
+                            size_t off = 0;
+                            while (off < total_len) {
+                                ssize_t w = s_orig_lib_sendto
+                                    ? s_orig_lib_sendto(peer_fd, resp + off, total_len - off, MSG_NOSIGNAL, NULL, 0)
+                                    : sendto(peer_fd, resp + off, total_len - off, MSG_NOSIGNAL, NULL, 0);
+                                if (w > 0) {
+                                    off += (size_t)w;
+                                } else if (w < 0 && errno == EINTR) {
+                                    continue;
+                                } else {
+                                    break;
+                                }
+                            }
+                            free(resp);
+                        }
+                    }
+                    shutdown(peer_fd, SHUT_WR);
+                    __android_log_print(ANDROID_LOG_INFO, "NFSU2-News",
+                        "Served %s payload (%zu bytes) for [%s]",
+                        is_tos ? "TOS" : "custom news", body_len, first_line);
+                    free(payload);
+                }
+            }
+            return (ssize_t)len;
+        }
+    }
+    return s_orig_lib_sendto
+        ? s_orig_lib_sendto(fd, buf, len, flags, dest_addr, addrlen)
+        : sendto(fd, buf, len, flags, dest_addr, addrlen);
+}
+
+static int hook_lib_close(int fd) {
+    if (atomic_load_explicit(&s_http_news_active, memory_order_relaxed) > 0 && fd >= 0) {
+        int peer_fd = -1;
+        pthread_mutex_lock(&s_http_news_mu);
+        for (int i = 0; i < HTTP_NEWS_MAX_SLOTS; i++) {
+            if (s_http_news_slots[i].fd == fd) {
+                peer_fd = s_http_news_slots[i].peer_fd;
+                s_http_news_slots[i].fd = 0;
+                s_http_news_slots[i].peer_fd = -1;
+                s_http_news_slots[i].responded = 0;
+                s_http_news_slots[i].req_len = 0;
+                atomic_fetch_sub(&s_http_news_active, 1);
+                break;
+            }
+        }
+        pthread_mutex_unlock(&s_http_news_mu);
+        if (peer_fd >= 0) {
+            if (s_orig_lib_close) s_orig_lib_close(peer_fd);
+            else close(peer_fd);
+        }
+    }
+    return s_orig_lib_close ? s_orig_lib_close(fd) : close(fd);
+}
+
+/* =========================================================================
+ * ARM64 NEON SIMD CPU DXT1 / DXT3 / DXT5 Decoder (_Z9decodeDXTjjjPKhm)
+ * Uses vqtbl1q_u8 4-pixel-per-op palette shuffle + zero redundant memset.
+ * ========================================================================= */
+#if defined(__aarch64__)
+typedef struct {
+    uint8_t *begin;
+    uint8_t *end;
+    uint8_t *cap;
+} NdkByteVec;
+
+static void *s_orig_decode_dxt = NULL;
+static void *(*s_android_op_new)(size_t) = NULL;
+static uint8_t s_dxt_row_lut[256][16] __attribute__((aligned(16)));
+static _Atomic uint64_t s_dxt_neon_decoded = 0;
+
+static void dxt_neon_init_lut(void) {
+    for (uint32_t b = 0; b < 256u; b++) {
+        uint8_t p0 = (uint8_t)(((b >> 0) & 3u) * 4u);
+        uint8_t p1 = (uint8_t)(((b >> 2) & 3u) * 4u);
+        uint8_t p2 = (uint8_t)(((b >> 4) & 3u) * 4u);
+        uint8_t p3 = (uint8_t)(((b >> 6) & 3u) * 4u);
+        uint8_t *row = s_dxt_row_lut[b];
+        row[0]  = p0;     row[1]  = p0 + 1u; row[2]  = p0 + 2u; row[3]  = p0 + 3u;
+        row[4]  = p1;     row[5]  = p1 + 1u; row[6]  = p1 + 2u; row[7]  = p1 + 3u;
+        row[8]  = p2;     row[9]  = p2 + 1u; row[10] = p2 + 2u; row[11] = p2 + 3u;
+        row[12] = p3;     row[13] = p3 + 1u; row[14] = p3 + 2u; row[15] = p3 + 3u;
+    }
+}
+
+static inline void call_orig_decode_dxt(uint32_t mode, uint32_t width, uint32_t height,
+                                        const uint8_t *src, size_t src_bytes, NdkByteVec *out) {
+    if (!s_orig_decode_dxt) return;
+    register uint32_t r0 __asm__("w0") = mode;
+    register uint32_t r1 __asm__("w1") = width;
+    register uint32_t r2 __asm__("w2") = height;
+    register const uint8_t *r3 __asm__("x3") = src;
+    register size_t r4 __asm__("x4") = src_bytes;
+    register NdkByteVec *r8 __asm__("x8") = out;
+    register void *fn __asm__("x16") = s_orig_decode_dxt;
+    __asm__ volatile(
+        "blr %x[fn]"
+        : "+r"(r0), "+r"(r1), "+r"(r2), "+r"(r3), "+r"(r4), "+r"(r8), "+r"(fn)
+        :
+        : "x5", "x6", "x7", "x9", "x10", "x11", "x12", "x13", "x14", "x15", "x17", "x30",
+          "v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7",
+          "v16", "v17", "v18", "v19", "v20", "v21", "v22", "v23",
+          "v24", "v25", "v26", "v27", "v28", "v29", "v30", "v31",
+          "memory", "cc"
+    );
+}
+
+static inline uint8x16_t dxt_build_color_palette(const uint8_t *colors, uint32_t mode) {
+    uint16_t c0 = (uint16_t)colors[0] | ((uint16_t)colors[1] << 8);
+    uint16_t c1 = (uint16_t)colors[2] | ((uint16_t)colors[3] << 8);
+
+    uint32_t r0 = (c0 >> 11) & 31u; r0 = (r0 << 3) | (r0 >> 2);
+    uint32_t g0 = (c0 >> 5)  & 63u; g0 = (g0 << 2) | (g0 >> 4);
+    uint32_t b0 =  c0        & 31u; b0 = (b0 << 3) | (b0 >> 2);
+
+    uint32_t r1 = (c1 >> 11) & 31u; r1 = (r1 << 3) | (r1 >> 2);
+    uint32_t g1 = (c1 >> 5)  & 63u; g1 = (g1 << 2) | (g1 >> 4);
+    uint32_t b1 =  c1        & 31u; b1 = (b1 << 3) | (b1 >> 2);
+
+    uint8_t alpha_fill = (mode == 1u) ? 255u : 0u;
+    uint8_t pal[16] __attribute__((aligned(16)));
+    pal[0] = (uint8_t)r0; pal[1] = (uint8_t)g0; pal[2] = (uint8_t)b0; pal[3] = alpha_fill;
+    pal[4] = (uint8_t)r1; pal[5] = (uint8_t)g1; pal[6] = (uint8_t)b1; pal[7] = alpha_fill;
+
+    if (mode != 1u || c0 > c1) {
+        pal[8]  = (uint8_t)(((2u * r0 + r1) * 21846u) >> 16);
+        pal[9]  = (uint8_t)(((2u * g0 + g1) * 21846u) >> 16);
+        pal[10] = (uint8_t)(((2u * b0 + b1) * 21846u) >> 16);
+        pal[11] = alpha_fill;
+        pal[12] = (uint8_t)(((r0 + 2u * r1) * 21846u) >> 16);
+        pal[13] = (uint8_t)(((g0 + 2u * g1) * 21846u) >> 16);
+        pal[14] = (uint8_t)(((b0 + 2u * b1) * 21846u) >> 16);
+        pal[15] = alpha_fill;
+    } else {
+        pal[8]  = (uint8_t)((r0 + r1) >> 1);
+        pal[9]  = (uint8_t)((g0 + g1) >> 1);
+        pal[10] = (uint8_t)((b0 + b1) >> 1);
+        pal[11] = 255u;
+        pal[12] = 0u; pal[13] = 0u; pal[14] = 0u; pal[15] = 0u;
+    }
+    return vld1q_u8(pal);
+}
+
+static inline void dxt1_decode_block_neon(const uint8_t *blk, uint8_t *dst, size_t stride) {
+    uint8x16_t pal = dxt_build_color_palette(blk, 1u);
+    vst1q_u8(dst,              vqtbl1q_u8(pal, vld1q_u8(s_dxt_row_lut[blk[4]])));
+    vst1q_u8(dst + stride,     vqtbl1q_u8(pal, vld1q_u8(s_dxt_row_lut[blk[5]])));
+    vst1q_u8(dst + stride * 2, vqtbl1q_u8(pal, vld1q_u8(s_dxt_row_lut[blk[6]])));
+    vst1q_u8(dst + stride * 3, vqtbl1q_u8(pal, vld1q_u8(s_dxt_row_lut[blk[7]])));
+}
+
+static inline void dxt3_decode_block_neon(const uint8_t *blk, uint8_t *dst, size_t stride) {
+    uint8x16_t pal = dxt_build_color_palette(blk + 8, 3u);
+    for (uint32_t row = 0; row < 4u; row++) {
+        uint8x16_t px = vqtbl1q_u8(pal, vld1q_u8(s_dxt_row_lut[blk[12u + row]]));
+        uint8_t ab0 = blk[row * 2u];
+        uint8_t ab1 = blk[row * 2u + 1u];
+        uint8_t a0 = (uint8_t)((ab0 & 0x0fu) * 17u);
+        uint8_t a1 = (uint8_t)((ab0 >> 4)    * 17u);
+        uint8_t a2 = (uint8_t)((ab1 & 0x0fu) * 17u);
+        uint8_t a3 = (uint8_t)((ab1 >> 4)    * 17u);
+        px = vsetq_lane_u8(a0, px, 3);
+        px = vsetq_lane_u8(a1, px, 7);
+        px = vsetq_lane_u8(a2, px, 11);
+        px = vsetq_lane_u8(a3, px, 15);
+        vst1q_u8(dst + row * stride, px);
+    }
+}
+
+static inline void dxt5_decode_block_neon(const uint8_t *blk, uint8_t *dst, size_t stride) {
+    uint32_t a0 = blk[0];
+    uint32_t a1 = blk[1];
+    uint8_t alpha[8];
+    alpha[0] = (uint8_t)a0;
+    alpha[1] = (uint8_t)a1;
+    if (a0 > a1) {
+        alpha[2] = (uint8_t)(((6u * a0 + 1u * a1) * 9363u) >> 16);
+        alpha[3] = (uint8_t)(((5u * a0 + 2u * a1) * 9363u) >> 16);
+        alpha[4] = (uint8_t)(((4u * a0 + 3u * a1) * 9363u) >> 16);
+        alpha[5] = (uint8_t)(((3u * a0 + 4u * a1) * 9363u) >> 16);
+        alpha[6] = (uint8_t)(((2u * a0 + 5u * a1) * 9363u) >> 16);
+        alpha[7] = (uint8_t)(((1u * a0 + 6u * a1) * 9363u) >> 16);
+    } else {
+        alpha[2] = (uint8_t)(((4u * a0 + 1u * a1) * 13108u) >> 16);
+        alpha[3] = (uint8_t)(((3u * a0 + 2u * a1) * 13108u) >> 16);
+        alpha[4] = (uint8_t)(((2u * a0 + 3u * a1) * 13108u) >> 16);
+        alpha[5] = (uint8_t)(((1u * a0 + 4u * a1) * 13108u) >> 16);
+        alpha[6] = 0u;
+        alpha[7] = 255u;
+    }
+
+    uint64_t abits = 0;
+    memcpy(&abits, blk + 2, 6);
+    uint8x16_t pal = dxt_build_color_palette(blk + 8, 5u);
+
+    for (uint32_t row = 0; row < 4u; row++) {
+        uint8x16_t px = vqtbl1q_u8(pal, vld1q_u8(s_dxt_row_lut[blk[12u + row]]));
+        uint32_t rbits = (uint32_t)((abits >> (row * 12u)) & 0xfffu);
+        px = vsetq_lane_u8(alpha[rbits & 7u],         px, 3);
+        px = vsetq_lane_u8(alpha[(rbits >> 3) & 7u],  px, 7);
+        px = vsetq_lane_u8(alpha[(rbits >> 6) & 7u],  px, 11);
+        px = vsetq_lane_u8(alpha[(rbits >> 9) & 7u],  px, 15);
+        vst1q_u8(dst + row * stride, px);
+    }
+}
+
+__attribute__((visibility("hidden"), used, noinline))
+void nfsu2_decode_dxt_neon_impl(uint32_t mode, uint32_t width, uint32_t height,
+                                const uint8_t *src, size_t src_bytes, NdkByteVec *out) {
+    uint64_t bw = ((uint64_t)width + 3ULL) >> 2;
+    uint64_t bh = ((uint64_t)height + 3ULL) >> 2;
+    uint32_t bbytes = (mode == 1u) ? 8u : 16u;
+    if ((mode != 1u && mode != 3u && mode != 5u) || !width || !height || !src || !out ||
+        !s_android_op_new || bw * bh * (uint64_t)bbytes > src_bytes ||
+        (uint64_t)width * (uint64_t)height > 0x1fffffffULL) {
+        call_orig_decode_dxt(mode, width, height, src, src_bytes, out);
+        return;
+    }
+
+    size_t total_bytes = (size_t)width * (size_t)height * 4u;
+    uint8_t *dst = (uint8_t *)s_android_op_new(total_bytes);
+    out->begin = dst;
+    out->end   = dst + total_bytes;
+    out->cap   = dst + total_bytes;
+
+    size_t stride = (size_t)width * 4u;
+    uint32_t full_bx = width >> 2;
+    uint32_t full_by = height >> 2;
+    const uint8_t *blk = src;
+
+    if (mode == 1u) {
+        for (uint32_t by = 0; by < (uint32_t)bh; by++) {
+            uint8_t *row_base = dst + (size_t)(by * 4u) * stride;
+            if (by < full_by) {
+                for (uint32_t bx = 0; bx < full_bx; bx++, blk += 8) {
+                    dxt1_decode_block_neon(blk, row_base + (size_t)bx * 16u, stride);
+                }
+                if (full_bx < (uint32_t)bw) {
+                    uint8_t tmp[64] __attribute__((aligned(16)));
+                    dxt1_decode_block_neon(blk, tmp, 16u);
+                    blk += 8;
+                    size_t copy_bytes = (size_t)(width - full_bx * 4u) * 4u;
+                    uint8_t *ed = row_base + (size_t)full_bx * 16u;
+                    for (uint32_t py = 0; py < 4u; py++) {
+                        memcpy(ed + py * stride, tmp + py * 16u, copy_bytes);
+                    }
+                }
+            } else {
+                uint32_t copy_h = height - by * 4u;
+                for (uint32_t bx = 0; bx < (uint32_t)bw; bx++, blk += 8) {
+                    uint8_t tmp[64] __attribute__((aligned(16)));
+                    dxt1_decode_block_neon(blk, tmp, 16u);
+                    uint32_t rem_w = width - bx * 4u;
+                    size_t copy_bytes = (size_t)(rem_w < 4u ? rem_w : 4u) * 4u;
+                    uint8_t *ed = row_base + (size_t)bx * 16u;
+                    for (uint32_t py = 0; py < copy_h; py++) {
+                        memcpy(ed + py * stride, tmp + py * 16u, copy_bytes);
+                    }
+                }
+            }
+        }
+    } else if (mode == 3u) {
+        for (uint32_t by = 0; by < (uint32_t)bh; by++) {
+            uint8_t *row_base = dst + (size_t)(by * 4u) * stride;
+            if (by < full_by) {
+                for (uint32_t bx = 0; bx < full_bx; bx++, blk += 16) {
+                    dxt3_decode_block_neon(blk, row_base + (size_t)bx * 16u, stride);
+                }
+                if (full_bx < (uint32_t)bw) {
+                    uint8_t tmp[64] __attribute__((aligned(16)));
+                    dxt3_decode_block_neon(blk, tmp, 16u);
+                    blk += 16;
+                    size_t copy_bytes = (size_t)(width - full_bx * 4u) * 4u;
+                    uint8_t *ed = row_base + (size_t)full_bx * 16u;
+                    for (uint32_t py = 0; py < 4u; py++) {
+                        memcpy(ed + py * stride, tmp + py * 16u, copy_bytes);
+                    }
+                }
+            } else {
+                uint32_t copy_h = height - by * 4u;
+                for (uint32_t bx = 0; bx < (uint32_t)bw; bx++, blk += 16) {
+                    uint8_t tmp[64] __attribute__((aligned(16)));
+                    dxt3_decode_block_neon(blk, tmp, 16u);
+                    uint32_t rem_w = width - bx * 4u;
+                    size_t copy_bytes = (size_t)(rem_w < 4u ? rem_w : 4u) * 4u;
+                    uint8_t *ed = row_base + (size_t)bx * 16u;
+                    for (uint32_t py = 0; py < copy_h; py++) {
+                        memcpy(ed + py * stride, tmp + py * 16u, copy_bytes);
+                    }
+                }
+            }
+        }
+    } else {
+        for (uint32_t by = 0; by < (uint32_t)bh; by++) {
+            uint8_t *row_base = dst + (size_t)(by * 4u) * stride;
+            if (by < full_by) {
+                for (uint32_t bx = 0; bx < full_bx; bx++, blk += 16) {
+                    dxt5_decode_block_neon(blk, row_base + (size_t)bx * 16u, stride);
+                }
+                if (full_bx < (uint32_t)bw) {
+                    uint8_t tmp[64] __attribute__((aligned(16)));
+                    dxt5_decode_block_neon(blk, tmp, 16u);
+                    blk += 16;
+                    size_t copy_bytes = (size_t)(width - full_bx * 4u) * 4u;
+                    uint8_t *ed = row_base + (size_t)full_bx * 16u;
+                    for (uint32_t py = 0; py < 4u; py++) {
+                        memcpy(ed + py * stride, tmp + py * 16u, copy_bytes);
+                    }
+                }
+            } else {
+                uint32_t copy_h = height - by * 4u;
+                for (uint32_t bx = 0; bx < (uint32_t)bw; bx++, blk += 16) {
+                    uint8_t tmp[64] __attribute__((aligned(16)));
+                    dxt5_decode_block_neon(blk, tmp, 16u);
+                    uint32_t rem_w = width - bx * 4u;
+                    size_t copy_bytes = (size_t)(rem_w < 4u ? rem_w : 4u) * 4u;
+                    uint8_t *ed = row_base + (size_t)bx * 16u;
+                    for (uint32_t py = 0; py < copy_h; py++) {
+                        memcpy(ed + py * stride, tmp + py * 16u, copy_bytes);
+                    }
+                }
+            }
+        }
+    }
+
+    uint64_t cnt = atomic_fetch_add_explicit(&s_dxt_neon_decoded, 1, memory_order_relaxed) + 1u;
+    if (cnt == 1u || (cnt % 256u) == 0u) {
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-DXT",
+            "ARM64 NEON decoded %llu CPU fallback textures (last: DXT%u %ux%u)",
+            (unsigned long long)cnt, mode, width, height);
+    }
+}
+
+__attribute__((naked))
+static void hook_decodeDXT_trampoline(void) {
+    __asm__ volatile(
+        "mov x5, x8\n"
+        "b nfsu2_decode_dxt_neon_impl\n"
+    );
+}
+#endif
+
 static void roam_android_install_hooks(void) {
     if (atomic_load(&g_hooks_installed) || !g_p_recomp_lookup) return;
     pthread_mutex_lock(&s_hooks_mu);
@@ -3219,23 +3921,81 @@ static void roam_android_install_hooks(void) {
         }
     }
 
-    // Widen checkGuestProgress render-thread slice from 3 ms (0x002dc6c0 ns) to 16 ms (0x00f42400 ns)
-    // to eliminate excessive mid-frame guest thread handovers while keeping worker slices (500 us) intact.
-    uint32_t *slice_insns = (uint32_t *)(lib_base + 0x477aec);
-    if (slice_insns[0] == 0x7100013fu &&
-        slice_insns[1] == 0x5298d809u &&
-        slice_insns[2] == 0x72a005a9u &&
-        slice_insns[3] == 0xcb080268u) {
-        uintptr_t sp_start = (uintptr_t)&slice_insns[1] & ~((uintptr_t)page_sz - 1);
-        uintptr_t sp_end = ((uintptr_t)&slice_insns[3] + (uintptr_t)page_sz - 1) & ~((uintptr_t)page_sz - 1);
+    // Widen checkGuestProgress render-thread slice (3 ms -> 33 ms) and tighten worker slice (500 us -> 200 us)
+    // to eliminate mid-frame guest thread handover stalls on 30-60 FPS mobile frames while keeping workers responsive.
+    uint32_t *slice_insns = (uint32_t *)(lib_base + 0x477ae0);
+    if (slice_insns[0] == 0x5294240au &&
+        slice_insns[2] == 0x72a000eau &&
+        slice_insns[3] == 0x7100013fu &&
+        slice_insns[4] == 0x5298d809u &&
+        slice_insns[5] == 0x72a005a9u &&
+        slice_insns[6] == 0xcb080268u) {
+        uintptr_t sp_start = (uintptr_t)&slice_insns[0] & ~((uintptr_t)page_sz - 1);
+        uintptr_t sp_end = ((uintptr_t)&slice_insns[6] + (uintptr_t)page_sz - 1) & ~((uintptr_t)page_sz - 1);
         if (mprotect((void *)sp_start, sp_end - sp_start, PROT_READ | PROT_WRITE | PROT_EXEC) == 0) {
-            slice_insns[1] = 0x52848009u; /* mov  w9, #0x2400 */
-            slice_insns[2] = 0x72a01e89u; /* movk w9, #0xf4, lsl #16 -> 16,000,000 ns */
-            __builtin___clear_cache((char *)&slice_insns[1], (char *)&slice_insns[3]);
+            slice_insns[0] = 0x5281a80au; /* mov  w10, #0x0d40 */
+            slice_insns[2] = 0x72a0006au; /* movk w10, #0x3, lsl #16   -> 200,000 ns (200 us) worker slice */
+            slice_insns[4] = 0x52914809u; /* mov  w9,  #0x8a40 */
+            slice_insns[5] = 0x72a03ee9u; /* movk w9,  #0x1f7, lsl #16 -> 33,000,000 ns (33 ms) render slice */
+            __builtin___clear_cache((char *)&slice_insns[0], (char *)&slice_insns[6]);
             mprotect((void *)sp_start, sp_end - sp_start, PROT_READ | PROT_EXEC);
             __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook",
-                "Patched checkGuestProgress render slice: 3 ms -> 16 ms at %p",
-                (void *)&slice_insns[1]);
+                "Patched checkGuestProgress slices: render 3ms->33ms, worker 500us->200us at %p",
+                (void *)&slice_insns[0]);
+        }
+    }
+
+#if defined(__aarch64__)
+    // Hook _Z9decodeDXTjjjPKhm via GOT (0x97ddfe0) with ARM64 NEON SIMD DXT1/DXT3/DXT5 decoder
+    void *target_decode_dxt = dlsym(h_main ? h_main : RTLD_DEFAULT, "_Z9decodeDXTjjjPKhm");
+    if (target_decode_dxt && !s_orig_decode_dxt) {
+        void **got_op_new = (void **)(lib_base + 0x97dd518u);
+        s_android_op_new = (void *(*)(size_t))(*got_op_new);
+        if (!s_android_op_new) {
+            s_android_op_new = (void *(*)(size_t))dlsym(h_main ? h_main : RTLD_DEFAULT, "_Znwm");
+        }
+        void **got_dxt = (void **)(lib_base + 0x97ddfe0u);
+        if (s_android_op_new && *got_dxt == target_decode_dxt) {
+            dxt_neon_init_lut();
+            uintptr_t gs = (uintptr_t)got_dxt & ~((uintptr_t)page_sz - 1);
+            uintptr_t ge = ((uintptr_t)(got_dxt + 1) + (uintptr_t)page_sz - 1) & ~((uintptr_t)page_sz - 1);
+            if (mprotect((void *)gs, ge - gs, PROT_READ | PROT_WRITE) == 0) {
+                s_orig_decode_dxt = target_decode_dxt;
+                *got_dxt = (void *)hook_decodeDXT_trampoline;
+                __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook",
+                    "Hooked decodeDXT via GOT at %p with ARM64 NEON SIMD (orig: %p, op_new: %p)",
+                    (void *)got_dxt, target_decode_dxt, (void *)s_android_op_new);
+            }
+        }
+    }
+#endif
+
+    // Hook libnfsu2_android.so libc socket GOT slots (connect/sendto/close) for Online News HTTP responder
+    {
+        struct {
+            const char *name;
+            uintptr_t got_off;
+            void *hook;
+            void **orig_out;
+        } net_got_hooks[] = {
+            { "connect", 0x97ddba8u, (void *)hook_lib_connect, (void **)&s_orig_lib_connect },
+            { "sendto",  0x97ddbe8u, (void *)hook_lib_sendto,  (void **)&s_orig_lib_sendto },
+            { "close",   0x97ddb50u, (void *)hook_lib_close,   (void **)&s_orig_lib_close },
+        };
+        for (size_t i = 0; i < sizeof(net_got_hooks) / sizeof(net_got_hooks[0]); i++) {
+            if (*net_got_hooks[i].orig_out) continue;
+            void **slot = (void **)(lib_base + net_got_hooks[i].got_off);
+            if (*slot && *slot != net_got_hooks[i].hook) {
+                uintptr_t gs = (uintptr_t)slot & ~((uintptr_t)page_sz - 1);
+                uintptr_t ge = ((uintptr_t)(slot + 1) + (uintptr_t)page_sz - 1) & ~((uintptr_t)page_sz - 1);
+                if (mprotect((void *)gs, ge - gs, PROT_READ | PROT_WRITE) == 0) {
+                    *net_got_hooks[i].orig_out = *slot;
+                    *slot = net_got_hooks[i].hook;
+                    __android_log_print(ANDROID_LOG_INFO, "NFSU2-News",
+                        "Hooked libc %s via GOT at %p (orig: %p)",
+                        net_got_hooks[i].name, (void *)slot, *net_got_hooks[i].orig_out);
+                }
+            }
         }
     }
 
@@ -3354,9 +4114,6 @@ static void resolution_frame_tick(void) {
     if (!rh_mem_committed(0x86e880u, 24)) return;
     for (uint32_t i = 0; i < 6u; i++) {
         MR32(0x86e880u + i * 4u) = (i < s_custom_mode_count) ? 1u : 0u;
-    }
-    if (!s_car_envmap_applied && s_adv_cfg.car_envmap_throttle != 0) {
-        adv_apply_car_envmap();
     }
 }
 
@@ -3491,8 +4248,22 @@ jint JNI_OnLoad(JavaVM *vm, void *reserved) {
             g_client_class = (jclass)(*env)->NewGlobalRef(env, clz);
             g_mid_on_said = (*env)->GetStaticMethodID(env, g_client_class, "onQuickChatReceived", "(Ljava/lang/String;)V");
             g_mid_on_send = (*env)->GetStaticMethodID(env, g_client_class, "onNativeSend", "(II[B)V");
+            (*env)->DeleteLocalRef(env, clz);
+        }
+        jclass ga_clz = (*env)->FindClass(env, "io/mininxd/nfsu2/GameActivity");
+        if (ga_clz) {
+            g_game_activity_class = (jclass)(*env)->NewGlobalRef(env, ga_clz);
+            g_mid_fetch_news = (*env)->GetStaticMethodID(env, g_game_activity_class, "fetchNewsContent", "()Ljava/lang/String;");
+            (*env)->DeleteLocalRef(env, ga_clz);
+            if ((*env)->ExceptionCheck(env)) {
+                (*env)->ExceptionClear(env);
+                g_mid_fetch_news = NULL;
+            }
+        } else if ((*env)->ExceptionCheck(env)) {
+            (*env)->ExceptionClear(env);
         }
     }
+    roam_android_init_symbols();
     roam_android_patch_carpool();
     roam_android_install_hooks();
     return JNI_VERSION_1_6;

@@ -410,7 +410,6 @@ public final class GameActivity extends NativeActivity {
         super.onCreate(saved);
         LauncherActivity.sAppContext = getApplicationContext();
         s_instance = this;
-        refreshNewsAsync();
         GameOptions.syncWidescreenIni(this);
         Intent launch = getIntent();
         try {
@@ -513,6 +512,7 @@ public final class GameActivity extends NativeActivity {
             android.system.Os.setenv("NFSU2_CROWD", "0", true);
             GraphicsCacheManager.setCrowdSuppression(true);
             android.system.Os.setenv("NFSU2_NEWS_URL", "https://api.mininxd.tech/nfsu2_news", true);
+            refreshNewsAsync();
 
             // Sync touch control size
             String touchSize = GameOptions.get(this, GameOptions.TOUCH_SIZE);
@@ -890,6 +890,25 @@ public final class GameActivity extends NativeActivity {
         android.os.Process.killProcess(android.os.Process.myPid());
     }
 
+    private static String normalizeNewsPayload(String raw) {
+        if (raw == null) return null;
+        String norm = raw.replace("\r\n", "\n").replace("\r", "\n");
+        String trimmed = norm.trim();
+        if (trimmed.isEmpty()) return null;
+        String crlf = trimmed.replace("\n", "\r\n");
+        if (!crlf.contains("CMD=news")) {
+            return " %{START CMD=news TITLE=\"NFSU2 News\" BTN1=\"OK\" BTN1-GOTO=\"$exit=0\" %}\r\n"
+                    + crlf + "\r\n%{%}\r\n";
+        }
+        if (!crlf.startsWith(" ")) {
+            crlf = " " + crlf;
+        }
+        if (!crlf.endsWith("\r\n")) {
+            crlf = crlf + "\r\n";
+        }
+        return crlf;
+    }
+
     public static String fetchNewsContent() {
         if (s_cachedNews != null && !s_cachedNews.trim().isEmpty()) {
             refreshNewsAsync();
@@ -913,8 +932,8 @@ public final class GameActivity extends NativeActivity {
                     baos.write(buf, 0, n);
                 }
                 in.close();
-                String res = baos.toString("UTF-8").trim();
-                if (!res.isEmpty()) {
+                String res = normalizeNewsPayload(baos.toString("UTF-8"));
+                if (res != null) {
                     return res;
                 }
             }
@@ -946,11 +965,8 @@ public final class GameActivity extends NativeActivity {
                     baos.write(buf, 0, n);
                 }
                 in.close();
-                String res = baos.toString("UTF-8").trim();
-                if (!res.isEmpty()) {
-                    if (!res.contains("CMD=news")) {
-                        res = " %{START CMD=news TITLE=\"NFSU2 News\" BTN1=\"OK\" BTN1-GOTO=\"$exit=0\" %}\r\n" + res + "\r\n%{%}";
-                    }
+                String res = normalizeNewsPayload(baos.toString("UTF-8"));
+                if (res != null) {
                     Log.i("NFSU2News", "Successfully fetched custom news from " + customUrl + " (" + res.length() + " chars)");
                     return res;
                 }
