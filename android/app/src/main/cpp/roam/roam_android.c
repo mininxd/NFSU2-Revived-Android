@@ -1700,12 +1700,14 @@ static void adv_apply_fps_limit(int fps) {
     }
 }
 
-#define D3D9_REF_SLOTS 256u
+#define D3D9_REF_BUCKETS 128u
+#define D3D9_REF_WAYS    8u
+#define D3D9_REF_SLOTS   (D3D9_REF_BUCKETS * D3D9_REF_WAYS)
 
 typedef struct {
     uint32_t handle;
     uint32_t token_addref;
-    uint32_t base_refs;
+    uint32_t base_refs;   /* 0 = pinned non-foldable (e.g. texture owns child surfaces) */
     uint32_t extra_refs;
     uint8_t  kind;
 } D3D9RefEntry;
@@ -1789,8 +1791,9 @@ static inline int d3d9_is_foldable_kind(uint32_t kind) {
     return (kind == 3u) || (kind >= 6u && kind <= 10u);
 }
 
-static inline uint32_t d3d9_ref_slot_hash(uint32_t handle) {
-    return ((handle >> 2) * 2654435761u) & (D3D9_REF_SLOTS - 1u);
+static inline uint32_t d3d9_ref_bucket_base(uint32_t handle) {
+    uint32_t h = ((handle >> 4) ^ (handle >> 12)) * 2654435761u;
+    return (h & (D3D9_REF_BUCKETS - 1u)) * D3D9_REF_WAYS;
 }
 
 static void d3d9_ref_flush_entry(D3D9RefEntry *e) {
@@ -1812,31 +1815,53 @@ static void d3d9_ref_flush_all(void) {
     memset(s_d3d9_cache.refs, 0, sizeof(s_d3d9_cache.refs));
 }
 
+/* 8-way set-associative lookup: always scans all 8 ways (immune to tombstone breaks) */
 static D3D9RefEntry *d3d9_ref_lookup(uint32_t handle, uint8_t kind) {
     if (handle == 0u) return NULL;
-    uint32_t h = d3d9_ref_slot_hash(handle);
-    for (uint32_t step = 0; step < 8u; step++) {
-        D3D9RefEntry *e = &s_d3d9_cache.refs[(h + step) & (D3D9_REF_SLOTS - 1u)];
+    uint32_t base = d3d9_ref_bucket_base(handle);
+    for (uint32_t w = 0; w < D3D9_REF_WAYS; w++) {
+        D3D9RefEntry *e = &s_d3d9_cache.refs[base + w];
         if (e->handle == handle && e->kind == kind) return e;
-        if (e->handle == 0u) return NULL;
     }
     return NULL;
 }
 
+static void d3d9_ref_clear_handle(uint32_t handle, uint8_t kind) {
+    D3D9RefEntry *e = d3d9_ref_lookup(handle, kind);
+    if (e) {
+        if (e->extra_refs > 0u) d3d9_ref_flush_entry(e);
+        e->handle = 0u;
+        e->base_refs = 0u;
+        e->extra_refs = 0u;
+        e->kind = 0u;
+    }
+}
+
 static D3D9RefEntry *d3d9_ref_alloc(uint32_t handle, uint8_t kind) {
     if (handle == 0u) return NULL;
-    uint32_t h = d3d9_ref_slot_hash(handle);
+    uint32_t base = d3d9_ref_bucket_base(handle);
     D3D9RefEntry *empty = NULL;
-    for (uint32_t step = 0; step < 8u; step++) {
-        D3D9RefEntry *e = &s_d3d9_cache.refs[(h + step) & (D3D9_REF_SLOTS - 1u)];
+    D3D9RefEntry *clean_victim = NULL;
+    D3D9RefEntry *fold_victim = NULL;
+    for (uint32_t w = 0; w < D3D9_REF_WAYS; w++) {
+        D3D9RefEntry *e = &s_d3d9_cache.refs[base + w];
         if (e->handle == handle && e->kind == kind) return e;
-        if (e->handle == 0u && !empty) empty = e;
+        if (e->handle == 0u) {
+            if (!empty) empty = e;
+        } else if (e->base_refs != 0u) {
+            if (e->extra_refs == 0u && !clean_victim) clean_victim = e;
+            if (!fold_victim) fold_victim = e;
+        }
     }
     if (empty) return empty;
-    D3D9RefEntry *victim = &s_d3d9_cache.refs[h];
-    d3d9_ref_flush_entry(victim);
+    D3D9RefEntry *victim = clean_victim ? clean_victim : (fold_victim ? fold_victim : &s_d3d9_cache.refs[base]);
+    if (victim->extra_refs > 0u) {
+        d3d9_ref_flush_entry(victim);
+    }
     victim->handle = 0u;
+    victim->base_refs = 0u;
     victim->extra_refs = 0u;
+    victim->kind = 0u;
     return victim;
 }
 
@@ -1898,7 +1923,8 @@ static uint32_t hook_dispatchGuestD3D9(uint32_t token, const uint32_t *args, uin
                     s_telemetry_present(now_ns);
                 }
                 if (s_adv_cfg.d3d9_filter_log &&
-                    (s_d3d9_cache.present_frames % 300u) == 0u && s_d3d9_cache.total_calls > 0u) {
+                    (s_d3d9_cache.present_frames == 60u || (s_d3d9_cache.present_frames % 300u) == 0u) &&
+                    s_d3d9_cache.total_calls > 0u) {
                     uint64_t saved = s_d3d9_cache.filtered_calls + s_d3d9_cache.ref_folded_calls;
                     double pct = (double)saved * 100.0 / (double)s_d3d9_cache.total_calls;
                     __android_log_print(ANDROID_LOG_INFO, "NFSU2-D3D9Filter",
@@ -1909,6 +1935,27 @@ static uint32_t hook_dispatchGuestD3D9(uint32_t token, const uint32_t *args, uin
                         (unsigned long long)s_d3d9_cache.total_calls,
                         pct,
                         (unsigned long long)s_d3d9_cache.present_frames);
+                }
+            }
+            return hr;
+        }
+
+        /* Clear any stale ref-cache slot if D3D9 Create* reuses a previously freed guest handle */
+        if (method == 23u || method == 26u || method == 27u ||
+            method == 86u || method == 91u || method == 106u) {
+            uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
+            if (hr == 0u) {
+                uint32_t out_va = 0u;
+                uint8_t out_kind = 0u;
+                if (method == 23u)       { out_va = args[7]; out_kind = 3u; }
+                else if (method == 26u)  { out_va = args[5]; out_kind = 6u; }
+                else if (method == 27u)  { out_va = args[5]; out_kind = 7u; }
+                else if (method == 86u)  { out_va = args[2]; out_kind = 10u; }
+                else if (method == 91u)  { out_va = args[2]; out_kind = 8u; }
+                else if (method == 106u) { out_va = args[2]; out_kind = 9u; }
+                const uint32_t *p_out = (const uint32_t *)d3d9_guest_ptr(out_va, 4u);
+                if (p_out && *p_out != 0u) {
+                    d3d9_ref_clear_handle(*p_out, out_kind);
                 }
             }
             return hr;
@@ -2310,16 +2357,38 @@ static uint32_t hook_dispatchGuestD3D9(uint32_t token, const uint32_t *args, uin
         return hr;
     }
 
+    /* Textures that hand out child surfaces via GetSurfaceLevel (3.18) use parent/child retirement
+     * semantics in d3d9_bridge; flush any folded refs and pin them non-foldable. */
+    if (kind == 3u && method == 18u && args[0] != 0u) {
+        D3D9RefEntry *e = d3d9_ref_alloc(args[0], 3u);
+        if (e) {
+            if (e->handle == args[0] && e->kind == 3u && e->extra_refs > 0u) {
+                d3d9_ref_flush_entry(e);
+            }
+            e->handle = args[0];
+            e->kind = 3u;
+            e->base_refs = 0u; /* sentinel: do not fold AddRef/Release on this parent texture */
+            e->extra_refs = 0u;
+        }
+        return s_orig_dispatch_d3d9(token, args, argumentCount);
+    }
+
     /* Paired transient AddRef (method 1) / Release (method 2) folding for non-subresource D3D9 objects */
     if (d3d9_is_foldable_kind(kind)) {
         uint32_t handle = args[0];
         if (method == 1u && handle != 0u && s_adv_cfg.d3d9_ref_folding) {
             D3D9RefEntry *e = d3d9_ref_lookup(handle, (uint8_t)kind);
-            if (e && e->base_refs >= 1u && e->extra_refs < 0x7fffffffu) {
-                e->extra_refs++;
-                *argumentCount = 1u;
-                s_d3d9_cache.ref_folded_calls++;
-                return e->base_refs + e->extra_refs;
+            if (e) {
+                if (e->base_refs == 0u) {
+                    /* Pinned non-foldable (parent texture with child surfaces) */
+                    return s_orig_dispatch_d3d9(token, args, argumentCount);
+                }
+                if (e->extra_refs < 0x7fffffffu) {
+                    e->extra_refs++;
+                    *argumentCount = 1u;
+                    s_d3d9_cache.ref_folded_calls++;
+                    return e->base_refs + e->extra_refs;
+                }
             }
             uint32_t refs = s_orig_dispatch_d3d9(token, args, argumentCount);
             if (refs >= 1u) {
@@ -2337,7 +2406,7 @@ static uint32_t hook_dispatchGuestD3D9(uint32_t token, const uint32_t *args, uin
         if (method == 2u && handle != 0u) {
             D3D9RefEntry *e = d3d9_ref_lookup(handle, (uint8_t)kind);
             if (e) {
-                if (s_adv_cfg.d3d9_ref_folding && e->extra_refs > 0u) {
+                if (s_adv_cfg.d3d9_ref_folding && e->base_refs >= 1u && e->extra_refs > 0u) {
                     e->extra_refs--;
                     *argumentCount = 1u;
                     s_d3d9_cache.ref_folded_calls++;
@@ -2351,10 +2420,12 @@ static uint32_t hook_dispatchGuestD3D9(uint32_t token, const uint32_t *args, uin
             if (refs == 0u) {
                 if (e) {
                     e->handle = 0u;
+                    e->base_refs = 0u;
                     e->extra_refs = 0u;
+                    e->kind = 0u;
                 }
                 s_d3d9_cache.epoch++;
-            } else if (e) {
+            } else if (e && e->base_refs != 0u) {
                 e->base_refs = refs;
             }
             return refs;
@@ -2502,7 +2573,7 @@ static void adv_refresh_widget(uint32_t self, int id) {
             else value = "Uncapped";
             break;
         case 4:
-            label = "DXVK Invariant Pos";
+            label = "Invariant Position";
             if (s_adv_cfg.dxvk_invariant_pos == s_adv_cfg.boot_invariant_pos) {
                 value = s_adv_cfg.dxvk_invariant_pos ? "Safe (On)" : "Fast (Off)";
             } else {
