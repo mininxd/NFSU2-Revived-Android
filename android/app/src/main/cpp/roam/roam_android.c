@@ -1163,7 +1163,10 @@ static void hook_sub_005c7ec0(void) {
                 view_id = MR32(view + 4);
                 cam = MR32(view + 0x40);
                 if (view_id == 1u) {
-                    look_process_view(view_id, cam);
+                    int replay_on = (rh_mem_committed(0x008650d0u, 4) && MR32(0x008650d0u) != 0u);
+                    if (!replay_on) {
+                        look_process_view(view_id, cam);
+                    }
                 }
                 if (dd >= 30.0f && (view_id >= 1u && view_id <= 5u)) {
                     max_far = (view_id == 4u) ? 70.0f : ((view_id == 3u) ? (dd * 0.75f) : dd);
@@ -4915,6 +4918,28 @@ __attribute__((visibility("default"))) void nfs_roam_frame_tick(void) {
     resolution_frame_tick();
     int replay_active = (g_p_mem_base && *g_p_mem_base &&
                          rh_mem_committed(0x008650d0u, 4) && MR32(0x008650d0u) != 0u);
+    if (g_p_mem_base && *g_p_mem_base && rh_mem_committed(0x008650b8u, 4)) {
+        static int s_last_replay_active = -1;
+        static uint32_t s_last_replay_scr = 0xFFFFFFFFu;
+        static uint32_t s_last_replay_bad = 0xFFFFFFFFu;
+        uint32_t rec = MR32(0x008650b8u);
+        uint32_t scr = rh_mem_committed(0x008363ecu, 4) ? MR32(0x008363ecu) : 0u;
+        uint32_t bad = (rec && rh_mem_committed(rec + 0x0cu, 4)) ? MR32(rec + 0x0cu) : 0u;
+        if (replay_active != s_last_replay_active || (scr != 0u) != (s_last_replay_scr != 0u) || bad != s_last_replay_bad) {
+            uint32_t rec_on = (rec && rh_mem_committed(rec + 0x50ecu, 1)) ? MR8(rec + 0x50ecu) : 0u;
+            uint32_t rec_f = (rec && rh_mem_committed(rec + 0xb8u, 4)) ? MR32(rec + 0xb8u) : 0u;
+            uint32_t rec_s = (rec && rh_mem_committed(rec + 0xbcu, 4)) ? MR32(rec + 0xbcu) : 0u;
+            uint32_t wt = rh_mem_committed(0x0086518cu, 4) ? MR32(0x0086518cu) : 0u;
+            uint32_t ticks = rh_mem_committed(0x00865140u, 4) ? MR32(0x00865140u) : 0u;
+            float wdt = rh_mem_committed(0x00865154u, 4) ? MRF32(0x00865154u) : 0.0f;
+            __android_log_print(ANDROID_LOG_INFO, "NFSU2-Replay",
+                "state playback=%d ui=0x%08x rec=0x%08x on=%u frames=%u snaps=%u bad=%u ticks=%u wdt=%.5f wt=%u",
+                replay_active, scr, rec, rec_on, rec_f, rec_s, bad, ticks, wdt, wt);
+            s_last_replay_active = replay_active;
+            s_last_replay_scr = scr;
+            s_last_replay_bad = bad;
+        }
+    }
     if (!replay_active) {
         look_camera_frame_tick();
     }

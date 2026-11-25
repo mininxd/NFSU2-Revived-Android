@@ -4,7 +4,6 @@
 //! high-refresh rate unlocks, projector headlight clamping, and spectator crowd suppression.
 
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use crate::interp::pacing_filter_dt;
 
 pub const G_TIMESTEP_ADDR: usize = 0x007875BC;
 pub const G_DELTA_ACCUM_ADDR: usize = 0x00865558;
@@ -141,6 +140,7 @@ pub extern "C" fn nfs_rust_get_contrast_mode() -> u32 {
 }
 
 #[inline]
+#[allow(dead_code)]
 unsafe fn read_f32(mem: *const u8, addr: usize) -> f32 {
     std::ptr::read_volatile(mem.add(addr) as *const f32)
 }
@@ -192,8 +192,8 @@ pub unsafe extern "C" fn nfs_rust_apply_engine_pacing(mem_base: *mut u8, real_el
     write_u32(mem_base, G_NTSC_MODE_ADDR, 1);
 
     // 4. Keep max frame delta multiplier (0x7FB714) at 3.0f (50 ms max).
-    // At 3600 Hz tick base, 50 ms = 180 ticks which fits inside JoyLog's 8-bit tick field (<= 255)
-    // so recorded Race Replays never overflow and desync on hitches.
+    // At vanilla 1800 Hz tick base, 50 ms = 90 ticks which stays well inside JoyLog's
+    // 8-bit tick field (<= 255) so recorded Race Replays never overflow on frame hitches.
     write_f32(mem_base, G_MAX_FRAME_DELTA_ADDR, 3.0);
 
     // 5. High refresh rate patch (0x0057A084: 0x75 'jne' -> 0xEB 'jmp')
@@ -211,23 +211,12 @@ pub unsafe extern "C" fn nfs_rust_apply_engine_pacing(mem_base: *mut u8, real_el
         write_u32(mem_base, G_HEADLIGHT_ENABLE_ADDR, 1);
     }
 
-    // 7. Never overwrite simulation dt/ticks during JoyLog Replay playback (0x008650D0 != 0),
-    // or while paused (current_wdt <= 0.0), or Replay checksum (0x5FA770) will immediately desync.
-    let replay_active = read_u32(mem_base, G_JOYLOG_PLAYBACK_ADDR) != 0;
-    if !replay_active && real_elapsed > 0.004 && real_elapsed < 0.200 {
-        let current_wdt = read_f32(mem_base, G_SIM_WDT_ADDR);
-        let current_realdt = read_f32(mem_base, G_SIM_REALDT_ADDR);
-
-        if current_wdt > 0.0 && current_wdt < real_elapsed * 0.90 {
-            let corrected = pacing_filter_dt(real_elapsed, current_wdt);
-            write_f32(mem_base, G_SIM_WDT_ADDR, corrected);
-            write_f32(mem_base, G_SIM_REALDT_ADDR, corrected);
-            PACED_FRAMES.fetch_add(1, Ordering::Relaxed);
-        } else if current_wdt <= 0.0 && current_realdt > 0.0 && current_realdt < real_elapsed * 0.90 {
-            let corrected = pacing_filter_dt(real_elapsed, current_realdt);
-            write_f32(mem_base, G_SIM_REALDT_ADDR, corrected);
-        }
-    }
+    // 7. Do NOT overwrite G_SIM_WDT_ADDR (0x00865154), G_SIM_REALDT_ADDR (0x00865198),
+    // or G_SIM_STEPS_ADDR (0x00865140) outside FrameTimeUpdate (0x0057EAD0).
+    // FrameTimeUpdate already computes dt from real wall-clock QPC time and writes the exact
+    // quantized 8-bit tick count into JoyLog channel 3 during recording; mutating WorldDT/RealDT
+    // afterward causes deterministic Replay playback (0x005FA770) to desync and abort via 0x004D8020.
+    let _ = (real_elapsed, G_SIM_WDT_ADDR, G_SIM_REALDT_ADDR, G_SIM_STEPS_ADDR, G_JOYLOG_PLAYBACK_ADDR);
 
     true
 }

@@ -374,19 +374,15 @@ void whine_frame_tick(void) {
 }
 
 /* =========================================================================
- * 3600 Hz Exact Simulation Tick Base (framerate.c parity)
+ * Vanilla 1800 Hz Simulation Tick Base (exact integers for 30/60/90/120 FPS)
  * ========================================================================= */
-#define A_TICK_HZ_ADDR  0x007a061cu   /* 1800.0 vanilla -> 3600.0 exact */
-#define A_TICK_4K_ADDR  0x007a0aa8u   /* 4000/1800 vanilla -> 4000/3600 exact */
-#define A_TICK_S_ADDR   0x007a0618u   /* 1/1800 vanilla -> 1/3600 exact */
+#define A_TICK_HZ_ADDR  0x007a061cu   /* 1800.0 vanilla */
+#define A_TICK_4K_ADDR  0x007a0aa8u   /* 4000/1800 vanilla */
+#define A_TICK_S_ADDR   0x007a0618u   /* 1/1800 vanilla */
 
 void framerate_tick_base_apply(void) {
-    if (!g_p_mem_base || !*g_p_mem_base) return;
-    if (!rh_mem_committed(A_TICK_S_ADDR, 8) || !rh_mem_committed(A_TICK_4K_ADDR, 4)) return;
-
-    if (MRF32(A_TICK_HZ_ADDR) != 3600.0f) {
-        MRF32(A_TICK_HZ_ADDR) = 3600.0f;
-        MRF32(A_TICK_4K_ADDR) = (float)(4000.0 / 3600.0);
-        MRF32(A_TICK_S_ADDR)  = (float)(1.0 / 3600.0);
-    }
+    /* Keep SPEED2.EXE's vanilla 1800 Hz tick base intact.
+     * 1800 Hz divides 30, 60, 90, and 120 FPS into exact integer ticks (60, 30, 20, 15)
+     * while preserving full 8-bit JoyLog tick headroom (~141 ms max) and avoiding
+     * carry/WorldTimer drift in unhooked FrameTimeUpdate (0x57EAD0) during Race Replays. */
 }
