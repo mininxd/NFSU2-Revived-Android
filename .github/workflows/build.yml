@@ -109,7 +109,7 @@ jobs:
             RUST_OBJS="$ROAM_RUST_LIB"
           fi
 
-          $CLANG_BIN -std=c11 -O3 -fomit-frame-pointer -shared -fPIC -ffp-contract=off -fno-strict-aliasing \
+          $CLANG_BIN -std=c11 -O3 -fomit-frame-pointer -funwind-tables -shared -fPIC -ffp-contract=off -fno-strict-aliasing \
             -DROAM_HOST_ANDROID -DROAM_HOST_WIN=1 $RUST_FLAGS \
             -Iandroid/app/src/main/cpp/roam \
             android/app/src/main/cpp/roam/roam_core.c \

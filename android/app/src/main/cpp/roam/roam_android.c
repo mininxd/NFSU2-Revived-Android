@@ -707,6 +707,9 @@ static recomp_void_func_t s_orig_61ad80 = NULL;
 static recomp_void_func_t s_orig_483b40 = NULL;
 static recomp_hook_func_t s_orig_recomp_hook = NULL;
 
+typedef uint32_t (*dispatch_d3d9_func_t)(uint32_t token, const uint32_t *args, uint32_t *argumentCount);
+static dispatch_d3d9_func_t s_orig_dispatch_d3d9 = NULL;
+
 static recomp_void_func_t arm64_inline_hook(void *target_func, void *hook_func) {
     if (!target_func || !hook_func) return NULL;
     uint32_t *target = (uint32_t *)target_func;
@@ -1083,7 +1086,7 @@ static void hook_sub_005c7ec0(void) {
         uint32_t fc = rh_mem_committed(0x00870818u, 4) ? MR32(0x00870818u) : 0;
         if (fc != s_last_pacing_fc) {
             s_last_pacing_fc = fc;
-            g_frame_count++;
+            if (!s_orig_dispatch_d3d9) g_frame_count++;
             sndlead_frame_tick();
             if (!s_allow_crowd && rh_mem_committed(0x00870cd0u, 4) && MR32(0x00870cd0u) != 0) {
                 MR32(0x00870cd0u) = 0;
@@ -1445,6 +1448,525 @@ static void look_camera_frame_tick(void) {
     restore_turned_cameras();
 }
 
+typedef struct {
+    uint32_t device_handle;
+    uint8_t  in_state_block;
+    uint64_t epoch;
+    uint32_t rs[256];
+    uint8_t  rs_valid[256];
+    uint32_t ss[16][16];
+    uint8_t  ss_valid[16][16];
+    uint32_t tss[8][33];
+    uint8_t  tss_valid[8][33];
+    uint32_t tex[16];
+    uint64_t tex_epoch[16];
+    uint8_t  tex_valid[16];
+    uint32_t decl;
+    uint64_t decl_epoch;
+    uint8_t  decl_valid;
+    uint32_t fvf;
+    uint8_t  fvf_valid;
+    uint32_t vs;
+    uint64_t vs_epoch;
+    uint8_t  vs_valid;
+    uint32_t ps;
+    uint64_t ps_epoch;
+    uint8_t  ps_valid;
+    uint32_t stream_buf[4];
+    uint32_t stream_off[4];
+    uint32_t stream_stride[4];
+    uint64_t stream_epoch[4];
+    uint8_t  stream_valid[4];
+    uint32_t stream_freq[4];
+    uint8_t  stream_freq_valid[4];
+    uint32_t ib;
+    uint64_t ib_epoch;
+    uint8_t  ib_valid;
+    uint32_t light_en[8];
+    uint8_t  light_valid[8];
+    uint32_t sw_vp;
+    uint8_t  sw_vp_valid;
+    uint32_t tf[264][16];
+    uint8_t  tf_valid[264];
+    uint32_t vp[6];
+    uint8_t  vp_valid;
+    uint32_t vs_c[256 * 4];
+    uint8_t  vs_c_valid[256];
+    uint32_t ps_c[224 * 4];
+    uint8_t  ps_c_valid[224];
+    uint64_t total_calls;
+    uint64_t filtered_calls;
+    uint64_t present_frames;
+} D3D9ShadowCache;
+
+static D3D9ShadowCache s_d3d9_cache;
+
+static void d3d9_cache_forget(void) {
+    memset(s_d3d9_cache.rs_valid, 0, sizeof(s_d3d9_cache.rs_valid));
+    memset(s_d3d9_cache.ss_valid, 0, sizeof(s_d3d9_cache.ss_valid));
+    memset(s_d3d9_cache.tss_valid, 0, sizeof(s_d3d9_cache.tss_valid));
+    memset(s_d3d9_cache.tex_valid, 0, sizeof(s_d3d9_cache.tex_valid));
+    memset(s_d3d9_cache.stream_valid, 0, sizeof(s_d3d9_cache.stream_valid));
+    memset(s_d3d9_cache.stream_freq_valid, 0, sizeof(s_d3d9_cache.stream_freq_valid));
+    memset(s_d3d9_cache.light_valid, 0, sizeof(s_d3d9_cache.light_valid));
+    memset(s_d3d9_cache.tf_valid, 0, sizeof(s_d3d9_cache.tf_valid));
+    memset(s_d3d9_cache.vs_c_valid, 0, sizeof(s_d3d9_cache.vs_c_valid));
+    memset(s_d3d9_cache.ps_c_valid, 0, sizeof(s_d3d9_cache.ps_c_valid));
+    s_d3d9_cache.decl_valid = 0;
+    s_d3d9_cache.fvf_valid = 0;
+    s_d3d9_cache.vs_valid = 0;
+    s_d3d9_cache.ps_valid = 0;
+    s_d3d9_cache.ib_valid = 0;
+    s_d3d9_cache.sw_vp_valid = 0;
+    s_d3d9_cache.vp_valid = 0;
+}
+
+static inline const void *d3d9_guest_ptr(uint32_t va, uint32_t len) {
+    if (!g_p_mem_base || !*g_p_mem_base) return NULL;
+    if (va < 0x00010000u || (uint64_t)va + (uint64_t)len > 0x80000000ULL) return NULL;
+    return (const void *)((uintptr_t)(*g_p_mem_base) + (uintptr_t)va);
+}
+
+static inline void d3d9_cache_sync_device(uint32_t dev) {
+    if (s_d3d9_cache.device_handle != dev) {
+        d3d9_cache_forget();
+        s_d3d9_cache.device_handle = dev;
+    }
+}
+
+static uint32_t hook_dispatchGuestD3D9(uint32_t token, const uint32_t *args, uint32_t *argumentCount) {
+    if (!s_orig_dispatch_d3d9) return 0;
+    if (!args || !argumentCount || token < 0x7e000000u || token >= 0x7e010000u) {
+        return s_orig_dispatch_d3d9(token, args, argumentCount);
+    }
+
+    uint32_t off = token - 0x7e000000u;
+    uint32_t kind = off >> 12;
+    uint32_t method = (off >> 4) & 0xFFu;
+    s_d3d9_cache.total_calls++;
+
+    if (kind == 2u) {
+        uint32_t dev = args[0];
+        if (method == 17u) {
+            uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
+            if (hr == 0u) {
+                g_frame_count++;
+                s_d3d9_cache.present_frames++;
+                static void (*s_telemetry_present)(uint64_t) = NULL;
+                static int s_telemetry_checked = 0;
+                if (!s_telemetry_checked) {
+                    s_telemetry_checked = 1;
+                    void *h_gc = dlopen("libgraphics_cache.so", RTLD_NOLOAD | RTLD_GLOBAL);
+                    if (!h_gc) h_gc = dlopen("libgraphics_cache.so", RTLD_LAZY | RTLD_GLOBAL);
+                    if (h_gc) {
+                        s_telemetry_present = (void (*)(uint64_t))dlsym(h_gc, "nfs_telemetry_record_present");
+                    }
+                    if (!s_telemetry_present) {
+                        s_telemetry_present = (void (*)(uint64_t))dlsym(RTLD_DEFAULT, "nfs_telemetry_record_present");
+                    }
+                }
+                if (s_telemetry_present) {
+                    struct timespec ts;
+                    clock_gettime(CLOCK_MONOTONIC, &ts);
+                    uint64_t now_ns = (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
+                    s_telemetry_present(now_ns);
+                }
+                if ((s_d3d9_cache.present_frames % 300u) == 0u && s_d3d9_cache.total_calls > 0u) {
+                    double pct = (double)s_d3d9_cache.filtered_calls * 100.0 / (double)s_d3d9_cache.total_calls;
+                    __android_log_print(ANDROID_LOG_INFO, "NFSU2-D3D9Filter",
+                        "Filtered %llu / %llu D3D9 calls (%.1f%%) over %llu frames",
+                        (unsigned long long)s_d3d9_cache.filtered_calls,
+                        (unsigned long long)s_d3d9_cache.total_calls,
+                        pct,
+                        (unsigned long long)s_d3d9_cache.present_frames);
+                }
+            }
+            return hr;
+        }
+
+        if (method == 60u) {
+            uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
+            if (hr == 0u) s_d3d9_cache.in_state_block = 1;
+            return hr;
+        }
+        if (method == 61u) {
+            uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
+            s_d3d9_cache.in_state_block = 0;
+            d3d9_cache_forget();
+            return hr;
+        }
+        if (method == 16u) {
+            uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
+            s_d3d9_cache.in_state_block = 0;
+            d3d9_cache_forget();
+            s_d3d9_cache.epoch++;
+            return hr;
+        }
+        if (method == 2u) {
+            uint32_t refs = s_orig_dispatch_d3d9(token, args, argumentCount);
+            if (refs == 0u) {
+                s_d3d9_cache.in_state_block = 0;
+                s_d3d9_cache.device_handle = 0;
+                d3d9_cache_forget();
+                s_d3d9_cache.epoch++;
+            }
+            return refs;
+        }
+        if (method == 37u || method == 34u) {
+            uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
+            memset(s_d3d9_cache.tex_valid, 0, sizeof(s_d3d9_cache.tex_valid));
+            s_d3d9_cache.vp_valid = 0;
+            s_d3d9_cache.epoch++;
+            return hr;
+        }
+        if (method == 39u) {
+            uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
+            s_d3d9_cache.vp_valid = 0;
+            return hr;
+        }
+        if (method == 46u) {
+            uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
+            if (args[1] < 264u) s_d3d9_cache.tf_valid[args[1]] = 0;
+            return hr;
+        }
+
+        if (!s_d3d9_cache.in_state_block && dev != 0u) {
+            int same_dev = (s_d3d9_cache.device_handle == dev);
+            switch (method) {
+            case 57u: {
+                uint32_t st = args[1], val = args[2];
+                if (same_dev && st < 256u && s_d3d9_cache.rs_valid[st] && s_d3d9_cache.rs[st] == val) {
+                    *argumentCount = 3u;
+                    s_d3d9_cache.filtered_calls++;
+                    return 0u;
+                }
+                uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
+                if (hr == 0u && st < 256u) {
+                    d3d9_cache_sync_device(dev);
+                    s_d3d9_cache.rs[st] = val;
+                    s_d3d9_cache.rs_valid[st] = 1;
+                }
+                return hr;
+            }
+            case 69u: {
+                uint32_t smp = args[1], type = args[2], val = args[3];
+                if (same_dev && smp < 16u && type < 16u && s_d3d9_cache.ss_valid[smp][type] && s_d3d9_cache.ss[smp][type] == val) {
+                    *argumentCount = 4u;
+                    s_d3d9_cache.filtered_calls++;
+                    return 0u;
+                }
+                uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
+                if (hr == 0u && smp < 16u && type < 16u) {
+                    d3d9_cache_sync_device(dev);
+                    s_d3d9_cache.ss[smp][type] = val;
+                    s_d3d9_cache.ss_valid[smp][type] = 1;
+                }
+                return hr;
+            }
+            case 67u: {
+                uint32_t stage = args[1], type = args[2], val = args[3];
+                if (same_dev && stage < 8u && type < 33u && s_d3d9_cache.tss_valid[stage][type] && s_d3d9_cache.tss[stage][type] == val) {
+                    *argumentCount = 4u;
+                    s_d3d9_cache.filtered_calls++;
+                    return 0u;
+                }
+                uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
+                if (hr == 0u && stage < 8u && type < 33u) {
+                    d3d9_cache_sync_device(dev);
+                    s_d3d9_cache.tss[stage][type] = val;
+                    s_d3d9_cache.tss_valid[stage][type] = 1;
+                }
+                return hr;
+            }
+            case 65u: {
+                uint32_t stage = args[1], tex_h = args[2];
+                if (same_dev && stage < 16u && s_d3d9_cache.tex_valid[stage] &&
+                    s_d3d9_cache.tex[stage] == tex_h && s_d3d9_cache.tex_epoch[stage] == s_d3d9_cache.epoch) {
+                    *argumentCount = 3u;
+                    s_d3d9_cache.filtered_calls++;
+                    return 0u;
+                }
+                uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
+                if (hr == 0u && stage < 16u) {
+                    d3d9_cache_sync_device(dev);
+                    s_d3d9_cache.tex[stage] = tex_h;
+                    s_d3d9_cache.tex_epoch[stage] = s_d3d9_cache.epoch;
+                    s_d3d9_cache.tex_valid[stage] = 1;
+                }
+                return hr;
+            }
+            case 87u: {
+                uint32_t decl_h = args[1];
+                if (same_dev && s_d3d9_cache.decl_valid &&
+                    s_d3d9_cache.decl == decl_h && s_d3d9_cache.decl_epoch == s_d3d9_cache.epoch) {
+                    *argumentCount = 2u;
+                    s_d3d9_cache.filtered_calls++;
+                    return 0u;
+                }
+                uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
+                if (hr == 0u) {
+                    d3d9_cache_sync_device(dev);
+                    s_d3d9_cache.decl = decl_h;
+                    s_d3d9_cache.decl_epoch = s_d3d9_cache.epoch;
+                    s_d3d9_cache.decl_valid = 1;
+                    s_d3d9_cache.fvf_valid = 0;
+                }
+                return hr;
+            }
+            case 89u: {
+                uint32_t fvf_val = args[1];
+                if (same_dev && s_d3d9_cache.fvf_valid && s_d3d9_cache.fvf == fvf_val) {
+                    *argumentCount = 2u;
+                    s_d3d9_cache.filtered_calls++;
+                    return 0u;
+                }
+                uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
+                if (hr == 0u) {
+                    d3d9_cache_sync_device(dev);
+                    s_d3d9_cache.fvf = fvf_val;
+                    s_d3d9_cache.fvf_valid = 1;
+                    s_d3d9_cache.decl_valid = 0;
+                }
+                return hr;
+            }
+            case 92u: {
+                uint32_t sh = args[1];
+                if (same_dev && s_d3d9_cache.vs_valid &&
+                    s_d3d9_cache.vs == sh && s_d3d9_cache.vs_epoch == s_d3d9_cache.epoch) {
+                    *argumentCount = 2u;
+                    s_d3d9_cache.filtered_calls++;
+                    return 0u;
+                }
+                uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
+                if (hr == 0u) {
+                    d3d9_cache_sync_device(dev);
+                    s_d3d9_cache.vs = sh;
+                    s_d3d9_cache.vs_epoch = s_d3d9_cache.epoch;
+                    s_d3d9_cache.vs_valid = 1;
+                }
+                return hr;
+            }
+            case 107u: {
+                uint32_t sh = args[1];
+                if (same_dev && s_d3d9_cache.ps_valid &&
+                    s_d3d9_cache.ps == sh && s_d3d9_cache.ps_epoch == s_d3d9_cache.epoch) {
+                    *argumentCount = 2u;
+                    s_d3d9_cache.filtered_calls++;
+                    return 0u;
+                }
+                uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
+                if (hr == 0u) {
+                    d3d9_cache_sync_device(dev);
+                    s_d3d9_cache.ps = sh;
+                    s_d3d9_cache.ps_epoch = s_d3d9_cache.epoch;
+                    s_d3d9_cache.ps_valid = 1;
+                }
+                return hr;
+            }
+            case 100u: {
+                uint32_t stream = args[1], buf = args[2], off_b = args[3], stride = args[4];
+                if (same_dev && stream < 4u && s_d3d9_cache.stream_valid[stream] &&
+                    s_d3d9_cache.stream_buf[stream] == buf &&
+                    s_d3d9_cache.stream_off[stream] == off_b &&
+                    s_d3d9_cache.stream_stride[stream] == stride &&
+                    s_d3d9_cache.stream_epoch[stream] == s_d3d9_cache.epoch) {
+                    *argumentCount = 5u;
+                    s_d3d9_cache.filtered_calls++;
+                    return 0u;
+                }
+                uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
+                if (hr == 0u && stream < 4u) {
+                    d3d9_cache_sync_device(dev);
+                    s_d3d9_cache.stream_buf[stream] = buf;
+                    s_d3d9_cache.stream_off[stream] = off_b;
+                    s_d3d9_cache.stream_stride[stream] = stride;
+                    s_d3d9_cache.stream_epoch[stream] = s_d3d9_cache.epoch;
+                    s_d3d9_cache.stream_valid[stream] = 1;
+                }
+                return hr;
+            }
+            case 102u: {
+                uint32_t stream = args[1], setting = args[2];
+                if (same_dev && stream < 4u && s_d3d9_cache.stream_freq_valid[stream] &&
+                    s_d3d9_cache.stream_freq[stream] == setting) {
+                    *argumentCount = 3u;
+                    s_d3d9_cache.filtered_calls++;
+                    return 0u;
+                }
+                uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
+                if (hr == 0u && stream < 4u) {
+                    d3d9_cache_sync_device(dev);
+                    s_d3d9_cache.stream_freq[stream] = setting;
+                    s_d3d9_cache.stream_freq_valid[stream] = 1;
+                }
+                return hr;
+            }
+            case 104u: {
+                uint32_t ib_h = args[1];
+                if (same_dev && s_d3d9_cache.ib_valid &&
+                    s_d3d9_cache.ib == ib_h && s_d3d9_cache.ib_epoch == s_d3d9_cache.epoch) {
+                    *argumentCount = 2u;
+                    s_d3d9_cache.filtered_calls++;
+                    return 0u;
+                }
+                uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
+                if (hr == 0u) {
+                    d3d9_cache_sync_device(dev);
+                    s_d3d9_cache.ib = ib_h;
+                    s_d3d9_cache.ib_epoch = s_d3d9_cache.epoch;
+                    s_d3d9_cache.ib_valid = 1;
+                }
+                return hr;
+            }
+            case 53u: {
+                uint32_t idx = args[1], en = args[2] ? 1u : 0u;
+                if (same_dev && idx < 8u && s_d3d9_cache.light_valid[idx] && s_d3d9_cache.light_en[idx] == en) {
+                    *argumentCount = 3u;
+                    s_d3d9_cache.filtered_calls++;
+                    return 0u;
+                }
+                uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
+                if (hr == 0u && idx < 8u) {
+                    d3d9_cache_sync_device(dev);
+                    s_d3d9_cache.light_en[idx] = en;
+                    s_d3d9_cache.light_valid[idx] = 1;
+                }
+                return hr;
+            }
+            case 77u: {
+                uint32_t sw = args[1] ? 1u : 0u;
+                if (same_dev && s_d3d9_cache.sw_vp_valid && s_d3d9_cache.sw_vp == sw) {
+                    *argumentCount = 2u;
+                    s_d3d9_cache.filtered_calls++;
+                    return 0u;
+                }
+                uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
+                if (hr == 0u) {
+                    d3d9_cache_sync_device(dev);
+                    s_d3d9_cache.sw_vp = sw;
+                    s_d3d9_cache.sw_vp_valid = 1;
+                }
+                return hr;
+            }
+            case 44u: {
+                uint32_t st = args[1];
+                const void *src = (st < 264u) ? d3d9_guest_ptr(args[2], 64u) : NULL;
+                if (same_dev && src && s_d3d9_cache.tf_valid[st] &&
+                    memcmp(s_d3d9_cache.tf[st], src, 64u) == 0) {
+                    *argumentCount = 3u;
+                    s_d3d9_cache.filtered_calls++;
+                    return 0u;
+                }
+                uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
+                if (hr == 0u && src) {
+                    d3d9_cache_sync_device(dev);
+                    memcpy(s_d3d9_cache.tf[st], src, 64u);
+                    s_d3d9_cache.tf_valid[st] = 1;
+                }
+                return hr;
+            }
+            case 47u: {
+                const void *src = d3d9_guest_ptr(args[1], 24u);
+                if (same_dev && src && s_d3d9_cache.vp_valid &&
+                    memcmp(s_d3d9_cache.vp, src, 24u) == 0) {
+                    *argumentCount = 2u;
+                    s_d3d9_cache.filtered_calls++;
+                    return 0u;
+                }
+                uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
+                if (hr == 0u && src) {
+                    d3d9_cache_sync_device(dev);
+                    memcpy(s_d3d9_cache.vp, src, 24u);
+                    s_d3d9_cache.vp_valid = 1;
+                }
+                return hr;
+            }
+            case 94u: {
+                uint32_t start = args[1], cnt = args[3];
+                const void *src = (start < 256u && cnt > 0u && cnt <= 256u - start)
+                    ? d3d9_guest_ptr(args[2], cnt * 16u) : NULL;
+                if (same_dev && src) {
+                    int all_valid = 1;
+                    for (uint32_t i = 0; i < cnt; i++) {
+                        if (!s_d3d9_cache.vs_c_valid[start + i]) { all_valid = 0; break; }
+                    }
+                    if (all_valid && memcmp(&s_d3d9_cache.vs_c[start * 4u], src, (size_t)cnt * 16u) == 0) {
+                        *argumentCount = 4u;
+                        s_d3d9_cache.filtered_calls++;
+                        return 0u;
+                    }
+                }
+                uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
+                if (hr == 0u && src) {
+                    d3d9_cache_sync_device(dev);
+                    memcpy(&s_d3d9_cache.vs_c[start * 4u], src, (size_t)cnt * 16u);
+                    memset(&s_d3d9_cache.vs_c_valid[start], 1, cnt);
+                }
+                return hr;
+            }
+            case 109u: {
+                uint32_t start = args[1], cnt = args[3];
+                const void *src = (start < 224u && cnt > 0u && cnt <= 224u - start)
+                    ? d3d9_guest_ptr(args[2], cnt * 16u) : NULL;
+                if (same_dev && src) {
+                    int all_valid = 1;
+                    for (uint32_t i = 0; i < cnt; i++) {
+                        if (!s_d3d9_cache.ps_c_valid[start + i]) { all_valid = 0; break; }
+                    }
+                    if (all_valid && memcmp(&s_d3d9_cache.ps_c[start * 4u], src, (size_t)cnt * 16u) == 0) {
+                        *argumentCount = 4u;
+                        s_d3d9_cache.filtered_calls++;
+                        return 0u;
+                    }
+                }
+                uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
+                if (hr == 0u && src) {
+                    d3d9_cache_sync_device(dev);
+                    memcpy(&s_d3d9_cache.ps_c[start * 4u], src, (size_t)cnt * 16u);
+                    memset(&s_d3d9_cache.ps_c_valid[start], 1, cnt);
+                }
+                return hr;
+            }
+            default:
+                break;
+            }
+        }
+        return s_orig_dispatch_d3d9(token, args, argumentCount);
+    }
+
+    if (kind == 13u && method == 3u) {
+        uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
+        if (hr == 0u) {
+            g_frame_count++;
+            s_d3d9_cache.present_frames++;
+        }
+        return hr;
+    }
+
+    if (kind == 11u && method == 5u) {
+        uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
+        d3d9_cache_forget();
+        return hr;
+    }
+
+    if (kind == 1u && method == 16u) {
+        uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
+        s_d3d9_cache.in_state_block = 0;
+        s_d3d9_cache.device_handle = 0;
+        d3d9_cache_forget();
+        s_d3d9_cache.epoch++;
+        return hr;
+    }
+
+    if (method == 2u && ((kind >= 3u && kind <= 10u) || kind == 14u)) {
+        uint32_t refs = s_orig_dispatch_d3d9(token, args, argumentCount);
+        if (refs == 0u) s_d3d9_cache.epoch++;
+        return refs;
+    }
+
+    return s_orig_dispatch_d3d9(token, args, argumentCount);
+}
+
 static void roam_android_install_hooks(void) {
     if (atomic_load(&g_hooks_installed) || !g_p_recomp_lookup) return;
     pthread_mutex_lock(&s_hooks_mu);
@@ -1632,6 +2154,60 @@ static void roam_android_install_hooks(void) {
         __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Patched GOT entry for recomp_hook");
     }
 
+    // Hook dispatchGuestD3D9 for redundant D3D9 state deduplication and Present telemetry
+    void *h_main = dlopen("libnfsu2_android.so", RTLD_NOLOAD | RTLD_GLOBAL);
+    void *target_dispatch = dlsym(h_main ? h_main : RTLD_DEFAULT, "_Z17dispatchGuestD3D9jPKjPj");
+    if (target_dispatch && !s_orig_dispatch_d3d9) {
+        void **got_dispatch = (void **)(lib_base + 0x97ddc88);
+        if (*got_dispatch == target_dispatch) {
+            uintptr_t gp_start = (uintptr_t)got_dispatch & ~((uintptr_t)page_sz - 1);
+            uintptr_t gp_end = ((uintptr_t)(got_dispatch + 1) + (uintptr_t)page_sz - 1) & ~((uintptr_t)page_sz - 1);
+            if (mprotect((void *)gp_start, gp_end - gp_start, PROT_READ | PROT_WRITE) == 0) {
+                s_orig_dispatch_d3d9 = (dispatch_d3d9_func_t)target_dispatch;
+                *got_dispatch = (void *)hook_dispatchGuestD3D9;
+                __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook",
+                    "Hooked dispatchGuestD3D9 via GOT at %p (orig: %p)",
+                    (void *)got_dispatch, target_dispatch);
+            }
+        }
+        if (!s_orig_dispatch_d3d9) {
+            static const uint8_t EXPECTED_DISPATCH_D3D9[16] = {
+                0xff, 0xc3, 0x04, 0xd1, 0xfd, 0x7b, 0x0d, 0xa9,
+                0xfc, 0x73, 0x00, 0xf9, 0xfa, 0x67, 0x0f, 0xa9
+            };
+            if (memcmp(target_dispatch, EXPECTED_DISPATCH_D3D9, 16) == 0) {
+                s_orig_dispatch_d3d9 = (dispatch_d3d9_func_t)arm64_inline_hook(
+                    target_dispatch, (void *)hook_dispatchGuestD3D9);
+                __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook",
+                    "Hooked dispatchGuestD3D9 inline at %p (orig: %p)",
+                    target_dispatch, (void *)s_orig_dispatch_d3d9);
+            } else {
+                __android_log_print(ANDROID_LOG_WARN, "NFSU2-Hook",
+                    "dispatchGuestD3D9 prefix mismatch at %p", target_dispatch);
+            }
+        }
+    }
+
+    // Widen checkGuestProgress render-thread slice from 3 ms (0x002dc6c0 ns) to 16 ms (0x00f42400 ns)
+    // to eliminate excessive mid-frame guest thread handovers while keeping worker slices (500 us) intact.
+    uint32_t *slice_insns = (uint32_t *)(lib_base + 0x477aec);
+    if (slice_insns[0] == 0x7100013fu &&
+        slice_insns[1] == 0x5298d809u &&
+        slice_insns[2] == 0x72a005a9u &&
+        slice_insns[3] == 0xcb080268u) {
+        uintptr_t sp_start = (uintptr_t)&slice_insns[1] & ~((uintptr_t)page_sz - 1);
+        uintptr_t sp_end = ((uintptr_t)&slice_insns[3] + (uintptr_t)page_sz - 1) & ~((uintptr_t)page_sz - 1);
+        if (mprotect((void *)sp_start, sp_end - sp_start, PROT_READ | PROT_WRITE | PROT_EXEC) == 0) {
+            slice_insns[1] = 0x52848009u; /* mov  w9, #0x2400 */
+            slice_insns[2] = 0x72a01e89u; /* movk w9, #0xf4, lsl #16 -> 16,000,000 ns */
+            __builtin___clear_cache((char *)&slice_insns[1], (char *)&slice_insns[3]);
+            mprotect((void *)sp_start, sp_end - sp_start, PROT_READ | PROT_EXEC);
+            __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook",
+                "Patched checkGuestProgress render slice: 3 ms -> 16 ms at %p",
+                (void *)&slice_insns[1]);
+        }
+    }
+
     atomic_store(&g_hooks_installed, 1);
     pthread_mutex_unlock(&s_hooks_mu);
 }
@@ -1654,16 +2230,30 @@ static void update_resolution_slots_in_memory(void) {
     if (s_res_window_start < 0) s_res_window_start = 0;
     if (s_res_window_start > (int)NUM_ALL_RESOLUTION_PERCENTS - 6) s_res_window_start = (int)NUM_ALL_RESOLUTION_PERCENTS - 6;
 
+    static uint32_t *s_guest_render_modes = NULL;
+    static int s_modes_checked = 0;
+    if (!s_modes_checked) {
+        s_modes_checked = 1;
+        void *h_main = dlopen("libnfsu2_android.so", RTLD_NOLOAD | RTLD_GLOBAL);
+        s_guest_render_modes = (uint32_t *)dlsym(h_main ? h_main : RTLD_DEFAULT, "guestRenderModes");
+    }
+
     for (int i = 0; i < 6; i++) {
         uint32_t pct = kAllResolutionPercents[s_res_window_start + i];
         uint32_t w = s_display_w > 0 ? ((s_display_w * pct / 100u) & ~1u) : 1280;
         uint32_t h = s_display_h > 0 ? ((s_display_h * pct / 100u) & ~1u) : 720;
         if (w < 320) w = 320;
         if (h < 240) h = 240;
+        if (w > 8192) w = 8192;
+        if (h > 8192) h = 8192;
 
         MR32(0x800538u + i * 4) = w;
         MR32(0x800550u + i * 4) = h;
         MR32(0x86e880u + i * 4) = 1;
+        if (s_guest_render_modes) {
+            s_guest_render_modes[i * 2] = w;
+            s_guest_render_modes[i * 2 + 1] = h;
+        }
 
         if (rh_mem_committed(label_vas[i], label_caps[i])) {
             char buf[16];
