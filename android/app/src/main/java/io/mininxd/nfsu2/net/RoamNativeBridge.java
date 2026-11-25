@@ -52,6 +52,7 @@ public final class RoamNativeBridge {
         lanUdpBindListener = listener;
     }
 
+    public static native void nativeSetGameDataDir(String path);
     public static native void nativeRoamConfigure(String room, String name, String peers, boolean ghostMode, int hubIp);
     public static native void nativeRoamReceive(int srcIp, int srcPort, byte[] data);
     public static native void nativeLanUdpReceive(int srcVip, int dstVip, int sport, int dport, byte[] data);
@@ -67,6 +68,15 @@ public final class RoamNativeBridge {
     public static native float nativeGetCarSpeedKmH();
     public static native int nativeGetCarNos();
     public static native boolean nativeIsNosActive();
+
+    public static void setGameDataDir(String path) {
+        if (path == null || path.trim().isEmpty()) return;
+        try {
+            nativeSetGameDataDir(path.trim());
+        } catch (Throwable t) {
+            Log.w(TAG, "nativeSetGameDataDir failed: " + t.getMessage());
+        }
+    }
 
     public static float getCarSpeedKmH() {
         try {

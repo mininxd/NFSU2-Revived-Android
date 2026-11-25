@@ -58,6 +58,7 @@ public final class GameActivity extends NativeActivity {
     }
     private boolean requested;
     private boolean foreground;
+    private String activeGameRootPath;
     private TextView status;
     private PopupWindow statusWindow;
 
@@ -407,21 +408,30 @@ public final class GameActivity extends NativeActivity {
         dialog.getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
     }
     @Override protected void onCreate(Bundle saved) {
-        super.onCreate(saved);
+        // Configure custom game data directory BEFORE super.onCreate(saved),
+        // because NativeActivity.onCreate() starts android_main() immediately.
         LauncherActivity.sAppContext = getApplicationContext();
-        s_instance = this;
-        GameOptions.syncWidescreenIni(this);
-        Intent launch = getIntent();
+        Intent preLaunch = getIntent();
+        String earlyGameRoot = preLaunch != null ? preLaunch.getStringExtra("gameRoot") : null;
+        if (earlyGameRoot == null || earlyGameRoot.trim().isEmpty()) {
+            earlyGameRoot = LauncherActivity.gameRoot(this).getAbsolutePath();
+        }
+        activeGameRootPath = earlyGameRoot;
+        LauncherActivity.sCustomGamePath = earlyGameRoot;
         try {
-            String gameRootPath = launch != null ? launch.getStringExtra("gameRoot") : null;
-            if (gameRootPath == null || gameRootPath.isEmpty()) {
-                gameRootPath = LauncherActivity.gameRoot(this).getAbsolutePath();
-            }
-            android.system.Os.setenv("NFSU2_DATA_DIR", gameRootPath, true);
-            String backend = launch != null ? launch.getStringExtra("graphicsBackend") : null;
+            android.system.Os.setenv("NFSU2_DATA_DIR", earlyGameRoot, true);
+        } catch (Throwable ignored) {}
+        io.mininxd.nfsu2.net.RoamNativeBridge.setGameDataDir(earlyGameRoot);
+        try {
+            String backend = preLaunch != null ? preLaunch.getStringExtra("graphicsBackend") : null;
             if (backend == null || "auto".equalsIgnoreCase(backend)) backend = GameOptions.getEffectiveGraphicsBackend(this);
             android.system.Os.setenv("NFSU2_RENDERER", backend, true);
         } catch (Throwable ignored) {}
+
+        super.onCreate(saved);
+        s_instance = this;
+        GameOptions.syncWidescreenIni(this);
+        Intent launch = getIntent();
         GamePerformanceBooster.apply(this, getWindow());
         PerformanceCores.bindToPerformanceCores();
         GameLog.init(this);
@@ -593,7 +603,9 @@ public final class GameActivity extends NativeActivity {
         status.setBackgroundColor(0xb0000000);
         status.setTextSize(18);
         status.setPadding(24, 16, 24, 16);
-        status.setText("NFSU2 Revived\nChecking internal storage/nfsu2…");
+        String displayDir = (activeGameRootPath != null && !activeGameRootPath.isEmpty())
+                ? activeGameRootPath : "internal storage/nfsu2";
+        status.setText("NFSU2 Revived\nChecking " + displayDir + "…");
         // NativeActivity gives its main window surface to Vulkan; use a separate
         // non-interactive popup surface for the diagnostic text.
         statusWindow = new PopupWindow(status, ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -694,8 +706,12 @@ public final class GameActivity extends NativeActivity {
             } else {
                 message = message.replaceAll("Vulkan ([0-9]+\\.[0-9]+).*?: presentación activa", "Vulkan $1: presentation active");
             }
+            String activeDirLabel = (activeGameRootPath != null && !activeGameRootPath.isEmpty())
+                    ? activeGameRootPath : "internal storage/nfsu2";
             message = message
-                    .replace("Datos accesibles: memoria interna/nfsu2", "Accessible data: internal storage/nfsu2")
+                    .replace("Datos accesibles: memoria interna/nfsu2", "Accessible data: " + activeDirLabel)
+                    .replace("internal storage/nfsu2", activeDirLabel)
+                    .replace("Internal storage/nfsu2", activeDirLabel)
                     .replace("Ejecutando entrada CRT del juego…", "Executing game CRT entry…")
                     .replace("Ejecutando entrada CRT del juego", "Executing game CRT entry…")
                     .replace("Arranque guest detenido:", "Guest boot halted:")

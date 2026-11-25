@@ -28,7 +28,10 @@
 #include <dirent.h>
 #include <signal.h>
 #include <setjmp.h>
+#include <limits.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/statvfs.h>
 #include <jni.h>
 #if defined(__aarch64__)
 #include <arm_neon.h>
@@ -5282,9 +5285,399 @@ JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_GameActivity_nativeGamepadLayout(
     Java_com_nfsu2_androidevolved_GameActivity_nativeGamepadLayout(env, clazz, console);
 }
 
+/* =========================================================================
+ * Custom Game Data Directory Redirect (libc FS GOT hooks on libnfsu2_android.so)
+ * Prebuilt libnfsu2_android.so hardcodes "/storage/emulated/0/nfsu2".
+ * Hooking its libc filesystem GOT slots transparently redirects all reads,
+ * writes, saves, registry, and scripts to NFSU2_DATA_DIR / custom folder.
+ * ========================================================================= */
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
+
+static char s_fs_custom_dirs[2][PATH_MAX];
+static _Atomic int s_fs_dir_idx = -1;
+static _Atomic int s_fs_hooks_installed = 0;
+
+static void fs_set_custom_dir(const char *dir) {
+    if (!dir || !*dir) {
+        atomic_store_explicit(&s_fs_dir_idx, -1, memory_order_release);
+        return;
+    }
+    int cur = atomic_load_explicit(&s_fs_dir_idx, memory_order_relaxed);
+    int next = (cur == 0) ? 1 : 0;
+    size_t len = strlen(dir);
+    while (len > 1 && dir[len - 1] == '/') len--;
+    if (len >= PATH_MAX) len = PATH_MAX - 1;
+    memcpy(s_fs_custom_dirs[next], dir, len);
+    s_fs_custom_dirs[next][len] = '\0';
+    atomic_store_explicit(&s_fs_dir_idx, next, memory_order_release);
+}
+
+static const char *fs_get_custom_dir(void) {
+    int idx = atomic_load_explicit(&s_fs_dir_idx, memory_order_acquire);
+    if (idx == 0 || idx == 1) {
+        if (s_fs_custom_dirs[idx][0]) return s_fs_custom_dirs[idx];
+    }
+    const char *env = getenv("NFSU2_DATA_DIR");
+    if (env && *env) return env;
+    return NULL;
+}
+
+static const char *fs_remap_path(const char *path, char *buf, size_t bufsz, int *did_remap) {
+    if (did_remap) *did_remap = 0;
+    if (!path || path[0] != '/') return path;
+    const char *custom = fs_get_custom_dir();
+    if (!custom || !*custom) return path;
+
+    static const char *const kPrefixes[2] = {
+        "/storage/emulated/0/nfsu2",
+        "/sdcard/nfsu2"
+    };
+    size_t clen = strlen(custom);
+    while (clen > 1 && custom[clen - 1] == '/') clen--;
+
+    for (int i = 0; i < 2; i++) {
+        size_t plen = strlen(kPrefixes[i]);
+        if (strncasecmp(path, kPrefixes[i], plen) == 0 &&
+            (path[plen] == '\0' || path[plen] == '/')) {
+            if (clen == plen && strcmp(custom, kPrefixes[i]) == 0) return path;
+            const char *rest = path + plen;
+            int n = snprintf(buf, bufsz, "%.*s%s", (int)clen, custom, rest);
+            if (n > 0 && (size_t)n < bufsz) {
+                if (did_remap) *did_remap = 1;
+                return buf;
+            }
+        }
+    }
+    return path;
+}
+
+static int fs_alt_speed2_exe(const char *mapped, int variant, char *alt, size_t altsz) {
+    if (!mapped) return 0;
+    size_t len = strlen(mapped);
+    if (len < 11 || strcmp(mapped + len - 11, "/SPEED2.EXE") != 0) return 0;
+    const char *repl = (variant == 0) ? "/speed2.exe" : "/Speed2.exe";
+    int n = snprintf(alt, altsz, "%.*s%s", (int)(len - 11), mapped, repl);
+    return (n > 0 && (size_t)n < altsz);
+}
+
+static int (*s_orig_fs_access)(const char *, int) = NULL;
+static FILE *(*s_orig_fs_fopen)(const char *, const char *) = NULL;
+static int (*s_orig_fs_stat)(const char *, struct stat *) = NULL;
+static DIR *(*s_orig_fs_opendir)(const char *) = NULL;
+static int (*s_orig_fs_unlink)(const char *) = NULL;
+static int (*s_orig_fs_rmdir)(const char *) = NULL;
+static int (*s_orig_fs_rename)(const char *, const char *) = NULL;
+static int (*s_orig_fs_mkdir)(const char *, mode_t) = NULL;
+static int (*s_orig_fs_open_2)(const char *, int) = NULL;
+static int (*s_orig_fs_open)(const char *, int, ...) = NULL;
+static ssize_t (*s_orig_fs_readlink)(const char *, char *, size_t) = NULL;
+static int (*s_orig_fs_remove)(const char *) = NULL;
+static char *(*s_orig_fs_realpath)(const char *, char *) = NULL;
+static int (*s_orig_fs_lstat)(const char *, struct stat *) = NULL;
+static int (*s_orig_fs_symlink)(const char *, const char *) = NULL;
+static int (*s_orig_fs_link)(const char *, const char *) = NULL;
+static long (*s_orig_fs_pathconf)(const char *, int) = NULL;
+static int (*s_orig_fs_chdir)(const char *) = NULL;
+static int (*s_orig_fs_utimensat)(int, const char *, const struct timespec[2], int) = NULL;
+static int (*s_orig_fs_fchmodat)(int, const char *, mode_t, int) = NULL;
+static int (*s_orig_fs_openat)(int, const char *, int, ...) = NULL;
+static int (*s_orig_fs_unlinkat)(int, const char *, int) = NULL;
+static int (*s_orig_fs_truncate)(const char *, off_t) = NULL;
+static int (*s_orig_fs_statvfs)(const char *, struct statvfs *) = NULL;
+
+static int hook_fs_access(const char *path, int mode) {
+    char buf[PATH_MAX], alt[PATH_MAX];
+    int remapped = 0;
+    const char *p = fs_remap_path(path, buf, sizeof buf, &remapped);
+    int r = s_orig_fs_access(p, mode);
+    if (r != 0 && errno == ENOENT) {
+        for (int v = 0; v < 2; v++) {
+            if (fs_alt_speed2_exe(p, v, alt, sizeof alt) && s_orig_fs_access(alt, mode) == 0) return 0;
+        }
+    }
+    return r;
+}
+
+static FILE *hook_fs_fopen(const char *path, const char *mode) {
+    char buf[PATH_MAX], alt[PATH_MAX];
+    const char *p = fs_remap_path(path, buf, sizeof buf, NULL);
+    FILE *f = s_orig_fs_fopen(p, mode);
+    if (!f && errno == ENOENT) {
+        for (int v = 0; v < 2; v++) {
+            if (fs_alt_speed2_exe(p, v, alt, sizeof alt)) {
+                f = s_orig_fs_fopen(alt, mode);
+                if (f) return f;
+            }
+        }
+    }
+    return f;
+}
+
+static int hook_fs_stat(const char *path, struct stat *st) {
+    char buf[PATH_MAX], alt[PATH_MAX];
+    const char *p = fs_remap_path(path, buf, sizeof buf, NULL);
+    int r = s_orig_fs_stat(p, st);
+    if (r != 0 && errno == ENOENT) {
+        for (int v = 0; v < 2; v++) {
+            if (fs_alt_speed2_exe(p, v, alt, sizeof alt) && s_orig_fs_stat(alt, st) == 0) return 0;
+        }
+    }
+    return r;
+}
+
+static DIR *hook_fs_opendir(const char *name) {
+    char buf[PATH_MAX];
+    return s_orig_fs_opendir(fs_remap_path(name, buf, sizeof buf, NULL));
+}
+
+static int hook_fs_unlink(const char *path) {
+    char buf[PATH_MAX];
+    return s_orig_fs_unlink(fs_remap_path(path, buf, sizeof buf, NULL));
+}
+
+static int hook_fs_rmdir(const char *path) {
+    char buf[PATH_MAX];
+    return s_orig_fs_rmdir(fs_remap_path(path, buf, sizeof buf, NULL));
+}
+
+static int hook_fs_rename(const char *oldpath, const char *newpath) {
+    char b1[PATH_MAX], b2[PATH_MAX];
+    return s_orig_fs_rename(fs_remap_path(oldpath, b1, sizeof b1, NULL),
+                            fs_remap_path(newpath, b2, sizeof b2, NULL));
+}
+
+static int hook_fs_mkdir(const char *path, mode_t mode) {
+    char buf[PATH_MAX];
+    return s_orig_fs_mkdir(fs_remap_path(path, buf, sizeof buf, NULL), mode);
+}
+
+static int hook_fs_open_2(const char *path, int flags) {
+    char buf[PATH_MAX], alt[PATH_MAX];
+    const char *p = fs_remap_path(path, buf, sizeof buf, NULL);
+    int fd = s_orig_fs_open_2(p, flags);
+    if (fd < 0 && errno == ENOENT) {
+        for (int v = 0; v < 2; v++) {
+            if (fs_alt_speed2_exe(p, v, alt, sizeof alt)) {
+                fd = s_orig_fs_open_2(alt, flags);
+                if (fd >= 0) return fd;
+            }
+        }
+    }
+    return fd;
+}
+
+static int hook_fs_open(const char *path, int flags, ...) {
+    mode_t mode = 0;
+    int has_mode = (flags & O_CREAT) != 0;
+#ifdef O_TMPFILE
+    if ((flags & O_TMPFILE) == O_TMPFILE) has_mode = 1;
+#endif
+    if (has_mode) {
+        va_list ap;
+        va_start(ap, flags);
+        mode = (mode_t)va_arg(ap, unsigned int);
+        va_end(ap);
+    }
+    char buf[PATH_MAX], alt[PATH_MAX];
+    const char *p = fs_remap_path(path, buf, sizeof buf, NULL);
+    int fd = has_mode ? s_orig_fs_open(p, flags, mode) : s_orig_fs_open(p, flags);
+    if (fd < 0 && errno == ENOENT && !has_mode) {
+        for (int v = 0; v < 2; v++) {
+            if (fs_alt_speed2_exe(p, v, alt, sizeof alt)) {
+                fd = s_orig_fs_open(alt, flags);
+                if (fd >= 0) return fd;
+            }
+        }
+    }
+    return fd;
+}
+
+static ssize_t hook_fs_readlink(const char *path, char *out, size_t bufsiz) {
+    char buf[PATH_MAX];
+    return s_orig_fs_readlink(fs_remap_path(path, buf, sizeof buf, NULL), out, bufsiz);
+}
+
+static int hook_fs_remove(const char *path) {
+    char buf[PATH_MAX];
+    return s_orig_fs_remove(fs_remap_path(path, buf, sizeof buf, NULL));
+}
+
+static char *hook_fs_realpath(const char *path, char *resolved) {
+    char buf[PATH_MAX];
+    return s_orig_fs_realpath(fs_remap_path(path, buf, sizeof buf, NULL), resolved);
+}
+
+static int hook_fs_lstat(const char *path, struct stat *st) {
+    char buf[PATH_MAX], alt[PATH_MAX];
+    const char *p = fs_remap_path(path, buf, sizeof buf, NULL);
+    int r = s_orig_fs_lstat(p, st);
+    if (r != 0 && errno == ENOENT) {
+        for (int v = 0; v < 2; v++) {
+            if (fs_alt_speed2_exe(p, v, alt, sizeof alt) && s_orig_fs_lstat(alt, st) == 0) return 0;
+        }
+    }
+    return r;
+}
+
+static int hook_fs_symlink(const char *target, const char *linkpath) {
+    char b1[PATH_MAX], b2[PATH_MAX];
+    return s_orig_fs_symlink(fs_remap_path(target, b1, sizeof b1, NULL),
+                             fs_remap_path(linkpath, b2, sizeof b2, NULL));
+}
+
+static int hook_fs_link(const char *oldpath, const char *newpath) {
+    char b1[PATH_MAX], b2[PATH_MAX];
+    return s_orig_fs_link(fs_remap_path(oldpath, b1, sizeof b1, NULL),
+                          fs_remap_path(newpath, b2, sizeof b2, NULL));
+}
+
+static long hook_fs_pathconf(const char *path, int name) {
+    char buf[PATH_MAX];
+    return s_orig_fs_pathconf(fs_remap_path(path, buf, sizeof buf, NULL), name);
+}
+
+static int hook_fs_chdir(const char *path) {
+    char buf[PATH_MAX];
+    return s_orig_fs_chdir(fs_remap_path(path, buf, sizeof buf, NULL));
+}
+
+static int hook_fs_utimensat(int dirfd, const char *path, const struct timespec times[2], int flags) {
+    char buf[PATH_MAX];
+    return s_orig_fs_utimensat(dirfd, fs_remap_path(path, buf, sizeof buf, NULL), times, flags);
+}
+
+static int hook_fs_fchmodat(int dirfd, const char *path, mode_t mode, int flags) {
+    char buf[PATH_MAX];
+    return s_orig_fs_fchmodat(dirfd, fs_remap_path(path, buf, sizeof buf, NULL), mode, flags);
+}
+
+static int hook_fs_openat(int dirfd, const char *path, int flags, ...) {
+    mode_t mode = 0;
+    int has_mode = (flags & O_CREAT) != 0;
+#ifdef O_TMPFILE
+    if ((flags & O_TMPFILE) == O_TMPFILE) has_mode = 1;
+#endif
+    if (has_mode) {
+        va_list ap;
+        va_start(ap, flags);
+        mode = (mode_t)va_arg(ap, unsigned int);
+        va_end(ap);
+    }
+    char buf[PATH_MAX], alt[PATH_MAX];
+    const char *p = fs_remap_path(path, buf, sizeof buf, NULL);
+    int fd = has_mode ? s_orig_fs_openat(dirfd, p, flags, mode) : s_orig_fs_openat(dirfd, p, flags);
+    if (fd < 0 && errno == ENOENT && !has_mode) {
+        for (int v = 0; v < 2; v++) {
+            if (fs_alt_speed2_exe(p, v, alt, sizeof alt)) {
+                fd = s_orig_fs_openat(dirfd, alt, flags);
+                if (fd >= 0) return fd;
+            }
+        }
+    }
+    return fd;
+}
+
+static int hook_fs_unlinkat(int dirfd, const char *path, int flags) {
+    char buf[PATH_MAX];
+    return s_orig_fs_unlinkat(dirfd, fs_remap_path(path, buf, sizeof buf, NULL), flags);
+}
+
+static int hook_fs_truncate(const char *path, off_t length) {
+    char buf[PATH_MAX];
+    return s_orig_fs_truncate(fs_remap_path(path, buf, sizeof buf, NULL), length);
+}
+
+static int hook_fs_statvfs(const char *path, struct statvfs *out) {
+    char buf[PATH_MAX];
+    return s_orig_fs_statvfs(fs_remap_path(path, buf, sizeof buf, NULL), out);
+}
+
+static void install_fs_redirect_hooks(void) {
+    if (atomic_load(&s_fs_hooks_installed)) return;
+    void *h = dlopen("libnfsu2_android.so", RTLD_NOLOAD | RTLD_GLOBAL);
+    if (!h) h = dlopen("libnfsu2_android.so", RTLD_LAZY | RTLD_GLOBAL);
+    void *sym = dlsym(h ? h : RTLD_DEFAULT, "recomp_lookup");
+    if (!sym) sym = dlsym(h ? h : RTLD_DEFAULT, "g_mem_base");
+    Dl_info dlinfo;
+    if (!sym || !dladdr(sym, &dlinfo) || !dlinfo.dli_fbase) return;
+    uintptr_t lib_base = (uintptr_t)dlinfo.dli_fbase;
+    long page_sz = sysconf(_SC_PAGESIZE);
+    if (page_sz <= 0) page_sz = 16384;
+
+    struct {
+        const char *name;
+        uintptr_t got_off;
+        void *hook;
+        void **orig_out;
+    } fs_hooks[] = {
+        { "access",    0x97dd5f0u, (void *)hook_fs_access,    (void **)&s_orig_fs_access },
+        { "fopen",     0x97dd7b0u, (void *)hook_fs_fopen,     (void **)&s_orig_fs_fopen },
+        { "stat",      0x97dd7c8u, (void *)hook_fs_stat,      (void **)&s_orig_fs_stat },
+        { "opendir",   0x97dd7d0u, (void *)hook_fs_opendir,   (void **)&s_orig_fs_opendir },
+        { "unlink",    0x97dd9d8u, (void *)hook_fs_unlink,    (void **)&s_orig_fs_unlink },
+        { "rmdir",     0x97dd9e0u, (void *)hook_fs_rmdir,     (void **)&s_orig_fs_rmdir },
+        { "rename",    0x97dd9e8u, (void *)hook_fs_rename,    (void **)&s_orig_fs_rename },
+        { "mkdir",     0x97dda70u, (void *)hook_fs_mkdir,     (void **)&s_orig_fs_mkdir },
+        { "__open_2",  0x97dda78u, (void *)hook_fs_open_2,    (void **)&s_orig_fs_open_2 },
+        { "open",      0x97dda80u, (void *)hook_fs_open,      (void **)&s_orig_fs_open },
+        { "readlink",  0x97df088u, (void *)hook_fs_readlink,  (void **)&s_orig_fs_readlink },
+        { "remove",    0x97e12b0u, (void *)hook_fs_remove,    (void **)&s_orig_fs_remove },
+        { "realpath",  0x97e2118u, (void *)hook_fs_realpath,  (void **)&s_orig_fs_realpath },
+        { "lstat",     0x97e2120u, (void *)hook_fs_lstat,     (void **)&s_orig_fs_lstat },
+        { "symlink",   0x97e2128u, (void *)hook_fs_symlink,   (void **)&s_orig_fs_symlink },
+        { "link",      0x97e2130u, (void *)hook_fs_link,      (void **)&s_orig_fs_link },
+        { "pathconf",  0x97e2150u, (void *)hook_fs_pathconf,  (void **)&s_orig_fs_pathconf },
+        { "chdir",     0x97e2160u, (void *)hook_fs_chdir,     (void **)&s_orig_fs_chdir },
+        { "utimensat", 0x97e2168u, (void *)hook_fs_utimensat, (void **)&s_orig_fs_utimensat },
+        { "fchmodat",  0x97e2170u, (void *)hook_fs_fchmodat,  (void **)&s_orig_fs_fchmodat },
+        { "openat",    0x97e2178u, (void *)hook_fs_openat,    (void **)&s_orig_fs_openat },
+        { "unlinkat",  0x97e2188u, (void *)hook_fs_unlinkat,  (void **)&s_orig_fs_unlinkat },
+        { "truncate",  0x97e2190u, (void *)hook_fs_truncate,  (void **)&s_orig_fs_truncate },
+        { "statvfs",   0x97e2198u, (void *)hook_fs_statvfs,   (void **)&s_orig_fs_statvfs },
+    };
+
+    int patched = 0;
+    for (size_t i = 0; i < sizeof(fs_hooks) / sizeof(fs_hooks[0]); i++) {
+        void **slot = (void **)(lib_base + fs_hooks[i].got_off);
+        void *cur = *slot;
+        if (!cur || cur == fs_hooks[i].hook) continue;
+        uintptr_t gs = (uintptr_t)slot & ~((uintptr_t)page_sz - 1);
+        uintptr_t ge = ((uintptr_t)(slot + 1) + (uintptr_t)page_sz - 1) & ~((uintptr_t)page_sz - 1);
+        if (mprotect((void *)gs, ge - gs, PROT_READ | PROT_WRITE) == 0) {
+            *fs_hooks[i].orig_out = cur;
+            *slot = fs_hooks[i].hook;
+            patched++;
+        }
+    }
+    if (patched > 0) {
+        atomic_store(&s_fs_hooks_installed, 1);
+        __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook",
+            "Installed %d libc FS path-redirect GOT hooks on libnfsu2_android.so", patched);
+    }
+}
+
+JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_net_RoamNativeBridge_nativeSetGameDataDir(
+        JNIEnv *env, jclass clazz, jstring jPath) {
+    (void)clazz;
+    if (env && jPath) {
+        const char *p = (*env)->GetStringUTFChars(env, jPath, NULL);
+        if (p) {
+            fs_set_custom_dir(p);
+            setenv("NFSU2_DATA_DIR", p, 1);
+            __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook",
+                "Configured custom game data directory: %s", p);
+            (*env)->ReleaseStringUTFChars(env, jPath, p);
+        }
+    }
+    install_fs_redirect_hooks();
+}
+
 __attribute__((constructor)) static void powervr_guard_ctor(void) {
     install_powervr_fault_guard();
     install_guest_null_fault_guard();
+    install_fs_redirect_hooks();
     roam_apply_gamepad_layout(0);
 
     pthread_t th;

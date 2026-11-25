@@ -174,7 +174,12 @@ public final class GameOptions {
         }
         try {
             java.io.File gr = LauncherActivity.gameRoot(context);
-            String[] candidates = {
+            String custom = context != null ? prefs(context).getString(CUSTOM_GAME_DIR, null) : null;
+            boolean hasCustom = custom != null && !custom.trim().isEmpty();
+            String[] candidates = hasCustom ? new String[] {
+                gr != null ? gr.getAbsolutePath() + "/GLOBALTEXTURESROW.BIN" : null,
+                gr != null ? gr.getAbsolutePath() + "/globaltexturesrow.bin" : null,
+            } : new String[] {
                 gr != null ? gr.getAbsolutePath() + "/GLOBALTEXTURESROW.BIN" : null,
                 gr != null ? gr.getAbsolutePath() + "/globaltexturesrow.bin" : null,
                 android.os.Environment.getExternalStorageDirectory() + "/nfsu2/GLOBALTEXTURESROW.BIN",
