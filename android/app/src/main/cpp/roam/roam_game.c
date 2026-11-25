@@ -5864,6 +5864,8 @@ static void track_name(uint32_t num, int reverse, char *o, int n){
         return;
     }
 }
+#endif
+#if MPRACES || SAYS
 typedef struct { char *b; int n, cap; } MpJs;
 static void js_raw(MpJs *j, const char *s){ while (*s && j->n + 1 < j->cap) j->b[j->n++] = *s++; j->b[j->n] = 0; }
 static void js_key(MpJs *j, const char *k){ if (j->n > 1) js_raw(j, ","); js_raw(j, "\""); js_raw(j, k); js_raw(j, "\":"); }
@@ -5878,6 +5880,8 @@ static void js_val(MpJs *j, const char *v){
 }
 static void js_str(MpJs *j, const char *k, const char *v){ js_key(j, k); js_val(j, v); }
 static void js_int(MpJs *j, const char *k, int v){ char t[16]; snprintf(t, sizeof t, "%d", v); js_key(j, k); js_raw(j, t); }
+#endif
+#if MPRACES
 /* the race: its kind, track and laps (a LAN race takes at least 2, Street X 4, as mprace.c sets them; a downhill
  * drift, 1 lap in the career, is one run and shows none, as a sprint), its career stage (a lobby races its host's
  * stage's race at the spot, or the last won there: spot_of) */
