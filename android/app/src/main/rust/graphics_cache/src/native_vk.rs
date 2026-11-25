@@ -38,8 +38,9 @@ pub const VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT: u32 = 0x00000010;
 pub const VK_FORMAT_R8G8B8A8_UNORM: u32 = 37;
 pub const VK_FORMAT_B8G8R8A8_UNORM: u32 = 44;
 pub const VK_COLOR_SPACE_SRGB_NONLINEAR_KHR: u32 = 0;
-pub const VK_PRESENT_MODE_FIFO_KHR: u32 = 2;
+pub const VK_PRESENT_MODE_IMMEDIATE_KHR: u32 = 0;
 pub const VK_PRESENT_MODE_MAILBOX_KHR: u32 = 1;
+pub const VK_PRESENT_MODE_FIFO_KHR: u32 = 2;
 pub const VK_SHARING_MODE_EXCLUSIVE: u32 = 0;
 pub const VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR: u32 = 0x00000008;
 pub const VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR: u32 = 0x00000001;
@@ -487,7 +488,7 @@ pub unsafe extern "C" fn nfs_native_vk_set_window(window: *mut c_void) -> c_int 
     let mut queue: *mut c_void = std::ptr::null_mut();
     (api.vk_get_device_queue)(device, queue_family_index, 0, &mut queue);
 
-    // 4. Create Swapchain
+    // 4. Create Swapchain (prefer Immediate -> Mailbox -> FIFO)
     let mut swapchain_info = VkSwapchainCreateInfoKHR {
         s_type: VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
         p_next: std::ptr::null(),
@@ -504,28 +505,35 @@ pub unsafe extern "C" fn nfs_native_vk_set_window(window: *mut c_void) -> c_int 
         p_queue_family_indices: std::ptr::null(),
         pre_transform: 1, // IDENTITY
         composite_alpha: VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR,
-        present_mode: VK_PRESENT_MODE_MAILBOX_KHR,
+        present_mode: VK_PRESENT_MODE_IMMEDIATE_KHR,
         clipped: 1,
         old_swapchain: 0,
     };
 
     let mut swapchain: u64 = 0;
-    if (api.vk_create_swapchain_khr)(device, &swapchain_info, std::ptr::null(), &mut swapchain) != VK_SUCCESS {
-        // Fallback 1: try standard FIFO if Mailbox is unsupported
-        swapchain_info.present_mode = VK_PRESENT_MODE_FIFO_KHR;
-        if (api.vk_create_swapchain_khr)(device, &swapchain_info, std::ptr::null(), &mut swapchain) != VK_SUCCESS {
-            // Fallback 2: B8G8R8A8 if R8G8B8A8 fails on driver
-            let mut fallback_info = swapchain_info;
-            fallback_info.image_format = VK_FORMAT_B8G8R8A8_UNORM;
-            fallback_info.composite_alpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-            fallback_info.present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
-            if (api.vk_create_swapchain_khr)(device, &fallback_info, std::ptr::null(), &mut swapchain) != VK_SUCCESS {
-                fallback_info.present_mode = VK_PRESENT_MODE_FIFO_KHR;
-                if (api.vk_create_swapchain_khr)(device, &fallback_info, std::ptr::null(), &mut swapchain) != VK_SUCCESS {
-                    return -7;
-                }
+    let format_attempts = [
+        (VK_FORMAT_R8G8B8A8_UNORM, VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR),
+        (VK_FORMAT_B8G8R8A8_UNORM, VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR),
+    ];
+    let present_modes = [
+        VK_PRESENT_MODE_IMMEDIATE_KHR,
+        VK_PRESENT_MODE_MAILBOX_KHR,
+        VK_PRESENT_MODE_FIFO_KHR,
+    ];
+    let mut swapchain_created = false;
+    'swapchain: for &(fmt, alpha) in &format_attempts {
+        swapchain_info.image_format = fmt;
+        swapchain_info.composite_alpha = alpha;
+        for &mode in &present_modes {
+            swapchain_info.present_mode = mode;
+            if (api.vk_create_swapchain_khr)(device, &swapchain_info, std::ptr::null(), &mut swapchain) == VK_SUCCESS {
+                swapchain_created = true;
+                break 'swapchain;
             }
         }
+    }
+    if !swapchain_created {
+        return -7;
     }
 
     *guard = Some(NativeVkContext {

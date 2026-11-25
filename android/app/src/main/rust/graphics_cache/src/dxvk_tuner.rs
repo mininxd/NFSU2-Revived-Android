@@ -6,7 +6,7 @@
 //! - `d3d9.forceSamplerTypeSpecConstants`: Specializes Vulkan samplers into constants, eliminating branch overhead.
 //! - `d3d9.lenientClear` and `d3d9.allowDiscard`: Removes redundant clearing and enables discard optimizations.
 //! - `d3d9.strictConstantCopies`: Disables redundant constant validation for faster push constant uploads.
-//! - `MESA_VK_WSI_PRESENT_MODE`: Selects mailbox presentation for minimum latency without screen tearing.
+//! - `MESA_VK_WSI_PRESENT_MODE`: Selects immediate presentation (VSync off) for minimum latency.
 
 use std::fs::File;
 use std::io::Write;
@@ -66,7 +66,7 @@ impl Default for DxvkProfileConfig {
             evict_managed_on_unlock: true,
             defer_surface_creation: true,
             no_explicit_front_buffer: true,
-            tear_free: true,
+            tear_free: false,
             max_frame_latency: 2,
             num_compiler_threads: 4,
         }
@@ -197,7 +197,7 @@ pub fn apply_driver_environment() {
         ("WINE_DISABLE_FULLSCREEN_HACK", "1"),
         ("WINE_DISABLE_HARDWARE_SCHEDULING", "1"),
         ("WINE_DO_NOT_CREATE_DXGI_DEVICE_MANAGER", "1"),
-        ("MESA_VK_WSI_PRESENT_MODE", "mailbox"),
+        ("MESA_VK_WSI_PRESENT_MODE", "immediate"),
         ("MESA_SHADER_CACHE_DISABLE", "false"),
         ("MESA_SHADER_CACHE_MAX_SIZE", "1024MB"),
         ("mesa_glthread", "true"),
