@@ -61,16 +61,6 @@ void hiddenraces_frame_tick(void) {
 void extraoptions_init_patches(void) {
     if (!rh_mem_committed(0x00400000u, 0x1000)) return;
 
-    // Bleach Bypass / Enhanced Contrast engine resolve clamp:
-    // Clamp 0x00870D00 (g_BleachByPassEnable) and 0x00870CFC (g_OverBrightEnable) to 0
-    // so SPEED2.EXE skips slow 3-pass ping-pong resolves that drop FPS to 30-40.
-    if (rh_mem_committed(0x00870D00u, 4)) {
-        MR32(0x00870D00u) = 0;
-    }
-    if (rh_mem_committed(0x00870CFCu, 4)) {
-        MR32(0x00870CFCu) = 0;
-    }
-
     // Optical drive / Disc 2 bypass
     if (rh_mem_committed(0x005C0D3Fu, 1)) MR8(0x005C0D3Fu) = 0x78;
     if (rh_mem_committed(0x005C0D54u, 1)) MR8(0x005C0D54u) = 0x00;

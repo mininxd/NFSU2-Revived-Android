@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 /// SPEED2.EXE guest memory address for g_CrowdEnable.
 pub const G_CROWD_ENABLE_ADDR: u32 = 0x00870CD0;
 
-static CROWD_SUPPRESSION_ENABLED: AtomicBool = AtomicBool::new(true);
+static CROWD_SUPPRESSION_ENABLED: AtomicBool = AtomicBool::new(false);
 static SUPPRESSED_FRAMES: AtomicU32 = AtomicU32::new(0);
 
 /// Check if crowd suppression is globally active in Rust.

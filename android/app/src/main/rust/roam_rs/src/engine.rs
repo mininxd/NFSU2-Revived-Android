@@ -208,28 +208,25 @@ pub unsafe extern "C" fn nfs_rust_apply_engine_pacing(mem_base: *mut u8, real_el
         write_u32(mem_base, G_HEADLIGHT_ENABLE_ADDR, 1);
     }
 
-    // 7. Trackside Crowd Suppression (0x00870CD0 = g_CrowdEnable)
-    crate::crowd::nfs_rust_apply_crowd_suppression(mem_base);
-
-    // 8. Enhanced Contrast Regulation (Issue #70: Snapdragon 8 Elite / Adreno 840 / 740)
-    // 8. Enhanced Contrast Regulation: clamp OverBright bloom to 0 to prevent TBDR tile stalls,
-    // while respecting the player's in-game Enhanced Contrast choice (G_BLEACH_BYPASS_ENABLE_ADDR)
-    write_u32(mem_base, G_OVERBRIGHT_ENABLE_ADDR, 0);
-
-    // 9. Anti-slowmotion frame pacing (supports 60Hz, 90Hz, 120Hz, 240Hz, and uncapped)
+    // 7. Anti-slowmotion frame pacing (supports 60Hz, 90Hz, 120Hz, 240Hz, and uncapped).
+    // Never overwrite G_SIM_WDT_ADDR while the simulation is paused (current_wdt <= 0.0),
+    // such as inside the pause menu or full World Map, or roam_game will see the world
+    // unpause and re-initialize WorldMap markers every frame.
     if real_elapsed > 0.004 && real_elapsed < 0.200 {
         let current_wdt = read_f32(mem_base, G_SIM_WDT_ADDR);
         let current_realdt = read_f32(mem_base, G_SIM_REALDT_ADDR);
-        let effective_dt = if current_wdt > 0.0 { current_wdt } else { current_realdt };
 
-        if effective_dt > 0.0 && effective_dt < real_elapsed * 0.90 {
-            let corrected = pacing_filter_dt(real_elapsed, effective_dt);
+        if current_wdt > 0.0 && current_wdt < real_elapsed * 0.90 {
+            let corrected = pacing_filter_dt(real_elapsed, current_wdt);
             write_f32(mem_base, G_SIM_WDT_ADDR, corrected);
             write_f32(mem_base, G_SIM_REALDT_ADDR, corrected);
             // Scaled with 3600 Hz tick base (capped to 70 max to prevent physics death spiral during hiccups)
             let steps = ((corrected * 3600.0) as u32).min(70);
             write_u32(mem_base, G_SIM_STEPS_ADDR, steps);
             PACED_FRAMES.fetch_add(1, Ordering::Relaxed);
+        } else if current_wdt <= 0.0 && current_realdt > 0.0 && current_realdt < real_elapsed * 0.90 {
+            let corrected = pacing_filter_dt(real_elapsed, current_realdt);
+            write_f32(mem_base, G_SIM_REALDT_ADDR, corrected);
         }
     }
 

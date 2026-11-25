@@ -2667,10 +2667,10 @@ static void arrow_colours(CPU *c, uint32_t w){
         uint32_t v = rd32(n + 0x1cu), o = ok(v, 8) && MR32(v + 4u) == MM_AIRACER ? MR32(v) : 0;
         if (!ok(o, 0x34)) continue;
         int16_t rn = (int16_t)MR32(n + 8u);
-        int crew = racer_crew(w, rn), ai = !crew && !racer_friend(w, rn), j = -1;
+        int crew = racer_crew(w, rn), j = -1;
         for (int i = 0; i < g_mmc.n; i++) if (g_mmc.obj[i] == o) j = i;
         if (j >= 0) live[j] = 1;
-        if (!crew && !ai) continue;
+        if (!crew) continue;
         int32_t col[4];
         if (!fe_colour_get(o, col)) continue;
         if (j < 0){
@@ -2679,7 +2679,7 @@ static void arrow_colours(CPU *c, uint32_t w){
             for (int i = 0; i < 3; i++) g_mmc.orig[j][i] = col[i];
         }
         used[j] = 1;
-        uint32_t rgb = crew ? O.crew_rgb[crew - 1] : g_ai_rgb;
+        uint32_t rgb = O.crew_rgb[crew - 1];
         int32_t b = (int32_t)(rgb & 0xffu), g = (int32_t)(rgb >> 8 & 0xffu), r = (int32_t)(rgb >> 16 & 0xffu);
         if (col[0] != b || col[1] != g || col[2] != r) fe_colour_set(c, o, b, g, r, col[3]);
     }
@@ -3177,41 +3177,11 @@ static void wmf_begin(uint32_t map){
     memset(&g_wmf, 0, sizeof g_wmf); g_wmf.map = map;
 }
 static void wmf_open(CPU *c, uint32_t scr, uint32_t map, uint32_t pkg, uint32_t w){
-    int rows = 0; uint32_t like = 0, line[64 + WMF_TEST0 + WMF_TEST_MAX]; float yl[64];
-    /* the game's rows, top to bottom (by their ticks' places) */
-    for (uint32_t r = rd32(scr + WMF_SCR_ROWS); r && r != scr + WMF_SCR_ROWS && rows < 64 && ok(r, WMF_ROW_SZ); r = rd32(r)){
-        uint32_t t = MR32(r + 8u), d = ok(t, 0x34) ? rd32(t + 0x2cu) : 0;
-        float y = ok(d, 0x40) ? MRF32(d + 0x20u) : 0.f;
-        int j = rows++;
-        for (; j > 0 && yl[j - 1] > y; j--){ yl[j] = yl[j - 1]; line[j] = line[j - 1]; }
-        yl[j] = y; line[j] = r; like = r;
-    }
-    /* ours after them, in the package's rows past theirs and in copies past the package's; with more rows than the
-     * package's, all of them nearer each other.  NFSU2_ROAM_TEST_LEGEND_ROWS=n: n rows more, of no kind (as a fuller
-     * legend) */
-    int test = env_int("NFSU2_ROAM_TEST_LEGEND_ROWS", 0, 0, WMF_TEST_MAX), nl = rows;
-    float k = 1.f;
-    if (like){
-        uint32_t car = wm_find(c, pkg, "AIRACERINDICATOR_0"), ring = wm_find(c, pkg, "SPRINTEVENTINDICATOR_0");
-        uint32_t rgb = g_wm.col_ok ? (uint32_t)(g_wm.col[2] & 0xff) << 16 | (uint32_t)(g_wm.col[1] & 0xff) << 8 | (uint32_t)(g_wm.col[0] & 0xff) : 0xffffffu;
-        uint32_t tex[3] = { car ? gcall1(c, FN_FE_TEX, 0, car) : 0, ring ? gcall1(c, FN_FE_TEX, 0, ring) : 0, 0 }, col[3] = { rgb, WMF_RACES_RGB, MEET_RGB };
-#if MPRACES
-        uint32_t mi = meet_icon(c, pkg);
-        tex[2] = mi ? gcall1(c, FN_FE_TEX, 0, mi) : tex[0];
-#endif
-        for (int i = 0; i < WMF_N + test; i++){
-            int what = i < WMF_N ? i : WMF_TEST0 + i - WMF_N, slot = rows + 1 + i;
-            uint32_t o[4], bk = 0;
-            int got = slot <= WMF_ROWS ? wmf_parts(c, pkg, slot, o, &bk) : wmf_copy_parts(c, pkg, i, o, &bk);
-            uint32_t r = got ? wmf_row(c, scr, pkg, o, bk, what, like, what < 3 ? tex[what] : tex[0], what < 3 ? col[what] : 0xffffffu) : 0;
-            if (i < WMF_N) g_wmf.row[i] = r;
-            if (r) line[nl++] = r;
-        }
-        k = wmf_fit(c, scr, pkg, line, nl);
-    }
-    /* the friends' cars (a crew-mate's aside): the game's markers for those in
-     * the AI range and ours, each where its car was as the map opened; all
-     * of them moved with their cars from then on (wm_live) */
+    (void)c; (void)scr; (void)pkg;
+    g_wmf_on[WMF_PLAYERS] = 1;
+    /* Keep the game's original fullmap legend untouched (do not add an extra
+     * "Players" row), and track friends' car markers so wm_live moves them smoothly
+     * with the same yellow arrow as NPC opponents. */
     g_wm.nf = 0;
     for (uint32_t e = rd32(map + 4u), i = 0; e && e != map + 4u && i < FE_WALK && ok(e, WM_MARK_SZ); e = rd32(e), i++){
         if (MR32(e + 8u) != WM_CAR) continue;
@@ -3226,9 +3196,6 @@ static void wmf_open(CPU *c, uint32_t scr, uint32_t map, uint32_t pkg, uint32_t 
             break;
         }
     }
-    rlog("[roam] f=%ld world map: legend rows %d of the game's%s%s%s, %d in all, at %.2f of their size; players %s, races %s, meets %s\n", rh_frame(), rows,
-         g_wmf.row[0] ? " and Players" : "", g_wmf.row[1] ? " and Players' races" : "", g_wmf.row[2] ? " and Car meets" : "", nl, (double)k,
-         g_wmf_on[0] ? "shown" : "hidden", g_wmf_on[1] ? "shown" : "hidden", g_wmf_on[2] ? "shown" : "hidden");
 }
 /* every frame the map is open: a row ticked or crossed since, its markers on or off the map */
 static void wmf_frame(CPU *c, uint32_t map){
@@ -3366,7 +3333,7 @@ static int wm_step(int64_t host){
     return g_wm_n > 0;
 }
 static void map_update(CPU *c, uint32_t w, int64_t host){
-    if (!g_sync_paused || !g_gmem){ g_wm.done = 0; return; }        /* the world stands while the map is open */
+    if (!g_gmem){ g_wm.done = 0; return; }
     uint32_t sa = g_gmem + TAG_SCR + 0x48u;
     gstr(sa, WM_PACKAGE, 24);
     uint32_t pk = gcall1(c, FN_FE_PACKAGE, 0, sa);
@@ -3394,7 +3361,6 @@ static void map_update(CPU *c, uint32_t w, int64_t host){
         int copies = wm_dress(c, map, pkg, wm_room(pk));
         if (n || copies) gcall0(c, FN_WM_PLACE, map);
         crew_map_open(c, map, pkg, pk, w);
-        ai_map_open(c, map, pkg, w);
         wmf_open(c, scr, map, pkg, w);
         gcall0(c, FN_WM_PLACE, map);
         rlog("[roam] f=%ld world map open: %u car markers, %d of them friends' cars outside the car index; %d copies of AIRACERINDICATOR_0\n",

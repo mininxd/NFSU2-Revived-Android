@@ -702,13 +702,6 @@ __attribute__((weak)) void dispatch_patch(uint32_t a, void (*f)(CPU *)) {
 #include "roam_patches.h"
 
 static void framerate_pacing_fix(void) {
-    static int s_crowd_env_checked = 0;
-    if (!s_crowd_env_checked) {
-        s_crowd_env_checked = 1;
-        const char *env_crowd = getenv("NFSU2_CROWD");
-        int allow_crowd = (env_crowd && (strcmp(env_crowd, "1") == 0 || strcasecmp(env_crowd, "on") == 0));
-        nfs_rust_set_crowd_suppression(!allow_crowd);
-    }
     if (g_p_mem_base && *g_p_mem_base) {
         static int64_t s_last_tick_us = 0;
         int64_t now_us = roam_plat_now_us();
@@ -1191,27 +1184,13 @@ static void hook_sub_005c7ec0(void) {
 
     if (view_id == 1u && g_p_mem_base && *g_p_mem_base) {
         static uint32_t s_last_pacing_fc = 0;
-        static int s_crowd_checked = 0;
-        static int s_allow_crowd = 0;
-        if (!s_crowd_checked) {
-            s_crowd_checked = 1;
-            const char *env_crowd = getenv("NFSU2_CROWD");
-            s_allow_crowd = (env_crowd && (strcmp(env_crowd, "1") == 0 || strcasecmp(env_crowd, "on") == 0));
-            nfs_rust_set_crowd_suppression(!s_allow_crowd);
-        }
         uint32_t fc = rh_mem_committed(0x00870818u, 4) ? MR32(0x00870818u) : 0;
         if (fc != s_last_pacing_fc) {
             s_last_pacing_fc = fc;
             if (!s_orig_dispatch_d3d9) g_frame_count++;
             sndlead_frame_tick();
-            if (!s_allow_crowd && rh_mem_committed(0x00870cd0u, 4) && MR32(0x00870cd0u) != 0) {
-                MR32(0x00870cd0u) = 0;
-            }
             if (rh_mem_committed(0x00870cc4u, 4) && MR32(0x00870cc4u) > 1u) {
                 MR32(0x00870cc4u) = 1u;
-            }
-            if (rh_mem_committed(0x00870cfcu, 4) && MR32(0x00870cfcu) != 0) {
-                MR32(0x00870cfcu) = 0;
             }
             if (rh_mem_committed(0x007fb700u, 4)) MR32(0x007fb700u) = 1u;
             if (rh_mem_committed(0x007fb714u, 4)) MRF32(0x007fb714u) = 6.0f;
@@ -1223,7 +1202,6 @@ static void hook_sub_005caad0(void) {
     static int s_gc_checked = 0;
     static void *s_h_gc = NULL;
     static void (*s_fn_bypass)(int) = NULL;
-    static void (*s_set_contrast_active)(uint32_t) = NULL;
 
     if (!s_gc_checked) {
         s_gc_checked = 1;
@@ -1231,12 +1209,6 @@ static void hook_sub_005caad0(void) {
         if (!s_h_gc) s_h_gc = dlopen("libgraphics_cache.so", RTLD_LAZY | RTLD_GLOBAL);
         if (s_h_gc) {
             s_fn_bypass = (void (*)(int))dlsym(s_h_gc, "nfs_camera_cull_set_bypass");
-            s_set_contrast_active = (void (*)(uint32_t))dlsym(s_h_gc, "nfs_contrast_set_active");
-        }
-        if (!s_set_contrast_active) {
-            void *h_core = dlopen("libgame_core.so", RTLD_NOLOAD | RTLD_GLOBAL);
-            if (!h_core) h_core = dlopen("libgame_core.so", RTLD_LAZY | RTLD_GLOBAL);
-            if (h_core) s_set_contrast_active = (void (*)(uint32_t))dlsym(h_core, "nfs_contrast_set_active");
         }
     }
 
@@ -1258,44 +1230,8 @@ static void hook_sub_005caad0(void) {
         }
     }
 
-    int do_bypass = 1;
-
-    uint32_t user_contrast = 0;
-    if (do_bypass) {
-        uint32_t master_contrast = 0;
-        if (rh_mem_committed(0x00876518u, 4)) {
-            master_contrast = MR32(0x00876518u);
-        }
-        if (rh_mem_committed(0x00870D00u, 4)) {
-            user_contrast = MR32(0x00870D00u) | master_contrast;
-            if (s_set_contrast_active) {
-                s_set_contrast_active(user_contrast);
-            }
-            // Clamping 0x00870D00 to 0 inside scene render causes SPEED2.EXE to cleanly
-            // skip the slow 3-pass ping-pong StretchRect resolve without hooking internal functions.
-            MR32(0x00870D00u) = 0;
-        }
-        if (rh_mem_committed(0x00870CFCu, 4)) {
-            MR32(0x00870CFCu) = 0;
-        }
-        if (rh_mem_committed(0x00876514u, 4)) {
-            MR32(0x00876514u) = 0;
-        }
-    }
-
     if (s_orig_5caad0) {
         s_orig_5caad0();
-    }
-
-    if (do_bypass) {
-        // Keep engine post-processing flags clamped to 0 so SPEED2.EXE never executes
-        // the heavy 3-pass ping-pong StretchRect resolve that causes the 40 FPS drop on mobile TBDR GPUs.
-        if (rh_mem_committed(0x00870D00u, 4)) {
-            MR32(0x00870D00u) = 0;
-        }
-        if (rh_mem_committed(0x00870CFCu, 4)) {
-            MR32(0x00870CFCu) = 0;
-        }
     }
 
     if (s_fn_bypass) s_fn_bypass(0);
@@ -1986,91 +1922,6 @@ static inline void d3d9_cache_sync_device(uint32_t dev) {
     }
 }
 
-static void contrast_and_crowd_sync(uint32_t dev, int apply_gamma) {
-    if (!g_p_mem_base || !*g_p_mem_base) return;
-
-    // 1. Crowd setting enforcement (0x00870CD0 = g_CrowdEnable)
-    static int s_crowd_env_init = 0;
-    static int s_allow_crowd = 0;
-    if (!s_crowd_env_init) {
-        s_crowd_env_init = 1;
-        const char *env_crowd = getenv("NFSU2_CROWD");
-        s_allow_crowd = (env_crowd && (strcmp(env_crowd, "1") == 0 || strcasecmp(env_crowd, "on") == 0));
-        nfs_rust_set_crowd_suppression(!s_allow_crowd);
-    }
-    if (!s_allow_crowd && rh_mem_committed(0x00870cd0u, 4) && MR32(0x00870cd0u) != 0) {
-        MR32(0x00870cd0u) = 0;
-    }
-
-    // 2. Enhanced Contrast pre-scene clamp + hardware SetGammaRamp tone curve
-    uint32_t master_contrast = rh_mem_committed(0x00876518u, 4) ? MR32(0x00876518u) : 0u;
-    uint32_t bleach = rh_mem_committed(0x00870D00u, 4) ? MR32(0x00870D00u) : 0u;
-    uint32_t want_contrast = (master_contrast != 0u || bleach != 0u) ? 1u : 0u;
-
-    if (rh_mem_committed(0x00870D00u, 4)) MR32(0x00870D00u) = 0;
-    if (rh_mem_committed(0x00870CFCu, 4)) MR32(0x00870CFCu) = 0;
-    if (rh_mem_committed(0x00876514u, 4)) MR32(0x00876514u) = 0;
-
-    if (apply_gamma && dev != 0u && s_orig_dispatch_d3d9) {
-        static uint32_t s_last_gamma_contrast = 0xFFFFFFFFu;
-        static uint32_t s_gamma_ramp_va = 0u;
-        if (want_contrast != s_last_gamma_contrast) {
-            if (s_gamma_ramp_va == 0u && g_p_esp && *g_p_esp && g_p_recomp_lookup) {
-                recomp_void_func_t fn_malloc = (recomp_void_func_t)g_p_recomp_lookup(0x00575620u);
-                if (fn_malloc && g_p_eax) {
-                    uint32_t esp_save = *g_p_esp;
-                    uint32_t sz = 1536u;
-                    uint32_t sp = esp_save - 8u;
-                    if (rh_mem_committed(sp, 8)) {
-                        MR32(sp) = 0xDEAD0000u;
-                        MR32(sp + 4u) = sz;
-                        *g_p_esp = sp;
-                        fn_malloc();
-                        *g_p_esp = esp_save;
-                        if (*g_p_eax >= 0x10000u && rh_mem_committed(*g_p_eax, 1536)) {
-                            s_gamma_ramp_va = *g_p_eax;
-                        }
-                    }
-                }
-            }
-            if (s_gamma_ramp_va != 0u && rh_mem_committed(s_gamma_ramp_va, 1536)) {
-                uint16_t *r = (uint16_t *)GPTR(s_gamma_ramp_va);
-                uint16_t *g = r + 256;
-                uint16_t *b = r + 512;
-                for (int i = 0; i < 256; i++) {
-                    uint16_t w;
-                    if (want_contrast) {
-                        float c = (float)i / 255.0f;
-                        c = fminf(fmaxf(c * 1.00695555f, 0.0f), 1.0f);
-                        float s_curve = c * c * (3.0f - 2.0f * c);
-                        c = c * 0.85f + s_curve * 0.15f;
-                        float th = fminf(fmaxf((c - 0.5f) / 0.5f, 0.0f), 1.0f);
-                        c += -0.35f * 0.20f * (th * th * (3.0f - 2.0f * th)) * (c - 0.5f);
-                        float tw = fminf(fmaxf((c - 0.75f) / 0.25f, 0.0f), 1.0f);
-                        c += 0.16f * 0.15f * (tw * tw * (3.0f - 2.0f * tw)) * (1.0f - c);
-                        float ts = fminf(fmaxf((0.5f - c) / 0.5f, 0.0f), 1.0f);
-                        c += -0.12f * 0.18f * (ts * ts * (3.0f - 2.0f * ts)) * (0.5f - c);
-                        float tb = fminf(fmaxf((0.25f - c) / 0.25f, 0.0f), 1.0f);
-                        c += 0.22f * 0.10f * (tb * tb * (3.0f - 2.0f * tb)) * c;
-                        c -= 0.20f * 0.12f * (1.0f - c) * c;
-                        c = fminf(fmaxf(c, 0.0f), 1.0f);
-                        w = (uint16_t)(c * 65535.0f);
-                    } else {
-                        w = (uint16_t)(i * 257);
-                    }
-                    r[i] = w;
-                    g[i] = w;
-                    b[i] = w;
-                }
-                uint32_t ramp_args[4] = { dev, 0u, 0u, s_gamma_ramp_va };
-                uint32_t ramp_ac = 4u;
-                s_orig_dispatch_d3d9(0x7e000000u | (2u << 12) | (21u << 4), ramp_args, &ramp_ac);
-                s_last_gamma_contrast = want_contrast;
-            }
-        }
-    }
-}
-
 static uint32_t hook_dispatchGuestD3D9(uint32_t token, const uint32_t *args, uint32_t *argumentCount) {
     if (!s_orig_dispatch_d3d9) return 0;
     if (!args || !argumentCount || token < 0x7e000000u || token >= 0x7e010000u) {
@@ -2084,11 +1935,7 @@ static uint32_t hook_dispatchGuestD3D9(uint32_t token, const uint32_t *args, uin
 
     if (kind == 2u) {
         uint32_t dev = args[0];
-        if (method == 41u) {
-            contrast_and_crowd_sync(dev, 1);
-        }
         if (method == 17u) {
-            contrast_and_crowd_sync(dev, 0);
             d3d9_flush_pending_states();
             uint32_t hr = s_orig_dispatch_d3d9(token, args, argumentCount);
             if (hr == 0u) {

@@ -45,7 +45,7 @@ public final class GameOptions {
             STARTUP_MOVIES = "intro", CUTSCENE_BORDERS = "cutscene_borders",
             ROAM_CARS_LIMIT = "roam_max_cars", ROAM_CREW = "roam_crew",
             GRAPHICS_BACKEND = "graphics_backend", DRAW_DISTANCE = "draw_distance",
-            TRACKSIDE_CROWDS = "trackside_crowds", REGION = "region", SPEEDOMETER = "speedometer", PAD_LAYOUT = "pad_layout",
+            REGION = "region", SPEEDOMETER = "speedometer", PAD_LAYOUT = "pad_layout",
             CUSTOM_GAME_DIR = "custom_game_dir";
 
     static final Option[] ALL = {
@@ -58,9 +58,6 @@ public final class GameOptions {
             new Option(DRAW_DISTANCE, "Draw Distance", "original",
                     new String[] {"ultra_performance", "performance", "balanced", "extended", "original"},
                     new String[] {"Ultra Performance", "Performance", "Balanced", "Extended", "Original"}),
-            new Option(TRACKSIDE_CROWDS, "Trackside Crowds", "off",
-                    new String[] {"off", "on"},
-                    new String[] {"Off (Faster)", "On"}),
             new Option(FPS, "FPS Limit", "60",
                     new String[] {"30", "60", "90", "120", "0"},
                     new String[] {"30 FPS", "60 FPS", "90 FPS", "120 FPS", "Uncapped"}),
