@@ -79,7 +79,10 @@ public final class GpuClockGovernor {
             }
         }
 
-        // 3. Fallback direct sysfs clamp
+        // 3. Fallback direct sysfs clamp only when sandbox permits sysfs writes
+        if (!hasWritableSysfsNode()) {
+            return;
+        }
         fallbackSysfsClockClamp(true);
 
         // 4. Start Java watchdog scheduler to sustain peak clocks every 1000ms
@@ -148,10 +151,35 @@ public final class GpuClockGovernor {
         }
     }
 
+    private static Boolean cachedSysfsWritable = null;
+
+    private static boolean hasWritableSysfsNode() {
+        if (cachedSysfsWritable != null) return cachedSysfsWritable;
+        String[] candidates = {
+                "/sys/class/kgsl/kgsl-3d0/min_pwrlevel",
+                "/sys/class/kgsl/kgsl-3d0/idle_timer",
+                "/sys/devices/platform/soc/soc:qcom,kgsl-3d0/kgsl/kgsl-3d0/min_pwrlevel",
+                "/sys/module/ged/parameters/boost_gpu_enable",
+                "/sys/module/ged/parameters/ged_boost_enable"
+        };
+        for (String p : candidates) {
+            try {
+                File f = new File(p);
+                if (f.exists() && f.canWrite()) {
+                    cachedSysfsWritable = true;
+                    return true;
+                }
+            } catch (Throwable ignored) {}
+        }
+        cachedSysfsWritable = false;
+        return false;
+    }
+
     /**
      * Fallback Java sysfs writer for Qualcomm Adreno & ARM Mali clock clamp nodes.
      */
     private static void fallbackSysfsClockClamp(boolean isGameplay) {
+        if (!hasWritableSysfsNode()) return;
         // Qualcomm Adreno kgsl-3d0 paths
         String[] adrenoBases = {
                 "/sys/class/kgsl/kgsl-3d0",

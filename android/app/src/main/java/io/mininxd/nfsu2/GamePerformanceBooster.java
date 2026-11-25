@@ -69,8 +69,8 @@ public final class GamePerformanceBooster {
                 }
             }
 
-            // 2. Native Rust driver environment setup
-            File cacheDir = new File(activity.getCacheDir(), "graphics-cache");
+            // 2. Native Rust driver environment setup (keep dxvk-v2 directory synchronized with GraphicsCache & DXVK)
+            File cacheDir = new File(activity.getCacheDir(), "dxvk-v2");
             if (nativeDxvkLoaded) {
                 try {
                     String rootDir = LauncherActivity.gameRoot(activity).getAbsolutePath();

@@ -89,9 +89,13 @@ int nfs_bind_to_perf_cores(void) {
     if (f_cpu) {
         char line[256];
         while (fgets(line, sizeof(line), f_cpu)) {
-            if (contains_case_insensitive(line, "sm8750") || contains_case_insensitive(line, "sun") || contains_case_insensitive(line, "oryon") ||
+            if (contains_case_insensitive(line, "sm8750") || contains_case_insensitive(line, "sm8850") ||
+                contains_case_insensitive(line, "sm8845") || contains_case_insensitive(line, "sun") ||
+                contains_case_insensitive(line, "canoe") || contains_case_insensitive(line, "oryon") ||
                 contains_case_insensitive(line, "mt6989") || contains_case_insensitive(line, "mt6991") ||
-                contains_case_insensitive(line, "dimensity 9300") || contains_case_insensitive(line, "dimensity 9400")) {
+                contains_case_insensitive(line, "mt6993") ||
+                contains_case_insensitive(line, "dimensity 9300") || contains_case_insensitive(line, "dimensity 9400") ||
+                contains_case_insensitive(line, "dimensity 9500")) {
                 is_all_big_soc = 1;
                 break;
             }
@@ -108,33 +112,48 @@ int nfs_bind_to_perf_cores(void) {
         }
     }
 
-    // Safety fallback: if all-big SoC, or thresholding produced 0 cores or all cores, use all cores
-    if (count == 0 || is_all_big_soc) {
-        CPU_ZERO(&cpuset);
-        count = 0;
-        for (int i = 0; i < total_cpus; i++) {
-            CPU_SET(i, &cpuset);
-            count++;
-        }
+    cpu_set_t allset;
+    CPU_ZERO(&allset);
+    for (int i = 0; i < total_cpus; i++) {
+        CPU_SET(i, &allset);
     }
 
-    // Elevate priority of the process & calling thread to highest real-time interactive priority (-20)
-    // so EAS / WALT governors prioritize scheduling and rapidly ramp up CPU clocks.
-    setpriority(PRIO_PROCESS, getpid(), -20);
-    setpriority(PRIO_PROCESS, 0, -20);
+    // Safety fallback: if all-big SoC, or thresholding produced 0 cores or all cores, use all cores
+    if (count == 0 || is_all_big_soc) {
+        cpuset = allset;
+        count = total_cpus;
+    }
 
-    sched_setaffinity(getpid(), sizeof(cpu_set_t), &cpuset);
-    int ret = sched_setaffinity(0, sizeof(cpu_set_t), &cpuset);
+    setpriority(PRIO_PROCESS, getpid(), -10);
+    sched_setaffinity(getpid(), sizeof(cpu_set_t), &allset);
+    int ret = (count <= 3)
+        ? sched_setaffinity(0, sizeof(cpu_set_t), &allset)
+        : sched_setaffinity(0, sizeof(cpu_set_t), &cpuset);
 
-    // Apply performance core affinity and elevated priority to all worker threads of the process
     DIR *d = opendir("/proc/self/task");
     if (d) {
         struct dirent *de;
         while ((de = readdir(d)) != NULL) {
             int tid = atoi(de->d_name);
-            if (tid > 0) {
+            if (tid <= 0) continue;
+            char comm_path[96], comm[64] = {0};
+            snprintf(comm_path, sizeof(comm_path), "/proc/self/task/%d/comm", tid);
+            FILE *fc = fopen(comm_path, "r");
+            if (fc) {
+                if (fgets(comm, sizeof(comm), fc)) {
+                    size_t ln = strlen(comm);
+                    if (ln > 0 && comm[ln - 1] == '\n') comm[ln - 1] = '\0';
+                }
+                fclose(fc);
+            }
+            if (strcmp(comm, "GuestBootWorker") == 0) {
                 sched_setaffinity(tid, sizeof(cpu_set_t), &cpuset);
                 setpriority(PRIO_PROCESS, tid, -20);
+            } else if (count >= 4 && (strncmp(comm, "dxvk-", 5) == 0 || strcmp(comm, "RenderThread") == 0)) {
+                sched_setaffinity(tid, sizeof(cpu_set_t), &cpuset);
+                setpriority(PRIO_PROCESS, tid, -14);
+            } else {
+                sched_setaffinity(tid, sizeof(cpu_set_t), &allset);
             }
         }
         closedir(d);

@@ -22,9 +22,10 @@
 
 use std::fs;
 use std::os::raw::c_int;
-use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI8, AtomicI32, Ordering};
 use std::thread;
 use std::time::Duration;
+use std::ffi::CString;
 use jni::JNIEnv;
 use jni::objects::JClass;
 use jni::sys::jboolean;
@@ -32,6 +33,39 @@ use jni::sys::jboolean;
 static GOVERNOR_RUNNING: AtomicBool = AtomicBool::new(false);
 static GAMEPLAY_ACTIVE: AtomicBool = AtomicBool::new(false);
 static LAST_LOCKED_FREQ: AtomicI32 = AtomicI32::new(0);
+static SYSFS_WRITABLE: AtomicI8 = AtomicI8::new(0);
+
+fn sysfs_node_writable(path: &str) -> bool {
+    if let Ok(cstr) = CString::new(path) {
+        unsafe { libc::access(cstr.as_ptr(), libc::W_OK) == 0 }
+    } else {
+        false
+    }
+}
+
+fn check_any_sysfs_writable() -> bool {
+    let cached = SYSFS_WRITABLE.load(Ordering::Relaxed);
+    if cached != 0 {
+        return cached > 0;
+    }
+    let candidates = [
+        "/sys/class/kgsl/kgsl-3d0/min_pwrlevel",
+        "/sys/class/kgsl/kgsl-3d0/idle_timer",
+        "/sys/class/kgsl/kgsl-3d0/devfreq/governor",
+        "/sys/devices/platform/soc/soc:qcom,kgsl-3d0/kgsl/kgsl-3d0/min_pwrlevel",
+        "/sys/devices/platform/soc/1c00000.qcom,kgsl-3d0/kgsl/kgsl-3d0/min_pwrlevel",
+        "/sys/devices/platform/soc/3d00000.qcom,kgsl-3d0/kgsl/kgsl-3d0/min_pwrlevel",
+        "/sys/module/ged/parameters/boost_gpu_enable",
+        "/sys/module/ged/parameters/ged_boost_enable",
+        "/sys/class/misc/mali0/device/devfreq",
+        "/sys/devices/platform/13040000.mali/devfreq",
+        "/sys/devices/platform/13000000.mali/devfreq",
+        "/sys/devices/platform/gpu/devfreq",
+    ];
+    let any = candidates.iter().any(|p| sysfs_node_writable(p));
+    SYSFS_WRITABLE.store(if any { 1 } else { -1 }, Ordering::Relaxed);
+    any
+}
 
 /// Supported GPU Vendor Architectures.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -184,6 +218,9 @@ pub fn lock_mali_peak_clocks(is_gameplay: bool) {
 
 /// Applies universal GPU clock locking according to detected hardware.
 pub fn apply_gpu_clock_lock(is_gameplay: bool) {
+    if !check_any_sysfs_writable() {
+        return;
+    }
     match detect_gpu_vendor() {
         GpuVendor::Adreno => lock_adreno_peak_clocks(is_gameplay),
         GpuVendor::Mali => lock_mali_peak_clocks(is_gameplay),
@@ -196,9 +233,11 @@ pub fn apply_gpu_clock_lock(is_gameplay: bool) {
 }
 
 /// Starts the persistent GPU Governor Keeper thread.
-/// Runs in the background and re-applies GPU frequency clamps every 500ms,
-/// preventing OEM background daemons (thermal-engine, Joyose, GOS) from downclocking.
+/// Skips background polling when SELinux restricts all GPU sysfs clock nodes.
 pub fn start_gpu_governor_keeper() {
+    if !check_any_sysfs_writable() {
+        return;
+    }
     if GOVERNOR_RUNNING.swap(true, Ordering::SeqCst) {
         return; // Already running
     }

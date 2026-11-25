@@ -74,12 +74,17 @@ impl SocInfo {
         // 2. Identify Big vs Little cores from ARM Architecture and Qualcomm Oryon Part IDs
         let lower_hw = hardware_str.to_lowercase();
         let is_all_big_soc = lower_hw.contains("sm8750")
+            || lower_hw.contains("sm8850")
+            || lower_hw.contains("sm8845")
             || lower_hw.contains("sun")
+            || lower_hw.contains("canoe")
             || lower_hw.contains("oryon")
             || lower_hw.contains("mt6989")
             || lower_hw.contains("mt6991")
+            || lower_hw.contains("mt6993")
             || lower_hw.contains("dimensity 9300")
-            || lower_hw.contains("dimensity 9400");
+            || lower_hw.contains("dimensity 9400")
+            || lower_hw.contains("dimensity 9500");
 
         if is_all_big_soc {
             big_cores_mask = if total_cores >= 64 { u64::MAX } else { (1u64 << total_cores) - 1 };
@@ -90,7 +95,8 @@ impl SocInfo {
                     let is_little = part == 0xd03 || part == 0xd05 || part == 0xd46 || part == 0xd80;
                     let is_big = (part >= 0xd08 && !is_little) || part == 0xd44 || part == 0xd42
                         || part == 0xd48 || part == 0xd4f || part == 0xd85
-                        || part == 0x001 || part == 0x002 || part == 0x005;
+                        || part == 0x001 || part == 0x002 || part == 0x003 || part == 0x005
+                        || (part >= 0x800 && part <= 0x8ff);
 
                     if is_big {
                         big_cores_mask |= 1u64 << cpu_id;

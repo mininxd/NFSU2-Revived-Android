@@ -5,7 +5,7 @@
 //! frame time, CPU usage (/proc/stat), and GPU utilization (/sys/class/kgsl/kgsl-3d0/gpubusy).
 
 use std::fs;
-use std::sync::atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicI8, AtomicU32, AtomicU64, AtomicUsize, Ordering};
 use std::time::Instant;
 
 const RING_SIZE: usize = 128;
@@ -30,6 +30,8 @@ static LAST_CPU_CHECK_MS: AtomicU64 = AtomicU64::new(0);
 // GPU tracking state
 static LAST_GPU_BUSY: AtomicU32 = AtomicU32::new(0);
 static LAST_GPU_CHECK_MS: AtomicU64 = AtomicU64::new(0);
+static GPU_SYSFS_STATE: AtomicI8 = AtomicI8::new(0); // 0=unchecked, 1=readable, -1=SELinux blocked
+static mut GPU_SYSFS_WORKING_PATH: Option<String> = None;
 
 /// Records a presentation frame timestamp in nanoseconds.
 #[no_mangle]
@@ -185,6 +187,10 @@ pub extern "C" fn nfs_telemetry_get_cpu_usage() -> f32 {
 /// Returns the current Qualcomm Adreno / Mali GPU busy percentage (0.0 to 100.0).
 #[no_mangle]
 pub extern "C" fn nfs_telemetry_get_gpu_busy() -> f32 {
+    if GPU_SYSFS_STATE.load(Ordering::Relaxed) < 0 {
+        return f32::from_bits(LAST_GPU_BUSY.load(Ordering::Relaxed));
+    }
+
     let mut tp = libc::timespec { tv_sec: 0, tv_nsec: 0 };
     unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut tp); }
     let now_ms = (tp.tv_sec as u64) * 1000 + (tp.tv_nsec as u64) / 1_000_000;
@@ -195,6 +201,35 @@ pub extern "C" fn nfs_telemetry_get_gpu_busy() -> f32 {
         return f32::from_bits(LAST_GPU_BUSY.load(Ordering::Relaxed));
     }
     LAST_GPU_CHECK_MS.store(now_ms, Ordering::Relaxed);
+
+    // Fast path: reuse previously discovered working sysfs node without re-probing denied paths
+    unsafe {
+        if let Some(ref p) = GPU_SYSFS_WORKING_PATH {
+            if let Ok(content) = fs::read_to_string(p) {
+                let trimmed = content.trim().trim_end_matches('%').trim();
+                let mut parts = trimmed.split_whitespace();
+                if let Some(first) = parts.next() {
+                    if let Some(second) = parts.next() {
+                        if let (Ok(busy), Ok(total)) = (first.parse::<u64>(), second.parse::<u64>()) {
+                            if total > 0 && busy <= total {
+                                let clamped = ((busy as f32 / total as f32) * 100.0).clamp(0.0, 100.0);
+                                LAST_GPU_BUSY.store(clamped.to_bits(), Ordering::Relaxed);
+                                return clamped;
+                            }
+                        }
+                    } else if let Ok(val) = first.parse::<f32>() {
+                        if (0.0..=100.0).contains(&val) {
+                            LAST_GPU_BUSY.store(val.to_bits(), Ordering::Relaxed);
+                            return val;
+                        }
+                    }
+                }
+            }
+            GPU_SYSFS_WORKING_PATH = None;
+            GPU_SYSFS_STATE.store(-1, Ordering::Relaxed);
+            return f32::from_bits(LAST_GPU_BUSY.load(Ordering::Relaxed));
+        }
+    }
 
     // 1. Qualcomm Adreno kgsl sysfs nodes
     let adreno_paths = [
@@ -216,12 +251,16 @@ pub extern "C" fn nfs_telemetry_get_gpu_busy() -> f32 {
                         if total > 0 && busy <= total {
                             let pct = (busy as f32 / total as f32) * 100.0;
                             let clamped = pct.clamp(0.0, 100.0);
+                            unsafe { GPU_SYSFS_WORKING_PATH = Some((*path).to_string()); }
+                            GPU_SYSFS_STATE.store(1, Ordering::Relaxed);
                             LAST_GPU_BUSY.store(clamped.to_bits(), Ordering::Relaxed);
                             return clamped;
                         }
                     }
                 } else if let Ok(val) = first.parse::<f32>() {
                     if (0.0..=100.0).contains(&val) {
+                        unsafe { GPU_SYSFS_WORKING_PATH = Some((*path).to_string()); }
+                        GPU_SYSFS_STATE.store(1, Ordering::Relaxed);
                         LAST_GPU_BUSY.store(val.to_bits(), Ordering::Relaxed);
                         return val;
                     }
@@ -244,6 +283,8 @@ pub extern "C" fn nfs_telemetry_get_gpu_busy() -> f32 {
                             if total > 0 && busy <= total {
                                 let pct = (busy as f32 / total as f32) * 100.0;
                                 let clamped = pct.clamp(0.0, 100.0);
+                                unsafe { GPU_SYSFS_WORKING_PATH = Some(p_busy.to_string_lossy().into_owned()); }
+                                GPU_SYSFS_STATE.store(1, Ordering::Relaxed);
                                 LAST_GPU_BUSY.store(clamped.to_bits(), Ordering::Relaxed);
                                 return clamped;
                             }
@@ -255,6 +296,8 @@ pub extern "C" fn nfs_telemetry_get_gpu_busy() -> f32 {
                     let trimmed = content.trim().trim_end_matches('%').trim();
                     if let Ok(val) = trimmed.parse::<f32>() {
                         if (0.0..=100.0).contains(&val) {
+                            unsafe { GPU_SYSFS_WORKING_PATH = Some(p_pct.to_string_lossy().into_owned()); }
+                            GPU_SYSFS_STATE.store(1, Ordering::Relaxed);
                             LAST_GPU_BUSY.store(val.to_bits(), Ordering::Relaxed);
                             return val;
                         }
@@ -285,6 +328,8 @@ pub extern "C" fn nfs_telemetry_get_gpu_busy() -> f32 {
             if let Ok(val) = trimmed.split_whitespace().next().unwrap_or("").parse::<f32>() {
                 if (0.0..=100.0).contains(&val) {
                     let clamped = val.clamp(0.0, 100.0);
+                    unsafe { GPU_SYSFS_WORKING_PATH = Some((*path).to_string()); }
+                    GPU_SYSFS_STATE.store(1, Ordering::Relaxed);
                     LAST_GPU_BUSY.store(clamped.to_bits(), Ordering::Relaxed);
                     return clamped;
                 }
@@ -292,6 +337,7 @@ pub extern "C" fn nfs_telemetry_get_gpu_busy() -> f32 {
         }
     }
 
+    GPU_SYSFS_STATE.store(-1, Ordering::Relaxed);
     f32::from_bits(LAST_GPU_BUSY.load(Ordering::Relaxed))
 }
 

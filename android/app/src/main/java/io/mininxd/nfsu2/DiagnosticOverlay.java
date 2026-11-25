@@ -37,9 +37,12 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Only displays player_racing and player_on_race during an ongoing race; when roaming, they are hidden.
  */
 public final class DiagnosticOverlay {
+    private static volatile boolean graphicsCacheLoaded = false;
+
     static {
         try {
             System.loadLibrary("graphics_cache");
+            graphicsCacheLoaded = true;
         } catch (Throwable t) {
             android.util.Log.w("NFSU2", "DiagnosticOverlay: libgraphics_cache load: " + t.getMessage());
         }
@@ -217,11 +220,6 @@ public final class DiagnosticOverlay {
                 @Override
                 public void onFrameMetricsAvailable(Window window, FrameMetrics frameMetrics, int dropCountSinceLastInvocation) {
                     frameCounter.incrementAndGet();
-                    long totalNs = frameMetrics.getMetric(FrameMetrics.TOTAL_DURATION);
-                    if (totalNs > 0) {
-                        lastFrameDurationMs = totalNs / 1_000_000.0f;
-                        safeRecordFrameDuration(totalNs);
-                    }
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         try {
                             long gpuNs = frameMetrics.getMetric(FrameMetrics.GPU_DURATION);
@@ -338,11 +336,11 @@ public final class DiagnosticOverlay {
         public void run() {
             if (!running) return;
 
-            // Ensure background worker threads are pinned to perf cores
-            if (perfBindCount < 10) {
+            // Re-bind worker threads once shortly after GuestBootWorker is created
+            if (perfBindCount == 2) {
                 PerformanceCores.bindToPerformanceCores();
-                perfBindCount++;
             }
+            perfBindCount++;
 
             long now = SystemClock.elapsedRealtime();
             long elapsed = now - lastFrameCalcTime;
@@ -350,62 +348,44 @@ public final class DiagnosticOverlay {
 
             boolean calculatedFromNative = false;
             if (elapsed > 0) {
-                // Primary: Direct frame count from libnfsu2_roam companion hooked to D3D9 Present
-                if (io.mininxd.nfsu2.net.RoamNativeBridge.isLoaded()) {
-                    try {
-                        long currentNativeFrames = io.mininxd.nfsu2.net.RoamNativeBridge.nativeGetFrameCount();
-                        if (currentNativeFrames >= 0) {
-                            if (lastNativeFrameCount >= 0 && currentNativeFrames >= lastNativeFrameCount) {
-                                long delta = currentNativeFrames - lastNativeFrameCount;
-                                if (delta > 0) {
-                                    float measuredFps = (delta * 1000.0f) / elapsed;
-                                    liveGameFps = measuredFps;
-                                    lastFrameDurationMs = 1000.0f / measuredFps;
-                                    calculatedFromNative = true;
-                                    safeRecordFrameDuration((long)(1_000_000_000L / Math.max(1.0f, measuredFps)));
-                                }
-                            }
-                            lastNativeFrameCount = currentNativeFrames;
-                        }
-                    } catch (Throwable ignored) {}
-                }
-
-                // Secondary fallback: Cross-validate with native bridge report if available (keep active for up to 30s)
-                if (!calculatedFromNative && measuredNativeFps > 0 && (now - lastNativeLogTime < 30000)) {
+                // Primary: Measured presentation FPS directly from D3D9 bridge logcat
+                if (measuredNativeFps > 0 && (now - lastNativeLogTime < 15000)) {
                     liveGameFps = measuredNativeFps;
                     lastFrameDurationMs = 1000.0f / measuredNativeFps;
                     calculatedFromNative = true;
                 }
 
-                // Tertiary fallback: Android Window OnFrameMetricsAvailableListener
-                if (!calculatedFromNative) {
-                    int frames = frameCounter.getAndSet(0);
-                    if (frames > 0) {
-                        liveGameFps = (frames * 1000.0f) / elapsed;
-                    }
-                }
-
-                // Instant lag / hitch detection: if frame duration exceeds 16.6ms, reflect actual lag
-                if (lastFrameDurationMs > 16.6f) {
-                    float instantFps = 1000.0f / lastFrameDurationMs;
-                    if (liveGameFps <= 0.0f || instantFps < liveGameFps) {
-                        liveGameFps = instantFps;
-                    }
+                // Secondary: Frame count from libnfsu2_roam camera hook
+                if (!calculatedFromNative && io.mininxd.nfsu2.net.RoamNativeBridge.isLoaded()) {
+                    try {
+                        long currentNativeFrames = io.mininxd.nfsu2.net.RoamNativeBridge.nativeGetFrameCount();
+                        if (currentNativeFrames >= 0) {
+                            if (lastNativeFrameCount >= 0 && currentNativeFrames > lastNativeFrameCount) {
+                                long delta = currentNativeFrames - lastNativeFrameCount;
+                                float measuredFps = (delta * 1000.0f) / elapsed;
+                                liveGameFps = measuredFps;
+                                lastFrameDurationMs = 1000.0f / measuredFps;
+                                calculatedFromNative = true;
+                            }
+                            lastNativeFrameCount = currentNativeFrames;
+                        }
+                    } catch (Throwable ignored) {}
                 }
             }
 
-            // Also check rust native telemetry buffer if active
-            try {
-                if (nativeGetTelemetry(telemetryBuffer)) {
-                    if (telemetryBuffer[0] > 0.0f) {
-                        liveGameFps = telemetryBuffer[0];
+            // Also poll rust native telemetry buffer (CPU / GPU / present FPS if available)
+            if (graphicsCacheLoaded) {
+                try {
+                    if (nativeGetTelemetry(telemetryBuffer)) {
+                        if (telemetryBuffer[0] > 0.0f) {
+                            liveGameFps = telemetryBuffer[0];
+                            if (telemetryBuffer[1] > 0.0f) {
+                                lastFrameDurationMs = telemetryBuffer[1];
+                            }
+                        }
                     }
-                    if (telemetryBuffer[1] > 0.0f) {
-                        lastFrameDurationMs = telemetryBuffer[1];
-                        safeRecordFrameDuration((long)(telemetryBuffer[1] * 1_000_000.0f));
-                    }
-                }
-            } catch (Throwable ignored) {}
+                } catch (Throwable ignored) {}
+            }
 
             updateStats();
 
@@ -421,10 +401,9 @@ public final class DiagnosticOverlay {
         float fps = liveGameFps;
         float frameTimeMs = (lastFrameDurationMs > 0.0f) ? lastFrameDurationMs : ((fps > 0.0f) ? (1000.0f / fps) : 0.0f);
         float p1Low = 0.0f;
-        if (safeGetFrameMetrics(frameMetricsBuffer)) {
-            if (frameMetricsBuffer[1] > 0.5f) {
-                fps = frameMetricsBuffer[1];
-                frameTimeMs = frameMetricsBuffer[4];
+        if (fps > 0.5f) {
+            safeRecordFrameDuration((long)(frameTimeMs * 1_000_000.0f));
+            if (safeGetFrameMetrics(frameMetricsBuffer) && frameMetricsBuffer[2] > 0.5f) {
                 p1Low = frameMetricsBuffer[2];
             }
         }
@@ -727,7 +706,26 @@ public final class DiagnosticOverlay {
         return Math.max(0.0f, Math.min(100.0f, smoothedGpuPercent));
     }
 
+    private boolean gpuSysfsChecked = false;
+    private String workingGpuSysfsPath = null;
+    private boolean workingGpuIsBusyPair = false;
+
     private Float sampleGpuUsage() {
+        if (gpuSysfsChecked) {
+            if (workingGpuSysfsPath == null) return null;
+            if (workingGpuIsBusyPair) return readGpubusyFile(new File(workingGpuSysfsPath));
+            try (RandomAccessFile raf = new RandomAccessFile(workingGpuSysfsPath, "r")) {
+                String line = raf.readLine();
+                if (line != null) {
+                    float val = Float.parseFloat(line.trim().replace("%", "").trim().split("\\s+")[0]);
+                    if (val >= 0.0f && val <= 100.0f) return val;
+                }
+            } catch (Exception ignored) {
+                workingGpuSysfsPath = null;
+            }
+            return null;
+        }
+        gpuSysfsChecked = true;
         String[] percentagePaths = new String[]{
                 "/sys/class/kgsl/kgsl-3d0/gpu_busy_percentage",
                 "/sys/class/kgsl/kgsl-3d0/gpu_load",
@@ -752,6 +750,8 @@ public final class DiagnosticOverlay {
                     String[] parts = line.split("\\s+");
                     float val = Float.parseFloat(parts[0]);
                     if (val >= 0.0f && val <= 100.0f) {
+                        workingGpuSysfsPath = p;
+                        workingGpuIsBusyPair = false;
                         return val;
                     }
                 }
@@ -764,7 +764,11 @@ public final class DiagnosticOverlay {
         };
         for (String bp : busyPaths) {
             Float val = readGpubusyFile(new File(bp));
-            if (val != null) return val;
+            if (val != null) {
+                workingGpuSysfsPath = bp;
+                workingGpuIsBusyPair = true;
+                return val;
+            }
         }
 
         if (!kgslDirChecked) {

@@ -107,7 +107,8 @@ static inline int nfs_rust_apply_engine_pacing(uint8_t *mem_base, float real_ela
 
 static int g_carpool_patched = 0;
 static _Atomic int s_null_page_protected = 0;
-static int g_hooks_installed = 0;
+static _Atomic int g_hooks_installed = 0;
+static pthread_mutex_t s_hooks_mu = PTHREAD_MUTEX_INITIALIZER;
 static void roam_android_install_hooks(void);
 
 
@@ -710,6 +711,12 @@ static recomp_void_func_t arm64_inline_hook(void *target_func, void *hook_func) 
     if (!target_func || !hook_func) return NULL;
     uint32_t *target = (uint32_t *)target_func;
 
+    if (target[0] == 0x58000050u && target[1] == 0xd61f0200u) {
+        __android_log_print(ANDROID_LOG_WARN, "NFSU2-Hook",
+                            "Target %p already inline-hooked, skipping duplicate hook", target_func);
+        return NULL;
+    }
+
     static uint8_t *s_tramp_page = NULL;
     static size_t s_tramp_offset = 0;
     if (!s_tramp_page) {
@@ -720,6 +727,10 @@ static recomp_void_func_t arm64_inline_hook(void *target_func, void *hook_func) 
             __android_log_print(ANDROID_LOG_ERROR, "NFSU2-Hook", "mmap trampoline page failed");
             return NULL;
         }
+    }
+    if (s_tramp_offset + 64 > 4096) {
+        __android_log_print(ANDROID_LOG_ERROR, "NFSU2-Hook", "trampoline page exhausted");
+        return NULL;
     }
 
     uint8_t *tramp = s_tramp_page + s_tramp_offset;
@@ -1058,13 +1069,59 @@ static void hook_sub_005c7ec0(void) {
             MRF32(cam + 0xC0u) = max_far;
         }
     }
+
+    if (view_id == 1u && g_p_mem_base && *g_p_mem_base) {
+        static uint32_t s_last_pacing_fc = 0;
+        static int s_crowd_checked = 0;
+        static int s_allow_crowd = 0;
+        if (!s_crowd_checked) {
+            s_crowd_checked = 1;
+            const char *env_crowd = getenv("NFSU2_CROWD");
+            s_allow_crowd = (env_crowd && (strcmp(env_crowd, "1") == 0 || strcasecmp(env_crowd, "on") == 0));
+            nfs_rust_set_crowd_suppression(!s_allow_crowd);
+        }
+        uint32_t fc = rh_mem_committed(0x00870818u, 4) ? MR32(0x00870818u) : 0;
+        if (fc != s_last_pacing_fc) {
+            s_last_pacing_fc = fc;
+            g_frame_count++;
+            sndlead_frame_tick();
+            if (!s_allow_crowd && rh_mem_committed(0x00870cd0u, 4) && MR32(0x00870cd0u) != 0) {
+                MR32(0x00870cd0u) = 0;
+            }
+            if (rh_mem_committed(0x00870cc4u, 4) && MR32(0x00870cc4u) > 1u) {
+                MR32(0x00870cc4u) = 1u;
+            }
+            if (rh_mem_committed(0x00870cfcu, 4) && MR32(0x00870cfcu) != 0) {
+                MR32(0x00870cfcu) = 0;
+            }
+            if (rh_mem_committed(0x007fb700u, 4)) MR32(0x007fb700u) = 1u;
+            if (rh_mem_committed(0x007fb714u, 4)) MRF32(0x007fb714u) = 6.0f;
+        }
+    }
 }
 
 static void hook_sub_005caad0(void) {
-    void *h_gc = dlopen("libgraphics_cache.so", RTLD_NOLOAD | RTLD_GLOBAL);
-    if (!h_gc) h_gc = dlopen("libgraphics_cache.so", RTLD_LAZY | RTLD_GLOBAL);
-    void (*fn_bypass)(int) = h_gc ? (void (*)(int))dlsym(h_gc, "nfs_camera_cull_set_bypass") : NULL;
-    if (fn_bypass) fn_bypass(1);
+    static int s_gc_checked = 0;
+    static void *s_h_gc = NULL;
+    static void (*s_fn_bypass)(int) = NULL;
+    static void (*s_set_contrast_active)(uint32_t) = NULL;
+
+    if (!s_gc_checked) {
+        s_gc_checked = 1;
+        s_h_gc = dlopen("libgraphics_cache.so", RTLD_NOLOAD | RTLD_GLOBAL);
+        if (!s_h_gc) s_h_gc = dlopen("libgraphics_cache.so", RTLD_LAZY | RTLD_GLOBAL);
+        if (s_h_gc) {
+            s_fn_bypass = (void (*)(int))dlsym(s_h_gc, "nfs_camera_cull_set_bypass");
+            s_set_contrast_active = (void (*)(uint32_t))dlsym(s_h_gc, "nfs_contrast_set_active");
+        }
+        if (!s_set_contrast_active) {
+            void *h_core = dlopen("libgame_core.so", RTLD_NOLOAD | RTLD_GLOBAL);
+            if (!h_core) h_core = dlopen("libgame_core.so", RTLD_LAZY | RTLD_GLOBAL);
+            if (h_core) s_set_contrast_active = (void (*)(uint32_t))dlsym(h_core, "nfs_contrast_set_active");
+        }
+    }
+
+    if (s_fn_bypass) s_fn_bypass(1);
 
     if (g_p_mem_base && *g_p_mem_base) {
         uint32_t view4 = 0x00832DE0u + 4u * 0x70u; // 0x00832FA0
@@ -1083,16 +1140,6 @@ static void hook_sub_005caad0(void) {
     }
 
     int do_bypass = 1;
-
-    static void (*s_set_contrast_active)(uint32_t) = NULL;
-    if (!s_set_contrast_active) {
-        if (h_gc) s_set_contrast_active = (void (*)(uint32_t))dlsym(h_gc, "nfs_contrast_set_active");
-        if (!s_set_contrast_active) {
-            void *h_core = dlopen("libgame_core.so", RTLD_NOLOAD | RTLD_GLOBAL);
-            if (!h_core) h_core = dlopen("libgame_core.so", RTLD_LAZY | RTLD_GLOBAL);
-            if (h_core) s_set_contrast_active = (void (*)(uint32_t))dlsym(h_core, "nfs_contrast_set_active");
-        }
-    }
 
     uint32_t user_contrast = 0;
     if (do_bypass) {
@@ -1132,7 +1179,7 @@ static void hook_sub_005caad0(void) {
         }
     }
 
-    if (fn_bypass) fn_bypass(0);
+    if (s_fn_bypass) s_fn_bypass(0);
 }
 
 /* =========================================================================
@@ -1399,11 +1446,17 @@ static void look_camera_frame_tick(void) {
 }
 
 static void roam_android_install_hooks(void) {
-    if (g_hooks_installed || !g_p_recomp_lookup) return;
+    if (atomic_load(&g_hooks_installed) || !g_p_recomp_lookup) return;
+    pthread_mutex_lock(&s_hooks_mu);
+    if (atomic_load(&g_hooks_installed) || !g_p_recomp_lookup) {
+        pthread_mutex_unlock(&s_hooks_mu);
+        return;
+    }
 
     Dl_info dlinfo;
     if (!dladdr((void *)g_p_recomp_lookup, &dlinfo) || !dlinfo.dli_fbase) {
         __android_log_print(ANDROID_LOG_ERROR, "NFSU2-Hook", "Failed to resolve lib base via dladdr");
+        pthread_mutex_unlock(&s_hooks_mu);
         return;
     }
 
@@ -1579,7 +1632,8 @@ static void roam_android_install_hooks(void) {
         __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook", "Patched GOT entry for recomp_hook");
     }
 
-    g_hooks_installed = 1;
+    atomic_store(&g_hooks_installed, 1);
+    pthread_mutex_unlock(&s_hooks_mu);
 }
 
 static const uint32_t kAllResolutionPercents[] = {

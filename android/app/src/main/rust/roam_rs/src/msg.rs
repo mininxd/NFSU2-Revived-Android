@@ -77,8 +77,34 @@ pub const RC_E_TRAIL: c_int = -9;
 
 const ENG_MAX: u16 = 20000;
 
-extern "C" {
-    pub fn rc_name_blocked(name: *const c_char) -> c_int;
+type FnNameBlocked = unsafe extern "C" fn(*const c_char) -> c_int;
+static NAME_BLOCKED_ONCE: std::sync::Once = std::sync::Once::new();
+static mut FN_NAME_BLOCKED: Option<FnNameBlocked> = None;
+
+pub unsafe fn rc_name_blocked(name: *const c_char) -> c_int {
+    NAME_BLOCKED_ONCE.call_once(|| {
+        let mut sym = libc::dlsym(
+            libc::RTLD_DEFAULT,
+            b"rc_name_blocked\0".as_ptr() as *const c_char,
+        );
+        if sym.is_null() {
+            let h = libc::dlopen(
+                b"libnfsu2_roam.so\0".as_ptr() as *const c_char,
+                libc::RTLD_NOLOAD | libc::RTLD_GLOBAL,
+            );
+            if !h.is_null() {
+                sym = libc::dlsym(h, b"rc_name_blocked\0".as_ptr() as *const c_char);
+            }
+        }
+        if !sym.is_null() {
+            FN_NAME_BLOCKED = Some(std::mem::transmute(sym));
+        }
+    });
+    if let Some(f) = FN_NAME_BLOCKED {
+        f(name)
+    } else {
+        0
+    }
 }
 
 #[repr(C)]

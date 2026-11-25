@@ -122,6 +122,8 @@ impl CpuCluster {
         if let Ok(cpuinfo) = fs::read_to_string("/proc/cpuinfo") {
             let mut cur_cpu: i32 = -1;
             let mut is_qualcomm = false;
+            let mut qcom_cores = 0usize;
+            let mut arm_little_cores = 0usize;
             for line in cpuinfo.lines() {
                 let trimmed = line.trim();
                 if trimmed.starts_with("processor") {
@@ -136,14 +138,17 @@ impl CpuCluster {
                         if let Ok(imp) = u32::from_str_radix(impl_str.trim_start_matches("0x"), 16) {
                             if imp == 0x51 {
                                 is_qualcomm = true;
+                                qcom_cores += 1;
                             }
                         }
                     }
                 } else if trimmed.starts_with("Hardware") || trimmed.starts_with("model name") {
                     let lower = trimmed.to_lowercase();
-                    if lower.contains("sm8750") || lower.contains("sun") || lower.contains("oryon")
-                        || lower.contains("mt6989") || lower.contains("mt6991")
+                    if lower.contains("sm8750") || lower.contains("sm8850") || lower.contains("sm8845")
+                        || lower.contains("sun") || lower.contains("canoe") || lower.contains("oryon")
+                        || lower.contains("mt6989") || lower.contains("mt6991") || lower.contains("mt6993")
                         || lower.contains("dimensity 9300") || lower.contains("dimensity 9400")
+                        || lower.contains("dimensity 9500")
                     {
                         is_all_big_soc = true;
                     }
@@ -151,7 +156,7 @@ impl CpuCluster {
                     if let Some(colon) = trimmed.find(':') {
                         let part_str = trimmed[colon + 1..].trim();
                         let part = u32::from_str_radix(part_str.trim_start_matches("0x"), 16).unwrap_or(0);
-                        if is_qualcomm && (part == 0x001 || part == 0x002 || part == 0x005 || (part >= 0x800 && part <= 0x805)) {
+                        if is_qualcomm && (part == 0x001 || part == 0x002 || part == 0x003 || part == 0x005 || (part >= 0x800 && part <= 0x8ff)) {
                             is_all_big_soc = true;
                         }
                         let role = match part {
@@ -162,7 +167,10 @@ impl CpuCluster {
                                 Some(CoreClusterRole::Mid)
                             }
                             // Efficiency / Little cores (Cortex-A5x series)
-                            0xd03 | 0xd05 | 0xd46 | 0xd80 => Some(CoreClusterRole::Little),
+                            0xd03 | 0xd05 | 0xd46 | 0xd80 => {
+                                arm_little_cores += 1;
+                                Some(CoreClusterRole::Little)
+                            }
                             _ => None,
                         };
                         if let Some(r) = role {
@@ -172,6 +180,9 @@ impl CpuCluster {
                         }
                     }
                 }
+            }
+            if qcom_cores >= total_cores && total_cores >= 8 && arm_little_cores == 0 {
+                is_all_big_soc = true;
             }
         }
 
@@ -300,13 +311,33 @@ impl CpuCluster {
         } else {
             all_cores_mask
         };
-        // Span across all performance cores (Prime + Mid clusters) so the emulator,
-        // D3D9 bridge, and Vulkan command encoders can fully utilize multiple CPU cores
-        // instead of throttling on a single core.
-        let render_mask = perf_mask;
+        let prime_mask = if self.prime_cores_mask != 0 {
+            self.prime_cores_mask
+        } else {
+            perf_mask
+        };
+        let mid_mask = if self.mid_cores_mask != 0 {
+            self.mid_cores_mask
+        } else {
+            perf_mask
+        };
+        // On tri-cluster / all-big >=6 perf-core SoCs (e.g. Snapdragon 8 Elite / SM8850),
+        // dedicate Prime cores to the single-threaded GuestBootWorker while letting
+        // DXVK/Vulkan/UI threads run across Mid cores without preempting the emulator.
+        // On 2-core big clusters (e.g. Dimensity 900 MT6877V 2xA78+6xA55), pin only
+        // GuestBootWorker to perf_mask and leave DXVK/background threads on all cores so
+        // 15+ threads do not contend on 2 big cores.
+        let dedicated_prime = self.perf_core_count >= 6 && self.prime_core_count >= 2 && self.mid_core_count >= 4;
+        let emu_mask = if dedicated_prime { prime_mask } else { perf_mask };
+        let worker_mask = if dedicated_prime {
+            mid_mask
+        } else if self.perf_core_count >= 4 {
+            perf_mask
+        } else {
+            all_cores_mask
+        };
 
         unsafe {
-            // Process-level default affinity: allow all cores so OS/driver helper threads aren't restricted
             let all_mask_val = all_cores_mask as c_long;
             let _ = libc::syscall(
                 libc::SYS_sched_setaffinity,
@@ -314,34 +345,38 @@ impl CpuCluster {
                 std::mem::size_of::<c_long>(),
                 &all_mask_val as *const c_long,
             );
-
-            // Calling thread affinity (RenderMain / UI thread): all performance cores (nice -20)
-            let render_mask_val = render_mask as c_long;
+            let caller_mask = if self.perf_core_count >= 4 {
+                worker_mask as c_long
+            } else {
+                all_mask_val
+            };
             let ret = libc::syscall(
                 libc::SYS_sched_setaffinity,
                 0 as c_int,
                 std::mem::size_of::<c_long>(),
-                &render_mask_val as *const c_long,
+                &caller_mask as *const c_long,
             );
-            let _ = libc::setpriority(libc::PRIO_PROCESS, libc::getpid() as u32, -20);
-            let _ = libc::setpriority(libc::PRIO_PROCESS, 0, -20);
+            let _ = libc::setpriority(libc::PRIO_PROCESS, libc::getpid() as u32, -10);
 
-            // Thread-level assignment across /proc/self/task:
             if let Ok(entries) = fs::read_dir("/proc/self/task") {
                 for entry in entries.flatten() {
                     if let Ok(tid) = entry.file_name().to_string_lossy().parse::<i32>() {
                         let comm_path = format!("/proc/self/task/{}/comm", tid);
-                        let is_audio = if let Ok(comm) = fs::read_to_string(&comm_path) {
-                            let n = comm.trim();
-                            n.starts_with("AAudio") || n.contains("audio") || n.contains("Audio")
-                        } else {
-                            false
-                        };
+                        let comm = fs::read_to_string(&comm_path).unwrap_or_default();
+                        let n = comm.trim();
 
-                        let m = if is_audio {
-                            all_cores_mask as c_long
+                        let is_audio = n.starts_with("AAudio") || n.contains("audio") || n.contains("Audio");
+                        let is_guest_main = n == "GuestBootWorker";
+                        let is_dxvk_or_render = n.starts_with("dxvk-") || n == "RenderThread";
+
+                        let (m, prio) = if is_guest_main {
+                            (emu_mask as c_long, -20)
+                        } else if is_audio {
+                            (all_cores_mask as c_long, -16)
+                        } else if is_dxvk_or_render {
+                            (worker_mask as c_long, -14)
                         } else {
-                            perf_mask as c_long
+                            (all_cores_mask as c_long, 0)
                         };
 
                         let _ = libc::syscall(
@@ -350,12 +385,7 @@ impl CpuCluster {
                             std::mem::size_of::<c_long>(),
                             &m as *const c_long,
                         );
-
-                        if is_audio {
-                            let _ = libc::setpriority(libc::PRIO_PROCESS, tid as u32, -16);
-                        } else {
-                            let _ = libc::setpriority(libc::PRIO_PROCESS, tid as u32, -20);
-                        }
+                        let _ = libc::setpriority(libc::PRIO_PROCESS, tid as u32, prio);
                     }
                 }
             }
