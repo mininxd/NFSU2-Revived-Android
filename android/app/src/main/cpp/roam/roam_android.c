@@ -3454,7 +3454,7 @@ static inline void call_orig_decode_dxt(uint32_t mode, uint32_t width, uint32_t 
     register NdkByteVec *r8 __asm__("x8") = out;
     register void *fn __asm__("x16") = s_orig_decode_dxt;
     __asm__ volatile(
-        "blr %x[fn]"
+        "blr x16"
         : "+r"(r0), "+r"(r1), "+r"(r2), "+r"(r3), "+r"(r4), "+r"(r8), "+r"(fn)
         :
         : "x5", "x6", "x7", "x9", "x10", "x11", "x12", "x13", "x14", "x15", "x17", "x30",
