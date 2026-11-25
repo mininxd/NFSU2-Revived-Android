@@ -491,8 +491,7 @@ public final class GameActivity extends NativeActivity {
                 }
             } catch (Throwable ignored) {}
             android.system.Os.setenv("NFSU2_EXTRA_OPTIONS", extraOptions ? "1" : "0", true);
-            boolean asiLoader = "on".equals(GameOptions.get(this, GameOptions.ASI_LOADER));
-            android.system.Os.setenv("NFSU2_ASI_LOADER", asiLoader ? "1" : "0", true);
+            android.system.Os.setenv("NFSU2_ASI_LOADER", "0", true);
 
             android.system.Os.setenv("NFSU2_AUTOSAVE", "1", true);
 

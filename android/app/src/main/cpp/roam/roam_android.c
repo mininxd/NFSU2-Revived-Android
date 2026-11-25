@@ -1199,7 +1199,7 @@ static void hook_sub_005c7ec0(void) {
                 MR32(0x00870cc4u) = 1u;
             }
             if (rh_mem_committed(0x007fb700u, 4)) MR32(0x007fb700u) = 1u;
-            if (rh_mem_committed(0x007fb714u, 4)) MRF32(0x007fb714u) = 6.0f;
+            if (rh_mem_committed(0x007fb714u, 4)) MRF32(0x007fb714u) = 3.0f;
         }
     }
 }
@@ -2579,7 +2579,7 @@ static void hook_nfs_widescreen_apply_frame_rate(void) {
     if (rh_mem_committed(0x00865558u, 4)) MRF32(0x00865558u) = 0.0f;
     if (rh_mem_committed(0x007fb710u, 8)) {
         MRF32(0x007fb710u) = 0.0f;
-        MRF32(0x007fb714u) = 6.0f;
+        MRF32(0x007fb714u) = 3.0f;
     }
     if (rh_mem_committed(0x007875bcu, 4)) MRF32(0x007875bcu) = 1.0f / 60.0f;
     if (rh_mem_committed(0x00865198u, 4) && rh_mem_committed(0x007fc858u, 4)) {
@@ -2729,68 +2729,10 @@ static void hook_nfs_widescreen_init(const char *game_root) {
     if (s_orig_widescreen_init) {
         s_orig_widescreen_init(game_root);
     }
-    static int s_asi_booted = 0;
-    if (s_asi_booted) return;
-    s_asi_booted = 1;
-
-    roam_android_init_symbols();
-    modloader_load_state(1);
-    if (!s_modloader_boot_enabled) {
-        __android_log_print(ANDROID_LOG_INFO, "NFSU2-ASI",
-            "ASI Modloader OFF (0%% emulation overhead, libnfsu2_asi.so not loaded)");
-        return;
-    }
-
-    int any_enabled = 0;
-    for (int i = 0; i < s_mod_ui_count; i++) {
-        if (s_mod_ui_entries[i].enabled_cfg) any_enabled++;
-    }
-    if (any_enabled == 0) {
-        __android_log_print(ANDROID_LOG_INFO, "NFSU2-ASI",
-            "ASI Modloader ON but 0 enabled .asi files in scripts/ (staying pure native ARM64)");
-        return;
-    }
-
-    void *h_asi = dlopen("libnfsu2_asi.so", RTLD_NOW | RTLD_GLOBAL);
-    if (!h_asi) {
-        __android_log_print(ANDROID_LOG_ERROR, "NFSU2-ASI",
-            "Failed to dlopen libnfsu2_asi.so: %s", dlerror());
-        return;
-    }
-    typedef int (*asi_boot_fn)(const AsiHostBridge *);
-    asi_boot_fn fn_boot = (asi_boot_fn)dlsym(h_asi, "asi_loader_boot");
-    if (!fn_boot || !s_lib_base || !g_p_mem_base || !*g_p_mem_base) {
-        __android_log_print(ANDROID_LOG_ERROR, "NFSU2-ASI",
-            "asi_loader_boot symbol or guest base unavailable");
-        return;
-    }
-
-    AsiHostBridge br;
-    memset(&br, 0, sizeof(br));
-    br.game_dir           = modloader_game_dir();
-    br.lib_base           = s_lib_base;
-    br.p_mem_base         = (uint8_t **)g_p_mem_base;
-    br.p_eax              = g_p_eax;
-    br.p_ecx              = g_p_ecx;
-    br.p_edx              = g_p_edx;
-    br.p_ebx              = g_p_ebx;
-    br.p_esp              = g_p_esp;
-    br.p_ebp              = g_p_ebp;
-    br.p_esi              = g_p_esi;
-    br.p_edi              = g_p_edi;
-    br.p_fp_top           = (int32_t *)(s_lib_base + 0x97e781cu);
-    br.p_st               = (double *)(s_lib_base + 0x98004b8u);
-    br.p_fs_base          = (uint32_t *)(s_lib_base + 0x97e78f0u);
-    br.recomp_lookup      = (asi_recomp_lookup_fn_t)g_p_recomp_lookup;
-    br.arm64_inline_hook  = (asi_inline_hook_fn_t)arm64_inline_hook;
-    br.mem_committed      = asi_mem_committed_cb;
-    br.recomp_table       = (const void *)(s_lib_base + 0x976a050u);
-    br.recomp_table_count = *(const uint32_t *)(s_lib_base + 0x1e50b8u);
-
-    s_modloader_loaded_count = fn_boot(&br);
-    __android_log_print(ANDROID_LOG_INFO, "NFSU2-ASI",
-        "asi_loader_boot finished: %d .asi mod(s) active (see %s/dinput8_log.txt)",
-        s_modloader_loaded_count, br.game_dir);
+    /* ASI Modloader is disabled by default in v1.0.7 (reserved for 1.1.beta) */
+    s_modloader_boot_enabled = 0;
+    s_modloader_cfg_enabled = 0;
+    return;
 }
 
 static uint32_t adv_guest_call_direct(recomp_void_func_t target, uint32_t ecx, uint32_t edx, int n, const uint32_t *args) {
@@ -2927,10 +2869,12 @@ static void hook_sub_0054ee40(void) {
     uint32_t esp = g_p_esp ? *g_p_esp : 0u;
     uint32_t widget = (esp >= 0x10000u && rh_mem_committed(esp + 4u, 4)) ? MR32(esp + 4u) : 0u;
 
-    /* Insert "Advanced Options" and "Modloader" right before "Default Settings" (vtable 0x007920a0) */
+    /* Insert "Advanced Options" right before "Default Settings" (vtable 0x007920a0).
+     * "Modloader" button is hidden in v1.0.7 (reserved for 1.1.beta). */
     if (this_screen && widget && rh_mem_committed(widget, 4) && MR32(widget) == 0x007920a0u) {
         s_adv_screen_active = 0;
         s_adv_widget_count = 0;
+        s_mod_btn_ptr = 0u;
         uint32_t sz = 0x38u;
         uint32_t btn = adv_guest_call(0x00575620u, 0u, 0u, 1, &sz);
         if (btn && rh_mem_committed(btn, 0x38)) {
@@ -2939,14 +2883,6 @@ static void hook_sub_0054ee40(void) {
             MR32(btn) = 0x00792060u; /* PCOCustomizeSettings vtable */
             s_adv_btn_ptr = btn;
             adv_guest_call_direct(s_orig_54ee40, this_screen, 0u, 1, &btn);
-        }
-        uint32_t mbtn = adv_guest_call(0x00575620u, 0u, 0u, 1, &sz);
-        if (mbtn && rh_mem_committed(mbtn, 0x38)) {
-            uint32_t ctor_args[3] = { this_screen + 0xfcu, this_screen + 0x10cu, 1u };
-            adv_guest_call(0x0051dfc0u, mbtn, 0u, 3, ctor_args);
-            MR32(mbtn) = 0x00792060u; /* PCOCustomizeSettings vtable */
-            s_mod_btn_ptr = mbtn;
-            adv_guest_call_direct(s_orig_54ee40, this_screen, 0u, 1, &mbtn);
         }
     }
 
@@ -4977,7 +4913,11 @@ __attribute__((visibility("default"))) void nfs_roam_frame_tick(void) {
     lobby_frame_tick();
     framerate_pacing_fix();
     resolution_frame_tick();
-    look_camera_frame_tick();
+    int replay_active = (g_p_mem_base && *g_p_mem_base &&
+                         rh_mem_committed(0x008650d0u, 4) && MR32(0x008650d0u) != 0u);
+    if (!replay_active) {
+        look_camera_frame_tick();
+    }
     fe_spinners_tick();
     static int s_gamepad_hooked_tick = 0;
     if (!s_gamepad_hooked_tick) {
@@ -5000,7 +4940,9 @@ __attribute__((visibility("default"))) void nfs_roam_frame_tick(void) {
         }
     }
     if (s_gpu_gov_tick) s_gpu_gov_tick(is_gameplay);
-    roam_game_frame(NULL);
+    if (!replay_active) {
+        roam_game_frame(NULL);
+    }
     atomic_store(&s_tick_in_progress, 0);
 }
 

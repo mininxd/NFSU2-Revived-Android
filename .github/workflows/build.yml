@@ -129,6 +129,7 @@ jobs:
           ls -lh android/app/src/main/jniLibs/arm64-v8a/lib*.so
 
       - name: Cache Unicorn Engine x86-32 ARM64 Static Library
+        if: false # Re-enable for 1.1.beta ASI Modloader
         id: cache-unicorn
         uses: actions/cache@v4
         with:
@@ -136,6 +137,7 @@ jobs:
           key: unicorn-2.1.1-x86-arm64-android26-v2
 
       - name: Build Unicorn Engine (x86-32 JIT) & Native ASI Modloader (libnfsu2_asi.so)
+        if: false # Re-enable for 1.1.beta ASI Modloader
         run: |
           NDK_DIR=$(find "$ANDROID_HOME/ndk" "$ANDROID_NDK_ROOT" /usr/local/lib/android/sdk/ndk -maxdepth 2 -name "build" 2>/dev/null | head -n 1 | xargs -r dirname)
           CLANG_BIN=$(find "$ANDROID_HOME/ndk" "$ANDROID_NDK_ROOT" /usr/local/lib/android/sdk/ndk -name "aarch64-linux-android26-clang" 2>/dev/null | head -n 1)

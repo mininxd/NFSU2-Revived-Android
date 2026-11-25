@@ -19,6 +19,7 @@ pub const G_BLEACH_BYPASS_ENABLE_ADDR: usize = 0x00870D00;
 pub const G_SIM_WDT_ADDR: usize = 0x00865154;
 pub const G_SIM_REALDT_ADDR: usize = 0x00865198;
 pub const G_SIM_STEPS_ADDR: usize = 0x00865140;
+pub const G_JOYLOG_PLAYBACK_ADDR: usize = 0x008650D0;
 
 static HIGH_FPS_PATCHED: AtomicBool = AtomicBool::new(false);
 static PACED_FRAMES: AtomicU32 = AtomicU32::new(0);
@@ -190,8 +191,10 @@ pub unsafe extern "C" fn nfs_rust_apply_engine_pacing(mem_base: *mut u8, real_el
     // 3. Force NTSC 60 Hz mode (0x7FB700 = 1). Prevents PAL 50 Hz lock (20 ms clamp)
     write_u32(mem_base, G_NTSC_MODE_ADDR, 1);
 
-    // 4. Expand maximum allowable frame delta multiplier (0x7FB714) to 6.0f (allows up to 100 ms)
-    write_f32(mem_base, G_MAX_FRAME_DELTA_ADDR, 6.0);
+    // 4. Keep max frame delta multiplier (0x7FB714) at 3.0f (50 ms max).
+    // At 3600 Hz tick base, 50 ms = 180 ticks which fits inside JoyLog's 8-bit tick field (<= 255)
+    // so recorded Race Replays never overflow and desync on hitches.
+    write_f32(mem_base, G_MAX_FRAME_DELTA_ADDR, 3.0);
 
     // 5. High refresh rate patch (0x0057A084: 0x75 'jne' -> 0xEB 'jmp')
     // Prevents spurious 'mov eax, 1' when frame time is under 1/60s on 90/120 Hz screens
@@ -208,11 +211,10 @@ pub unsafe extern "C" fn nfs_rust_apply_engine_pacing(mem_base: *mut u8, real_el
         write_u32(mem_base, G_HEADLIGHT_ENABLE_ADDR, 1);
     }
 
-    // 7. Anti-slowmotion frame pacing (supports 60Hz, 90Hz, 120Hz, 240Hz, and uncapped).
-    // Never overwrite G_SIM_WDT_ADDR while the simulation is paused (current_wdt <= 0.0),
-    // such as inside the pause menu or full World Map, or roam_game will see the world
-    // unpause and re-initialize WorldMap markers every frame.
-    if real_elapsed > 0.004 && real_elapsed < 0.200 {
+    // 7. Never overwrite simulation dt/ticks during JoyLog Replay playback (0x008650D0 != 0),
+    // or while paused (current_wdt <= 0.0), or Replay checksum (0x5FA770) will immediately desync.
+    let replay_active = read_u32(mem_base, G_JOYLOG_PLAYBACK_ADDR) != 0;
+    if !replay_active && real_elapsed > 0.004 && real_elapsed < 0.200 {
         let current_wdt = read_f32(mem_base, G_SIM_WDT_ADDR);
         let current_realdt = read_f32(mem_base, G_SIM_REALDT_ADDR);
 
@@ -220,9 +222,6 @@ pub unsafe extern "C" fn nfs_rust_apply_engine_pacing(mem_base: *mut u8, real_el
             let corrected = pacing_filter_dt(real_elapsed, current_wdt);
             write_f32(mem_base, G_SIM_WDT_ADDR, corrected);
             write_f32(mem_base, G_SIM_REALDT_ADDR, corrected);
-            // Scaled with 3600 Hz tick base (capped to 70 max to prevent physics death spiral during hiccups)
-            let steps = ((corrected * 3600.0) as u32).min(70);
-            write_u32(mem_base, G_SIM_STEPS_ADDR, steps);
             PACED_FRAMES.fetch_add(1, Ordering::Relaxed);
         } else if current_wdt <= 0.0 && current_realdt > 0.0 && current_realdt < real_elapsed * 0.90 {
             let corrected = pacing_filter_dt(real_elapsed, current_realdt);

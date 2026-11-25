@@ -73,9 +73,6 @@ public final class GameOptions {
             new Option(PAD_LAYOUT, "Gamepad Layout", "port",
                     new String[] {"port", "console"},
                     new String[] {"Default Xbox", "PS2 style"}),
-            new Option(ASI_LOADER, "ASI Modloader", "off",
-                    new String[] {"off", "on"},
-                    new String[] {"Off", "On (Beta)"}),
     };
 
     private static final String PREFS = "nfsu2_game";

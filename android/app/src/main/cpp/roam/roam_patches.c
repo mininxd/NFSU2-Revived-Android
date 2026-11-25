@@ -164,6 +164,11 @@ void extraoptions_frame_tick(void) {
     static int s_applied_state = -1;
     static uint32_t s_applied_player = 0;
 
+    /* Never interfere with JoyLog Replay playback (0x008650D0 != 0) */
+    if (rh_mem_committed(0x008650D0u, 4) && MR32(0x008650D0u) != 0u) {
+        return;
+    }
+
     if (!rh_mem_committed(0x008900ACu, 4)) {
         s_applied_player = 0;
         s_applied_state = -1;
@@ -183,10 +188,10 @@ void extraoptions_frame_tick(void) {
             roam_android_call(0x005FAE20u, player, 0, 0, NULL);
             __android_log_print(ANDROID_LOG_INFO, "NFSU2-ExtraOptions",
                                 "Dumb AI (AutoPilot) ENABLED on player car 0x%08x", player);
-        } else {
-            // Player_AutoPilotOff (0x005FAF10) with ecx = player
+        } else if (s_applied_state == 1 && s_applied_player == player) {
+            // Only disable AutoPilot / restore controller input when transitioning FROM Dumb AI ON -> OFF.
+            // Calling SetInputMode(2) on every freshly spawned player stomps on Replay playback and NIS autopilot.
             roam_android_call(0x005FAF10u, player, 0, 0, NULL);
-            // Player_SetInputMode (0x00605C70) with ecx = player, mode = 2
             uint32_t arg = 2;
             roam_android_call(0x00605C70u, player, 0, 1, &arg);
             __android_log_print(ANDROID_LOG_INFO, "NFSU2-ExtraOptions",
