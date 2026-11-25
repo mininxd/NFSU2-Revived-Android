@@ -378,8 +378,28 @@ public final class GameOptions {
     static int[] renderSize(Context context, int width, int height) {
         String value = get(context, RESOLUTION);
         float scale = Integer.parseInt(value) / 100f;
-        int w = Math.min(8192, Math.max(320, Math.round(width * scale / 2f) * 2));
-        int h = Math.min(8192, Math.max(240, Math.round(height * scale / 2f) * 2));
+        int dispW = Math.max(320, width);
+        int dispH = Math.max(240, height);
+        int w = Math.round(dispW * scale / 2f) * 2;
+        int h = Math.round(dispH * scale / 2f) * 2;
+        if (h < 240) {
+            h = 240;
+            w = Math.round((h * (float) dispW / dispH) / 2f) * 2;
+        }
+        if (w < 320) {
+            w = 320;
+            h = Math.round((w * (float) dispH / dispW) / 2f) * 2;
+        }
+        if (w > 8192) {
+            w = 8192;
+            h = Math.round((w * (float) dispH / dispW) / 2f) * 2;
+        }
+        if (h > 8192) {
+            h = 8192;
+            w = Math.round((h * (float) dispW / dispH) / 2f) * 2;
+        }
+        w = Math.min(8192, Math.max(320, w & ~1));
+        h = Math.min(8192, Math.max(240, h & ~1));
         return new int[] {w, h};
     }
 

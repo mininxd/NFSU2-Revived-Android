@@ -710,6 +710,40 @@ static recomp_hook_func_t s_orig_recomp_hook = NULL;
 typedef uint32_t (*dispatch_d3d9_func_t)(uint32_t token, const uint32_t *args, uint32_t *argumentCount);
 static dispatch_d3d9_func_t s_orig_dispatch_d3d9 = NULL;
 
+typedef struct {
+    uint32_t width;
+    uint32_t height;
+    uint32_t refresh_num;
+    uint32_t refresh_den;
+    uint32_t bits_per_pixel;
+    uint8_t  interlaced;
+    uint8_t  pad[3];
+} DxvkWsiMode;
+
+typedef void (*configure_res_modes_fn)(void);
+typedef int (*nfs_android_res_fn)(void);
+typedef uint8_t (*wsi_get_display_mode_fn)(void *monitor, uint32_t mode_num, DxvkWsiMode *mode);
+typedef void (*widescreen_set_res_fn)(unsigned width, unsigned height);
+
+static configure_res_modes_fn s_orig_configure_res_modes = NULL;
+static nfs_android_res_fn s_orig_nfs_android_res = NULL;
+static wsi_get_display_mode_fn s_orig_wsi_get_display_mode = NULL;
+static widescreen_set_res_fn s_orig_widescreen_set_res = NULL;
+
+typedef struct {
+    uint32_t w;
+    uint32_t h;
+    uint32_t pct;
+} CustomResMode;
+
+static CustomResMode s_custom_modes[6];
+static uint32_t s_custom_mode_count = 0;
+static uint32_t s_res_active_slot = 2;
+static int s_custom_modes_ready = 0;
+static int s_boot_selftest_pending = 0;
+static uint32_t *s_p_guest_render_modes = NULL;
+static uint8_t *s_p_first_game_res = NULL;
+
 static recomp_void_func_t arm64_inline_hook(void *target_func, void *hook_func) {
     if (!target_func || !hook_func) return NULL;
     uint32_t *target = (uint32_t *)target_func;
@@ -1967,6 +2001,230 @@ static uint32_t hook_dispatchGuestD3D9(uint32_t token, const uint32_t *args, uin
     return s_orig_dispatch_d3d9(token, args, argumentCount);
 }
 
+static void compute_aspect_scaled_size(uint32_t disp_w, uint32_t disp_h, uint32_t pct,
+                                       uint32_t *out_w, uint32_t *out_h) {
+    if (disp_w < 320u || disp_h < 240u) {
+        disp_w = 1280u;
+        disp_h = 720u;
+    }
+    uint32_t w = (uint32_t)((((uint64_t)disp_w * pct + 50u) / 100u) & ~1ULL);
+    uint32_t h = (uint32_t)((((uint64_t)disp_h * pct + 50u) / 100u) & ~1ULL);
+    if (h < 240u) {
+        h = 240u;
+        w = (uint32_t)((((uint64_t)h * disp_w + disp_h / 2u) / disp_h) & ~1ULL);
+    }
+    if (w < 320u) {
+        w = 320u;
+        h = (uint32_t)((((uint64_t)w * disp_h + disp_w / 2u) / disp_w) & ~1ULL);
+    }
+    if (w > 8192u) {
+        w = 8192u;
+        h = (uint32_t)((((uint64_t)w * disp_h + disp_w / 2u) / disp_w) & ~1ULL);
+    }
+    if (h > 8192u) {
+        h = 8192u;
+        w = (uint32_t)((((uint64_t)h * disp_w + disp_h / 2u) / disp_h) & ~1ULL);
+    }
+    if (w < 320u) w = 320u;
+    if (h < 240u) h = 240u;
+    *out_w = w & ~1u;
+    *out_h = h & ~1u;
+}
+
+static void apply_custom_resolution_slots(void) {
+    if (!g_p_mem_base || !*g_p_mem_base || !s_p_guest_render_modes) return;
+
+    uint32_t disp_w = 0, disp_h = 0;
+    const char *env_dw = getenv("NFSU2_DISPLAY_WIDTH");
+    const char *env_dh = getenv("NFSU2_DISPLAY_HEIGHT");
+    if (env_dw) disp_w = (uint32_t)atoi(env_dw);
+    if (env_dh) disp_h = (uint32_t)atoi(env_dh);
+    if (disp_w < 320u || disp_h < 240u) {
+        disp_w = s_p_guest_render_modes[3 * 2];
+        disp_h = s_p_guest_render_modes[3 * 2 + 1];
+    }
+    if (disp_w < 320u || disp_h < 240u) return;
+
+    s_display_w = disp_w;
+    s_display_h = disp_h;
+
+    uint32_t init_w = s_p_guest_render_modes[5 * 2];
+    uint32_t init_h = s_p_guest_render_modes[5 * 2 + 1];
+
+    uint32_t target_pct = 0;
+    const char *env_pct = getenv("NFSU2_RES_PERCENT");
+    if (env_pct && *env_pct) target_pct = (uint32_t)atoi(env_pct);
+    if (target_pct < 10u || target_pct > 200u) {
+        target_pct = (init_w >= 320u) ? ((init_w * 100u + disp_w / 2u) / disp_w) : 75u;
+    }
+
+    uint32_t pcts[6] = { 25u, 50u, 75u, 100u, 0u, 0u };
+    uint32_t count = 4u;
+    int is_base = (target_pct == 25u || target_pct == 50u || target_pct == 75u || target_pct == 100u);
+    if (!is_base && target_pct >= 10u && target_pct <= 200u) {
+        pcts[4] = target_pct;
+        count = 5u;
+        for (uint32_t i = 0; i < count; i++) {
+            for (uint32_t j = i + 1; j < count; j++) {
+                if (pcts[j] < pcts[i]) {
+                    uint32_t tmp = pcts[i];
+                    pcts[i] = pcts[j];
+                    pcts[j] = tmp;
+                }
+            }
+        }
+    }
+
+    static const uint32_t label_vas[6] = {
+        0x78fa1cu, 0x78fa14u, 0x78fa08u, 0x78f9fcu, 0x78f9f0u, 0x78f9e4u
+    };
+    static const uint32_t label_caps[6] = { 8u, 8u, 12u, 12u, 12u, 12u };
+
+    uint32_t active_slot = 0;
+    int best_diff = 999999;
+    for (uint32_t i = 0; i < count; i++) {
+        int diff = abs((int)pcts[i] - (int)target_pct);
+        if (diff < best_diff) {
+            best_diff = diff;
+            active_slot = i;
+        }
+    }
+
+    for (uint32_t i = 0; i < count; i++) {
+        uint32_t w = 0, h = 0;
+        if (i == active_slot && init_w >= 320u && init_h >= 240u) {
+            w = init_w;
+            h = init_h;
+        } else {
+            compute_aspect_scaled_size(disp_w, disp_h, pcts[i], &w, &h);
+        }
+        s_custom_modes[i].w = w;
+        s_custom_modes[i].h = h;
+        s_custom_modes[i].pct = pcts[i];
+
+        s_p_guest_render_modes[i * 2] = w;
+        s_p_guest_render_modes[i * 2 + 1] = h;
+
+        MR32(0x800538u + i * 4u) = w;
+        MR32(0x800550u + i * 4u) = h;
+        MR32(0x86e880u + i * 4u) = 1u;
+
+        char buf[16];
+        snprintf(buf, sizeof(buf), "%u%%", pcts[i]);
+        memset(GPTR(label_vas[i]), 0, label_caps[i]);
+        strncpy((char *)GPTR(label_vas[i]), buf, label_caps[i] - 1u);
+    }
+
+    for (uint32_t i = count; i < 6u; i++) {
+        uint32_t fb_w = (i == 5u && init_w >= 320u) ? init_w : s_custom_modes[count - 1u].w;
+        uint32_t fb_h = (i == 5u && init_h >= 240u) ? init_h : s_custom_modes[count - 1u].h;
+        s_custom_modes[i].w = fb_w;
+        s_custom_modes[i].h = fb_h;
+        s_custom_modes[i].pct = 100u;
+
+        s_p_guest_render_modes[i * 2] = fb_w;
+        s_p_guest_render_modes[i * 2 + 1] = fb_h;
+
+        /* Zero guest table & availability so 0x5be5b0 never exposes disabled slots (no 1280x720) */
+        MR32(0x800538u + i * 4u) = 0u;
+        MR32(0x800550u + i * 4u) = 0u;
+        MR32(0x86e880u + i * 4u) = 0u;
+
+        memset(GPTR(label_vas[i]), 0, label_caps[i]);
+        strncpy((char *)GPTR(label_vas[i]), "100%", label_caps[i] - 1u);
+    }
+
+    s_custom_mode_count = count;
+    s_res_active_slot = active_slot;
+    s_custom_modes_ready = 1;
+
+    __android_log_print(ANDROID_LOG_INFO, "NFSU2-Res",
+        "Configured %u native-aspect resolution slots (display=%ux%u active=%u [%u%% %ux%u], removed 1280x720)",
+        count, disp_w, disp_h, active_slot,
+        s_custom_modes[active_slot].pct,
+        s_custom_modes[active_slot].w, s_custom_modes[active_slot].h);
+}
+
+static void hook_configureAndroidResolutionModes(void) {
+    if (s_orig_configure_res_modes) {
+        s_orig_configure_res_modes();
+    }
+    apply_custom_resolution_slots();
+    /* connectGuestRuntime runs 7 boot ABI self-test calls (initial + slots 0..5) right after this. */
+    s_boot_selftest_pending = 7;
+}
+
+static int hook_nfs_android_resolution(void) {
+    if (s_boot_selftest_pending > 0) {
+        s_boot_selftest_pending--;
+        return s_orig_nfs_android_res ? s_orig_nfs_android_res() : 0;
+    }
+    if (g_p_mem_base && *g_p_mem_base) {
+        if (!s_custom_modes_ready) {
+            apply_custom_resolution_slots();
+        }
+        if (s_custom_modes_ready) {
+            if (s_p_first_game_res && *s_p_first_game_res != 0u) {
+                *s_p_first_game_res = 0u;
+                MR32(0x870d1cu) = s_res_active_slot;
+            }
+            for (uint32_t i = 0; i < 6u; i++) {
+                MR32(0x86e880u + i * 4u) = (i < s_custom_mode_count) ? 1u : 0u;
+            }
+            if (MR32(0x870d1cu) >= s_custom_mode_count) {
+                MR32(0x870d1cu) = s_res_active_slot;
+            }
+        }
+    }
+    return s_orig_nfs_android_res ? s_orig_nfs_android_res() : 0;
+}
+
+static uint8_t hook_wsi_getDisplayMode(void *monitor, uint32_t mode_num, DxvkWsiMode *mode) {
+    if (!s_custom_modes_ready) {
+        return s_orig_wsi_get_display_mode ? s_orig_wsi_get_display_mode(monitor, mode_num, mode) : 0u;
+    }
+    if (monitor != (void *)1 || !mode || mode_num >= s_custom_mode_count) {
+        return 0u;
+    }
+    mode->width = s_custom_modes[mode_num].w;
+    mode->height = s_custom_modes[mode_num].h;
+    mode->refresh_num = 60000u;
+    mode->refresh_den = 1000u;
+    mode->bits_per_pixel = 32u;
+    mode->interlaced = 0u;
+    return 1u;
+}
+
+static void hook_nfs_widescreen_set_resolution(unsigned width, unsigned height) {
+    if (s_orig_widescreen_set_res) {
+        s_orig_widescreen_set_res(width, height);
+    }
+    if (!s_lib_base || !g_p_mem_base || !*g_p_mem_base || !width || !height) return;
+    if (s_display_w < 320u || s_display_h < 240u) return;
+
+    uint8_t ws_enabled = *(uint8_t *)(s_lib_base + 0x97f7300);
+    if (!ws_enabled) return;
+
+    float disp_aspect = (float)s_display_w / (float)s_display_h;
+    float cur_aspect = (float)width / (float)height;
+    if (fabsf(cur_aspect - disp_aspect) > 0.03f) {
+        float hud_scale_x = 2.0f / (disp_aspect * 480.0f);
+        float hud_pos_x = disp_aspect * 240.0f;
+        float hud_offset = 240.0f * disp_aspect - 320.0f;
+        float dyno_x = 79.0f + ((480.0f * disp_aspect) - 640.0f) * 0.5f;
+
+        *(float *)(s_lib_base + 0x97e64bc) = disp_aspect;
+        *(float *)(s_lib_base + 0x97e64c0) = hud_pos_x;
+        *(float *)(s_lib_base + 0x97f7304) = hud_offset;
+
+        MRF32(0x0079ac10u) = hud_scale_x;
+        MRF32(0x00797d50u) = hud_pos_x;
+        MRF32(0x00797d58u) = hud_pos_x * 2.0f;
+        MRF32(0x007fa3c0u) = dyno_x;
+        MRF32(0x007fa3c4u) = 60.0f;
+    }
+}
+
 static void roam_android_install_hooks(void) {
     if (atomic_load(&g_hooks_installed) || !g_p_recomp_lookup) return;
     pthread_mutex_lock(&s_hooks_mu);
@@ -2208,6 +2466,42 @@ static void roam_android_install_hooks(void) {
         }
     }
 
+    // Hook resolution mode configuration, D3D9 mode enumeration, and aspect-ratio lock (removes 1280x720)
+    s_p_guest_render_modes = (uint32_t *)dlsym(h_main ? h_main : RTLD_DEFAULT, "guestRenderModes");
+    s_p_first_game_res = (uint8_t *)dlsym(h_main ? h_main : RTLD_DEFAULT, "firstGameResolution");
+
+    struct {
+        const char *sym;
+        uintptr_t got_off;
+        void *hook;
+        void **orig_out;
+    } res_got_hooks[] = {
+        { "_Z31configureAndroidResolutionModesv", 0x97ddcf0u,
+          (void *)hook_configureAndroidResolutionModes, (void **)&s_orig_configure_res_modes },
+        { "nfs_android_resolution", 0x97dd4c0u,
+          (void *)hook_nfs_android_resolution, (void **)&s_orig_nfs_android_res },
+        { "_ZN4dxvk3wsi14getDisplayModeEPvjPNS0_7WsiModeE", 0x97df030u,
+          (void *)hook_wsi_getDisplayMode, (void **)&s_orig_wsi_get_display_mode },
+        { "nfs_widescreen_set_resolution", 0x97ddd08u,
+          (void *)hook_nfs_widescreen_set_resolution, (void **)&s_orig_widescreen_set_res },
+    };
+    for (size_t i = 0; i < sizeof(res_got_hooks) / sizeof(res_got_hooks[0]); i++) {
+        void *target = dlsym(h_main ? h_main : RTLD_DEFAULT, res_got_hooks[i].sym);
+        if (!target || *res_got_hooks[i].orig_out) continue;
+        void **slot = (void **)(lib_base + res_got_hooks[i].got_off);
+        if (*slot == target) {
+            uintptr_t gs = (uintptr_t)slot & ~((uintptr_t)page_sz - 1);
+            uintptr_t ge = ((uintptr_t)(slot + 1) + (uintptr_t)page_sz - 1) & ~((uintptr_t)page_sz - 1);
+            if (mprotect((void *)gs, ge - gs, PROT_READ | PROT_WRITE) == 0) {
+                *res_got_hooks[i].orig_out = target;
+                *slot = res_got_hooks[i].hook;
+                __android_log_print(ANDROID_LOG_INFO, "NFSU2-Hook",
+                    "Hooked %s via GOT at %p (orig: %p)",
+                    res_got_hooks[i].sym, (void *)slot, target);
+            }
+        }
+    }
+
     atomic_store(&g_hooks_installed, 1);
     pthread_mutex_unlock(&s_hooks_mu);
 }
@@ -2265,23 +2559,10 @@ static void update_resolution_slots_in_memory(void) {
 }
 
 void roam_resolution_nav(int dir) {
-    if (!g_p_mem_base || !*g_p_mem_base || !rh_mem_committed(0x870d1cu, 4)) return;
-    // Only navigate resolution in menus (MR32(SPLIT_PLAYERS_INDEX) == 0 means not in race/world)
-    if (rh_mem_committed(SPLIT_PLAYERS_INDEX, 4) && MR32(SPLIT_PLAYERS_INDEX) != 0) return;
-
-    uint32_t cur = MR32(0x870d1cu);
-
-    if (dir > 0 && cur >= 5 && s_res_window_start < (int)NUM_ALL_RESOLUTION_PERCENTS - 6) {
-        s_res_window_start++;
-        update_resolution_slots_in_memory();
-        MR32(0x870d1cu) = 4;
-        if (rh_mem_committed(0x8709d1u, 1)) MR8(0x8709d1u) = 1;
-    } else if (dir < 0 && cur == 0 && s_res_window_start > 0) {
-        s_res_window_start--;
-        update_resolution_slots_in_memory();
-        MR32(0x870d1cu) = 1;
-        if (rh_mem_committed(0x8709d1u, 1)) MR8(0x8709d1u) = 1;
-    }
+    /* Disabled: in-game Display Settings resolution slots are managed directly by
+     * hook_configureAndroidResolutionModes / hook_nfs_android_resolution without 1280x720.
+     * Mutating 0x870d1c on arbitrary menu left/right presses caused unexpected 1280x720 snaps. */
+    (void)dir;
 }
 
 static void resolution_frame_tick(void) {
