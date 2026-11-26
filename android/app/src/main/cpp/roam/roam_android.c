@@ -977,7 +977,7 @@ static void hook_sub_004a5d90(void) {
 
 #define STICK_ON     0.20f
 #define STICK_FULL   0.85f
-#define TAU_S        0.09f
+#define TAU_S        0.1385f
 #define BACK_RAD     2.4f
 #define SNAP_IN      0.44f
 #define SNAP_OUT     0.61f
