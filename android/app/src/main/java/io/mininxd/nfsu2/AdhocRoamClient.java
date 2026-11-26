@@ -116,6 +116,16 @@ public final class AdhocRoamClient {
         }
     }
 
+    public static void nativeGamepadAxes(int[] deviceIds, int[] axisModes) {
+        if (RoamNativeBridge.isLoaded()) {
+            try {
+                RoamNativeBridge.nativeGamepadAxes(deviceIds, axisModes);
+            } catch (Throwable t) {
+                Log.d(TAG, "nativeGamepadAxes: " + t.getMessage());
+            }
+        }
+    }
+
     public static void nativeRoamHorn(boolean held) {
         if (RoamNativeBridge.isLoaded()) {
             try {
@@ -165,7 +175,6 @@ public final class AdhocRoamClient {
     }
 
     public static void handleRightStick(float x, float y) {
-        QuickChatManager.handleRightStick(x, y);
         nativeRoamStick(x, y);
     }
 

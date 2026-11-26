@@ -60,6 +60,7 @@ public final class RoamNativeBridge {
     public static native void nativeRoamTick();
     public static native void nativeRoamSay(int phrase);
     public static native void nativeRoamStick(float x, float y);
+    public static native void nativeGamepadAxes(int[] deviceIds, int[] axisModes);
     public static native void nativeRoamHorn(boolean held);
     public static native void nativeSetFrameLimit(int fps);
     public static native int[] nativeGetActionKeys();

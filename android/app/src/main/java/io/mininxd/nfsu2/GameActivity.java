@@ -218,9 +218,31 @@ public final class GameActivity extends NativeActivity {
      * themselves as joysticks with X/Y axes, and their resting value used to steer the car by itself.
      * Pads in "keyboard" mode report only KEYBOARD but still have gamepad buttons.
      */
+    private volatile boolean javaPadStickActive = false;
+
+    private static boolean hasBipolarRange(android.view.InputDevice device, int axis) {
+        android.view.InputDevice.MotionRange r =
+                device.getMotionRange(axis, android.view.InputDevice.SOURCE_JOYSTICK);
+        if (r == null) r = device.getMotionRange(axis);
+        return r != null && r.getMin() <= -0.5f && r.getMax() >= 0.5f;
+    }
+
+    private static int classifyRightStickMode(android.view.InputDevice device) {
+        if (device == null) return 0;
+        boolean zBipolar = hasBipolarRange(device, android.view.MotionEvent.AXIS_Z)
+                && hasBipolarRange(device, android.view.MotionEvent.AXIS_RZ);
+        boolean rxBipolar = hasBipolarRange(device, android.view.MotionEvent.AXIS_RX)
+                && hasBipolarRange(device, android.view.MotionEvent.AXIS_RY);
+        if (zBipolar && !rxBipolar) return 1;
+        if (rxBipolar && !zBipolar) return 2;
+        if (zBipolar && rxBipolar) return 3;
+        return 0;
+    }
+
     private void updateGamepads() {
         boolean connected=false;
         java.util.ArrayList<Integer> accepted=new java.util.ArrayList<>();
+        java.util.ArrayList<Integer> axisModes=new java.util.ArrayList<>();
         StringBuilder seen=new StringBuilder();
         for(int id:android.view.InputDevice.getDeviceIds()) {
             android.view.InputDevice device=android.view.InputDevice.getDevice(id);
@@ -239,11 +261,13 @@ public final class GameActivity extends NativeActivity {
             boolean pad=(device.isExternal()||buttons||stick)&&(buttons||stick||keys);
             seen.append(seen.length()==0?"":"; ").append(device.getName()).append(" [").append(Integer.toHexString(sources))
                     .append(device.isExternal()?" external":" internal").append(pad?" pad":"").append(']');
-            if(pad){connected=true;accepted.add(id);}
+            if(pad){connected=true;accepted.add(id);axisModes.add(classifyRightStickMode(device));}
         }
         android.util.Log.i("NFS","Input devices: "+seen);
         // Only these devices may move the guest's stick or press its keys.
         int[] ids=new int[accepted.size()];for(int i=0;i<ids.length;++i)ids[i]=accepted.get(i);
+        int[] modes=new int[axisModes.size()];for(int i=0;i<modes.length;++i)modes[i]=axisModes.get(i);
+        AdhocRoamClient.nativeGamepadAxes(ids, modes);
         nativeGamepadDevices(ids);
         if(touchControls!=null)touchControls.setGamepadConnected(connected);
         nativeGamepadConnected(connected);
@@ -791,6 +815,8 @@ public final class GameActivity extends NativeActivity {
         super.onWindowFocusChanged(focused);
         if(!focused) {
             if(touchControls!=null)touchControls.releaseAll();
+            AdhocRoamClient.nativeGamepadAxes(null, null);
+            javaPadStickActive = false;
             setTiltKeys(false,false);
             if(diagnosticOverlay!=null)diagnosticOverlay.hide();
         }
@@ -842,6 +868,8 @@ public final class GameActivity extends NativeActivity {
         if(inputManager!=null)inputManager.unregisterInputDeviceListener(gamepadListener);
         if (statusWindow != null) statusWindow.dismiss();
         if (touchControls != null) {touchControls.removeCallbacks(updateControlMode);touchControls.releaseAll();}
+        AdhocRoamClient.nativeGamepadAxes(null, null);
+        javaPadStickActive = false;
         if (controlsWindow != null) controlsWindow.dismiss();
         GpuClockGovernor.pause();
         super.onPause();
@@ -1033,17 +1061,47 @@ public final class GameActivity extends NativeActivity {
             if (touchControls != null) {
                 touchControls.notifyGamepadActive(true);
             }
+            int mode = classifyRightStickMode(event.getDevice());
             float rx_z = event.getAxisValue(android.view.MotionEvent.AXIS_Z);
-            float rx_rot = event.getAxisValue(android.view.MotionEvent.AXIS_RX);
-            float rx = Math.abs(rx_rot) >= Math.abs(rx_z) ? rx_rot : rx_z;
-
             float ry_z = event.getAxisValue(android.view.MotionEvent.AXIS_RZ);
+            float rx_rot = event.getAxisValue(android.view.MotionEvent.AXIS_RX);
             float ry_rot = event.getAxisValue(android.view.MotionEvent.AXIS_RY);
-            float ry = Math.abs(ry_rot) >= Math.abs(ry_z) ? ry_rot : ry_z;
-
-            float shapedX = safeDInputRadialX(rx, ry, 0.08f, 0.65f);
-            float shapedY = safeDInputRadialY(rx, ry, 0.08f, 0.65f);
-            AdhocRoamClient.handleRightStick(shapedX, shapedY);
+            float rx;
+            float ry;
+            if (mode == 1) {
+                rx = rx_z;
+                ry = ry_z;
+            } else if (mode == 2) {
+                rx = rx_rot;
+                ry = ry_rot;
+            } else {
+                boolean zTriggerIdle = (rx_z < -0.85f && ry_z < -0.85f)
+                        && Math.abs(rx_rot) < 0.25f && Math.abs(ry_rot) < 0.25f;
+                boolean rxTriggerIdle = (rx_rot < -0.85f && ry_rot < -0.85f)
+                        && Math.abs(rx_z) < 0.25f && Math.abs(ry_z) < 0.25f;
+                if (zTriggerIdle) {
+                    rx = rx_rot;
+                    ry = ry_rot;
+                } else if (rxTriggerIdle) {
+                    rx = rx_z;
+                    ry = ry_z;
+                } else if (Math.hypot(rx_rot, ry_rot) > Math.hypot(rx_z, ry_z) + 0.05) {
+                    rx = rx_rot;
+                    ry = ry_rot;
+                } else {
+                    rx = rx_z;
+                    ry = ry_z;
+                }
+            }
+            rx = Math.max(-1f, Math.min(1f, rx));
+            ry = Math.max(-1f, Math.min(1f, ry));
+            if (Math.hypot(rx, ry) > 0.12) {
+                javaPadStickActive = true;
+                AdhocRoamClient.handleRightStick(rx, ry);
+            } else if (javaPadStickActive) {
+                javaPadStickActive = false;
+                AdhocRoamClient.handleRightStick(0f, 0f);
+            }
         }
         return super.onGenericMotionEvent(event);
     }

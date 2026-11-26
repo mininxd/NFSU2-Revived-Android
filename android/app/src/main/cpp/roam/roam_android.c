@@ -19,6 +19,7 @@
 #include <poll.h>
 #include <pthread.h>
 #include <time.h>
+#include <stdbool.h>
 #include <stdatomic.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -726,8 +727,23 @@ static void pace_frame(void) {
      * Avoid blocking nanosleep here which double-waits and starves guest background threads. */
 }
 
-static float g_stick_x = 0.f;
-static float g_stick_y = 0.f;
+static _Atomic uint32_t g_stick_x_bits = 0u;
+static _Atomic uint32_t g_stick_y_bits = 0u;
+
+static inline void roam_store_stick(float x, float y) {
+    uint32_t xb, yb;
+    memcpy(&xb, &x, sizeof(xb));
+    memcpy(&yb, &y, sizeof(yb));
+    atomic_store_explicit(&g_stick_x_bits, xb, memory_order_relaxed);
+    atomic_store_explicit(&g_stick_y_bits, yb, memory_order_relaxed);
+}
+
+static inline void roam_load_stick(float *out_x, float *out_y) {
+    uint32_t xb = atomic_load_explicit(&g_stick_x_bits, memory_order_relaxed);
+    uint32_t yb = atomic_load_explicit(&g_stick_y_bits, memory_order_relaxed);
+    memcpy(out_x, &xb, sizeof(*out_x));
+    memcpy(out_y, &yb, sizeof(*out_y));
+}
 
 /* =========================================================================
  * ARM64 Runtime Inline Hooking & Right Stick Camera / Garage Viewer Engine
@@ -921,8 +937,9 @@ static void hook_sub_004a5d90(void) {
         return;
     }
 
-    float x = g_stick_x;
-    float y = g_stick_y;
+    float x = 0.f;
+    float y = 0.f;
+    roam_load_stick(&x, &y);
     float r = sqrtf(x * x + y * y);
     if (r < 0.15f) {
         x = 0.f;
@@ -982,6 +999,7 @@ static int      s_num_cams_turned = 0;
 
 static uint32_t get_driving_car(void) {
     if (!g_p_mem_base || !*g_p_mem_base) return 0;
+    if (!rh_mem_committed(0x008654a4u, 4) || MR32(0x008654a4u) != 6u) return 0;
     if (!rh_mem_committed(0x008900ac, 4)) return 0; // SPLIT_PLAYERS_INDEX
     uint32_t pl = MR32(0x008900ac);
     if (!pl || pl >= 0x7fffffff || !rh_mem_committed(pl + 4, 4)) return 0;
@@ -1014,7 +1032,8 @@ static float get_car_speed_mps(uint32_t car) {
 static float compute_stick_yaw(int can, int *back) {
     *back = 0;
     if (!can) return 0.f;
-    float x = g_stick_x, y = g_stick_y;
+    float x = 0.f, y = 0.f;
+    roam_load_stick(&x, &y);
     float r = hypotf(x, y);
     if (r < STICK_ON) return 0.f;
 
@@ -1162,7 +1181,7 @@ static void hook_sub_005c7ec0(void) {
             if (view && rh_mem_committed(view + 4, 0x40)) {
                 view_id = MR32(view + 4);
                 cam = MR32(view + 0x40);
-                if (view_id == 1u) {
+                if (view_id == 1u || view_id == 4u) {
                     int replay_on = (rh_mem_committed(0x008650d0u, 4) && MR32(0x008650d0u) != 0u);
                     if (!replay_on) {
                         look_process_view(view_id, cam);
@@ -4973,8 +4992,7 @@ __attribute__((visibility("default"))) void nfs_roam_frame_tick(void) {
 
 /* Gamepad Right Stick Quick Chat Input & Camera Look */
 void roam_stick_input(float x, float y) {
-    g_stick_x = x;
-    g_stick_y = y;
+    roam_store_stick(x, y);
     if (!g_hooks_installed) {
         roam_android_init_symbols();
         roam_android_install_hooks();
@@ -5227,10 +5245,255 @@ JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_net_RoamNativeBridge_nativeRoamSay(
     roam_do_say(phrase);
 }
 
+static void roam_install_gamepad_hooks(uintptr_t base);
+static uintptr_t roam_find_nfsu2_base(void *h);
+
 JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_net_RoamNativeBridge_nativeRoamStick(
         JNIEnv *env, jclass clazz, jfloat x, jfloat y) {
     (void)env; (void)clazz;
     roam_do_stick(x, y);
+}
+
+#define ROAM_AXIS_Z         0x0b
+#define ROAM_AXIS_RX        0x0c
+#define ROAM_AXIS_RY        0x0d
+#define ROAM_AXIS_RZ        0x0e
+#define ROAM_PAD_CAM_DZ     0.12f
+
+enum {
+    ROAM_PAD_MODE_AUTO         = 0,
+    ROAM_PAD_MODE_Z_RZ         = 1,
+    ROAM_PAD_MODE_RX_RY        = 2,
+    ROAM_PAD_MODE_DUAL_BIPOLAR = 3
+};
+
+typedef struct {
+    int32_t device_id;
+    int     java_mode;
+    int     locked_mode;
+} RoamPadDevState;
+
+#define ROAM_MAX_PAD_DEVS 16
+static pthread_mutex_t s_pad_cam_mu = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t s_gamepad_hook_mu = PTHREAD_MUTEX_INITIALIZER;
+static RoamPadDevState s_pad_devs[ROAM_MAX_PAD_DEVS];
+static int             s_pad_dev_count = 0;
+static int             s_pad_cam_active = 0;
+static int32_t         s_pad_cam_dev = -1;
+static uintptr_t       s_nfsu2_base = 0;
+
+typedef bool    (*roam_gamepad_motion_fn)(void *self, const void *event, bool driving, void *set_key);
+typedef void    (*roam_set_guest_pad_connected_fn)(bool connected);
+typedef float   (*roam_get_axis_fn)(const void *event, int32_t axis, size_t pointer_index);
+typedef int32_t (*roam_get_devid_fn)(const void *event);
+
+static roam_gamepad_motion_fn         s_orig_gamepad_motion = NULL;
+static roam_set_guest_pad_connected_fn s_orig_set_guest_pad_connected = NULL;
+static roam_get_axis_fn               s_p_get_axis = NULL;
+static roam_get_devid_fn              s_p_get_devid = NULL;
+static int                            s_input_apis_checked = 0;
+
+static void resolve_android_input_apis(void) {
+    if (s_input_apis_checked) return;
+    s_input_apis_checked = 1;
+    s_p_get_axis = (roam_get_axis_fn)dlsym(RTLD_DEFAULT, "AMotionEvent_getAxisValue");
+    s_p_get_devid = (roam_get_devid_fn)dlsym(RTLD_DEFAULT, "AInputEvent_getDeviceId");
+    if (!s_p_get_axis || !s_p_get_devid) {
+        void *la = dlopen("libandroid.so", RTLD_NOLOAD | RTLD_LAZY);
+        if (!la) la = dlopen("libandroid.so", RTLD_LAZY);
+        if (la) {
+            if (!s_p_get_axis) s_p_get_axis = (roam_get_axis_fn)dlsym(la, "AMotionEvent_getAxisValue");
+            if (!s_p_get_devid) s_p_get_devid = (roam_get_devid_fn)dlsym(la, "AInputEvent_getDeviceId");
+        }
+    }
+}
+
+static inline float roam_clamp_stick(float v) {
+    if (!isfinite(v)) return 0.f;
+    if (v < -1.f) return -1.f;
+    if (v > 1.f) return 1.f;
+    return v;
+}
+
+static RoamPadDevState *find_or_add_pad_dev_locked(int32_t dev_id) {
+    for (int i = 0; i < s_pad_dev_count; i++) {
+        if (s_pad_devs[i].device_id == dev_id) return &s_pad_devs[i];
+    }
+    int idx = (s_pad_dev_count < ROAM_MAX_PAD_DEVS) ? s_pad_dev_count++ : (ROAM_MAX_PAD_DEVS - 1);
+    s_pad_devs[idx].device_id = dev_id;
+    s_pad_devs[idx].java_mode = ROAM_PAD_MODE_AUTO;
+    s_pad_devs[idx].locked_mode = 0;
+    return &s_pad_devs[idx];
+}
+
+static void resolve_pad_right_stick_locked(int32_t dev_id, float z, float rz, float rx, float ry, float *out_x, float *out_y) {
+    RoamPadDevState *d = find_or_add_pad_dev_locked(dev_id);
+    int mode = 0;
+    if (d->java_mode == ROAM_PAD_MODE_Z_RZ) {
+        mode = 1;
+    } else if (d->java_mode == ROAM_PAD_MODE_RX_RY) {
+        mode = 2;
+    } else if (d->locked_mode != 0) {
+        mode = d->locked_mode;
+    } else {
+        int z_idle_neg = (z < -0.85f && rz < -0.85f) && (fabsf(rx) < 0.25f && fabsf(ry) < 0.25f);
+        int rx_idle_neg = (rx < -0.85f && ry < -0.85f) && (fabsf(z) < 0.25f && fabsf(rz) < 0.25f);
+        if (z_idle_neg) {
+            d->locked_mode = 2;
+            mode = 2;
+        } else if (rx_idle_neg) {
+            d->locked_mode = 1;
+            mode = 1;
+        } else {
+            mode = (hypotf(rx, ry) > hypotf(z, rz) + 0.05f) ? 2 : 1;
+        }
+    }
+    if (mode == 2) {
+        *out_x = roam_clamp_stick(rx);
+        *out_y = roam_clamp_stick(ry);
+    } else {
+        *out_x = roam_clamp_stick(z);
+        *out_y = roam_clamp_stick(rz);
+    }
+}
+
+static bool hook_gamepad_motion(void *self, const void *event, bool driving, void *set_key) {
+    bool handled = s_orig_gamepad_motion ? s_orig_gamepad_motion(self, event, driving, set_key) : false;
+    if (!handled || !self || !event) return handled;
+
+    resolve_android_input_apis();
+    float cam_x = 0.f, cam_y = 0.f;
+    int32_t dev_id = -1;
+    int have_axes = 0;
+    if (s_p_get_axis && s_p_get_devid) {
+        dev_id = s_p_get_devid(event);
+        float z  = s_p_get_axis(event, ROAM_AXIS_Z, 0);
+        float rz = s_p_get_axis(event, ROAM_AXIS_RZ, 0);
+        float rx = s_p_get_axis(event, ROAM_AXIS_RX, 0);
+        float ry = s_p_get_axis(event, ROAM_AXIS_RY, 0);
+        pthread_mutex_lock(&s_pad_cam_mu);
+        resolve_pad_right_stick_locked(dev_id, z, rz, rx, ry, &cam_x, &cam_y);
+        pthread_mutex_unlock(&s_pad_cam_mu);
+        *(float *)((uint8_t *)self + 24) = cam_x;
+        *(float *)((uint8_t *)self + 28) = cam_y;
+        have_axes = 1;
+    }
+    if (!have_axes) {
+        cam_x = roam_clamp_stick(*(const float *)((const uint8_t *)self + 24));
+        cam_y = roam_clamp_stick(*(const float *)((const uint8_t *)self + 28));
+    }
+
+    float mag = hypotf(cam_x, cam_y);
+    int notify_stick = 0;
+    float out_x = 0.f, out_y = 0.f;
+    uintptr_t nfsu2_base = 0;
+    pthread_mutex_lock(&s_pad_cam_mu);
+    nfsu2_base = s_nfsu2_base;
+    if (mag > ROAM_PAD_CAM_DZ) {
+        s_pad_cam_active = 1;
+        s_pad_cam_dev = dev_id;
+        out_x = cam_x;
+        out_y = cam_y;
+        notify_stick = 1;
+    } else if (s_pad_cam_active && (s_pad_cam_dev < 0 || dev_id < 0 || s_pad_cam_dev == dev_id)) {
+        s_pad_cam_active = 0;
+        s_pad_cam_dev = -1;
+        out_x = 0.f;
+        out_y = 0.f;
+        notify_stick = 1;
+    }
+    pthread_mutex_unlock(&s_pad_cam_mu);
+
+    if (mag > 0.5f && nfsu2_base) {
+        __atomic_store_n((uint8_t *)(nfsu2_base + 0x97e67d4u), (uint8_t)1, __ATOMIC_RELEASE);
+    }
+    if (notify_stick) {
+        roam_stick_input(out_x, out_y);
+    }
+    return handled;
+}
+
+static void hook_set_guest_pad_connected(bool connected) {
+    if (s_orig_set_guest_pad_connected) {
+        s_orig_set_guest_pad_connected(connected);
+    }
+    if (!connected) {
+        pthread_mutex_lock(&s_pad_cam_mu);
+        int was_active = s_pad_cam_active;
+        s_pad_cam_active = 0;
+        s_pad_cam_dev = -1;
+        s_pad_dev_count = 0;
+        pthread_mutex_unlock(&s_pad_cam_mu);
+        if (was_active) {
+            roam_stick_input(0.f, 0.f);
+        }
+    }
+}
+
+JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_net_RoamNativeBridge_nativeGamepadAxes(
+        JNIEnv *env, jclass clazz, jintArray jDeviceIds, jintArray jAxisModes) {
+    (void)clazz;
+    if (!jDeviceIds || !jAxisModes) {
+        pthread_mutex_lock(&s_pad_cam_mu);
+        int was_active = s_pad_cam_active;
+        s_pad_cam_active = 0;
+        s_pad_cam_dev = -1;
+        pthread_mutex_unlock(&s_pad_cam_mu);
+        if (was_active) {
+            roam_stick_input(0.f, 0.f);
+        }
+        return;
+    }
+
+    jsize n = (*env)->GetArrayLength(env, jDeviceIds);
+    jsize m = (*env)->GetArrayLength(env, jAxisModes);
+    if (n > m) n = m;
+    if (n > ROAM_MAX_PAD_DEVS) n = ROAM_MAX_PAD_DEVS;
+
+    jint ids[ROAM_MAX_PAD_DEVS];
+    jint modes[ROAM_MAX_PAD_DEVS];
+    if (n > 0) {
+        (*env)->GetIntArrayRegion(env, jDeviceIds, 0, n, ids);
+        (*env)->GetIntArrayRegion(env, jAxisModes, 0, n, modes);
+    }
+
+    int reset_stick = 0;
+    pthread_mutex_lock(&s_pad_cam_mu);
+    int new_count = 0;
+    RoamPadDevState updated[ROAM_MAX_PAD_DEVS];
+    int active_still_present = 0;
+    for (jsize i = 0; i < n; i++) {
+        int32_t id = (int32_t)ids[i];
+        int locked = 0;
+        for (int j = 0; j < s_pad_dev_count; j++) {
+            if (s_pad_devs[j].device_id == id && s_pad_devs[j].java_mode == (int)modes[i]) {
+                locked = s_pad_devs[j].locked_mode;
+                break;
+            }
+        }
+        updated[new_count].device_id = id;
+        updated[new_count].java_mode = (int)modes[i];
+        updated[new_count].locked_mode = locked;
+        if (s_pad_cam_active && s_pad_cam_dev == id) active_still_present = 1;
+        new_count++;
+    }
+    s_pad_dev_count = new_count;
+    if (new_count > 0) memcpy(s_pad_devs, updated, (size_t)new_count * sizeof(RoamPadDevState));
+    if (s_pad_cam_active && !active_still_present) {
+        s_pad_cam_active = 0;
+        s_pad_cam_dev = -1;
+        reset_stick = 1;
+    }
+    pthread_mutex_unlock(&s_pad_cam_mu);
+
+    if (reset_stick) {
+        roam_stick_input(0.f, 0.f);
+    }
+
+    void *h = dlopen("libnfsu2_android.so", RTLD_NOLOAD | RTLD_GLOBAL);
+    if (h) {
+        roam_install_gamepad_hooks(roam_find_nfsu2_base(h));
+    }
 }
 
 JNIEXPORT void JNICALL Java_io_mininxd_nfsu2_net_RoamNativeBridge_nativeRoamHorn(
@@ -5445,19 +5708,52 @@ int _ZN12GamepadInput9buttonForEi(int code) {
     }
 }
 
-static void roam_apply_gamepad_layout(int is_ps2) {
-    void *h = dlopen("libnfsu2_android.so", RTLD_NOLOAD | RTLD_GLOBAL);
-    if (!h) h = dlopen("libnfsu2_android.so", RTLD_LAZY | RTLD_GLOBAL);
+static void roam_patch_got_slot(uintptr_t slot_addr, void *replacement, void **out_orig) {
+    if (!slot_addr || !replacement) return;
+    void **slot = (void **)slot_addr;
+    void *cur = __atomic_load_n(slot, __ATOMIC_ACQUIRE);
+    if (cur == replacement) return;
+    long ps = sysconf(_SC_PAGESIZE);
+    uintptr_t page_size = (ps > 0) ? (uintptr_t)ps : 4096u;
+    uintptr_t start = slot_addr & ~(page_size - 1u);
+    uintptr_t end = (slot_addr + sizeof(void *) + page_size - 1u) & ~(page_size - 1u);
+    if (mprotect((void *)start, end - start, PROT_READ | PROT_WRITE) != 0) return;
+    if (out_orig && !*out_orig) *out_orig = cur;
+    __atomic_store_n(slot, replacement, __ATOMIC_RELEASE);
+}
+
+static void roam_install_gamepad_hooks(uintptr_t base) {
+    if (!base) return;
+    pthread_mutex_lock(&s_gamepad_hook_mu);
+    pthread_mutex_lock(&s_pad_cam_mu);
+    if (!s_nfsu2_base) s_nfsu2_base = base;
+    pthread_mutex_unlock(&s_pad_cam_mu);
+    roam_patch_got_slot(base + 0x97dd700u, (void *)hook_gamepad_motion, (void **)&s_orig_gamepad_motion);
+    roam_patch_got_slot(base + 0x97dd550u, (void *)hook_set_guest_pad_connected, (void **)&s_orig_set_guest_pad_connected);
+    pthread_mutex_unlock(&s_gamepad_hook_mu);
+}
+
+static uintptr_t roam_find_nfsu2_base(void *h) {
     void *sym = dlsym(h ? h : RTLD_DEFAULT, "recomp_lookup");
     if (!sym) sym = dlsym(h ? h : RTLD_DEFAULT, "g_mem_base");
     if (!sym) sym = dlsym(RTLD_DEFAULT, "_ZN12GamepadInput9buttonForEi");
     Dl_info dlinfo;
     if (sym && dladdr(sym, &dlinfo) && dlinfo.dli_fbase) {
-        uintptr_t base = (uintptr_t)dlinfo.dli_fbase;
+        return (uintptr_t)dlinfo.dli_fbase;
+    }
+    return 0;
+}
+
+static void roam_apply_gamepad_layout(int is_ps2) {
+    void *h = dlopen("libnfsu2_android.so", RTLD_NOLOAD | RTLD_GLOBAL);
+    if (!h) h = dlopen("libnfsu2_android.so", RTLD_LAZY | RTLD_GLOBAL);
+    uintptr_t base = roam_find_nfsu2_base(h);
+    if (base) {
         uintptr_t page_size = sysconf(_SC_PAGESIZE);
         if (page_size == 0) page_size = 4096;
 
-        /* 1. Hook GOT entry for _ZN12GamepadInput9buttonForEi (resolves LS and RS button issues) */
+        /* 1. Hook GOT entries for _ZN12GamepadInput9buttonForEi, motion, and pad disconnect */
+        roam_install_gamepad_hooks(base);
         void **got_entry = (void**)(base + 0x97dd968);
         uintptr_t got_page = ((uintptr_t)got_entry) & ~(page_size - 1);
         mprotect((void*)got_page, page_size, PROT_READ | PROT_WRITE);
